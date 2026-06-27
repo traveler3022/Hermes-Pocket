@@ -119,6 +119,31 @@ class SkillsViewModel @Inject constructor(
         }
     }
 
+    fun initializeSkillsHub() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isInitializing = true, errorMessage = null)
+            try {
+                // Doctor suggests `hermes skills list` to initialize the Skills Hub.
+                // Run through shell.exec so UI still depends only on GatewayClient.
+                gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("hermes skills list >/dev/null 2>&1 || true")),
+                    timeoutMs = 60_000,
+                )
+                gatewayClient.request(GatewayMethods.SKILLS_RELOAD, timeoutMs = 30_000)
+                Timber.i("[Skills] Skills Hub initialized")
+                _uiState.value = _uiState.value.copy(isInitializing = false)
+                loadSkills()
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Initialization failed")
+                _uiState.value = _uiState.value.copy(
+                    isInitializing = false,
+                    errorMessage = "Failed to initialize skills: ${e.message}",
+                )
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
@@ -127,6 +152,7 @@ class SkillsViewModel @Inject constructor(
 data class SkillsUiState(
     val skills: List<SkillItem> = emptyList(),
     val isLoading: Boolean = false,
+    val isInitializing: Boolean = false,
     val errorMessage: String? = null,
 )
 
