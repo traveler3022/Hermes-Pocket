@@ -2,6 +2,7 @@ package com.hermes.android.runtime.termux
 
 import android.content.Context
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.DetectionResult
@@ -133,6 +134,7 @@ class TermuxBridge @Inject constructor(
         }
 
         _state.value = RuntimeState.Installing
+        completionFlow.value = TermuxInstallProgressReceiver.InstallCompletion.Pending
         progressFlow.value = InstallProgress(
             stage = "starting",
             message = "Dispatching install command to Termux...",
@@ -293,9 +295,9 @@ class TermuxBridge @Inject constructor(
             # Ensure HERMES_HOME is set (uses default ~/.hermes if not)
             export HERMES_HOME="${'$'}{HERMES_HOME:-${'$'}HOME/.hermes}"
             mkdir -p "${'$'}HERMES_HOME/logs"
-            mkdir -p "${'$'}HERMES_HOME/web_dist_placeholder"
-            # Create a minimal index.html so --skip-build doesn't refuse
-            # (web_server.py:11401 checks for index.html existence)
+            mkdir -p "${'$'}HERMES_HOME/web_dist_placeholder/assets"
+            # Create a minimal index.html + assets dir so --skip-build doesn't refuse
+            # and StaticFiles(directory=WEB_DIST/assets) can mount cleanly.
             if [ ! -f "${'$'}HERMES_HOME/web_dist_placeholder/index.html" ]; then
                 echo '<!doctype html><title>Hermes2</title><p>WebSocket API only.</p>' > "${'$'}HERMES_HOME/web_dist_placeholder/index.html"
             fi
@@ -303,9 +305,11 @@ class TermuxBridge @Inject constructor(
             # The Android app connects to ws://127.0.0.1:9119/api/ws?token=<sessionToken>.
             export HERMES_DASHBOARD_SESSION_TOKEN="$sessionToken"
             export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
-            export PATH=/data/data/com.termux/files/usr/bin:${'$'}PATH
+            export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
             HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-            if [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
+            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
+            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
                 HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
             elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
                 HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
@@ -393,7 +397,18 @@ class TermuxBridge @Inject constructor(
         //   - On Termux it would refuse (same as `gateway start`).
         val script = """
             set -e
-            ${TermuxCommandExecutor.HERMES_BIN} dashboard --stop || {
+            export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
+            HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
+            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
+            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
+            elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
+            elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
+                HERMES_CMD="$(command -v hermes)"
+            fi
+            "${'$'}HERMES_CMD" dashboard --stop || {
                 # Fallback: pkill any hermes dashboard process
                 echo "hermes dashboard --stop failed, trying pkill fallback..."
                 pkill -f "hermes.*dashboard" 2>/dev/null || true
@@ -549,8 +564,9 @@ class TermuxBridge @Inject constructor(
             addAction(TermuxInstaller.BroadcastAction.COMPLETE.action)
             addAction(TermuxInstaller.BroadcastAction.ERROR.action)
         }
-        // RECEIVER_EXPORTED because the broadcast comes from Termux (another app)
-        context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        // RECEIVER_EXPORTED because the broadcast comes from Termux (another app).
+        // Use AndroidX for API < 33; Context.registerReceiver(..., flags) is API 33+.
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         receiverRegistered = true
         Timber.d("[Runtime] Install progress receiver registered")
     }
@@ -603,7 +619,7 @@ class TermuxBridge @Inject constructor(
         private const val DEFAULT_GATEWAY_PORT = 9119
         private const val DEFAULT_GATEWAY_HOST = "127.0.0.1"
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
-        private val INSTALL_TIMEOUT = 10.minutes
+        private val INSTALL_TIMEOUT = 30.minutes
         private const val POLL_INTERVAL_MS = 500L
         // Bumped from 15s to 30s: `hermes dashboard` does plugin discovery
         // + MCP discovery + uvicorn startup, which on a slow phone takes

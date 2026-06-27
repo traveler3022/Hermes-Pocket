@@ -16,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -78,8 +79,12 @@ class TermuxBridgeTest {
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Accepted
 
-        // Simulate the install completing asynchronously
-        completionFlow.value = TermuxInstallProgressReceiver.InstallCompletion.Completed
+        // Simulate the install completing asynchronously after install() resets
+        // any stale completion value to Pending.
+        launch {
+            kotlinx.coroutines.delay(1_000)
+            completionFlow.value = TermuxInstallProgressReceiver.InstallCompletion.Completed
+        }
 
         // When: install is called
         val result = bridge.install(ProgressEmitter { })
@@ -154,6 +159,14 @@ class TermuxBridgeTest {
             "Script must set HERMES_DASHBOARD_SESSION_TOKEN env var",
             scriptSlot.captured.contains("HERMES_DASHBOARD_SESSION_TOKEN"),
         )
+        assertTrue(
+            "Script must prefer official Termux install layout (~/.hermes/hermes-agent/venv)",
+            scriptSlot.captured.contains(".hermes/hermes-agent/venv/bin/hermes"),
+        )
+        assertTrue(
+            "Script must create a placeholder assets dir for dashboard StaticFiles",
+            scriptSlot.captured.contains("web_dist_placeholder/assets"),
+        )
         // Must bind to 127.0.0.1:9119 (default dashboard port)
         assertTrue(
             "Script must use --host 127.0.0.1",
@@ -200,6 +213,10 @@ class TermuxBridgeTest {
 
         val scriptSlot = slot<String>()
         coVerify { executor.executeBackgroundScript(capture(scriptSlot), any()) }
+        assertTrue(
+            "Stop script must prefer official Termux install layout (~/.hermes/hermes-agent/venv)",
+            scriptSlot.captured.contains(".hermes/hermes-agent/venv/bin/hermes"),
+        )
         assertTrue(
             "Script must invoke 'hermes dashboard --stop' (not 'gateway stop')",
             scriptSlot.captured.contains("dashboard --stop"),

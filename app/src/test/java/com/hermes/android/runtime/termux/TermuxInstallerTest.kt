@@ -116,16 +116,39 @@ class TermuxInstallerTest {
     }
 
     @Test
-    fun `generateInstallScript handles Android psutil failures`() {
+    fun `generateInstallScript handles Android psutil failures without deleting core dependency`() {
         val script = installer.generateInstallScript()
 
-        assertTrue("Script must run the upstream psutil Android workaround", script.contains("install_psutil_android.py"))
+        assertTrue("Script must know the upstream psutil Android workaround", script.contains("install_psutil_android.py"))
         assertTrue("Script must detect Android psutil unsupported errors", script.contains("platform android is not supported"))
-        assertTrue("Script must remove the pinned psutil dependency for Android fallback", script.contains("psutil==7.2.2"))
         assertTrue(
-            "Script must retry the termux pip install after removing psutil",
-            script.contains("python3 -m pip install -e '.[termux]' -c constraints-termux.txt"),
+            "Script must run the psutil shim with the Hermes venv pip, not global python",
+            script.contains("--pip \"\$PIP_PYTHON -m pip\""),
         )
+        assertFalse(
+            "Script must not delete psutil from pyproject.toml; psutil is a core runtime dependency",
+            script.contains("psutil==7.2.2"),
+        )
+    }
+
+    @Test
+    fun `generateInstallScript follows upstream manifest and non interactive stages`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must parse stage names from install_sh manifest", script.contains("s['name']"))
+        assertTrue("Script must pass --non-interactive to stage runs", script.contains("--non-interactive"))
+        assertFalse(
+            "Script must not hard-code a partial stage list that skips setup and gateway accounting",
+            script.contains("for STAGE in prerequisites repository venv python-deps node-deps path config complete"),
+        )
+    }
+
+    @Test
+    fun `generateInstallScript ensures dashboard web dependencies for Android websocket`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must check dashboard dependencies", script.contains("dashboard WebSocket dependencies"))
+        assertTrue("Script must install the web extra if upstream falls back to baseline termux", script.contains("pip install -e '.[web]' -c constraints-termux.txt"))
     }
 
     @Test
