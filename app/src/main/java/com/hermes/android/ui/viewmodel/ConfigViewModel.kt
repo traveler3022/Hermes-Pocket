@@ -197,6 +197,97 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    fun configureXiaomiBackend(apiKey: String, baseUrl: String, model: String) {
+        viewModelScope.launch {
+            try {
+                val targetModel = model.ifBlank { "mimo-v2.5-free" }
+                if (apiKey.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.MODEL_SAVE_KEY,
+                        buildJsonObject {
+                            put("slug", "xiaomi")
+                            put("api_key", apiKey.trim())
+                        }.toMap(),
+                    )
+                }
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.provider")
+                        put("value", "xiaomi")
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.default")
+                        put("value", targetModel)
+                    }.toMap(),
+                )
+                if (baseUrl.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.CONFIG_SET,
+                        buildJsonObject {
+                            put("key", "model.base_url")
+                            put("value", baseUrl.trim())
+                        }.toMap(),
+                    )
+                }
+                _uiState.value = _uiState.value.copy(
+                    activeProvider = "xiaomi",
+                    activeModel = targetModel,
+                    errorMessage = "MiMo backend saved",
+                )
+                loadConfig()
+                loadModels()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to configure MiMo")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure MiMo: ${e.message}")
+            }
+        }
+    }
+
+    fun configureGeminiBackend(apiKey: String, model: String) {
+        viewModelScope.launch {
+            try {
+                val targetModel = model.ifBlank { "gemini-2.5-flash" }
+                if (apiKey.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.MODEL_SAVE_KEY,
+                        buildJsonObject {
+                            put("slug", "gemini")
+                            put("api_key", apiKey.trim())
+                        }.toMap(),
+                    )
+                }
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.provider")
+                        put("value", "gemini")
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.default")
+                        put("value", targetModel)
+                    }.toMap(),
+                )
+                _uiState.value = _uiState.value.copy(
+                    activeProvider = "gemini",
+                    activeModel = targetModel,
+                    errorMessage = "Gemini backend saved",
+                )
+                loadConfig()
+                loadModels()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to configure Gemini")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure Gemini: ${e.message}")
+            }
+        }
+    }
+
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {

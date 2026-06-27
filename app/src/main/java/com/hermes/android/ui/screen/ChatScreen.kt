@@ -50,6 +50,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.Button
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.SessionItem
+import kotlinx.coroutines.launch
 
 /**
  * Main Chat screen.
@@ -79,6 +93,13 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // Keep drawer state in sync with ViewModel state.
+    LaunchedEffect(uiState.showSessionDrawer) {
+        if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
+    }
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(uiState.messages.size) {
@@ -95,88 +116,168 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.clickable { onNavigateToRuntime() }
-                    ) {
-                        Text("Hermes")
-                        ConnectionIndicator(uiState.connectionState)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.toggleSessionDrawer() }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Sessions")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToSessions) {
-                        Icon(Icons.Default.History, contentDescription = "Sessions")
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                    IconButton(onClick = { viewModel.newConversation() }) {
-                        Icon(Icons.Default.Add, contentDescription = "New conversation")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            // Message list
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerContentColor = MaterialTheme.colorScheme.onSurface,
             ) {
-                items(uiState.messages, key = { it.id }) { message ->
-                    MessageBubble(message)
-                }
-            }
-
-            // Sending progress bar
-            if (uiState.isSending) {
-                LinearProgressIndicator(
+                Text(
+                    text = t("Conversations", "گفتگوها"),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(20.dp),
+                )
+                Button(
+                    onClick = {
+                        viewModel.newConversation()
+                        scope.launch { drawerState.close() }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                ) {
+                    Text(t("New conversation", "گفتگوی جدید"))
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                if (uiState.sessions.isEmpty()) {
+                    Text(
+                        text = t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                } else {
+                    LazyColumn {
+                        items(uiState.sessions, key = { it.id }) { session ->
+                            SessionDrawerRow(
+                                session = session,
+                                isActive = session.id == uiState.activeSessionId,
+                                onClick = {
+                                    viewModel.resumeSession(session.id)
+                                    scope.launch { drawerState.close() }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.clickable { onNavigateToRuntime() }
+                        ) {
+                            Text(t("Hermes", "هرمس"))
+                            ConnectionIndicator(uiState.connectionState)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.toggleSessionDrawer() }) {
+                            Icon(Icons.Default.Menu, contentDescription = t("Sessions", "گفتگوها"))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onNavigateToSessions) {
+                            Icon(Icons.Default.History, contentDescription = t("Sessions", "تاریخچه"))
+                        }
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = t("Settings", "تنظیمات"))
+                        }
+                        IconButton(onClick = { viewModel.newConversation() }) {
+                            Icon(Icons.Default.Add, contentDescription = t("New conversation", "گفتگوی جدید"))
+                        }
+                    },
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+            ) {
+                // Message list
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                ) {
+                    items(uiState.messages, key = { it.id }) { message ->
+                        MessageBubble(message)
+                    }
+                }
+
+                // Sending progress bar
+                if (uiState.isSending) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                    )
+                }
+
+                // Input bar
+                InputBar(
+                    text = uiState.inputText,
+                    isSending = uiState.isSending,
+                    onTextChange = viewModel::updateInputText,
+                    onSend = viewModel::sendMessage,
+                    onStop = viewModel::stopGeneration,
                 )
             }
-
-            // Input bar
-            InputBar(
-                text = uiState.inputText,
-                isSending = uiState.isSending,
-                onTextChange = viewModel::updateInputText,
-                onSend = viewModel::sendMessage,
-                onStop = viewModel::stopGeneration,
-            )
         }
     }
 }
 
 @Composable
+private fun SessionDrawerRow(
+    session: SessionItem,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = session.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            )
+            session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it.take(80),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+@Composable
 private fun ConnectionIndicator(state: ChatConnectionState) {
     val (color, label) = when (state) {
-        ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to "● Connected"
-        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to "◌ Connecting…"
-        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to "↻ Reconnecting…"
-        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.outline to "○ Tap to Connect"
-        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to "✕ Termux Error"
+        ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
+        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting…", "◌ در حال اتصال…")
+        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to t("↻ Reconnecting…", "↻ اتصال دوباره…")
+        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.outline to t("○ Tap to Connect", "○ برای اتصال لمس کنید")
+        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to t("✕ Termux Error", "✕ خطای ترموکس")
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -200,7 +301,7 @@ private fun MessageBubble(message: ChatMessage) {
                 horizontalArrangement = Arrangement.End,
             ) {
                 Card(
-                    modifier = Modifier.widthIn(max = 320.dp),
+                    modifier = Modifier.widthIn(max = 420.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                     ),
@@ -222,7 +323,7 @@ private fun MessageBubble(message: ChatMessage) {
                 horizontalArrangement = Arrangement.Start,
             ) {
                 Card(
-                    modifier = Modifier.widthIn(max = 320.dp),
+                    modifier = Modifier.widthIn(max = 420.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     ),
@@ -246,12 +347,14 @@ private fun MessageBubble(message: ChatMessage) {
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         } else {
-                            dev.jeziellago.compose.markdowntext.MarkdownText(
-                                markdown = message.text,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                ),
-                            )
+                            SelectionContainer {
+                                dev.jeziellago.compose.markdowntext.MarkdownText(
+                                    markdown = message.text,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                )
+                            }
                         }
                         if (message.isStreaming) {
                             Spacer(modifier = Modifier.height(4.dp))
@@ -358,6 +461,8 @@ private fun InputBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
             .padding(12.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -366,7 +471,7 @@ private fun InputBar(
             value = text,
             onValueChange = onTextChange,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Type a message…") },
+            placeholder = { Text(t("Type a message…", "پیام بنویس…")) },
             maxLines = 4,
             shape = RoundedCornerShape(24.dp),
         )
@@ -378,7 +483,7 @@ private fun InputBar(
             ) {
                 Icon(
                     Icons.Default.Stop,
-                    contentDescription = "Stop",
+                    contentDescription = t("Stop", "توقف"),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -390,7 +495,7 @@ private fun InputBar(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
+                    contentDescription = t("Send", "ارسال"),
                 )
             }
         }

@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -129,10 +131,52 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
-                // TODO: parse session list from result
-                Timber.d("[Chat] Session list loaded")
+                val sessions = parseSessionList(result)
+                _uiState.value = _uiState.value.copy(sessions = sessions)
+                Timber.d("[Chat] Session list loaded: ${sessions.size}")
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] Failed to load session list")
+            }
+        }
+    }
+
+    private fun parseSessionList(result: kotlinx.serialization.json.JsonElement): List<SessionItem> {
+        return try {
+            val obj = result as? JsonObject ?: return emptyList()
+            val arr = obj["sessions"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+            arr.mapNotNull { item ->
+                val session = item as? JsonObject ?: return@mapNotNull null
+                SessionItem(
+                    id = session["id"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null,
+                    title = session["title"]?.let { (it as? JsonPrimitive)?.content }?.ifBlank { null }
+                        ?: "Untitled",
+                    lastMessagePreview = session["preview"]?.let { (it as? JsonPrimitive)?.content },
+                    updatedAt = session["started_at"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
+                        ?.let(::normalizeEpochMillis) ?: 0L,
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Failed to parse sessions")
+            emptyList()
+        }
+    }
+
+    fun resumeSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("session_id", sessionId) }
+                gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                activeAssistantMessageId = null
+                _uiState.value = _uiState.value.copy(
+                    activeSessionId = sessionId,
+                    messages = emptyList(),
+                    showSessionDrawer = false,
+                    errorMessage = null,
+                )
+                Timber.i("[Chat] Resumed session: $sessionId")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to resume session")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
             }
         }
     }
@@ -386,9 +430,13 @@ class ChatViewModel @Inject constructor(
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun toggleSessionDrawer() {
-        _uiState.value = _uiState.value.copy(
-            showSessionDrawer = !_uiState.value.showSessionDrawer
-        )
+        val opening = !_uiState.value.showSessionDrawer
+        _uiState.value = _uiState.value.copy(showSessionDrawer = opening)
+        if (opening) loadSessionList()
+    }
+
+    fun closeSessionDrawer() {
+        _uiState.value = _uiState.value.copy(showSessionDrawer = false)
     }
 
     fun newConversation() {
@@ -397,6 +445,7 @@ class ChatViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 messages = emptyList(),
                 showSessionDrawer = false,
+                activeSessionId = null,
             )
             createSession()
         }
@@ -410,6 +459,9 @@ class ChatViewModel @Inject constructor(
 
     private fun jsonToElementMap(obj: kotlinx.serialization.json.JsonObject):
         Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
+
+    private fun normalizeEpochMillis(value: Long): Long =
+        if (value in 1..999_999_999_999L) value * 1000L else value
 
     override fun onCleared() {
         super.onCleared()

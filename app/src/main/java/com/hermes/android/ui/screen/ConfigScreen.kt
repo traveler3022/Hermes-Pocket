@@ -44,6 +44,8 @@ import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.hermes.android.ui.i18n.t
 
 /**
  * Configuration screen — model picker, tool toggles, config viewer.
@@ -75,7 +77,7 @@ fun ConfigScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(t("Settings", "تنظیمات")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -172,12 +174,15 @@ private fun GeneralTab(
             }
         }
 
+        QuickBackendSetup(viewModel)
+
+
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
             onClick = onNavigateToRuntime,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Termux & Agent Connection")
+            Text(t("Termux & Agent Connection", "اتصال ترموکس و عامل"))
         }
 
         // Link to Messaging Platforms
@@ -185,7 +190,7 @@ private fun GeneralTab(
             onClick = onNavigateToPlatforms,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Messaging Platforms")
+            Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
         }
 
         // Link to Skills
@@ -193,7 +198,7 @@ private fun GeneralTab(
             onClick = onNavigateToSkills,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Skills Browser")
+            Text(t("Skills Browser", "مهارت‌ها"))
         }
 
         // Link to Cron Jobs
@@ -201,11 +206,11 @@ private fun GeneralTab(
             onClick = onNavigateToCron,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Cron Scheduler")
+            Text(t("Cron Scheduler", "زمان‌بندی"))
         }
 
         Text(
-            text = "Current Configuration",
+            text = t("Current Configuration", "پیکربندی فعلی"),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -221,6 +226,82 @@ private fun GeneralTab(
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(12.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun QuickBackendSetup(viewModel: ConfigViewModel) {
+    var mimoKey by remember { mutableStateOf("") }
+    var mimoBaseUrl by remember { mutableStateOf("https://api.xiaomimimo.com/v1") }
+    var mimoModel by remember { mutableStateOf("mimo-v2.5-free") }
+    var geminiKey by remember { mutableStateOf("") }
+    var geminiModel by remember { mutableStateOf("gemini-2.5-flash") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = t("Add / switch API backend", "افزودن / تغییر بک‌اند API"),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            OutlinedTextField(
+                value = mimoKey,
+                onValueChange = { mimoKey = it },
+                label = { Text(t("MiMo API key", "کلید MiMo")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            OutlinedTextField(
+                value = mimoBaseUrl,
+                onValueChange = { mimoBaseUrl = it },
+                label = { Text(t("MiMo base URL", "آدرس API میمو")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = mimoModel,
+                onValueChange = { mimoModel = it },
+                label = { Text(t("MiMo model", "مدل میمو")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            androidx.compose.material3.Button(
+                onClick = { viewModel.configureXiaomiBackend(mimoKey, mimoBaseUrl, mimoModel) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(t("Save MiMo backend", "ذخیره بک‌اند MiMo"))
+            }
+
+            androidx.compose.material3.HorizontalDivider()
+
+            OutlinedTextField(
+                value = geminiKey,
+                onValueChange = { geminiKey = it },
+                label = { Text(t("Gemini API key", "کلید Gemini")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            OutlinedTextField(
+                value = geminiModel,
+                onValueChange = { geminiModel = it },
+                label = { Text(t("Gemini model", "مدل Gemini")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.configureGeminiBackend(geminiKey, geminiModel) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(t("Save Gemini backend", "ذخیره بک‌اند Gemini"))
+            }
         }
     }
 }
