@@ -275,7 +275,15 @@ class ChatViewModel @Inject constructor(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
                 )
-                _uiState.value = _uiState.value.copy(isSending = false)
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+                        } else msg
+                    },
+                    isSending = false,
+                )
+                activeAssistantMessageId = null
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to interrupt")
             }
@@ -329,6 +337,8 @@ class ChatViewModel @Inject constructor(
                                 isStreaming = false,
                                 reasoning = event.reasoning,
                             )
+                        } else if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Completed")
                         } else msg
                     },
                     isSending = false,
@@ -381,9 +391,15 @@ class ChatViewModel @Inject constructor(
 
             is GatewayEvent.Error -> {
                 _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                            msg.copy(isRunning = false, error = event.message)
+                        } else msg
+                    },
                     errorMessage = event.message,
                     isSending = false,
                 )
+                activeAssistantMessageId = null
             }
 
             is GatewayEvent.StatusUpdate -> {
