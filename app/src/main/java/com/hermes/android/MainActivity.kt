@@ -1,6 +1,5 @@
 package com.hermes.android
 
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.hermes.android.service.HermesGatewayService
 import com.hermes.android.ui.screen.ChatScreen
 import com.hermes.android.ui.screen.ConfigScreen
 import com.hermes.android.ui.screen.CronScreen
@@ -28,8 +26,9 @@ import dagger.hilt.android.AndroidEntryPoint
 /**
  * Main Activity — single-activity architecture with simple screen state.
  *
- * Starts [HermesGatewayService] on create to keep the gateway connection
- * alive in the background (ADR-004).
+ * The gateway foreground service is started only after the user starts the
+ * Hermes gateway from Runtime Setup. Starting it here would create a
+ * foreground-service notification before Termux/Hermes is installed.
  *
  * Reference: ADR-002 (Native Compose), ADR-004 (Foreground Service),
  *            Phase 1.5 Rule 1
@@ -53,9 +52,6 @@ class MainActivity : ComponentActivity() {
                 requestPermissions(permissionsToRequest.toTypedArray(), 1001)
             }
         }
-
-        // Start the gateway foreground service
-        HermesGatewayService.start(this)
 
         setContent {
             Hermes2Theme {

@@ -237,13 +237,15 @@ private fun MessageBubble(message: ChatMessage) {
                                 modifier = Modifier.padding(bottom = 4.dp),
                             )
                         }
-                        Text(
-                            text = message.text.ifEmpty { "…" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        // Fix S4F01: Render assistant messages as Markdown
-                        if (message.text.isNotEmpty()) {
+                        // Fix S4F01: Render assistant messages as Markdown,
+                        // but do not also render the same text as plain Text.
+                        if (message.text.isEmpty()) {
+                            Text(
+                                text = "…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        } else {
                             dev.jeziellago.compose.markdowntext.MarkdownText(
                                 markdown = message.text,
                                 style = MaterialTheme.typography.bodyMedium.copy(

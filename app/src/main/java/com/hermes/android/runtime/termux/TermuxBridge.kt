@@ -108,22 +108,24 @@ class TermuxBridge @Inject constructor(
             )
         }
 
+        val previouslyInstalled = isPreviouslyInstalled()
         val info = RuntimeInfo(
             type = RuntimeType.TERMUX,
             version = detection.termuxVersion,
             path = TERMUX_PREFIX_PATH,
             pythonVersion = null, // probed during install script (Fix S2F01)
             diskFreeBytes = detection.diskFreeBytes,
+            hermesVersion = if (previouslyInstalled) "installed" else null,
             extras = buildMap {
                 put("termuxApiInstalled", detection.termuxApiInstalled.toString())
                 put("termuxBootInstalled", detection.termuxBootInstalled.toString())
                 // Fix S2F07: flag if this is a re-install
-                put("previouslyInstalled", isPreviouslyInstalled().toString())
+                put("previouslyInstalled", previouslyInstalled.toString())
             },
         )
 
-        Timber.i("Termux detected: ${info.version}, free=${info.diskFreeBytes} bytes")
-        _state.value = RuntimeState.Detected(info)
+        Timber.i("Termux detected: ${info.version}, free=${info.diskFreeBytes} bytes, installed=$previouslyInstalled")
+        _state.value = if (previouslyInstalled) RuntimeState.Installed(info) else RuntimeState.Detected(info)
         return DetectionResult.Available(info)
     }
 
@@ -371,7 +373,10 @@ class TermuxBridge @Inject constructor(
         // full WS handshake here — isHealthy() does that.
         val reachable = waitForGatewayReady(timeoutMs = GATEWAY_READY_TIMEOUT_MS)
         if (!reachable) {
-            Timber.w("[Gateway] Gateway did not become reachable within $GATEWAY_READY_TIMEOUT_MS ms — UI will see reconnect attempts")
+            val msg = "Gateway did not become reachable within $GATEWAY_READY_TIMEOUT_MS ms. Check ~/.hermes/logs/gateway_stdout.log."
+            Timber.w("[Gateway] $msg")
+            _state.value = RuntimeState.Error(msg)
+            throw IllegalStateException(msg)
         }
 
         _state.value = RuntimeState.Running(info, handle)

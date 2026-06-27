@@ -49,6 +49,7 @@ class ChatViewModel @Inject constructor(
 
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
+    private var activeAssistantMessageId: String? = null
 
     init {
         connectAndCollect()
@@ -57,6 +58,8 @@ class ChatViewModel @Inject constructor(
     // ── Connection ────────────────────────────────────────────────────────
 
     private fun connectAndCollect() {
+        connectionWatchJob?.cancel()
+        eventCollectionJob?.cancel()
         viewModelScope.launch {
             // Watch connection state
             connectionWatchJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
@@ -240,8 +243,11 @@ class ChatViewModel @Inject constructor(
     private fun handleEvent(event: GatewayEvent) {
         when (event) {
             is GatewayEvent.MessageStart -> {
-                // Start a new assistant message (streaming)
-                val msgId = event.sessionId ?: UUID.randomUUID().toString()
+                // Start a new assistant message (streaming). Use a unique
+                // message id; sessionId is stable for the whole conversation
+                // and would collide across multiple assistant turns.
+                val msgId = UUID.randomUUID().toString()
+                activeAssistantMessageId = msgId
                 val assistantMsg = ChatMessage.Assistant(
                     id = msgId,
                     timestamp = System.currentTimeMillis(),
@@ -258,7 +264,9 @@ class ChatViewModel @Inject constructor(
                 // Append text to the streaming assistant message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
+                        ) {
                             msg.copy(text = msg.text + event.text)
                         } else msg
                     }
@@ -269,7 +277,9 @@ class ChatViewModel @Inject constructor(
                 // Finalize the assistant message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
+                        ) {
                             msg.copy(
                                 text = event.text.ifEmpty { msg.text },
                                 isStreaming = false,
@@ -279,12 +289,15 @@ class ChatViewModel @Inject constructor(
                     },
                     isSending = false,
                 )
+                activeAssistantMessageId = null
             }
 
             is GatewayEvent.ThinkingDelta -> {
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
+                        ) {
                             msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
                         } else msg
                     }
@@ -380,6 +393,7 @@ class ChatViewModel @Inject constructor(
 
     fun newConversation() {
         viewModelScope.launch {
+            activeAssistantMessageId = null
             _uiState.value = _uiState.value.copy(
                 messages = emptyList(),
                 showSessionDrawer = false,

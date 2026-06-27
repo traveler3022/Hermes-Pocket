@@ -137,7 +137,7 @@ class TermuxBridgeTest {
         bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Accepted
-        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connecting
+        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connected(sessionId = null)
 
         // When: startGateway is called
         val handle = bridge.startGateway()
@@ -177,6 +177,24 @@ class TermuxBridgeTest {
             scriptSlot.captured.contains("--port 9119"),
         )
         assertTrue("Handle must have WS URL", handle.webSocketUrl.startsWith("ws://"))
+    }
+
+    @Test
+    fun `startGateway throws when dashboard never becomes reachable`() = runTest {
+        val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0", hermesVersion = "0.17.0")
+        bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
+        every { executor.executeBackgroundScript(any(), any()) } returns
+            TermuxCommandExecutor.Result.Accepted
+        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connecting
+
+        var threw = false
+        try {
+            bridge.startGateway()
+        } catch (e: IllegalStateException) {
+            threw = true
+            assertTrue("Exception must mention reachability", e.message!!.contains("reachable"))
+        }
+        assertTrue("startGateway must throw when gateway is not reachable", threw)
     }
 
     @Test

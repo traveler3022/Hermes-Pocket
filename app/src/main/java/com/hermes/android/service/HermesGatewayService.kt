@@ -15,11 +15,12 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.hermes.android.HermesApplication
 import com.hermes.android.MainActivity
 import com.hermes.android.R
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.ConnectionState
+import com.hermes.android.runtime.DetectionResult
+import com.hermes.android.runtime.RuntimeState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -87,12 +88,16 @@ class HermesGatewayService : Service() {
                 }
             }
 
-            // Connect to gateway
+            // Ensure the Termux-side dashboard process exists, then connect.
+            // The service is a keeper, not just a socket client: after boot or
+            // process death there may be no `hermes dashboard` process to dial.
             launch {
                 try {
+                    ensureRuntimeGatewayStarted()
                     gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
                 } catch (e: Exception) {
-                    Timber.e(e, "[GatewayService] Failed to connect to gateway")
+                    Timber.e(e, "[GatewayService] Failed to start/connect gateway")
+                    updateNotification("Gateway unavailable: ${e.message ?: "unknown error"}")
                 }
             }
         }
@@ -101,6 +106,49 @@ class HermesGatewayService : Service() {
         // Fix S6F01: Schedule periodic health check via WorkManager (every 15 min)
         scheduleHealthCheck()
         return START_STICKY
+    }
+
+
+    private suspend fun ensureRuntimeGatewayStarted() {
+        when (val state = hermesRuntime.state.value) {
+            is RuntimeState.Running -> return
+            is RuntimeState.Installed -> {
+                updateNotification("Starting Hermes gateway…")
+                hermesRuntime.startGateway()
+                return
+            }
+            is RuntimeState.NotDetected,
+            is RuntimeState.Error -> {
+                updateNotification("Detecting Hermes runtime…")
+                when (val detection = hermesRuntime.detect()) {
+                    is DetectionResult.Missing -> {
+                        updateNotification("Termux setup required")
+                        throw IllegalStateException(detection.title)
+                    }
+                    is DetectionResult.Incompatible -> {
+                        updateNotification("Runtime incompatible")
+                        throw IllegalStateException(detection.reason)
+                    }
+                    is DetectionResult.Available -> Unit
+                }
+                if (hermesRuntime.state.value is RuntimeState.Installed) {
+                    updateNotification("Starting Hermes gateway…")
+                    hermesRuntime.startGateway()
+                    return
+                }
+                updateNotification("Hermes install required")
+                throw IllegalStateException("Hermes is not installed yet")
+            }
+            is RuntimeState.Detected -> {
+                updateNotification("Hermes install required")
+                throw IllegalStateException("Hermes is not installed yet")
+            }
+            RuntimeState.Detecting,
+            RuntimeState.Installing -> {
+                updateNotification("Runtime is busy…")
+                throw IllegalStateException("Runtime is busy: $state")
+            }
+        }
     }
 
     override fun onDestroy() {
