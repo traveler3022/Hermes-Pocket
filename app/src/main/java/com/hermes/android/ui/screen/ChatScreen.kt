@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -338,9 +337,24 @@ private fun MessageBubble(message: ChatMessage) {
                                 modifier = Modifier.padding(bottom = 4.dp),
                             )
                         }
-                        // Fix S4F01: Render assistant messages as Markdown,
-                        // but do not also render the same text as plain Text.
-                        if (message.text.isEmpty()) {
+                        // Normal chat behavior:
+                        // - While streaming, render plain text so the bubble feels
+                        //   like a live chat message instead of a Markdown document
+                        //   constantly re-rendering.
+                        // - Once complete, render Markdown for final formatting.
+                        if (message.isStreaming) {
+                            Text(
+                                text = message.text.ifEmpty { "…" },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = t("typing…", "در حال نوشتن…"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        } else if (message.text.isEmpty()) {
                             Text(
                                 text = "…",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -355,13 +369,6 @@ private fun MessageBubble(message: ChatMessage) {
                                     ),
                                 )
                             }
-                        }
-                        if (message.isStreaming) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                strokeWidth = 2.dp,
-                            )
                         }
                     }
                 }
