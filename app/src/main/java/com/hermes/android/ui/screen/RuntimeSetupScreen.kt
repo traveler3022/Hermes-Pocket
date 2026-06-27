@@ -214,6 +214,15 @@ fun RuntimeSetupScreen(
                 Text("Fetch & View Logs")
             }
 
+            OutlinedButton(
+                onClick = { viewModel.runDoctor() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.Description, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("Run Hermes Doctor")
+            }
+
             AnimatedVisibility(visible = logs != null) {
                 logs?.let { logText ->
                     Card(
