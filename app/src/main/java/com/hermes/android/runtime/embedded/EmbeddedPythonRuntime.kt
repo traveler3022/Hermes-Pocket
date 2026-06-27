@@ -86,6 +86,10 @@ class EmbeddedPythonRuntime @Inject constructor() : HermesRuntime {
         return StopResult.Success
     }
 
+    override suspend fun fetchLogs() {
+        // Embedded runtime logs are managed in-app
+    }
+
     override suspend fun isHealthy(): Boolean {
         return _state.value is RuntimeState.Running
     }
