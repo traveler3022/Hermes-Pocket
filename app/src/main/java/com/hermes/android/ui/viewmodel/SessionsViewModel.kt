@@ -78,7 +78,7 @@ class SessionsViewModel @Inject constructor(
                     lastMessagePreview = s["preview"]?.let { (it as? JsonPrimitive)?.content },
                     // Fix S9F01: field is "started_at" not "updated_at"
                     updatedAt = s["started_at"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                        ?: 0L,
+                        ?.let(::normalizeEpochMillis) ?: 0L,
                     messageCount = s["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
                         ?: 0,
                 )
@@ -195,6 +195,9 @@ class SessionsViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
+
+    private fun normalizeEpochMillis(value: Long): Long =
+        if (value in 1..999_999_999_999L) value * 1000L else value
 }
 
 // ── UI State models ──────────────────────────────────────────────────────

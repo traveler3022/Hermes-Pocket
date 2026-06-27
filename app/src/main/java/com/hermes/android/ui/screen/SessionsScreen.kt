@@ -47,6 +47,9 @@ import com.hermes.android.ui.viewmodel.SessionsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import com.hermes.android.ui.i18n.t
 
 /**
  * Sessions & Memory screen — browse past sessions, view USER.md / MEMORY.md.
@@ -76,7 +79,7 @@ fun SessionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sessions & Memory") },
+                title = { Text(t("Sessions & Memory", "گفتگوها و حافظه")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -95,12 +98,12 @@ fun SessionsScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Sessions") },
+                    text = { Text(t("Sessions", "گفتگوها")) },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Memory") },
+                    text = { Text(t("Memory", "حافظه")) },
                 )
             }
 
@@ -118,7 +121,7 @@ private fun SessionsTab(
     viewModel: SessionsViewModel,
 ) {
     if (state.isLoadingSessions) {
-        LoadingIndicator("Loading sessions…")
+        LoadingIndicator(t("Loading sessions…", "در حال بارگذاری گفتگوها…"))
         return
     }
 
@@ -128,7 +131,7 @@ private fun SessionsTab(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("No sessions yet", style = MaterialTheme.typography.bodyLarge)
+            Text(t("No sessions yet", "هنوز گفتگویی وجود ندارد"), style = MaterialTheme.typography.bodyLarge)
         }
         return
     }
@@ -138,6 +141,11 @@ private fun SessionsTab(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (state.selectedSessionId != null) {
+            item {
+                SelectedSessionHistory(state.selectedSessionHistory)
+            }
+        }
         items(state.sessions, key = { it.id }) { session ->
             SessionCard(session, viewModel)
         }
@@ -149,7 +157,9 @@ private fun SessionCard(session: SessionSummary, viewModel: SessionsViewModel) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { viewModel.loadSessionHistory(session.id) },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -183,7 +193,7 @@ private fun SessionCard(session: SessionSummary, viewModel: SessionsViewModel) {
             IconButton(onClick = { viewModel.deleteSession(session.id) }) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = t("Delete", "حذف"),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -192,9 +202,44 @@ private fun SessionCard(session: SessionSummary, viewModel: SessionsViewModel) {
 }
 
 @Composable
+private fun SelectedSessionHistory(messages: List<HistoryMessage>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = t("Selected session", "گفتگوی انتخاب‌شده"),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            if (messages.isEmpty()) {
+                Text(
+                    text = t("No messages loaded yet", "هنوز پیامی بارگذاری نشده"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            } else {
+                messages.takeLast(12).forEach { msg ->
+                    Text(
+                        text = "${msg.role}: ${msg.content.take(240)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
     if (state.isLoading) {
-        LoadingIndicator("Loading memory…")
+        LoadingIndicator(t("Loading memory…", "در حال بارگذاری حافظه…"))
         return
     }
 
@@ -229,7 +274,7 @@ private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
                     )
                 }
                 Text(
-                    text = state.userMd.ifEmpty { "(empty)" },
+                    text = state.userMd.ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }.replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده")),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -262,7 +307,7 @@ private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
                     )
                 }
                 Text(
-                    text = state.memoryMd.ifEmpty { "(empty)" },
+                    text = state.memoryMd.ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }.replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده")),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
