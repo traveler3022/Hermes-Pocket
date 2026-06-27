@@ -157,7 +157,7 @@ class TermuxInstallerTest {
 
         assertTrue("Script must export ANDROID_API_LEVEL for maturin builds", script.contains("ANDROID_API_LEVEL"))
         assertTrue("Script must export CARGO_BUILD_TARGET for Termux Rust builds", script.contains("CARGO_BUILD_TARGET"))
-        assertTrue("Script must install Termux binutils for maturin jiter builds", script.contains("binutils-is-llvm"))
+        assertTrue("Script must install LLVM for maturin jiter builds", script.contains(" llvm lld"))
     }
 
     @Test
@@ -165,7 +165,10 @@ class TermuxInstallerTest {
         val script = installer.generateInstallScript()
 
         assertTrue("Script must not report success if hermes binary is missing", script.contains("Hermes command not found after install"))
-        assertFalse("Script must not hide a missing hermes command as installed", script.contains("--version 2>&1 || echo "installed""))
+        assertFalse(
+            "Script must not hide a missing hermes command as installed",
+            script.contains("--version 2>&1 || echo \"installed\""),
+        )
     }
 
     @Test
