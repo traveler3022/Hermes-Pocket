@@ -98,6 +98,44 @@ class TermuxInstallerTest {
     }
 
     @Test
+    fun `generateInstallScript recovers non git repo directory without precreating it`() {
+        val script = installer.generateInstallScript()
+
+        assertFalse(
+            "Script must not pre-create repo dir before install_sh repository stage",
+            script.contains("mkdir -p \"\$HOME/.hermes/hermes-agent\""),
+        )
+        assertTrue(
+            "Script must move a non-git repo path aside before running repository stage",
+            script.contains("BROKEN_REPO_DIR=\"\$REPO_DIR.broken-\$(date +%Y%m%d-%H%M%S)\""),
+        )
+        assertTrue(
+            "Script must detect repo path without .git",
+            script.contains("[ -e \"\$REPO_DIR\" ] && [ ! -d \"\$REPO_DIR/.git\" ]"),
+        )
+    }
+
+    @Test
+    fun `generateInstallScript handles Android psutil failures`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must run the upstream psutil Android workaround", script.contains("install_psutil_android.py"))
+        assertTrue("Script must detect Android psutil unsupported errors", script.contains("platform android is not supported"))
+        assertTrue("Script must remove the pinned psutil dependency for Android fallback", script.contains("psutil==7.2.2"))
+        assertTrue(
+            "Script must retry the termux pip install after removing psutil",
+            script.contains("python3 -m pip install -e '.[termux]' -c constraints-termux.txt"),
+        )
+    }
+
+    @Test
+    fun `generateInstallScript enables pipefail so stage failures are caught`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must enable pipefail before tee pipelines", script.contains("set -o pipefail"))
+    }
+
+    @Test
     fun `generateInstallCommand is alias for generateInstallScript`() {
         // Legacy entry point must return the same script body
         val cmd = installer.generateInstallCommand()
