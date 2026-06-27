@@ -1,0 +1,42 @@
+# Gradle
+.gradle/
+build/
+*/build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Keystore files (DO NOT commit)
+*.jks
+*.keystore
+keystore.properties
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# APK / AAB / mapping files (do not commit build artifacts)
+*.apk
+*.aab
+mapping.txt
+
+# Kotlin
+.kotlin/
+
+# Prototype 12A (abandoned — Chaquopy can't load pydantic-core on Android.
+# See hermes-migration/docs/audits/gateway-bind-audit.md — Termux is the
+# only viable Python runtime on Android per Phase 0 Report §2.4.1.)
+prototype12a/

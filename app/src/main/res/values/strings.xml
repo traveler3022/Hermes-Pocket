@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — translatable per ADR-013 -->
+    <string name="app_name">Hermes</string>
+
+    <!-- Gateway service notification (Step 6) -->
+    <string name="notification_channel_gateway_id">hermes_gateway</string>
+    <string name="notification_channel_gateway_name">Gateway Service</string>
+    <string name="notification_channel_gateway_desc">Keeps the Hermes gateway running in the background</string>
+    <string name="gateway_notification_title">Hermes Gateway</string>
+    <string name="gateway_notification_text">Gateway is running</string>
+
+    <!-- Tool approval notification (Step 7) -->
+    <string name="notification_channel_approval_id">hermes_approval</string>
+    <string name="notification_channel_approval_name">Tool Approvals</string>
+    <string name="notification_channel_approval_desc">High-priority notifications for tool approval requests</string>
+    <string name="approval_notification_title">Tool approval required</string>
+    <string name="approval_approve">Approve</string>
+    <string name="approval_deny">Deny</string>
+
+    <!-- Boot receiver (Step 6) -->
+    <string name="boot_notification_text">Starting Hermes gateway…</string>
+
+    <!-- Placeholder strings for Step 4 (Chat UI) -->
+    <string name="chat_send">Send</string>
+    <string name="chat_stop">Stop</string>
+    <string name="chat_input_hint">Type a message…</string>
+    <string name="new_conversation">New conversation</string>
+    <string name="settings">Settings</string>
+</resources>
