@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -125,10 +126,15 @@ class ConfigViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingModels = true)
             try {
                 val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
+                val obj = result as? JsonObject
+                val activeProvider = obj?.get("provider")?.let { (it as? JsonPrimitive)?.content }
+                val activeModel = obj?.get("model")?.let { (it as? JsonPrimitive)?.content }
                 // Parse model list from result
                 val models = parseModelOptions(result)
                 _uiState.value = _uiState.value.copy(
                     availableModels = models,
+                    activeProvider = activeProvider ?: _uiState.value.activeProvider,
+                    activeModel = activeModel ?: _uiState.value.activeModel,
                     isLoadingModels = false,
                 )
                 Timber.i("[Config] Models loaded: ${models.size}")
@@ -191,6 +197,39 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    fun selectModel(model: ModelOption) {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.provider")
+                        put("value", model.provider)
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.default")
+                        put("value", model.modelId)
+                    }.toMap(),
+                )
+                _uiState.value = _uiState.value.copy(
+                    activeProvider = model.provider,
+                    activeModel = model.modelId,
+                    errorMessage = "Backend set to ${model.provider}/${model.modelId}",
+                )
+                loadConfig()
+                loadModels()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to select model")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to select model: ${e.message}",
+                )
+            }
+        }
+    }
+
     // ── Tools ─────────────────────────────────────────────────────────────
 
     fun loadTools() {
@@ -218,11 +257,17 @@ class ConfigViewModel @Inject constructor(
             val toolsets = obj["toolsets"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
             toolsets.mapNotNull { tsEl ->
                 val ts = tsEl as? JsonObject ?: return@mapNotNull null
+                val tools = (ts["tools"] as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                    ?: emptyList()
                 ToolOption(
                     name = ts["name"]?.let { (it as? JsonPrimitive)?.content } ?: "",
                     description = ts["description"]?.let { (it as? JsonPrimitive)?.content } ?: "",
                     enabled = ts["enabled"]?.let { (it as? JsonPrimitive)?.content } != "false",
                     toolset = null,
+                    toolCount = ts["tool_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+                        ?: tools.size,
+                    tools = tools,
                 )
             }
         } catch (e: Exception) {
@@ -272,6 +317,8 @@ data class ConfigUiState(
     val selectedTab: ConfigTab = ConfigTab.GENERAL,
     val configYaml: String = "",
     val isLoadingConfig: Boolean = false,
+    val activeProvider: String? = null,
+    val activeModel: String? = null,
     val availableModels: List<ModelOption> = emptyList(),
     val isLoadingModels: Boolean = false,
     val availableTools: List<ToolOption> = emptyList(),
@@ -297,4 +344,6 @@ data class ToolOption(
     val description: String,
     val enabled: Boolean,
     val toolset: String?,
+    val toolCount: Int = 0,
+    val tools: List<String> = emptyList(),
 )

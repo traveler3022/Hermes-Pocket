@@ -383,7 +383,9 @@ class TermuxBridge @Inject constructor(
             throw IllegalStateException(msg)
         }
 
-        _state.value = RuntimeState.Running(info, handle)
+        val runningInfo = info.copy(hermesVersion = info.hermesVersion ?: "installed")
+        cacheInstallState(runningInfo)
+        _state.value = RuntimeState.Running(runningInfo, handle)
         return handle
     }
 
