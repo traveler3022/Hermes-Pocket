@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
-import java.util.Base64
 import javax.inject.Inject
 
 /**
@@ -289,87 +288,61 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun configureFallbackProvider(provider: String, model: String, baseUrl: String = "") {
+    fun configureCustomBackend(apiKey: String, baseUrl: String, model: String) {
         viewModelScope.launch {
             try {
-                val cleanProvider = provider.trim()
+                val cleanBaseUrl = baseUrl.trim()
                 val cleanModel = model.trim()
-                if (cleanProvider.isBlank() || cleanModel.isBlank()) {
-                    _uiState.value = _uiState.value.copy(errorMessage = "Fallback provider and model are required")
+                if (cleanBaseUrl.isBlank() || cleanModel.isBlank()) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Custom base URL and model are required",
+                    )
                     return@launch
                 }
-                writeFallbackChain(
-                    listOf(
-                        FallbackProviderConfig(
-                            provider = cleanProvider,
-                            model = cleanModel,
-                            baseUrl = baseUrl.trim().ifBlank { null },
-                        )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.provider")
+                        put("value", "custom")
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.base_url")
+                        put("value", cleanBaseUrl)
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.default")
+                        put("value", cleanModel)
+                    }.toMap(),
+                )
+                if (apiKey.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.CONFIG_SET,
+                        buildJsonObject {
+                            put("key", "model.api_key")
+                            put("value", apiKey.trim())
+                        }.toMap(),
                     )
-                )
+                }
                 _uiState.value = _uiState.value.copy(
-                    fallbackSummary = "$cleanProvider/$cleanModel",
-                    errorMessage = "Fallback set to $cleanProvider/$cleanModel",
+                    activeProvider = "custom",
+                    activeModel = cleanModel,
+                    errorMessage = "Custom backend saved",
                 )
                 loadConfig()
+                loadModels()
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure fallback")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure fallback: ${e.message}")
-            }
-        }
-    }
-
-    fun clearFallbackProviders() {
-        viewModelScope.launch {
-            try {
-                writeFallbackChain(emptyList())
+                Timber.e(e, "[Config] Failed to configure custom backend")
                 _uiState.value = _uiState.value.copy(
-                    fallbackSummary = "none",
-                    errorMessage = "Fallback providers cleared",
+                    errorMessage = "Failed to configure custom backend: ${e.message}",
                 )
-                loadConfig()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to clear fallback")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to clear fallback: ${e.message}")
             }
         }
-    }
-
-    private suspend fun writeFallbackChain(entries: List<FallbackProviderConfig>) {
-        val json = entries.joinToString(prefix = "[", postfix = "]") { entry ->
-            buildString {
-                append("{")
-                append("\"provider\":\"").append(entry.provider.escapeJson()).append("\"")
-                append(",\"model\":\"").append(entry.model.escapeJson()).append("\"")
-                entry.baseUrl?.let { append(",\"base_url\":\"").append(it.escapeJson()).append("\"") }
-                append("}")
-            }
-        }
-        val payload = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
-        val command = """
-            python3 - <<'PY'
-            import base64, json
-            from pathlib import Path
-            import yaml
-
-            entries = json.loads(base64.b64decode('$payload').decode('utf-8'))
-            path = Path.home() / '.hermes' / 'config.yaml'
-            if path.exists():
-                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                cfg = {}
-            cfg['fallback_providers'] = entries
-            cfg.pop('fallback_model', None)
-            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
-            print('fallback_providers updated:', entries)
-            PY
-        """.trimIndent()
-        gatewayClient.request(
-            GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive(command)),
-            timeoutMs = 10_000,
-        )
     }
 
     fun selectModel(model: ModelOption) {
@@ -494,7 +467,6 @@ data class ConfigUiState(
     val isLoadingConfig: Boolean = false,
     val activeProvider: String? = null,
     val activeModel: String? = null,
-    val fallbackSummary: String? = null,
     val availableModels: List<ModelOption> = emptyList(),
     val isLoadingModels: Boolean = false,
     val availableTools: List<ToolOption> = emptyList(),
@@ -507,15 +479,6 @@ enum class ConfigTab(val label: String) {
     MODELS("Models"),
     TOOLS("Tools"),
 }
-
-data class FallbackProviderConfig(
-    val provider: String,
-    val model: String,
-    val baseUrl: String? = null,
-)
-
-private fun String.escapeJson(): String =
-    replace("\\", "\\\\").replace("\"", "\\\"")
 
 data class ModelOption(
     val provider: String,

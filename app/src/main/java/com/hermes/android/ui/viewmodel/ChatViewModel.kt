@@ -266,6 +266,17 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
+        // Make the UI stop spinning immediately. The backend interrupt is
+        // cooperative and can take a moment if a tool/model call is in-flight.
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                    msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+                } else msg
+            },
+            isSending = false,
+        )
+        activeAssistantMessageId = null
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
@@ -274,16 +285,8 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
+                    timeoutMs = 10_000,
                 )
-                _uiState.value = _uiState.value.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
-                        } else msg
-                    },
-                    isSending = false,
-                )
-                activeAssistantMessageId = null
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to interrupt")
             }
