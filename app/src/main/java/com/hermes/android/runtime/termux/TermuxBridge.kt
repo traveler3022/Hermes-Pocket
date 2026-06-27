@@ -433,6 +433,40 @@ class TermuxBridge @Inject constructor(
         return StopResult.Success
     }
 
+    override suspend fun fetchLogs() {
+        val script = """
+            mkdir -p /sdcard/Download
+            LOG_FILE="/sdcard/Download/hermes_logs.txt"
+            echo "=== HERMES AGENT LOGS ===" > "${'$'}LOG_FILE"
+            echo "Date: $(date)" >> "${'$'}LOG_FILE"
+            echo "" >> "${'$'}LOG_FILE"
+            echo "=== INSTALL LOG (${'$'}HOME/.hermes/logs/install.log) ===" >> "${'$'}LOG_FILE"
+            if [ -f "${'$'}HOME/.hermes/logs/install.log" ]; then
+                cat "${'$'}HOME/.hermes/logs/install.log" >> "${'$'}LOG_FILE"
+            else
+                echo "(No install log found)" >> "${'$'}LOG_FILE"
+            fi
+            echo "" >> "${'$'}LOG_FILE"
+            echo "=== GATEWAY LOG (${'$'}HOME/.hermes/logs/gateway_stdout.log) ===" >> "${'$'}LOG_FILE"
+            if [ -f "${'$'}HOME/.hermes/logs/gateway_stdout.log" ]; then
+                cat "${'$'}HOME/.hermes/logs/gateway_stdout.log" >> "${'$'}LOG_FILE"
+            else
+                echo "(No gateway log found)" >> "${'$'}LOG_FILE"
+            fi
+            
+            # Take last 2000 chars for broadcast to avoid intent size limits
+            LOG_TAIL="$(tail -c 2000 "${'$'}LOG_FILE")"
+            am broadcast -p "${context.packageName}" -a "com.hermes.android.LOG_UPDATE" --es logs "${'$'}LOG_TAIL" >/dev/null 2>&1 || true
+            echo "Logs copied to /sdcard/Download/hermes_logs.txt and broadcasted"
+        """.trimIndent()
+
+        executor.executeBackgroundScript(
+            script = script,
+            workingDirectory = TermuxCommandExecutor.TERMUX_HOME,
+        )
+        Timber.i("[Logs] Fetch logs script dispatched to Termux")
+    }
+
     override suspend fun isHealthy(): Boolean {
         // Real health probe: check that (a) the runtime state is Running,
         // and (b) the WS connection is actually established with the gateway.
