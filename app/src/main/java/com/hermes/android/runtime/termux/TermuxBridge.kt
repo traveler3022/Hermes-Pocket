@@ -1,6 +1,8 @@
 package com.hermes.android.runtime.termux
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
@@ -19,6 +21,7 @@ import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,19 +111,22 @@ class TermuxBridge @Inject constructor(
             )
         }
 
-        val previouslyInstalled = isPreviouslyInstalled()
+        val probe = probeHermesInstall()
+        val previouslyInstalled = isPreviouslyInstalled() || probe?.installed == true
         val info = RuntimeInfo(
             type = RuntimeType.TERMUX,
             version = detection.termuxVersion,
             path = TERMUX_PREFIX_PATH,
-            pythonVersion = null, // probed during install script (Fix S2F01)
+            pythonVersion = probe?.pythonVersion, // best-effort RUN_COMMAND probe
             diskFreeBytes = detection.diskFreeBytes,
-            hermesVersion = if (previouslyInstalled) "installed" else null,
+            hermesVersion = probe?.hermesVersion?.takeIf { it.isNotBlank() }
+                ?: if (previouslyInstalled) "installed" else null,
             extras = buildMap {
                 put("termuxApiInstalled", detection.termuxApiInstalled.toString())
                 put("termuxBootInstalled", detection.termuxBootInstalled.toString())
-                // Fix S2F07: flag if this is a re-install
+                // Fix S2F07: flag if this is a re-install or a manual Termux install
                 put("previouslyInstalled", previouslyInstalled.toString())
+                put("manualProbe", (probe?.installed == true).toString())
             },
         )
 
@@ -493,8 +499,29 @@ class TermuxBridge @Inject constructor(
                 echo "(No gateway log found)" >> "${'$'}LOG_FILE"
             fi
             
-            # Take last 2000 chars for broadcast to avoid intent size limits
-            LOG_TAIL="$(tail -c 2000 "${'$'}LOG_FILE")"
+            echo "" >> "${'$'}LOG_FILE"
+            echo "=== HERMES VERSION + DOCTOR ===" >> "${'$'}LOG_FILE"
+            export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
+            HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
+            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
+            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
+            elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
+                HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
+            elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
+                HERMES_CMD="$(command -v hermes)"
+            fi
+            if [ -x "${'$'}HERMES_CMD" ]; then
+                "${'$'}HERMES_CMD" --version >> "${'$'}LOG_FILE" 2>&1 || true
+                echo "" >> "${'$'}LOG_FILE"
+                "${'$'}HERMES_CMD" doctor >> "${'$'}LOG_FILE" 2>&1 || true
+            else
+                echo "Hermes command not found: ${'$'}HERMES_CMD" >> "${'$'}LOG_FILE"
+            fi
+
+            # Take last 4000 chars for broadcast to avoid intent size limits
+            LOG_TAIL="$(tail -c 4000 "${'$'}LOG_FILE")"
             am broadcast -p "${context.packageName}" -a "com.hermes.android.LOG_UPDATE" --es logs "${'$'}LOG_TAIL" >/dev/null 2>&1 || true
             echo "Logs copied to /sdcard/Download/hermes_logs.txt and broadcasted"
         """.trimIndent()
@@ -662,6 +689,74 @@ class TermuxBridge @Inject constructor(
         // in startGateway(), and the ?token= query param we add to the WS URL
         // in getWebSocketUrl()) must use this same value.
         private const val KEY_SESSION_TOKEN = "session_token"
+    }
+
+    private data class HermesInstallProbe(
+        val installed: Boolean,
+        val hermesVersion: String?,
+        val pythonVersion: String?,
+    )
+
+    /**
+     * Best-effort probe for manual installs that survive Android app reinstall.
+     *
+     * Android cannot directly read Termux private files, so we ask Termux to
+     * resolve `hermes` and broadcast the result back. If RUN_COMMAND is not yet
+     * allowed, this simply returns null and detect() falls back to Detected.
+     */
+    private suspend fun probeHermesInstall(): HermesInstallProbe? {
+        val action = "${context.packageName}.RUNTIME_PROBE_RESULT"
+        val result = CompletableDeferred<HermesInstallProbe>()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != action || result.isCompleted) return
+                result.complete(
+                    HermesInstallProbe(
+                        installed = intent.getBooleanExtra("installed", false),
+                        hermesVersion = intent.getStringExtra("hermes_version"),
+                        pythonVersion = intent.getStringExtra("python_version"),
+                    )
+                )
+            }
+        }
+        val filter = IntentFilter(action)
+        return try {
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+            val script = """
+                set +e
+                RECEIVER="${context.packageName}"
+                ACTION="$action"
+                export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
+                HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
+                if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
+                elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
+                elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
+                elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
+                    HERMES_CMD="$(command -v hermes)"
+                fi
+                if [ -x "${'$'}HERMES_CMD" ]; then
+                    INSTALLED=true
+                    HERMES_VERSION=$("${'$'}HERMES_CMD" --version 2>&1 | head -n 1)
+                else
+                    INSTALLED=false
+                    HERMES_VERSION=""
+                fi
+                PYTHON_VERSION=$(python3 --version 2>&1 | head -n 1)
+                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION"                     --ez installed "${'$'}INSTALLED"                     --es hermes_version "${'$'}HERMES_VERSION"                     --es python_version "${'$'}PYTHON_VERSION" >/dev/null 2>&1 || true
+            """.trimIndent()
+            when (executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
+                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(6.seconds) { result.await() }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Timber.d(e, "[Runtime] Hermes manual-install probe failed")
+            null
+        } finally {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+        }
     }
 
     // Fix S2F03: Cache install state
