@@ -40,6 +40,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Request runtime permissions required on Android 13+ (RUN_COMMAND and POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val permissionsToRequest = mutableListOf<String>()
+            if (checkSelfPermission("com.termux.permission.RUN_COMMAND") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add("com.termux.permission.RUN_COMMAND")
+            }
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add("android.permission.POST_NOTIFICATIONS")
+            }
+            if (permissionsToRequest.isNotEmpty()) {
+                requestPermissions(permissionsToRequest.toTypedArray(), 1001)
+            }
+        }
+
         // Start the gateway foreground service
         HermesGatewayService.start(this)
 
