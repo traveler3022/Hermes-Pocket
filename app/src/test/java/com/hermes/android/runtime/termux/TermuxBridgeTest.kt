@@ -167,6 +167,10 @@ class TermuxBridgeTest {
             "Script must create a placeholder assets dir for dashboard StaticFiles",
             scriptSlot.captured.contains("web_dist_placeholder/assets"),
         )
+        assertTrue(
+            "Script must stop stale dashboard processes before rebinding 9119",
+            scriptSlot.captured.contains("dashboard --stop") && scriptSlot.captured.contains("lsof -ti tcp:"),
+        )
         // Must bind to 127.0.0.1:9119 (default dashboard port)
         assertTrue(
             "Script must use --host 127.0.0.1",
