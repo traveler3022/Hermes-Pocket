@@ -96,6 +96,11 @@ interface HermesRuntime {
     suspend fun stopGateway(): StopResult
 
     /**
+     * Fetch logs from the runtime (e.g. install.log and gateway_stdout.log).
+     */
+    suspend fun fetchLogs()
+
+    /**
      * Quick health probe — is the runtime alive and the gateway responding?
      *
      * Cheaper than [verify]; intended for periodic polling by a foreground service.
