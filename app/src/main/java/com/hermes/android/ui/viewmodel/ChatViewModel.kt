@@ -10,6 +10,7 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +53,8 @@ class ChatViewModel @Inject constructor(
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
     private var activeAssistantMessageId: String? = null
+    private val streamingBuffer = StringBuilder()
+    private var streamingFlushJob: Job? = null
 
     init {
         connectAndCollect()
@@ -167,6 +170,7 @@ class ChatViewModel @Inject constructor(
                 val params = buildJsonObject { put("session_id", sessionId) }
                 gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
                 activeAssistantMessageId = null
+                resetStreamingBuffer()
                 _uiState.value = _uiState.value.copy(
                     activeSessionId = sessionId,
                     messages = emptyList(),
@@ -266,6 +270,18 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
+        // Make the UI stop spinning immediately. The backend interrupt is
+        // cooperative and can take a moment if a tool/model call is in-flight.
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                    msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+                } else msg
+            },
+            isSending = false,
+        )
+        activeAssistantMessageId = null
+        resetStreamingBuffer()
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
@@ -274,18 +290,22 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
+                    timeoutMs = 5_000,
                 )
-                _uiState.value = _uiState.value.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
-                        } else msg
-                    },
-                    isSending = false,
-                )
-                activeAssistantMessageId = null
             } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to interrupt")
+                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
+            }
+            try {
+                // Best-effort cleanup for background/shell processes that keep
+                // a tool card spinning after the turn was interrupted. This is
+                // still routed through GatewayClient, so UI does not know about
+                // backend process details.
+                gatewayClient.request(
+                    method = GatewayMethods.PROCESS_STOP,
+                    timeoutMs = 5_000,
+                )
+            } catch (e: Exception) {
+                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
             }
         }
     }
@@ -298,6 +318,7 @@ class ChatViewModel @Inject constructor(
                 // Start a new assistant message (streaming). Use a unique
                 // message id; sessionId is stable for the whole conversation
                 // and would collide across multiple assistant turns.
+                resetStreamingBuffer()
                 val msgId = UUID.randomUUID().toString()
                 activeAssistantMessageId = msgId
                 val assistantMsg = ChatMessage.Assistant(
@@ -313,19 +334,11 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageDelta -> {
-                // Append text to the streaming assistant message
-                _uiState.value = _uiState.value.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                        ) {
-                            msg.copy(text = msg.text + event.text)
-                        } else msg
-                    }
-                )
+                enqueueStreamingDelta(event.text)
             }
 
             is GatewayEvent.MessageComplete -> {
+                flushStreamingBuffer()
                 // Finalize the assistant message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
@@ -344,6 +357,7 @@ class ChatViewModel @Inject constructor(
                     isSending = false,
                 )
                 activeAssistantMessageId = null
+                resetStreamingBuffer()
             }
 
             is GatewayEvent.ThinkingDelta -> {
@@ -443,6 +457,41 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // ── Streaming buffer ─────────────────────────────────────────────────
+
+    private fun enqueueStreamingDelta(text: String) {
+        if (text.isEmpty()) return
+        streamingBuffer.append(text)
+        if (streamingFlushJob?.isActive == true) return
+        streamingFlushJob = viewModelScope.launch {
+            delay(STREAM_FLUSH_INTERVAL_MS)
+            flushStreamingBuffer()
+            streamingFlushJob = null
+        }
+    }
+
+    private fun flushStreamingBuffer() {
+        if (streamingBuffer.isEmpty()) return
+        val chunk = streamingBuffer.toString()
+        streamingBuffer.setLength(0)
+        val targetId = activeAssistantMessageId
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                    (targetId == null || msg.id == targetId)
+                ) {
+                    msg.copy(text = msg.text + chunk)
+                } else msg
+            }
+        )
+    }
+
+    private fun resetStreamingBuffer() {
+        streamingFlushJob?.cancel()
+        streamingFlushJob = null
+        streamingBuffer.setLength(0)
+    }
+
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun toggleSessionDrawer() {
@@ -458,6 +507,7 @@ class ChatViewModel @Inject constructor(
     fun newConversation() {
         viewModelScope.launch {
             activeAssistantMessageId = null
+            resetStreamingBuffer()
             _uiState.value = _uiState.value.copy(
                 messages = emptyList(),
                 showSessionDrawer = false,
@@ -479,10 +529,15 @@ class ChatViewModel @Inject constructor(
     private fun normalizeEpochMillis(value: Long): Long =
         if (value in 1..999_999_999_999L) value * 1000L else value
 
+    private companion object {
+        private const val STREAM_FLUSH_INTERVAL_MS = 80L
+    }
+
     override fun onCleared() {
         super.onCleared()
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()
+        resetStreamingBuffer()
         viewModelScope.launch { gatewayClient.disconnect() }
     }
 }
