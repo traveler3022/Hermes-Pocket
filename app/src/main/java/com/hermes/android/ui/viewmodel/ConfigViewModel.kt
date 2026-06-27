@@ -515,7 +515,7 @@ data class FallbackProviderConfig(
 )
 
 private fun String.escapeJson(): String =
-    replace("\", "\\").replace(""", "\"")
+    replace("\\", "\\\\").replace("\"", "\\\"")
 
 data class ModelOption(
     val provider: String,
