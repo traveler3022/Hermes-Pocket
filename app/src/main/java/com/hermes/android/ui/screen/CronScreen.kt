@@ -76,7 +76,7 @@ fun CronScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.uiState.value.let { /* toggle dialog */ } }) {
+                    IconButton(onClick = { viewModel.showCreateDialog() }) {
                         Icon(Icons.Default.Add, contentDescription = "Add job")
                     }
                 },
@@ -104,7 +104,7 @@ fun CronScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text("No scheduled jobs", style = MaterialTheme.typography.bodyLarge)
-                TextButton(onClick = { /* show create dialog */ }) {
+                TextButton(onClick = { viewModel.showCreateDialog() }) {
                     Text("Create a job")
                 }
             }
@@ -219,7 +219,7 @@ private fun CreateJobDialog(viewModel: CronViewModel) {
     var prompt by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = { /* close dialog */ },
+        onDismissRequest = { viewModel.hideCreateDialog() },
         title = { Text("Create Cron Job") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -254,7 +254,7 @@ private fun CreateJobDialog(viewModel: CronViewModel) {
             ) { Text("Create") }
         },
         dismissButton = {
-            TextButton(onClick = { /* close */ }) { Text("Cancel") }
+            TextButton(onClick = { viewModel.hideCreateDialog() }) { Text("Cancel") }
         },
     )
 }

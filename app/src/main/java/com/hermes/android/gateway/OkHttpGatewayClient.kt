@@ -309,11 +309,11 @@ class OkHttpGatewayClient @Inject constructor(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            handleMessage(text)
+            handleMessage(text, onState)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-            handleMessage(bytes.utf8())
+            handleMessage(bytes.utf8(), onState)
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -331,7 +331,7 @@ class OkHttpGatewayClient @Inject constructor(
         }
     }
 
-    private fun handleMessage(raw: String) {
+    private fun handleMessage(raw: String, onState: (WsState) -> Unit = {}) {
         try {
             val element = json.parseToJsonElement(raw)
             if (element !is JsonObject) {
@@ -344,7 +344,7 @@ class OkHttpGatewayClient @Inject constructor(
             if ("id" in obj) {
                 handleResponse(obj)
             } else if (obj["method"]?.jsonPrimitive?.content == "event") {
-                handleEvent(obj)
+                handleEvent(obj, onState)
             } else {
                 Timber.w("[Gateway] unknown message shape: ${raw.take(200)}")
             }
@@ -378,7 +378,7 @@ class OkHttpGatewayClient @Inject constructor(
         }
     }
 
-    private fun handleEvent(obj: JsonObject) {
+    private fun handleEvent(obj: JsonObject, onState: (WsState) -> Unit = {}) {
         val params = obj["params"]?.jsonObject ?: return
         val eventType = (params["event"] ?: params["type"])?.jsonPrimitive?.content ?: return
         val sid = (params["sid"] ?: params["session_id"])?.jsonPrimitive?.content
@@ -386,9 +386,13 @@ class OkHttpGatewayClient @Inject constructor(
 
         val event = parseEvent(eventType, sid, payload)
         if (event is GatewayEvent.GatewayReady) {
+            // gateway.ready is the transport-level handshake that connect()
+            // waits for. Without this, the socket can be open while the app
+            // remains stuck in Connecting until timeout.
+            onState(WsState.Ready(event.sessionId))
             // Track last session for resume
-            // (gateway.ready doesn't carry a session id, but we'll get one
-            // from session.create in Step 4)
+            // (gateway.ready usually doesn't carry a session id, but preserve
+            // it if a future server version includes one.)
             if (event.sessionId != null) {
                 lastSessionId = event.sessionId
             }

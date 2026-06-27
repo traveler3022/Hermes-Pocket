@@ -99,6 +99,7 @@ class CronViewModel @Inject constructor(
                 }
                 gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap())
                 Timber.i("[Cron] Job created: $name")
+                _uiState.value = _uiState.value.copy(showCreateDialog = false)
                 loadJobs()
             } catch (e: Exception) {
                 Timber.e(e, "[Cron] Create failed")
@@ -146,6 +147,14 @@ class CronViewModel @Inject constructor(
                 Timber.e(e, "[Cron] Remove failed")
             }
         }
+    }
+
+    fun showCreateDialog() {
+        _uiState.value = _uiState.value.copy(showCreateDialog = true)
+    }
+
+    fun hideCreateDialog() {
+        _uiState.value = _uiState.value.copy(showCreateDialog = false)
     }
 
     fun clearError() {

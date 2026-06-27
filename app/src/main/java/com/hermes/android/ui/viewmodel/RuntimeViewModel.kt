@@ -2,6 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.ContextCompat
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
 import com.hermes.android.runtime.InstallResult
@@ -70,7 +71,7 @@ class RuntimeViewModel @Inject constructor(
     init {
         // Register log receiver
         val filter = android.content.IntentFilter("com.hermes.android.LOG_UPDATE")
-        context.registerReceiver(logReceiver, filter, android.content.Context.RECEIVER_EXPORTED)
+        ContextCompat.registerReceiver(context, logReceiver, filter, ContextCompat.RECEIVER_EXPORTED)
 
         // Bridge runtime state → UI state
         viewModelScope.launch {
@@ -159,6 +160,7 @@ class RuntimeViewModel @Inject constructor(
             try {
                 val handle = runtimeManager.runtime.startGateway()
                 Timber.i("[Runtime] Gateway started: ${handle.webSocketUrl}")
+                com.hermes.android.service.HermesGatewayService.start(context)
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to start gateway")
                 _errorMessage.value = e.message ?: "Failed to start gateway in Termux"
