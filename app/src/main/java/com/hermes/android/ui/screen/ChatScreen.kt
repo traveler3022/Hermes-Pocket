@@ -372,65 +372,66 @@ private fun MessageBubble(message: ChatMessage) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = "🔧 ${message.toolName}",
+                            text = if (message.isRunning) "◌" else "✓",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = if (message.isRunning) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = message.toolName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
                         )
                         if (message.isRunning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                strokeWidth = 2.dp,
+                            Text(
+                                text = t("Running…", "در حال اجرا…"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
                             )
                         }
                         message.durationS?.let {
                             Text(
                                 text = "${"%.1f".format(it)}s",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = MaterialTheme.colorScheme.outline,
                             )
                         }
                     }
-                    message.argsText?.let { args ->
-                        if (args.isNotBlank()) {
-                            Text(
-                                text = args,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
+                    message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
+                        Text(
+                            text = args.replace('\n', ' ').take(180) + if (args.length > 180) "…" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    message.resultText?.let { result ->
-                        if (result.isNotBlank()) {
-                            Text(
-                                text = result.take(500) + if (result.length > 500) "…" else "",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
+                    message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
+                        Text(
+                            text = result.take(300) + if (result.length > 300) "…" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    message.error?.let { err ->
-                        if (err.isNotBlank()) {
-                            Text(
-                                text = "❌ $err",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
+                    message.error?.takeIf { it.isNotBlank() }?.let { err ->
+                        Text(
+                            text = "❌ ${err.take(220)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
                     }
                 }
             }

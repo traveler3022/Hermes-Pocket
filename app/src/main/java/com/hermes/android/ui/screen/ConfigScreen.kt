@@ -27,7 +27,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -172,14 +171,6 @@ private fun GeneralTab(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                state.fallbackSummary?.let { fallback ->
-                    Text(
-                        text = "Fallback: $fallback",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
             }
         }
 
@@ -246,6 +237,9 @@ private fun QuickBackendSetup(viewModel: ConfigViewModel) {
     var mimoModel by remember { mutableStateOf("mimo-v2.5-free") }
     var geminiKey by remember { mutableStateOf("") }
     var geminiModel by remember { mutableStateOf("gemini-2.5-flash") }
+    var customKey by remember { mutableStateOf("") }
+    var customBaseUrl by remember { mutableStateOf("") }
+    var customModel by remember { mutableStateOf("") }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -314,34 +308,38 @@ private fun QuickBackendSetup(viewModel: ConfigViewModel) {
 
             androidx.compose.material3.HorizontalDivider()
             Text(
-                text = t("Automatic fallback", "جایگزین خودکار"),
+                text = t("Custom OpenAI-compatible backend", "بک‌اند سفارشی سازگار با OpenAI"),
                 style = MaterialTheme.typography.titleSmall,
             )
-            Text(
-                text = t(
-                    "If the active provider runs out of quota or fails, Hermes will try the fallback provider without losing the conversation.",
-                    "اگر توکن یا سهمیه مدل اصلی تمام شود یا خطا بدهد، هرمس بدون قطع گفتگو سراغ پرووایدر جایگزین می‌رود.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            OutlinedTextField(
+                value = customBaseUrl,
+                onValueChange = { customBaseUrl = it },
+                label = { Text(t("Base URL", "آدرس پایه")) },
+                placeholder = { Text("https://example.com/v1") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = customKey,
+                onValueChange = { customKey = it },
+                label = { Text(t("API key", "کلید API")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            OutlinedTextField(
+                value = customModel,
+                onValueChange = { customModel = it },
+                label = { Text(t("Model name", "نام مدل")) },
+                placeholder = { Text("my-model") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
             )
             androidx.compose.material3.Button(
-                onClick = { viewModel.configureFallbackProvider("gemini", geminiModel) },
+                onClick = { viewModel.configureCustomBackend(customKey, customBaseUrl, customModel) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(t("Use Gemini as fallback", "Gemini جایگزین باشد"))
-            }
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.configureFallbackProvider("xiaomi", mimoModel, mimoBaseUrl) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Use MiMo as fallback", "MiMo جایگزین باشد"))
-            }
-            TextButton(
-                onClick = { viewModel.clearFallbackProviders() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Clear fallbacks", "پاک کردن جایگزین‌ها"))
+                Text(t("Save custom backend", "ذخیره بک‌اند سفارشی"))
             }
         }
     }
