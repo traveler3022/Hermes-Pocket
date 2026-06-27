@@ -152,6 +152,23 @@ class TermuxInstallerTest {
     }
 
     @Test
+    fun `generateInstallScript prepares Termux Rust build env for jiter`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must export ANDROID_API_LEVEL for maturin builds", script.contains("ANDROID_API_LEVEL"))
+        assertTrue("Script must export CARGO_BUILD_TARGET for Termux Rust builds", script.contains("CARGO_BUILD_TARGET"))
+        assertTrue("Script must install Termux binutils for maturin jiter builds", script.contains("binutils-is-llvm"))
+    }
+
+    @Test
+    fun `generateInstallScript fails verification when hermes command is missing`() {
+        val script = installer.generateInstallScript()
+
+        assertTrue("Script must not report success if hermes binary is missing", script.contains("Hermes command not found after install"))
+        assertFalse("Script must not hide a missing hermes command as installed", script.contains("--version 2>&1 || echo "installed""))
+    }
+
+    @Test
     fun `generateInstallScript enables pipefail so stage failures are caught`() {
         val script = installer.generateInstallScript()
 
