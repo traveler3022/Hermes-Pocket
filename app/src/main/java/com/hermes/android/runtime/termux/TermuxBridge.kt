@@ -318,6 +318,10 @@ class TermuxBridge @Inject constructor(
             elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
                 HERMES_CMD="$(command -v hermes)"
             fi
+            if ! [ -x "${'$'}HERMES_CMD" ]; then
+                echo "Hermes command not found. Install likely failed before linking hermes. Expected: ${'$'}HERMES_CMD"
+                exit 1
+            fi
             # hermes dashboard execution via flexible path
             nohup "${'$'}HERMES_CMD" dashboard \
                 --host $DEFAULT_GATEWAY_HOST \
