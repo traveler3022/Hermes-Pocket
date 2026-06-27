@@ -158,6 +158,8 @@ class TermuxInstallerTest {
         assertTrue("Script must export ANDROID_API_LEVEL for maturin builds", script.contains("ANDROID_API_LEVEL"))
         assertTrue("Script must export CARGO_BUILD_TARGET for Termux Rust builds", script.contains("CARGO_BUILD_TARGET"))
         assertTrue("Script must install LLVM for maturin jiter builds", script.contains(" llvm lld"))
+        assertTrue("Script must isolate Cargo from broken user mirror configs", script.contains("CARGO_HOME=\"\$HOME/.hermes/cargo\""))
+        assertTrue("Script must force Cargo sparse crates.io protocol", script.contains("CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse"))
     }
 
     @Test
