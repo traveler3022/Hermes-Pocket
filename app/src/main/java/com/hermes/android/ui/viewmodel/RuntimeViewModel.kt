@@ -32,6 +32,7 @@ import javax.inject.Inject
 @HiltViewModel
 class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     /**
@@ -53,7 +54,24 @@ class RuntimeViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _logs = MutableStateFlow<String?>(null)
+    val logs: StateFlow<String?> = _logs.asStateFlow()
+
+    private val logReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            if (intent.action == "com.hermes.android.LOG_UPDATE") {
+                val logContent = intent.getStringExtra("logs")
+                _logs.value = logContent
+                Timber.i("[RuntimeViewModel] Logs updated via broadcast")
+            }
+        }
+    }
+
     init {
+        // Register log receiver
+        val filter = android.content.IntentFilter("com.hermes.android.LOG_UPDATE")
+        context.registerReceiver(logReceiver, filter, android.content.Context.RECEIVER_EXPORTED)
+
         // Bridge runtime state → UI state
         viewModelScope.launch {
             runtimeManager.state.collect { runtimeState ->
@@ -168,7 +186,25 @@ class RuntimeViewModel @Inject constructor(
         }
     }
 
+    fun fetchLogs() {
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                _logs.value = "Fetching logs from Termux (saving to /sdcard/Download/hermes_logs.txt)..."
+                runtimeManager.runtime.fetchLogs()
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Failed to fetch logs")
+                _errorMessage.value = e.message ?: "Failed to fetch logs"
+            }
+        }
+    }
+
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try { context.unregisterReceiver(logReceiver) } catch (e: Exception) {}
     }
 }

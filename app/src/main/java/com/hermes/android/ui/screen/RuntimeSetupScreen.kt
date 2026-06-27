@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -77,6 +78,7 @@ fun RuntimeSetupScreen(
     val installInstructions by viewModel.installInstructions.collectAsStateWithLifecycle()
     val installing by viewModel.installing.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val logs by viewModel.logs.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -194,7 +196,71 @@ fun RuntimeSetupScreen(
                 }
 
                 is RuntimeUiState.Error -> {
-                    ErrorContent(message = state.message, onRetry = { viewModel.detect() })
+                    ErrorContent(
+                        message = state.message,
+                        onRetry = { viewModel.detect() },
+                        onFetchLogs = { viewModel.fetchLogs() },
+                    )
+                }
+            }
+
+            Button(
+                onClick = { viewModel.fetchLogs() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.Description, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("Fetch & View Logs")
+            }
+
+            AnimatedVisibility(visible = logs != null) {
+                logs?.let { logText ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Execution Logs",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Button(
+                                    onClick = {
+                                        copyToClipboard(context, logText)
+                                        scope.launch { snackbarHostState.showSnackbar("Logs copied to clipboard") }
+                                    },
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                    Spacer(modifier = Modifier.size(8.dp))
+                                    Text("Copy Logs")
+                                }
+                            }
+                            Text(
+                                text = "Logs are also saved to: /sdcard/Download/hermes_logs.txt",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = logText,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(250.dp)
+                                    .verticalScroll(rememberScrollState()),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -385,7 +451,7 @@ private fun InstalledContent(hermesVersion: String?, onStartGateway: () -> Unit)
 }
 
 @Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit) {
+private fun ErrorContent(message: String, onRetry: () -> Unit, onFetchLogs: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -406,7 +472,10 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
-            Button(onClick = onRetry) { Text("Retry") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onRetry) { Text("Retry") }
+                Button(onClick = onFetchLogs) { Text("Fetch Logs") }
+            }
         }
     }
 }
