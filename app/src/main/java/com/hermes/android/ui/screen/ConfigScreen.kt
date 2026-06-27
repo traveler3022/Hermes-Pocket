@@ -138,9 +138,39 @@ private fun GeneralTab(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Capabilities & Connections",
+            text = "Backend & Capabilities",
             style = MaterialTheme.typography.titleMedium,
         )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Active backend",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = "Provider: ${state.activeProvider ?: "unknown"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = "Model: ${state.activeModel ?: "unknown"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
 
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
@@ -211,13 +241,17 @@ private fun ModelsTab(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(state.availableModels, key = { "${it.provider}/${it.modelId}" }) { model ->
-            ModelCard(model, viewModel)
+            ModelCard(
+                model = model,
+                viewModel = viewModel,
+                isActive = model.provider == state.activeProvider && model.modelId == state.activeModel,
+            )
         }
     }
 }
 
 @Composable
-private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel) {
+private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel, isActive: Boolean) {
     var apiKey by remember { mutableStateOf("") }
 
     Card(
@@ -241,6 +275,19 @@ private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel) {
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
+            if (isActive) {
+                Text(
+                    text = "Active backend",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                androidx.compose.material3.TextButton(
+                    onClick = { viewModel.selectModel(model) },
+                ) {
+                    Text("Use this model")
+                }
+            }
             if (model.requiresApiKey) {
                 OutlinedTextField(
                     value = apiKey,
@@ -308,6 +355,11 @@ private fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Text(
+                    text = "${tool.toolCount} tools" + if (tool.tools.isNotEmpty()) ": ${tool.tools.take(6).joinToString(", ")}${if (tool.tools.size > 6) "…" else ""}" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
                 tool.toolset?.let {
                     Text(
                         text = "toolset: $it",
