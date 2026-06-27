@@ -3,6 +3,7 @@ package com.hermes.android.ui.screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -270,6 +272,16 @@ private fun DetectedContent(
         Text("Start Agent Gateway (Termux)")
     }
 
+    val context = LocalContext.current
+    Button(
+        onClick = { openAppSettings(context) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Default.Settings, contentDescription = null)
+        Spacer(modifier = Modifier.size(8.dp))
+        Text("Grant RUN_COMMAND Permission in Settings")
+    }
+
     Button(
         onClick = onShowInstallInstructions,
         modifier = Modifier.fillMaxWidth(),
@@ -446,6 +458,14 @@ private fun InstallInstructionsCard(
 }
 
 // ---- Helpers ----
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = android.net.Uri.fromParts("package", context.packageName, null)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
+}
 
 private fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

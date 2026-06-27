@@ -173,11 +173,12 @@ class TermuxCommandExecutor @Inject constructor(
             // or when allow-external-apps is false AND Termux version logs it
             // via a notification instead of an exception.
             Timber.e(e, "[TermuxExecutor] SecurityException dispatching RUN_COMMAND")
-            Result.AllowExternalAppsDisabled(
-                "Termux rejected the command. Verify that " +
-                    "`allow-external-apps=true` is set in ~/.termux/termux.properties. " +
-                    "Cause: ${e.message}",
-            )
+            val msg = if (e.message?.contains("permission", ignoreCase = true) == true) {
+                "Android Permission Denied: You must grant the 'Run commands in Termux' (RUN_COMMAND) permission to Hermes2. Tap 'Grant RUN_COMMAND Permission in Settings' on the setup screen, or go to Android Settings -> Apps -> Hermes2 -> Permissions -> Additional Permissions and enable it."
+            } else {
+                "Termux rejected the command. Verify that `allow-external-apps=true` is set in ~/.termux/termux.properties. Cause: ${e.message}"
+            }
+            Result.AllowExternalAppsDisabled(msg)
         } catch (e: Exception) {
             Timber.e(e, "[TermuxExecutor] Failed to dispatch RUN_COMMAND")
             Result.Failure(
