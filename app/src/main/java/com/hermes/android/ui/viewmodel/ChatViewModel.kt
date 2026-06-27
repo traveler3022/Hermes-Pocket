@@ -285,10 +285,22 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
-                    timeoutMs = 10_000,
+                    timeoutMs = 5_000,
                 )
             } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to interrupt")
+                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
+            }
+            try {
+                // Best-effort cleanup for background/shell processes that keep
+                // a tool card spinning after the turn was interrupted. This is
+                // still routed through GatewayClient, so UI does not know about
+                // backend process details.
+                gatewayClient.request(
+                    method = GatewayMethods.PROCESS_STOP,
+                    timeoutMs = 5_000,
+                )
+            } catch (e: Exception) {
+                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
             }
         }
     }
