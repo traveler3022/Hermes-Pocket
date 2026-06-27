@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network — WebSocket to tui_gateway, LLM API calls -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Termux RUN_COMMAND permission (CRITICAL: Required to communicate with RunCommandService) -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
+    <!-- Foreground Service — keeps Hermes gateway alive (ADR-004) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MESSAGE_INACTIVE" />
+
+    <!-- Notifications — tool approval, gateway status (ADR-003) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Boot — auto-start gateway on device boot (temporary, ADR-004) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Battery — request exemption from battery optimization (ADR-004, RISK-001) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Wake lock — keep CPU awake during long tool execution -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Vibrate — notification feedback for tool approvals -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+        Android 11+ (API 30+) package visibility: apps cannot see other installed
+        packages unless they are declared in a <queries> block. Termux must be
+        visible so that:
+        - TermuxDetector.canQueryPackage() returns true
+        - Context.startService(RUN_COMMAND intent) reaches RunCommandService
+          instead of returning null silently.
+
+        Reference: ADR-001 (Termux migration), ADR-007 (reuse install.sh),
+        TermuxCommandExecutor.kt.
+    -->
+    <queries>
+        <package android:name="com.termux" />
+        <package android:name="com.termux.api" />
+        <package android:name="com.termux.boot" />
+    </queries>
+
+    <application
+        android:name=".HermesApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.Hermes2"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Hermes2"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Gateway Foreground Service (ADR-004) -->
+        <service
+            android:name=".service.HermesGatewayService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Boot Receiver (ADR-004, temporary during migration) -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Approval Action Receiver (ADR-003) -->
+        <receiver
+            android:name=".service.ApprovalActionReceiver"
+            android:exported="false" />
+
+        <!-- WorkManager initialization — custom Configuration via Hilt -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+    </application>
+
+</manifest>

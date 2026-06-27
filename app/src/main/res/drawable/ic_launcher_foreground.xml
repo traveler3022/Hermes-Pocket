@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Caduceus-inspired stylized "H" for Hermes -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,30 L44,30 L44,50 L64,50 L64,30 L74,30 L74,78 L64,78 L64,60 L44,60 L44,78 L34,78 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,18 C50,18 47,21 47,25 C47,29 50,32 54,32 C58,32 61,29 61,25 C61,21 58,18 54,18 Z M54,22 C55.5,22 57,23.5 57,25 C57,26.5 55.5,28 54,28 C52.5,28 51,26.5 51,25 C51,23.5 52.5,22 54,22 Z" />
+</vector>
