@@ -160,6 +160,8 @@ class TermuxInstallerTest {
         assertTrue("Script must install LLVM for maturin jiter builds", script.contains(" llvm lld"))
         assertTrue("Script must isolate Cargo from broken user mirror configs", script.contains("CARGO_HOME=\"\$HOME/.hermes/cargo\""))
         assertTrue("Script must force Cargo sparse crates.io protocol", script.contains("CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse"))
+        assertTrue("Script must disable Cargo LTO to avoid Termux rustc ICE", script.contains("CARGO_PROFILE_RELEASE_LTO=false"))
+        assertTrue("Script must serialize Cargo jobs for phone builds", script.contains("CARGO_BUILD_JOBS=1"))
     }
 
     @Test
