@@ -1,181 +1,372 @@
-# Hermes2 — Android Migration of Hermes Agent
+# Hermes2 — Android UI for Hermes Agent
 
-> **Initialized per:** [`migration-spec-v1.0`](https://github.com/traveler3022/hermes/releases/tag/migration-spec-v1.0)
-> **Migration specification:** [traveler3022/hermes](https://github.com/traveler3022/hermes)
-> **Source project:** [traveler3022/hermes-agent](https://github.com/traveler3022/hermes-agent) (fork of NousResearch/hermes-agent)
+Hermes2 is an Android-native Kotlin/Compose app that controls **Hermes Agent** running inside **Termux** during the migration phase.
 
----
-
-## What is this?
-
-Hermes2 is the Android port of [Hermes Agent](https://github.com/NousResearch/hermes-agent) — the self-improving AI agent built by Nous Research. This repository contains the Android-native application that wraps the Hermes Python runtime and provides a modern Android UI.
-
-This repository was created **only after** the Migration Specification was frozen at tag `migration-spec-v1.0`. All architectural decisions are documented as ADRs in the spec repo.
+> Current runtime strategy: **Android app UI + Termux-hosted Hermes Python runtime + local WebSocket dashboard API**.
+>
+> Long-term target: replace the Termux migration adapter with an embedded Python runtime without changing the UI/ViewModel layers.
 
 ---
 
-## Migration Progress
+## TL;DR
 
-| Step | Title | Status | Commit |
-|---:|---|---|---|
-| 1 | Project Bootstrap | ✅ Complete | `a381217` |
-| 2 | Runtime Abstraction + Termux Bridge | ✅ Complete | `b954905` |
-| 3 | WebSocket Client | ✅ Complete | `6314e89` |
-| 4 | Chat UI | ✅ Complete | `ebd3ebe` |
-| 5 | Configuration UI | ✅ Complete | `dc2a69d` |
-| 6 | Foreground Service | ✅ Complete | `84209e3` |
-| 7 | Tool Approval Notifications | 🟡 In Progress | — |
-| 8 | Messaging Platforms | ⬜ Pending | — |
-| 9 | Memory & Sessions | ⬜ Pending | — |
-| 10 | Skills Browser | ⬜ Pending | — |
-| 11 | Cron Scheduler | ⬜ Pending | — |
-| 12 | Embedded Runtime Migration | ⬜ Pending | — |
-| 13 | Polish & Release | ⬜ Pending | — |
-
-**Overall completion: 6/13 steps (46%)**
-
-```
-████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░ 46%
+```text
+Android Compose UI
+   ↓ GatewayClient / HermesRuntime interfaces
+TermuxBridge + OkHttp WebSocket
+   ↓ RUN_COMMAND + ws://127.0.0.1:9119/api/ws
+Hermes Agent inside Termux
+   ↓
+NousResearch/hermes-agent official runtime
 ```
 
-### Phase 1.5 Quality Gate Status
+For the tested Android setup, install Hermes manually in Termux first, then start the gateway from the app.
 
-Every step passes through a 12-rule architecture audit before approval:
+Recommended model setup for the current phone workflow:
 
-| Rule | Description | Status |
-|---|---|---|
-| 1 | Strict Layer Dependency | ✅ Enforced |
-| 2 | Agent Is an Orchestrator Only | ✅ Enforced |
-| 3 | Failure Isolation | ✅ Enforced |
-| 4 | Debug Isolation | ✅ Enforced |
-| 5 | Runtime + Gateway Swap Test | ✅ Enforced |
-| 6 | Feature Independence Test | ✅ Enforced |
-| 7 | Public API Rule | ✅ Enforced |
-| 8 | Debug Boundary | ✅ Enforced |
-| 9 | Root Cause Rule | ✅ Enforced |
-| 10 | Architecture Fitness Test | ✅ Enforced |
-| 10.5 | Layer Architecture Verification | ✅ Enforced |
-| 12 | Zero Tolerance Gate Re-Run | ✅ Enforced |
-
-**All 6 completed steps: 12/12 rules PASS on every step.**
-
-See [Step Status Registry](https://github.com/traveler3022/hermes/blob/main/docs/10-foundation-hardening/STEP_STATUS.md) for per-step evidence (timestamp, commit hash, audit report links).
+```text
+Provider: Xiaomi MiMo
+Model:    mimo-v2.5-free  (or mimo-v2.5 / mimo-v2.5-pro if your plan exposes those names)
+Optional: Gemini key in .env for later switching/fallback
+```
 
 ---
 
-## Project Configuration
+## Repository Status
 
-| Setting | Value | ADR Reference |
-|---|---|---|
-| **minSdk** | 29 (Android 10) | ADR-012 |
-| **targetSdk** | 35 (Latest Stable) | ADR-012 |
-| **compileSdk** | 35 (Latest Stable) | ADR-012 |
-| **Language** | Kotlin | ADR-002 |
-| **UI** | Jetpack Compose (Material 3) | ADR-002, ADR-010 |
-| **DI** | Hilt | ADR-002 |
-| **Background** | Foreground Service + WorkManager | ADR-004 |
-| **Networking** | OkHttp (WebSocket to tui_gateway) | ADR-002 |
-| **i18n** | strings.xml + resource qualifiers (RTL-ready) | ADR-013 |
+| Area | Status |
+|---|---|
+| Android project bootstrap | ✅ Done |
+| Runtime abstraction | ✅ Done |
+| Termux migration adapter | ✅ Done |
+| WebSocket client | ✅ Done |
+| Chat UI | ✅ Done |
+| Runtime setup UI | ✅ Done |
+| Settings / backend / tools UI | ✅ Done |
+| Sessions & memory UI | ✅ Done |
+| Skills UI | ✅ Done |
+| Cron UI | ✅ Basic UI done |
+| Embedded Python runtime | ⏳ Future |
+
+The app currently expects Hermes to run in Termux and exposes a native Android UI over the Hermes dashboard WebSocket API.
+
+---
+
+## Important Runtime Notes
+
+### Official Hermes source
+
+The Termux runtime should install the official upstream project:
+
+```text
+https://github.com/NousResearch/hermes-agent
+```
+
+The Android app downloads the official installer from:
+
+```text
+https://hermes-agent.nousresearch.com/install.sh
+```
+
+### Why Termux?
+
+Hermes Agent is a large Python project with many tools, providers, plugins, skills, memory systems, and gateway integrations. Rewriting it in Kotlin is not practical for the migration phase. Termux lets the Android app use the real Hermes runtime while the app provides a native Material 3 UI.
+
+---
+
+## Quick Start for Developers
+
+### 1. Clone this repository
+
+```bash
+git clone -b fix/architecture-and-ui-wiring https://github.com/traveler3022/Hermes2.git
+cd Hermes2
+```
+
+### 2. Open in Android Studio
+
+Use a recent Android Studio with:
+
+- JDK 17+
+- Android SDK 35
+- Gradle 8.11.1 wrapper
+
+### 3. Build debug APK
+
+```bash
+bash ./gradlew :app:assembleDebug
+```
+
+Unit tests:
+
+```bash
+bash ./gradlew :app:testDebugUnitTest
+```
+
+GitHub Actions also builds the debug APK on push.
+
+---
+
+## Device Setup: Termux + Hermes Agent
+
+For the full phone setup guide, see:
+
+- [`docs/RUNNING_ON_ANDROID_TERMUX.md`](docs/RUNNING_ON_ANDROID_TERMUX.md)
+
+Short version:
+
+```bash
+pkg update -y
+pkg upgrade -y
+pkg install -y git python clang rust make pkg-config libffi openssl ca-certificates curl llvm lld nodejs ripgrep ffmpeg
+
+export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
+export CARGO_BUILD_TARGET="$(rustc -Vv | awk '/^host:/ {print $2; exit}')"
+export CARGO_HOME="$HOME/.hermes/cargo"
+mkdir -p "$CARGO_HOME"
+export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+export CARGO_PROFILE_RELEASE_LTO=false
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+export CARGO_PROFILE_RELEASE_STRIP=none
+export CARGO_BUILD_JOBS=1
+
+mkdir -p "$HOME/.hermes"
+git clone https://github.com/NousResearch/hermes-agent.git "$HOME/.hermes/hermes-agent"
+cd "$HOME/.hermes/hermes-agent"
+python -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python scripts/install_psutil_android.py --pip "python -m pip"
+python -m pip install -e '.[termux]' -c constraints-termux.txt
+python -m pip install -e '.[web]' -c constraints-termux.txt
+ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
+```
+
+Verify:
+
+```bash
+hermes --version
+hermes doctor
+```
+
+---
+
+## Model Setup: Xiaomi MiMo + Gemini
+
+### Xiaomi MiMo
+
+Edit:
+
+```bash
+nano "$HOME/.hermes/.env"
+```
+
+For normal MiMo API keys:
+
+```env
+XIAOMI_API_KEY=YOUR_MIMO_KEY
+XIAOMI_BASE_URL=https://api.xiaomimimo.com/v1
+```
+
+For MiMo Token Plan:
+
+```env
+XIAOMI_API_KEY=YOUR_TOKEN_PLAN_KEY
+XIAOMI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
+```
+
+Configure Hermes:
+
+```bash
+hermes config set model.provider xiaomi
+hermes config set model.default mimo-v2.5-free
+```
+
+If your MiMo account does not expose `mimo-v2.5-free`, try:
+
+```bash
+hermes config set model.default mimo-v2.5
+# or
+hermes config set model.default mimo-v2.5-pro
+```
+
+### Gemini optional key
+
+Add one of these to `~/.hermes/.env`:
+
+```env
+GEMINI_API_KEY=YOUR_GEMINI_KEY
+```
+
+or:
+
+```env
+GOOGLE_API_KEY=YOUR_GEMINI_KEY
+```
+
+Switch to Gemini later with:
+
+```bash
+hermes config set model.provider gemini
+hermes config set model.default gemini-2.5-flash
+```
+
+---
+
+## Running with the Android App
+
+1. Install Termux from F-Droid.
+2. Enable Termux external commands:
+
+   ```bash
+   mkdir -p ~/.termux
+   echo 'allow-external-apps=true' > ~/.termux/termux.properties
+   ```
+
+   Restart Termux after this.
+
+3. Install Hermes in Termux using the guide above.
+4. Install/open the Hermes2 APK.
+5. Grant `RUN_COMMAND` permission if Android asks.
+6. Open:
+
+   ```text
+   Termux & Agent Connection → Start Agent Gateway
+   ```
+
+7. Then open Settings to confirm:
+
+   ```text
+   Provider: xiaomi
+   Model: mimo-v2.5-free / mimo-v2.5 / mimo-v2.5-pro
+   ```
+
+Do **not** manually start `hermes dashboard` for normal app use unless debugging. The app injects its own WebSocket session token when it starts the gateway.
 
 ---
 
 ## Architecture
 
-### Layer Dependency (Phase 1.5 Rule 1)
+### Layer dependency
 
+```text
+UI screens
+  ↓
+ViewModels
+  ↓
+Domain interfaces
+  ├── HermesRuntime
+  └── GatewayClient
+  ↓
+Infrastructure
+  ├── TermuxBridge
+  ├── TermuxInstaller
+  ├── TermuxCommandExecutor
+  └── OkHttpGatewayClient
+  ↓
+Hermes Agent in Termux
 ```
-UI (Compose screens)
- ↓ depends only on
-ViewModel (StateFlow + business logic)
- ↓ depends only on
-Domain (interfaces — GatewayClient, HermesRuntime)
- ↓ implemented by
-Infrastructure (OkHttpGatewayClient, TermuxBridge)
- ↓ bound by
-DI (Hilt — the ONLY swap point)
-```
 
-### Key Abstractions
+### Key files
 
-| Interface | Purpose | Swap Target |
-|---|---|---|
-| `HermesRuntime` | Abstracts Python runtime host | TermuxBridge → EmbeddedPythonRuntime (Step 12) |
-| `GatewayClient` | Abstracts WebSocket client | OkHttpGatewayClient → mock/stub for tests |
-
-### Swap Test Compliance
-
-Both interfaces pass the compile-time swap test:
-- Replacing `TermuxBridge` with `EmbeddedPythonRuntime` affects only `RuntimeModule.kt` (1 file)
-- Replacing `OkHttpGatewayClient` with a fake affects only `GatewayModule.kt` (1 file)
-- Zero OkHttp/Termux imports in UI or ViewModel layers
+| File | Purpose |
+|---|---|
+| `HermesRuntime.kt` | Runtime interface used by the app |
+| `TermuxBridge.kt` | Migration adapter for Termux runtime |
+| `TermuxInstaller.kt` | Generates the Termux install script |
+| `TermuxCommandExecutor.kt` | Sends RUN_COMMAND intents to Termux |
+| `GatewayClient.kt` | WebSocket JSON-RPC interface |
+| `OkHttpGatewayClient.kt` | Concrete WebSocket implementation |
+| `HermesGatewayService.kt` | Foreground service that keeps gateway connection alive |
+| `ConfigViewModel.kt` | Loads active backend and tool capabilities |
 
 ---
 
-## Build System
+## UI / Material Design
 
-- **Gradle:** 8.11.1
-- **AGP:** 8.7.3
-- **Kotlin:** 2.0.21
-- **Compose BOM:** 2024.12.01
-- **JDK:** 17
+The Material 3 UI guide lives in:
 
-### Build Pipeline (per step)
+- [`docs/MATERIAL3_UI_GUIDE.md`](docs/MATERIAL3_UI_GUIDE.md)
+
+Current UI surfaces:
+
+| Screen | Purpose |
+|---|---|
+| Chat | Conversation, streaming responses, tool cards |
+| Runtime Setup | Detect/install/start Termux gateway, view logs |
+| Settings | Active backend, model list, capability/tool list |
+| Sessions | Session list and memory files |
+| Skills | Skill discovery/install/reload |
+| Cron | Basic scheduled jobs UI |
+| Platforms | Messaging platform placeholder/config guidance |
+
+---
+
+## Troubleshooting
+
+### `jiter` or `pydantic-core` fails to build
+
+Use the Termux environment variables from the run guide:
 
 ```bash
-./gradlew assembleDebug    # Build APK
-./gradlew test             # Unit tests
-./gradlew lintDebug        # Lint
-# Phase 1.5 Exit Gate     # 12-rule architecture audit
+export CARGO_HOME="$HOME/.hermes/cargo"
+export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+export CARGO_PROFILE_RELEASE_LTO=false
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+export CARGO_PROFILE_RELEASE_STRIP=none
+export CARGO_BUILD_JOBS=1
 ```
 
-All 4 checks must PASS before a step is marked complete.
+This avoids broken Cargo mirror config and reduces Rust build pressure on Android.
 
----
+### `Hermes command not found`
 
-## Project Structure
+Verify the link:
 
+```bash
+which hermes
+ls -l "$PREFIX/bin/hermes"
+ls -l "$HOME/.hermes/hermes-agent/venv/bin/hermes"
 ```
-Hermes2/
-├── app/
-│   ├── build.gradle.kts
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       ├── java/com/hermes/android/
-│       │   ├── HermesApplication.kt          ← @HiltAndroidApp
-│       │   ├── MainActivity.kt               ← Single-activity host
-│       │   ├── di/
-│       │   │   ├── GatewayModule.kt           ← Hilt binding (swap point)
-│       │   │   └── RuntimeModule.kt           ← Hilt binding (swap point)
-│       │   ├── gateway/                       ← Domain + Infrastructure
-│       │   │   ├── GatewayClient.kt           ← Interface
-│       │   │   ├── GatewayEvent.kt            ← 30+ event types
-│       │   │   ├── OkHttpGatewayClient.kt     ← Concrete impl
-│       │   │   └── ...
-│       │   ├── runtime/                       ← Domain + Infrastructure
-│       │   │   ├── HermesRuntime.kt           ← Interface
-│       │   │   ├── termux/TermuxBridge.kt     ← Migration adapter
-│       │   │   ├── embedded/EmbeddedPythonRuntime.kt  ← Stub for swap test
-│       │   │   └── ...
-│       │   ├── service/
-│       │   │   ├── HermesGatewayService.kt    ← Foreground service
-│       │   │   └── BootReceiver.kt            ← Auto-start on boot
-│       │   └── ui/
-│       │       ├── screen/                    ← Compose screens
-│       │       ├── viewmodel/                 ← ViewModels + UI state
-│       │       └── theme/                     ← Material 3 theme
-│       └── res/
-└── gradle/
-    └── libs.versions.toml                     ← Version catalog
+
+Fix:
+
+```bash
+cd "$HOME/.hermes/hermes-agent"
+ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
+```
+
+### Gateway does not connect
+
+Fetch logs from the app or run in Termux:
+
+```bash
+cat "$HOME/.hermes/logs/gateway_stdout.log"
+```
+
+Stop stale dashboards before letting the app start one:
+
+```bash
+hermes dashboard --stop
 ```
 
 ---
 
-## License
+## Security
 
-MIT — same as upstream Hermes Agent.
+Never commit API keys. Keep provider credentials only in:
+
+```text
+~/.hermes/.env
+```
+
+If an API key is pasted into chat, rotate/revoke it immediately.
+
+---
 
 ## References
 
-- **Migration spec:** [traveler3022/hermes](https://github.com/traveler3022/hermes) @ `migration-spec-v1.0`
-- **Source project:** [traveler3022/hermes-agent](https://github.com/traveler3022/hermes-agent)
-- **Original Hermes:** [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
+- Hermes Agent upstream: <https://github.com/NousResearch/hermes-agent>
+- Official Termux guide: <https://hermes-agent.nousresearch.com/docs/getting-started/termux>
+- Xiaomi MiMo Hermes guide: <https://platform.xiaomimimo.com/docs/en-US/integration/hermes-agent>
+- Migration spec source: <https://github.com/traveler3022/hermes>
