@@ -35,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.SkillItem
 import com.hermes.android.ui.viewmodel.SkillsViewModel
+import com.hermes.android.ui.i18n.t
 
 /**
  * Skills Browser screen — list, enable/disable, reload skills.
@@ -62,7 +63,7 @@ fun SkillsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Skills") },
+                title = { Text(t("Skills", "مهارت‌ها")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -70,7 +71,7 @@ fun SkillsScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.reloadSkills() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
+                        Icon(Icons.Default.Refresh, contentDescription = t("Reload", "بارگذاری دوباره"))
                     }
                 },
             )
@@ -86,7 +87,7 @@ fun SkillsScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 CircularProgressIndicator()
-                Text("Loading skills…", style = MaterialTheme.typography.bodyMedium)
+                Text(t("Loading skills…", "در حال بارگذاری مهارت‌ها…"), style = MaterialTheme.typography.bodyMedium)
             }
         } else if (uiState.skills.isEmpty()) {
             Column(
@@ -96,19 +97,37 @@ fun SkillsScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text("No skills available", style = MaterialTheme.typography.bodyLarge)
+                Text(t("No skills available", "مهارتی در دسترس نیست"), style = MaterialTheme.typography.bodyLarge)
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.initializeSkillsHub() },
+                    enabled = !uiState.isInitializing,
+                    modifier = Modifier.padding(top = 12.dp),
+                ) {
+                    Text(if (uiState.isInitializing) t("Initializing…", "در حال راه‌اندازی…") else t("Initialize Skills Hub", "راه‌اندازی مهارت‌ها"))
+                }
             }
         } else {
+            Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { viewModel.initializeSkillsHub() },
+                    enabled = !uiState.isInitializing,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text(if (uiState.isInitializing) t("Initializing…", "در حال راه‌اندازی…") else t("Initialize / Refresh Skills Hub", "راه‌اندازی / بروزرسانی مهارت‌ها"))
+                }
             LazyColumn(
                 modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(uiState.skills, key = { it.name }) { skill ->
                     SkillCard(skill, viewModel)
                 }
+            }
             }
         }
     }
@@ -144,7 +163,7 @@ private fun SkillCard(skill: SkillItem, viewModel: SkillsViewModel) {
             androidx.compose.material3.TextButton(
                 onClick = { viewModel.installSkill(skill.name) },
             ) {
-                Text("Install")
+                Text(t("Install", "نصب"))
             }
         }
     }

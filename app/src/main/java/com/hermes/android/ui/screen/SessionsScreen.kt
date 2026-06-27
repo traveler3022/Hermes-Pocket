@@ -109,7 +109,7 @@ fun SessionsScreen(
 
             when (selectedTab) {
                 0 -> SessionsTab(uiState, viewModel)
-                1 -> MemoryTab(memoryState)
+                1 -> MemoryTab(memoryState, viewModel)
             }
         }
     }
@@ -237,7 +237,10 @@ private fun SelectedSessionHistory(messages: List<HistoryMessage>) {
 }
 
 @Composable
-private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
+private fun MemoryTab(
+    state: com.hermes.android.ui.viewmodel.MemoryUiState,
+    viewModel: SessionsViewModel,
+) {
     if (state.isLoading) {
         LoadingIndicator(t("Loading memory…", "در حال بارگذاری حافظه…"))
         return
@@ -250,6 +253,31 @@ private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.loadMemory() },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(t("Refresh", "بروزرسانی"))
+            }
+            androidx.compose.material3.Button(
+                onClick = { viewModel.initializeMemoryFiles() },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(t("Initialize", "راه‌اندازی"))
+            }
+        }
+        state.errorMessage?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
         // USER.md
         Card(
             modifier = Modifier.fillMaxWidth(),
