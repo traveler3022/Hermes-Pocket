@@ -387,31 +387,42 @@ private fun AssistantBubble(message: ChatMessage.Assistant) {
                     // Collapsible thinking section
                     val hasReasoning = !message.reasoning.isNullOrEmpty()
                     if (hasReasoning) {
-                        Row(
+                        val wordCount = message.reasoning
+                            ?.trim()?.split(Regex("\\s+"))?.size ?: 0
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showReasoning = !showReasoning }
-                                .padding(bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                .padding(bottom = 6.dp)
+                                .clickable { showReasoning = !showReasoning },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.0f),
                         ) {
-                            Text(
-                                text = "💭",
-                                fontSize = 12.sp,
-                            )
-                            Text(
-                                text = t("Thinking", "فکر کردن"),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Icon(
-                                imageVector = if (showReasoning) Icons.Default.KeyboardArrowUp
-                                              else Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text("💭", fontSize = 11.sp)
+                                Text(
+                                    text = t("Thinking", "فکر کردن"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = "$wordCount ${t("words", "کلمه")}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                )
+                                Icon(
+                                    imageVector = if (showReasoning) Icons.Default.KeyboardArrowUp
+                                                  else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                )
+                            }
                         }
                         AnimatedVisibility(
                             visible = showReasoning,
@@ -421,15 +432,18 @@ private fun AssistantBubble(message: ChatMessage.Assistant) {
                             Column {
                                 Text(
                                     text = message.reasoning ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        lineHeight = 18.sp,
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                             RoundedCornerShape(8.dp),
                                         )
-                                        .padding(8.dp),
+                                        .padding(10.dp),
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -437,7 +451,7 @@ private fun AssistantBubble(message: ChatMessage.Assistant) {
                         if (message.text.isNotEmpty()) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(bottom = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
                             )
                         }
                     }
