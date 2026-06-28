@@ -73,23 +73,21 @@ jobs:
           gh release list --limit 20 --json tagName,isPrerelease \
             --jq '.[] | select(.isPrerelease==true and .tagName!="debug-latest") | .tagName' \
             | xargs -r -I{} gh release delete {} --yes --cleanup-tag || true
-          # Recreate the single rolling release
-          gh release delete debug-latest --yes --cleanup-tag || true
-          gh release create debug-latest app/build/outputs/apk/debug/*.apk \
-            --prerelease \
-            --title "Debug APK (latest)" \
-            --target "$GITHUB_SHA" \
-            --notes "$(printf 'Branch: %s\nCommit: %s\nBuilt: %s' \
-              "$GITHUB_REF_NAME" "${GITHUB_SHA:0:8}" "$(date -u '+%Y-%m-%d %H:%M UTC')")"
-
-      - name: Upload test results (best-effort)
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            app/build/reports/tests/
-            app/build/test-results/
-          retention-days: 3
-          if-no-files-found: warn
+          # Recreate the single rolling release. The asset upload can hit a
+          # transient HTTP 404 on uploads.github.com, so retry a few times.
+          NOTES="$(printf 'Branch: %s\nCommit: %s\nBuilt: %s' \
+            "$GITHUB_REF_NAME" "${GITHUB_SHA:0:8}" "$(date -u '+%Y-%m-%d %H:%M UTC')")"
+          for attempt in 1 2 3; do
+            gh release delete debug-latest --yes --cleanup-tag || true
+            sleep 2
+            if gh release create debug-latest app/build/outputs/apk/debug/*.apk \
+                --prerelease \
+                --title "Debug APK (latest)" \
+                --target "$GITHUB_SHA" \
+                --notes "$NOTES"; then
+              echo "Release published on attempt $attempt"
+              break
+            fi
+            echo "Release publish attempt $attempt failed; retrying in 10s…"
+            sleep 10
+          done
