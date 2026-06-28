@@ -90,6 +90,8 @@ class EmbeddedPythonRuntime @Inject constructor() : HermesRuntime {
         // Embedded runtime logs are managed in-app
     }
 
+    override suspend fun runDoctor(): String = "stub: doctor not available in embedded runtime"
+
     override suspend fun isHealthy(): Boolean {
         return _state.value is RuntimeState.Running
     }

@@ -1,6 +1,8 @@
 package com.hermes.android.runtime.termux
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
@@ -22,6 +24,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -491,6 +494,65 @@ class TermuxBridge @Inject constructor(
             workingDirectory = TermuxCommandExecutor.TERMUX_HOME,
         )
         Timber.i("[Logs] Fetch logs script dispatched to Termux")
+    }
+
+    override suspend fun runDoctor(): String {
+        val action = "${context.packageName}.DOCTOR_RESULT"
+        val result = CompletableDeferred<String>()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == action && !result.isCompleted) {
+                    result.complete(intent.getStringExtra("doctor") ?: "(no doctor output)")
+                }
+            }
+        }
+        val filter = IntentFilter(action)
+        return try {
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+            val script = """
+                set +e
+                RECEIVER="${context.packageName}"
+                ACTION="$action"
+                export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
+                HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
+                if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
+                elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
+                elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
+                    HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
+                elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
+                    HERMES_CMD="$(command -v hermes)"
+                fi
+                OUT="${'$'}HOME/.hermes/logs/doctor_from_app.log"
+                mkdir -p "${'$'}HOME/.hermes/logs"
+                {
+                    echo "=== hermes --version ==="
+                    if [ -x "${'$'}HERMES_CMD" ]; then
+                        "${'$'}HERMES_CMD" --version 2>&1
+                        echo ""
+                        echo "=== hermes doctor ==="
+                        "${'$'}HERMES_CMD" doctor 2>&1
+                    else
+                        echo "Hermes command not found: ${'$'}HERMES_CMD"
+                    fi
+                } > "${'$'}OUT"
+                DOCTOR_TAIL="$(tail -c 12000 "${'$'}OUT")"
+                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION" --es doctor "${'$'}DOCTOR_TAIL" >/dev/null 2>&1 || true
+            """.trimIndent()
+            when (val dispatch = executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
+                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(90.seconds) { result.await() }
+                    ?: "Doctor timed out. Check ~/.hermes/logs/doctor_from_app.log in Termux."
+                is TermuxCommandExecutor.Result.TermuxMissing -> dispatch.message
+                is TermuxCommandExecutor.Result.AllowExternalAppsDisabled -> dispatch.message
+                is TermuxCommandExecutor.Result.Failure -> dispatch.message
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "[Doctor] Failed to run doctor")
+            "Failed to run doctor: ${e.message}"
+        } finally {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+        }
     }
 
     override suspend fun isHealthy(): Boolean {

@@ -101,6 +101,12 @@ interface HermesRuntime {
     suspend fun fetchLogs()
 
     /**
+     * Run `hermes --version` + `hermes doctor` inside the runtime and return the
+     * captured output for display. Read-only diagnostics — does not change state.
+     */
+    suspend fun runDoctor(): String
+
+    /**
      * Quick health probe — is the runtime alive and the gateway responding?
      *
      * Cheaper than [verify]; intended for periodic polling by a foreground service.

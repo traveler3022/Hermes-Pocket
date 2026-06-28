@@ -201,6 +201,19 @@ class RuntimeViewModel @Inject constructor(
         }
     }
 
+    fun runDoctor() {
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                _logs.value = "Running hermes doctor inside Termux…"
+                _logs.value = runtimeManager.runtime.runDoctor()
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Failed to run doctor")
+                _errorMessage.value = e.message ?: "Failed to run doctor"
+            }
+        }
+    }
+
     fun clearError() {
         _errorMessage.value = null
     }
