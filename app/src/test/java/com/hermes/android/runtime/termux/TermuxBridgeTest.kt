@@ -10,6 +10,7 @@ import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.GatewayHandle
 import com.hermes.android.runtime.StopResult
+import io.mockk.answers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -135,9 +136,20 @@ class TermuxBridgeTest {
         // Given: runtime is Installed
         val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0", hermesVersion = "0.17.0")
         bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
-        every { executor.executeBackgroundScript(any(), any()) } returns
+
+        // startGateway() first probes for an already-running dashboard and
+        // reuses it without restarting if it is reachable. To exercise the
+        // *dispatch* path we model "nothing is running yet": the gateway only
+        // becomes reachable AFTER the `hermes dashboard` script is dispatched.
+        var dashboardDispatched = false
+        every { executor.executeBackgroundScript(any(), any()) } answers {
+            if (firstArg<String>().contains("hermes dashboard")) dashboardDispatched = true
             TermuxCommandExecutor.Result.Accepted
-        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connected(sessionId = null)
+        }
+        coEvery { gatewayClient.connect(any(), any()) } answers {
+            if (dashboardDispatched) ConnectionState.Connected(sessionId = null)
+            else ConnectionState.Connecting
+        }
 
         // When: startGateway is called
         val handle = bridge.startGateway()
