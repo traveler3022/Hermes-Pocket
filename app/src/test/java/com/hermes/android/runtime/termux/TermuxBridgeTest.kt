@@ -10,7 +10,6 @@ import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.GatewayHandle
 import com.hermes.android.runtime.StopResult
-import io.mockk.answers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
