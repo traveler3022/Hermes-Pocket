@@ -220,6 +220,9 @@ class TermuxBridgeTest {
         bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Failure("explosion")
+        // No dashboard is running, so the reuse probe must fail and startGateway
+        // must proceed to the dispatch path where the executor reports Failure.
+        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connecting
 
         var threw = false
         try {
