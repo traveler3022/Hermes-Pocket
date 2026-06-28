@@ -81,6 +81,11 @@ class TermuxBridge @Inject constructor(
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotDetected)
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
 
+    // Tracks when the last `hermes dashboard` script was dispatched to Termux.
+    // Used by ensureGatewayReady() to avoid killing a still-starting dashboard
+    // when the initial wait times out and ChatViewModel retries.
+    private var lastGatewayDispatchMs: Long = 0L
+
     override val installProgress: StateFlow<InstallProgress?> = progressFlow.asStateFlow()
 
     override suspend fun detect(): DetectionResult {
@@ -385,6 +390,10 @@ class TermuxBridge @Inject constructor(
         when (result) {
             is TermuxCommandExecutor.Result.Accepted -> {
                 Timber.i("[Gateway] RUN_COMMAND accepted")
+                // Record the dispatch time so ensureGatewayReady() can probe
+                // with remaining cooldown time instead of kill-restarting the
+                // dashboard if it hasn't bound the port yet.
+                lastGatewayDispatchMs = System.currentTimeMillis()
             }
             is TermuxCommandExecutor.Result.TermuxMissing -> {
                 _state.value = RuntimeState.Error(result.message)
@@ -401,22 +410,23 @@ class TermuxBridge @Inject constructor(
             }
         }
 
-        // Wait briefly for the gateway to come up by attempting a WS connect.
-        // The OkHttpGatewayClient handles retries internally; we just need
-        // to know whether the gateway is reachable.
+        // Wait for the gateway to bind the port and send gateway.ready.
+        // Cold start on a phone (plugin discovery + MCP scan + uvicorn boot)
+        // typically takes 30-90s. We wait up to GATEWAY_READY_TIMEOUT_MS.
         val handle = GatewayHandle(
             pid = null, // unknown — Termux doesn't expose child PIDs back to us
             startedAt = System.currentTimeMillis(),
             webSocketUrl = getWebSocketUrl(),
         )
 
-        // Give the gateway a few seconds to bind the port. We don't block on
-        // full WS handshake here — isHealthy() does that.
         val reachable = waitForGatewayReady(timeoutMs = GATEWAY_READY_TIMEOUT_MS)
         if (!reachable) {
-            val msg = "Gateway did not become reachable within $GATEWAY_READY_TIMEOUT_MS ms. Check ~/.hermes/logs/gateway_stdout.log."
+            // Don't set Error state — keep the current Installed/Detected state
+            // so that ensureGatewayReady()'s cooldown path can keep probing
+            // without triggering another kill-and-restart cycle.
+            val msg = "Gateway not reachable within ${GATEWAY_READY_TIMEOUT_MS / 1_000}s (still starting). " +
+                "Check ~/.hermes/logs/gateway_stdout.log in Termux."
             Timber.w("[Gateway] $msg")
-            _state.value = RuntimeState.Error(msg)
             throw IllegalStateException(msg)
         }
 
@@ -447,8 +457,31 @@ class TermuxBridge @Inject constructor(
             return true
         }
 
-        // 3) Replace path: no reachable dashboard → make sure we're detected,
-        //    then (re)start with the synced token.
+        // 3) Cooldown path: a startGateway() was dispatched recently and the
+        //    dashboard is still cold-starting. Don't kill-and-restart — just
+        //    keep probing with whatever time is left in the cooldown window.
+        //    Without this guard, ChatViewModel's retry loop would dispatch a new
+        //    `hermes dashboard` script every 30s, each one killing the previous
+        //    attempt before it could finish binding port 9119 (kill-restart cycle).
+        val timeSinceDispatch = System.currentTimeMillis() - lastGatewayDispatchMs
+        if (lastGatewayDispatchMs > 0 && timeSinceDispatch < GATEWAY_DISPATCH_COOLDOWN_MS) {
+            val remaining = GATEWAY_DISPATCH_COOLDOWN_MS - timeSinceDispatch
+            Timber.i("[Gateway] ensureGatewayReady: dispatch ${timeSinceDispatch}ms ago, probing ${remaining}ms more")
+            if (waitForGatewayReady(timeoutMs = remaining)) {
+                val handle = GatewayHandle(
+                    pid = null,
+                    startedAt = System.currentTimeMillis(),
+                    webSocketUrl = getWebSocketUrl(),
+                )
+                _state.value = RuntimeState.Running(currentInfo(), handle)
+                return true
+            }
+            Timber.w("[Gateway] ensureGatewayReady: dashboard did not come up within cooldown window")
+            return false
+        }
+
+        // 4) Replace path: no recent dispatch and no reachable dashboard →
+        //    make sure we're detected, then (re)start with the synced token.
         val s = _state.value
         if (s !is RuntimeState.Installed && s !is RuntimeState.Detected && s !is RuntimeState.Running) {
             try {
@@ -466,7 +499,10 @@ class TermuxBridge @Inject constructor(
             startGateway()
             _state.value is RuntimeState.Running
         } catch (e: Exception) {
-            Timber.w(e, "[Gateway] ensureGatewayReady: startGateway failed")
+            Timber.w(e, "[Gateway] ensureGatewayReady: startGateway threw (dashboard still starting?)")
+            // startGateway() threw because GATEWAY_READY_TIMEOUT_MS elapsed before
+            // gateway.ready arrived. The dispatch timestamp is recorded so the
+            // next ensureGatewayReady() call takes the cooldown path above.
             false
         }
     }
@@ -801,15 +837,20 @@ class TermuxBridge @Inject constructor(
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
         private val INSTALL_TIMEOUT = 30.minutes
         private const val POLL_INTERVAL_MS = 500L
-        // Bumped from 15s to 30s: `hermes dashboard` does plugin discovery
-        // + MCP discovery + uvicorn startup, which on a slow phone takes
-        // longer than 15s on a cold start.
-        private const val GATEWAY_READY_TIMEOUT_MS = 30_000L
+        // Cold start on a phone (plugin discovery + MCP scan + uvicorn boot)
+        // takes 30-90 s. Use 90 s so the first startGateway() attempt has a
+        // realistic chance of succeeding without triggering a retry.
+        private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
         private const val HEALTH_CHECK_TIMEOUT_MS = 3_000L
         // Short probe used by ensureGatewayReady() to detect an already-running
         // dashboard before deciding to (re)start one. Kept small so the cold
         // path isn't delayed much when no dashboard is up yet.
         private const val QUICK_PROBE_TIMEOUT_MS = 5_000L
+        // After dispatching a `hermes dashboard` script, don't dispatch another
+        // one for this many ms even if the first GATEWAY_READY_TIMEOUT_MS probe
+        // times out. Prevents the kill-restart cycle where each retry in
+        // ChatViewModel kills the still-starting dashboard.
+        private const val GATEWAY_DISPATCH_COOLDOWN_MS = 120_000L
 
         // Fix S2F03: SharedPreferences keys for install state caching
         private const val PREFS_NAME = "hermes_runtime"
