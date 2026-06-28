@@ -343,6 +343,76 @@ private fun QuickBackendSetup(viewModel: ConfigViewModel) {
             ) {
                 Text(t("Clear fallbacks", "پاک کردن جایگزین‌ها"))
             }
+
+            androidx.compose.material3.HorizontalDivider()
+
+            CustomProviderSetup(viewModel)
+        }
+    }
+}
+
+@Composable
+private fun CustomProviderSetup(viewModel: ConfigViewModel) {
+    var provider by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = t("Custom Provider", "پرووایدر دلخواه"),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            text = t(
+                "Set any OpenAI-compatible provider as the active backend.",
+                "هر پرووایدر سازگار با OpenAI رو به عنوان بک‌اند فعال تنظیم کن.",
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = provider,
+            onValueChange = { provider = it },
+            label = { Text(t("Provider slug", "نام پرووایدر")) },
+            placeholder = { Text("openai, deepseek, groq, ...") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = model,
+            onValueChange = { model = it },
+            label = { Text(t("Model ID", "شناسه مدل")) },
+            placeholder = { Text("gpt-4o, deepseek-chat, ...") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = { apiKey = it },
+            label = { Text(t("API Key (optional if already saved)", "کلید API (اختیاری)")) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        OutlinedTextField(
+            value = baseUrl,
+            onValueChange = { baseUrl = it },
+            label = { Text(t("Base URL (optional)", "آدرس API (اختیاری)")) },
+            placeholder = { Text("https://api.example.com/v1") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        androidx.compose.material3.Button(
+            onClick = {
+                viewModel.configureCustomProvider(
+                    provider.trim(), model.trim(), apiKey.trim(), baseUrl.trim()
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = provider.isNotBlank() && model.isNotBlank(),
+        ) {
+            Text(t("Save & Activate", "ذخیره و فعال‌سازی"))
         }
     }
 }
@@ -362,12 +432,122 @@ private fun ModelsTab(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        item(key = "__quick_model_switch") {
+            QuickModelSwitch(state, viewModel)
+        }
+        item(key = "__refresh_header") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = t("Available Models", "مدل‌های موجود"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                TextButton(onClick = { viewModel.loadModels() }) {
+                    Text(t("Refresh", "بارگذاری مجدد"))
+                }
+            }
+        }
+        if (state.availableModels.isEmpty()) {
+            item(key = "__empty_models") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = t(
+                                "No models loaded. Make sure Hermes gateway is running, then tap Refresh.",
+                                "مدلی بارگذاری نشد. مطمئن شو gateway هرمس روشنه، بعد بزن بارگذاری مجدد.",
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
         items(state.availableModels, key = { "${it.provider}/${it.modelId}" }) { model ->
             ModelCard(
                 model = model,
                 viewModel = viewModel,
                 isActive = model.provider == state.activeProvider && model.modelId == state.activeModel,
             )
+        }
+    }
+}
+
+@Composable
+private fun QuickModelSwitch(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    var customProvider by remember { mutableStateOf("") }
+    var customModel by remember { mutableStateOf("") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = t("Quick Model Switch", "تغییر سریع مدل"),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = t(
+                    "Current: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
+                    "فعلی: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            OutlinedTextField(
+                value = customProvider,
+                onValueChange = { customProvider = it },
+                label = { Text(t("Provider (e.g. xiaomi, gemini, openai)", "پرووایدر")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = customModel,
+                onValueChange = { customModel = it },
+                label = { Text(t("Model ID (e.g. mimo-v2.5-free)", "شناسه مدل")) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            androidx.compose.material3.Button(
+                onClick = {
+                    if (customProvider.isNotBlank() && customModel.isNotBlank()) {
+                        viewModel.selectModel(
+                            ModelOption(
+                                provider = customProvider.trim(),
+                                modelId = customModel.trim(),
+                                name = customModel.trim(),
+                                requiresApiKey = false,
+                            )
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = customProvider.isNotBlank() && customModel.isNotBlank(),
+            ) {
+                Text(t("Switch Model", "تغییر مدل"))
+            }
         }
     }
 }

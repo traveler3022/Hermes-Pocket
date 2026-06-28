@@ -372,6 +372,57 @@ class ConfigViewModel @Inject constructor(
         )
     }
 
+    fun configureCustomProvider(provider: String, model: String, apiKey: String, baseUrl: String) {
+        viewModelScope.launch {
+            try {
+                if (apiKey.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.MODEL_SAVE_KEY,
+                        buildJsonObject {
+                            put("slug", provider)
+                            put("api_key", apiKey)
+                        }.toMap(),
+                    )
+                }
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.provider")
+                        put("value", provider)
+                    }.toMap(),
+                )
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "model.default")
+                        put("value", model)
+                    }.toMap(),
+                )
+                if (baseUrl.isNotBlank()) {
+                    gatewayClient.request(
+                        GatewayMethods.CONFIG_SET,
+                        buildJsonObject {
+                            put("key", "model.base_url")
+                            put("value", baseUrl)
+                        }.toMap(),
+                    )
+                }
+                _uiState.value = _uiState.value.copy(
+                    activeProvider = provider,
+                    activeModel = model,
+                    errorMessage = "Backend set to $provider/$model",
+                )
+                loadConfig()
+                loadModels()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to configure custom provider")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to configure $provider: ${e.message}",
+                )
+            }
+        }
+    }
+
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {

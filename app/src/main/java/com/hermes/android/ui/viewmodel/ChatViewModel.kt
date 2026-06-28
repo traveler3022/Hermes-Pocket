@@ -182,10 +182,62 @@ class ChatViewModel @Inject constructor(
                     errorMessage = null,
                 )
                 Timber.i("[Chat] Resumed session: $sessionId")
+                loadSessionHistory(sessionId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun loadSessionHistory(sessionId: String) {
+        try {
+            val params = buildJsonObject { put("session_id", sessionId) }
+            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
+            val messages = parseSessionHistory(result)
+            if (messages.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(messages = messages)
+                Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Failed to load session history (non-fatal)")
+        }
+    }
+
+    private fun parseSessionHistory(result: kotlinx.serialization.json.JsonElement): List<ChatMessage> {
+        return try {
+            val obj = result as? JsonObject ?: return emptyList()
+            val arr = obj["messages"] as? kotlinx.serialization.json.JsonArray
+                ?: obj["history"] as? kotlinx.serialization.json.JsonArray
+                ?: return emptyList()
+            arr.mapNotNull { item ->
+                val msg = item as? JsonObject ?: return@mapNotNull null
+                val role = msg["role"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null
+                val content = msg["content"]?.let { (it as? JsonPrimitive)?.content } ?: ""
+                val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
+                    ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
+                val id = msg["id"]?.let { (it as? JsonPrimitive)?.content } ?: UUID.randomUUID().toString()
+                when (role) {
+                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content)
+                    "assistant" -> ChatMessage.Assistant(
+                        id = id, timestamp = ts, text = content,
+                        isStreaming = false,
+                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.content },
+                    )
+                    "tool" -> ChatMessage.ToolCall(
+                        id = id, timestamp = ts,
+                        toolName = msg["name"]?.let { (it as? JsonPrimitive)?.content } ?: "tool",
+                        argsText = msg["args"]?.let { (it as? JsonPrimitive)?.content },
+                        resultText = msg["result"]?.let { (it as? JsonPrimitive)?.content } ?: content,
+                        error = msg["error"]?.let { (it as? JsonPrimitive)?.content },
+                        isRunning = false, durationS = null,
+                    )
+                    else -> null
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Failed to parse session history")
+            emptyList()
         }
     }
 
@@ -274,6 +326,16 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                    msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+                } else msg
+            },
+            isSending = false,
+        )
+        activeAssistantMessageId = null
+        resetStreamingBuffer()
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
@@ -282,19 +344,18 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
+                    timeoutMs = 5_000,
                 )
-                _uiState.value = _uiState.value.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
-                        } else msg
-                    },
-                    isSending = false,
-                )
-                activeAssistantMessageId = null
-                resetStreamingBuffer()
             } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to interrupt")
+                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
+            }
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.PROCESS_STOP,
+                    timeoutMs = 5_000,
+                )
+            } catch (e: Exception) {
+                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
             }
         }
     }
