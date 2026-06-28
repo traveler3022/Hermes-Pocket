@@ -91,6 +91,28 @@ interface HermesRuntime {
     suspend fun startGateway(): GatewayHandle
 
     /**
+     * Ensure the gateway is up and reachable with a token the app can use,
+     * WITHOUT requiring the caller to know runtime-specific details.
+     *
+     * This is the resilient entry point the UI should use before connecting
+     * the [com.hermes.android.gateway.GatewayClient]. It:
+     *
+     * 1. **Syncs** the WebSocket auth token from a location that survives an
+     *    app reinstall (for the migration adapter: a file inside the Termux
+     *    runtime). After a reinstall the app's private storage is wiped, so a
+     *    freshly generated token would no longer match a dashboard that is
+     *    still running with the old token. Re-syncing makes [getWebSocketUrl]
+     *    return the token the running gateway actually expects.
+     * 2. If a gateway is already reachable with that token, returns `true`
+     *    immediately (no restart — the common reinstall fast path).
+     * 3. Otherwise **(re)starts** the gateway with the synced token.
+     *
+     * Safe to call repeatedly. Returns `true` if the gateway is reachable
+     * after the call, `false` otherwise.
+     */
+    suspend fun ensureGatewayReady(): Boolean
+
+    /**
      * Stop the running gateway process.
      */
     suspend fun stopGateway(): StopResult
