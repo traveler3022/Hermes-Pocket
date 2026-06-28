@@ -45,6 +45,7 @@ class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -110,6 +111,10 @@ class ChatViewModel @Inject constructor(
                     errorMessage = "Cannot connect to Hermes gateway. Is it running?",
                     connectionState = ChatConnectionState.Failed,
                 )
+            } else {
+                // Ensure the foreground service is running so the WebSocket
+                // connection survives screen-off and app-backgrounding.
+                com.hermes.android.service.HermesGatewayService.start(context)
             }
 
             // Collect events
@@ -194,10 +199,72 @@ class ChatViewModel @Inject constructor(
                     errorMessage = null,
                 )
                 Timber.i("[Chat] Resumed session: $sessionId")
+                loadSessionHistory(sessionId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun loadSessionHistory(sessionId: String) {
+        try {
+            val params = buildJsonObject { put("session_id", sessionId) }
+            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
+            val history = parseSessionHistory(result)
+            if (history.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(messages = history)
+            } else {
+                appendStatus("Session resumed — start typing to continue")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Could not load session history")
+            appendStatus("Session resumed")
+        }
+    }
+
+    private fun appendStatus(text: String) {
+        val msg = ChatMessage.Status(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = text,
+            isError = false,
+        )
+        _uiState.value = _uiState.value.copy(messages = _uiState.value.messages + msg)
+    }
+
+    private fun parseSessionHistory(result: kotlinx.serialization.json.JsonElement): List<ChatMessage> {
+        return try {
+            val obj = result as? JsonObject ?: return emptyList()
+            val arr = (obj["messages"] ?: obj["history"])
+                as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+            arr.mapNotNull { item ->
+                val msg = item as? JsonObject ?: return@mapNotNull null
+                val role = msg["role"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null
+                val text = msg["text"]?.let { (it as? JsonPrimitive)?.content }
+                    ?: msg["content"]?.let { (it as? JsonPrimitive)?.content }
+                    ?: return@mapNotNull null
+                val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
+                    ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
+                when (role) {
+                    "user" -> ChatMessage.User(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = ts,
+                        text = text,
+                    )
+                    "assistant" -> ChatMessage.Assistant(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = ts,
+                        text = text,
+                        isStreaming = false,
+                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.content },
+                    )
+                    else -> null
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Failed to parse session history")
+            emptyList()
         }
     }
 
