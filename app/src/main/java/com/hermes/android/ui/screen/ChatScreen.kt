@@ -217,6 +217,41 @@ fun ChatScreen(
                     .padding(padding)
                     .fillMaxSize()
             ) {
+                // Gateway not running — show setup banner instead of empty chat
+                if (uiState.connectionState == ChatConnectionState.Failed && uiState.messages.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Text(
+                                text = t("Gateway not running", "گیت‌وی اجرا نیست"),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = t(
+                                    "Open Termux, then tap \"Start Agent Gateway\" in setup.",
+                                    "ترموکس را باز کنید، سپس در تنظیمات «شروع گیت‌وی» را بزنید."
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Button(onClick = onNavigateToRuntime) {
+                                Text(t("Open Setup", "باز کردن تنظیمات"))
+                            }
+                            TextButton(onClick = { viewModel.retryConnection() }) {
+                                Text(t("Retry connection", "تلاش دوباره"))
+                            }
+                        }
+                    }
+                } else {
                 // Message list
                 LazyColumn(
                     state = listState,
@@ -230,6 +265,7 @@ fun ChatScreen(
                     items(uiState.messages, key = { it.id }) { message ->
                         MessageBubble(message)
                     }
+                }
                 }
 
                 // Sending progress bar

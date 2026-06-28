@@ -86,15 +86,13 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Connect to gateway. Before each attempt, ensure the Termux
-            // dashboard is up with a token that matches ours. After an app
-            // reinstall the WS token is regenerated, so this re-syncs it from
-            // Termux (and restarts the dashboard if needed) — otherwise the
-            // handshake is rejected and the client would dead-end in Failed.
+            // Connect to the gateway. We do NOT auto-start it here — starting
+            // is the user's explicit action via RuntimeSetupScreen. Auto-starting
+            // from two places (here + RuntimeSetupScreen) causes two concurrent
+            // startGateway() calls that interfere with each other.
             var connected = false
             for (attempt in 1..CONNECT_ATTEMPTS) {
                 try {
-                    hermesRuntime.ensureGatewayReady()
                     val state = gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
                     if (state is ConnectionState.Connected) {
                         connected = true
@@ -106,14 +104,13 @@ class ChatViewModel @Inject constructor(
                 if (attempt < CONNECT_ATTEMPTS) delay(CONNECT_RETRY_DELAY_MS)
             }
             if (!connected) {
-                Timber.e("[Chat] Failed to connect to gateway after $CONNECT_ATTEMPTS attempts")
+                Timber.e("[Chat] Failed to connect after $CONNECT_ATTEMPTS attempts — gateway not running")
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Cannot connect to Hermes gateway. Is it running?",
                     connectionState = ChatConnectionState.Failed,
                 )
             } else {
-                // Ensure the foreground service is running so the WebSocket
-                // connection survives screen-off and app-backgrounding.
+                // Foreground service keeps the WS alive through screen-off and
+                // app-backgrounding. Start it only after a confirmed connection.
                 com.hermes.android.service.HermesGatewayService.start(context)
             }
 
