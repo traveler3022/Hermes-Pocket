@@ -78,4 +78,5 @@ object GatewayMethods {
     const val INSIGHTS_GET = "insights.get"
 
     const val SHELL_EXEC = "shell.exec"
+    const val PROCESS_STOP = "process.stop"
 }
