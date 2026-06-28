@@ -294,6 +294,13 @@ class TermuxBridge @Inject constructor(
         //     (else web_server.py:11401 refuses). We create a placeholder dir.
         Timber.i("[Gateway] Sending 'hermes dashboard' to Termux via RUN_COMMAND")
 
+        // Anchor the WS auth token in Termux (survives app reinstall) and pull
+        // it into our local cache so the token we hand the dashboard matches
+        // the token getWebSocketUrl() will use. Without this, a direct
+        // startGateway() caller (Runtime screen button, boot service) could
+        // seed the file with a freshly generated token while getWebSocketUrl()
+        // returns a different cached one.
+        syncSessionTokenFromTermux()
         val sessionToken = getOrCreateSessionToken()
 
         // Note: all bash ${VAR} references must be escaped as ${'$'}{VAR}
@@ -311,7 +318,18 @@ class TermuxBridge @Inject constructor(
             fi
             # Start dashboard with our session token, no browser, no SPA build.
             # The Android app connects to ws://127.0.0.1:9119/api/ws?token=<sessionToken>.
-            export HERMES_DASHBOARD_SESSION_TOKEN="$sessionToken"
+            #
+            # The token's source of truth is a file inside Termux that survives
+            # an Android app reinstall. The app reads the same file back (see
+            # syncSessionTokenFromTermux) so both sides always agree even after
+            # the app's private storage is wiped. Seed it on first start with
+            # the token the app passed in; afterwards the existing file wins.
+            TOKEN_FILE="${'$'}HERMES_HOME/.dashboard_session_token"
+            if [ ! -s "${'$'}TOKEN_FILE" ]; then
+                printf '%s' "$sessionToken" > "${'$'}TOKEN_FILE"
+                chmod 600 "${'$'}TOKEN_FILE" 2>/dev/null || true
+            fi
+            export HERMES_DASHBOARD_SESSION_TOKEN="$(cat "${'$'}TOKEN_FILE" | tr -d '\n')"
             export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
             export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
             HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
@@ -407,6 +425,58 @@ class TermuxBridge @Inject constructor(
         _state.value = RuntimeState.Running(runningInfo, handle)
         return handle
     }
+
+    override suspend fun ensureGatewayReady(): Boolean {
+        // 1) Re-sync the WS auth token from Termux. After an app reinstall our
+        //    cached token is gone; pull the persisted one so getWebSocketUrl()
+        //    matches a dashboard that may still be running with the old token.
+        syncSessionTokenFromTermux()
+
+        // 2) Fast path: a dashboard is already up and accepts our (now-synced)
+        //    token — connect to it without killing/restarting anything. This is
+        //    the common case after a plain app reinstall, and it avoids the
+        //    20-40s cold-start of `hermes dashboard` on a phone.
+        if (waitForGatewayReady(timeoutMs = QUICK_PROBE_TIMEOUT_MS)) {
+            Timber.i("[Gateway] ensureGatewayReady: existing dashboard reachable with synced token")
+            val handle = GatewayHandle(
+                pid = null,
+                startedAt = System.currentTimeMillis(),
+                webSocketUrl = getWebSocketUrl(),
+            )
+            _state.value = RuntimeState.Running(currentInfo(), handle)
+            return true
+        }
+
+        // 3) Replace path: no reachable dashboard → make sure we're detected,
+        //    then (re)start with the synced token.
+        val s = _state.value
+        if (s !is RuntimeState.Installed && s !is RuntimeState.Detected && s !is RuntimeState.Running) {
+            try {
+                detect()
+            } catch (e: Exception) {
+                Timber.w(e, "[Gateway] ensureGatewayReady: detect() failed")
+            }
+        }
+        val detected = _state.value
+        if (detected !is RuntimeState.Installed && detected !is RuntimeState.Detected && detected !is RuntimeState.Running) {
+            Timber.w("[Gateway] ensureGatewayReady: runtime not ready to start (state=$detected)")
+            return false
+        }
+        return try {
+            startGateway()
+            _state.value is RuntimeState.Running
+        } catch (e: Exception) {
+            Timber.w(e, "[Gateway] ensureGatewayReady: startGateway failed")
+            false
+        }
+    }
+
+    /** Best-effort current runtime info from state, or a minimal Termux default. */
+    private fun currentInfo(): RuntimeInfo =
+        (_state.value as? RuntimeState.Installed)?.info
+            ?: (_state.value as? RuntimeState.Running)?.info
+            ?: (_state.value as? RuntimeState.Detected)?.info
+            ?: RuntimeInfo(type = RuntimeType.TERMUX, hermesVersion = "installed")
 
     override suspend fun stopGateway(): StopResult {
         val currentState = _state.value
@@ -736,6 +806,10 @@ class TermuxBridge @Inject constructor(
         // longer than 15s on a cold start.
         private const val GATEWAY_READY_TIMEOUT_MS = 30_000L
         private const val HEALTH_CHECK_TIMEOUT_MS = 3_000L
+        // Short probe used by ensureGatewayReady() to detect an already-running
+        // dashboard before deciding to (re)start one. Kept small so the cold
+        // path isn't delayed much when no dashboard is up yet.
+        private const val QUICK_PROBE_TIMEOUT_MS = 5_000L
 
         // Fix S2F03: SharedPreferences keys for install state caching
         private const val PREFS_NAME = "hermes_runtime"
@@ -840,6 +914,91 @@ class TermuxBridge @Inject constructor(
             prefs.getBoolean(KEY_INSTALLED, false)
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Pull the WebSocket auth token from Termux, generating + persisting it
+     * there on first use, and cache it locally.
+     *
+     * ## Why this exists
+     *
+     * The token must match on both ends: the `HERMES_DASHBOARD_SESSION_TOKEN`
+     * env var we pass to `hermes dashboard`, and the `?token=` query param we
+     * add in [getWebSocketUrl]. Originally the token lived only in Android
+     * [android.content.SharedPreferences], which Android **wipes on app
+     * uninstall**. So every app reinstall minted a brand-new token while a
+     * `hermes dashboard` started by the previous install kept running with the
+     * old token — the WS handshake was then rejected and the app could never
+     * reconnect without a reboot.
+     *
+     * Anchoring the token in a Termux-side file
+     * (`$HERMES_HOME/.dashboard_session_token`, which survives an Android
+     * reinstall) and reading it back over the RUN_COMMAND channel (which does
+     * NOT require the WS token) lets a reinstalled app adopt the token the
+     * running dashboard already uses — and connect with no restart.
+     *
+     * Reuses the same `am broadcast` → dynamically-registered receiver
+     * round-trip as [probeHermesInstall] / [runDoctor]. Best-effort: returns
+     * null (and leaves the local cache untouched) if RUN_COMMAND is not yet
+     * allowed.
+     */
+    private suspend fun syncSessionTokenFromTermux(): String? {
+        val action = "${context.packageName}.SESSION_TOKEN_RESULT"
+        val result = CompletableDeferred<String>()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == action && !result.isCompleted) {
+                    result.complete(intent.getStringExtra("token") ?: "")
+                }
+            }
+        }
+        val filter = IntentFilter(action)
+        return try {
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+            val script = """
+                set +e
+                RECEIVER="${context.packageName}"
+                ACTION="$action"
+                export HERMES_HOME="${'$'}{HERMES_HOME:-${'$'}HOME/.hermes}"
+                mkdir -p "${'$'}HERMES_HOME"
+                TOKEN_FILE="${'$'}HERMES_HOME/.dashboard_session_token"
+                if [ ! -s "${'$'}TOKEN_FILE" ]; then
+                    TOK=""
+                    if command -v python3 >/dev/null 2>&1; then
+                        TOK=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))' 2>/dev/null)
+                    fi
+                    if [ -z "${'$'}TOK" ]; then
+                        TOK=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=' | tr -d '\n')
+                    fi
+                    printf '%s' "${'$'}TOK" > "${'$'}TOKEN_FILE"
+                    chmod 600 "${'$'}TOKEN_FILE" 2>/dev/null || true
+                fi
+                TOKEN_VALUE="$(cat "${'$'}TOKEN_FILE" 2>/dev/null | tr -d '\n')"
+                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION" --es token "${'$'}TOKEN_VALUE" >/dev/null 2>&1 || true
+            """.trimIndent()
+            when (executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
+                is TermuxCommandExecutor.Result.Accepted -> {
+                    val token = withTimeoutOrNull(8.seconds) { result.await() }
+                        ?.takeIf { it.isNotBlank() }
+                    if (token != null) {
+                        try {
+                            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                                .edit().putString(KEY_SESSION_TOKEN, token).apply()
+                            Timber.i("[Runtime] Session token synced from Termux")
+                        } catch (e: Exception) {
+                            Timber.w(e, "[Runtime] Failed to cache synced session token")
+                        }
+                    }
+                    token
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Timber.d(e, "[Runtime] Session token sync failed")
+            null
+        } finally {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
 

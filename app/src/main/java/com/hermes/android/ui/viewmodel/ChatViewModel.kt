@@ -85,11 +85,27 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Connect to gateway
-            try {
-                gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to connect to gateway")
+            // Connect to gateway. Before each attempt, ensure the Termux
+            // dashboard is up with a token that matches ours. After an app
+            // reinstall the WS token is regenerated, so this re-syncs it from
+            // Termux (and restarts the dashboard if needed) — otherwise the
+            // handshake is rejected and the client would dead-end in Failed.
+            var connected = false
+            for (attempt in 1..CONNECT_ATTEMPTS) {
+                try {
+                    hermesRuntime.ensureGatewayReady()
+                    val state = gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
+                    if (state is ConnectionState.Connected) {
+                        connected = true
+                        break
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "[Chat] connect attempt $attempt/$CONNECT_ATTEMPTS failed")
+                }
+                if (attempt < CONNECT_ATTEMPTS) delay(CONNECT_RETRY_DELAY_MS)
+            }
+            if (!connected) {
+                Timber.e("[Chat] Failed to connect to gateway after $CONNECT_ATTEMPTS attempts")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Cannot connect to Hermes gateway. Is it running?",
                     connectionState = ChatConnectionState.Failed,
@@ -531,6 +547,11 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
+        // Initial-connect retry. ensureGatewayReady() may need to (re)start the
+        // Termux dashboard (cold start is 20-40s on a phone); a few spaced
+        // attempts ride that out instead of dead-ending in Failed.
+        private const val CONNECT_ATTEMPTS = 3
+        private const val CONNECT_RETRY_DELAY_MS = 2_000L
     }
 
     override fun onCleared() {
