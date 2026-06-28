@@ -62,6 +62,8 @@ data class SessionItem(
     val title: String,
     val lastMessagePreview: String?,
     val updatedAt: Long,
+    /** Number of messages in this session (if known). */
+    val messageCount: Int? = null,
 )
 
 /**
@@ -76,6 +78,12 @@ data class ChatUiState(
     val isSending: Boolean = false,
     val errorMessage: String? = null,
     val showSessionDrawer: Boolean = false,
+    // Feature #16: Search in current chat
+    val searchQuery: String = "",
+    val showSearch: Boolean = false,
+    // Feature #8: Quick model switch from chat
+    val showModelSwitcher: Boolean = false,
+    val currentModelName: String = "",
 )
 
 enum class ChatConnectionState {
