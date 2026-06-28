@@ -289,20 +289,32 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun configureFallbackProvider(provider: String, model: String, baseUrl: String? = null) {
+    fun configureFallbackProvider(provider: String, model: String, baseUrl: String = "") {
         viewModelScope.launch {
             try {
-                writeFallbackChain(listOf(FallbackProviderConfig(provider, model, baseUrl)))
-                val summary = if (baseUrl != null) "$provider/$model ($baseUrl)" else "$provider/$model"
-                _uiState.value = _uiState.value.copy(
-                    fallbackSummary = summary,
-                    errorMessage = "Fallback set to $provider/$model",
+                val cleanProvider = provider.trim()
+                val cleanModel = model.trim()
+                if (cleanProvider.isBlank() || cleanModel.isBlank()) {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Fallback provider and model are required")
+                    return@launch
+                }
+                writeFallbackChain(
+                    listOf(
+                        FallbackProviderConfig(
+                            provider = cleanProvider,
+                            model = cleanModel,
+                            baseUrl = baseUrl.trim().ifBlank { null },
+                        )
+                    )
                 )
+                _uiState.value = _uiState.value.copy(
+                    fallbackSummary = "$cleanProvider/$cleanModel",
+                    errorMessage = "Fallback set to $cleanProvider/$cleanModel",
+                )
+                loadConfig()
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set fallback provider")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to set fallback: ${e.message}",
-                )
+                Timber.e(e, "[Config] Failed to configure fallback")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure fallback: ${e.message}")
             }
         }
     }
@@ -312,14 +324,13 @@ class ConfigViewModel @Inject constructor(
             try {
                 writeFallbackChain(emptyList())
                 _uiState.value = _uiState.value.copy(
-                    fallbackSummary = null,
+                    fallbackSummary = "none",
                     errorMessage = "Fallback providers cleared",
                 )
+                loadConfig()
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to clear fallback providers")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to clear fallbacks: ${e.message}",
-                )
+                Timber.e(e, "[Config] Failed to clear fallback")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to clear fallback: ${e.message}")
             }
         }
     }
@@ -340,6 +351,7 @@ class ConfigViewModel @Inject constructor(
             import base64, json
             from pathlib import Path
             import yaml
+
             entries = json.loads(base64.b64decode('$payload').decode('utf-8'))
             path = Path.home() / '.hermes' / 'config.yaml'
             if path.exists():
@@ -496,6 +508,15 @@ enum class ConfigTab(val label: String) {
     TOOLS("Tools"),
 }
 
+data class FallbackProviderConfig(
+    val provider: String,
+    val model: String,
+    val baseUrl: String? = null,
+)
+
+private fun String.escapeJson(): String =
+    replace("\\", "\\\\").replace("\"", "\\\"")
+
 data class ModelOption(
     val provider: String,
     val modelId: String,
@@ -511,12 +532,3 @@ data class ToolOption(
     val toolCount: Int = 0,
     val tools: List<String> = emptyList(),
 )
-
-data class FallbackProviderConfig(
-    val provider: String,
-    val model: String,
-    val baseUrl: String? = null,
-)
-
-private fun String.escapeJson(): String =
-    replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")

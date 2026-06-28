@@ -10,7 +10,6 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,7 +44,6 @@ class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -54,8 +52,6 @@ class ChatViewModel @Inject constructor(
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
     private var activeAssistantMessageId: String? = null
-    private val streamingBuffer = StringBuilder()
-    private var streamingFlushJob: Job? = null
 
     init {
         connectAndCollect()
@@ -86,38 +82,15 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Auto-connect: entering the chat screen should connect on its own,
-            // so the user never has to tap a connect button. Before each attempt
-            // we call ensureGatewayReady(), which:
-            //   - re-syncs the WS token from Termux (survives app reinstall),
-            //   - reuses an already-running dashboard if one is reachable
-            //     (it does NOT kill a healthy dashboard), and
-            //   - only cold-starts one when nothing is listening.
-            // A cold start takes 30-90s on a phone, so we spread several attempts
-            // across that window instead of dead-ending after the first failure.
-            var connected = false
-            for (attempt in 1..CONNECT_ATTEMPTS) {
-                try {
-                    hermesRuntime.ensureGatewayReady()
-                    val state = gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
-                    if (state is ConnectionState.Connected) {
-                        connected = true
-                        break
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "[Chat] connect attempt $attempt/$CONNECT_ATTEMPTS failed")
-                }
-                if (attempt < CONNECT_ATTEMPTS) delay(CONNECT_RETRY_DELAY_MS)
-            }
-            if (!connected) {
-                Timber.e("[Chat] Failed to connect after $CONNECT_ATTEMPTS attempts — gateway not running")
+            // Connect to gateway
+            try {
+                gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to connect to gateway")
                 _uiState.value = _uiState.value.copy(
+                    errorMessage = "Cannot connect to Hermes gateway. Is it running?",
                     connectionState = ChatConnectionState.Failed,
                 )
-            } else {
-                // Foreground service keeps the WS alive through screen-off and
-                // app-backgrounding. Start it only after a confirmed connection.
-                com.hermes.android.service.HermesGatewayService.start(context)
             }
 
             // Collect events
@@ -194,7 +167,6 @@ class ChatViewModel @Inject constructor(
                 val params = buildJsonObject { put("session_id", sessionId) }
                 gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
                 activeAssistantMessageId = null
-                resetStreamingBuffer()
                 _uiState.value = _uiState.value.copy(
                     activeSessionId = sessionId,
                     messages = emptyList(),
@@ -202,72 +174,10 @@ class ChatViewModel @Inject constructor(
                     errorMessage = null,
                 )
                 Timber.i("[Chat] Resumed session: $sessionId")
-                loadSessionHistory(sessionId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
             }
-        }
-    }
-
-    private suspend fun loadSessionHistory(sessionId: String) {
-        try {
-            val params = buildJsonObject { put("session_id", sessionId) }
-            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            val history = parseSessionHistory(result)
-            if (history.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(messages = history)
-            } else {
-                appendStatus("Session resumed — start typing to continue")
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Chat] Could not load session history")
-            appendStatus("Session resumed")
-        }
-    }
-
-    private fun appendStatus(text: String) {
-        val msg = ChatMessage.Status(
-            id = UUID.randomUUID().toString(),
-            timestamp = System.currentTimeMillis(),
-            text = text,
-            isError = false,
-        )
-        _uiState.value = _uiState.value.copy(messages = _uiState.value.messages + msg)
-    }
-
-    private fun parseSessionHistory(result: kotlinx.serialization.json.JsonElement): List<ChatMessage> {
-        return try {
-            val obj = result as? JsonObject ?: return emptyList()
-            val arr = (obj["messages"] ?: obj["history"])
-                as? kotlinx.serialization.json.JsonArray ?: return emptyList()
-            arr.mapNotNull { item ->
-                val msg = item as? JsonObject ?: return@mapNotNull null
-                val role = msg["role"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null
-                val text = msg["text"]?.let { (it as? JsonPrimitive)?.content }
-                    ?: msg["content"]?.let { (it as? JsonPrimitive)?.content }
-                    ?: return@mapNotNull null
-                val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                    ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
-                when (role) {
-                    "user" -> ChatMessage.User(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = ts,
-                        text = text,
-                    )
-                    "assistant" -> ChatMessage.Assistant(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = ts,
-                        text = text,
-                        isStreaming = false,
-                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.content },
-                    )
-                    else -> null
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Chat] Failed to parse session history")
-            emptyList()
         }
     }
 
@@ -356,18 +266,6 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
-        // Make the UI stop spinning immediately. The backend interrupt is
-        // cooperative and can take a moment if a tool/model call is in-flight.
-        _uiState.value = _uiState.value.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                    msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
-                } else msg
-            },
-            isSending = false,
-        )
-        activeAssistantMessageId = null
-        resetStreamingBuffer()
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
@@ -376,22 +274,18 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(
                     method = GatewayMethods.SESSION_INTERRUPT,
                     params = jsonToElementMap(params),
-                    timeoutMs = 5_000,
                 )
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
-            }
-            try {
-                // Best-effort cleanup for background/shell processes that keep
-                // a tool card spinning after the turn was interrupted. This is
-                // still routed through GatewayClient, so UI does not know about
-                // backend process details.
-                gatewayClient.request(
-                    method = GatewayMethods.PROCESS_STOP,
-                    timeoutMs = 5_000,
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+                        } else msg
+                    },
+                    isSending = false,
                 )
+                activeAssistantMessageId = null
             } catch (e: Exception) {
-                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
+                Timber.e(e, "[Chat] Failed to interrupt")
             }
         }
     }
@@ -404,7 +298,6 @@ class ChatViewModel @Inject constructor(
                 // Start a new assistant message (streaming). Use a unique
                 // message id; sessionId is stable for the whole conversation
                 // and would collide across multiple assistant turns.
-                resetStreamingBuffer()
                 val msgId = UUID.randomUUID().toString()
                 activeAssistantMessageId = msgId
                 val assistantMsg = ChatMessage.Assistant(
@@ -420,11 +313,19 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageDelta -> {
-                enqueueStreamingDelta(event.text)
+                // Append text to the streaming assistant message
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
+                        ) {
+                            msg.copy(text = msg.text + event.text)
+                        } else msg
+                    }
+                )
             }
 
             is GatewayEvent.MessageComplete -> {
-                flushStreamingBuffer()
                 // Finalize the assistant message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
@@ -443,7 +344,6 @@ class ChatViewModel @Inject constructor(
                     isSending = false,
                 )
                 activeAssistantMessageId = null
-                resetStreamingBuffer()
             }
 
             is GatewayEvent.ThinkingDelta -> {
@@ -543,41 +443,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // ── Streaming buffer ─────────────────────────────────────────────────
-
-    private fun enqueueStreamingDelta(text: String) {
-        if (text.isEmpty()) return
-        streamingBuffer.append(text)
-        if (streamingFlushJob?.isActive == true) return
-        streamingFlushJob = viewModelScope.launch {
-            delay(STREAM_FLUSH_INTERVAL_MS)
-            flushStreamingBuffer()
-            streamingFlushJob = null
-        }
-    }
-
-    private fun flushStreamingBuffer() {
-        if (streamingBuffer.isEmpty()) return
-        val chunk = streamingBuffer.toString()
-        streamingBuffer.setLength(0)
-        val targetId = activeAssistantMessageId
-        _uiState.value = _uiState.value.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.Assistant && msg.isStreaming &&
-                    (targetId == null || msg.id == targetId)
-                ) {
-                    msg.copy(text = msg.text + chunk)
-                } else msg
-            }
-        )
-    }
-
-    private fun resetStreamingBuffer() {
-        streamingFlushJob?.cancel()
-        streamingFlushJob = null
-        streamingBuffer.setLength(0)
-    }
-
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun toggleSessionDrawer() {
@@ -593,7 +458,6 @@ class ChatViewModel @Inject constructor(
     fun newConversation() {
         viewModelScope.launch {
             activeAssistantMessageId = null
-            resetStreamingBuffer()
             _uiState.value = _uiState.value.copy(
                 messages = emptyList(),
                 showSessionDrawer = false,
@@ -615,20 +479,10 @@ class ChatViewModel @Inject constructor(
     private fun normalizeEpochMillis(value: Long): Long =
         if (value in 1..999_999_999_999L) value * 1000L else value
 
-    private companion object {
-        private const val STREAM_FLUSH_INTERVAL_MS = 80L
-        // Initial-connect retry. ensureGatewayReady() may need to (re)start the
-        // Termux dashboard (cold start is 20-40s on a phone); a few spaced
-        // attempts ride that out instead of dead-ending in Failed.
-        private const val CONNECT_ATTEMPTS = 3
-        private const val CONNECT_RETRY_DELAY_MS = 2_000L
-    }
-
     override fun onCleared() {
         super.onCleared()
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()
-        resetStreamingBuffer()
         viewModelScope.launch { gatewayClient.disconnect() }
     }
 }
