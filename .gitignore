@@ -40,3 +40,4 @@ mapping.txt
 # See hermes-migration/docs/audits/gateway-bind-audit.md — Termux is the
 # only viable Python runtime on Android per Phase 0 Report §2.4.1.)
 prototype12a/
+.claude/
