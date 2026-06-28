@@ -86,13 +86,19 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Connect to the gateway. We do NOT auto-start it here — starting
-            // is the user's explicit action via RuntimeSetupScreen. Auto-starting
-            // from two places (here + RuntimeSetupScreen) causes two concurrent
-            // startGateway() calls that interfere with each other.
+            // Auto-connect: entering the chat screen should connect on its own,
+            // so the user never has to tap a connect button. Before each attempt
+            // we call ensureGatewayReady(), which:
+            //   - re-syncs the WS token from Termux (survives app reinstall),
+            //   - reuses an already-running dashboard if one is reachable
+            //     (it does NOT kill a healthy dashboard), and
+            //   - only cold-starts one when nothing is listening.
+            // A cold start takes 30-90s on a phone, so we spread several attempts
+            // across that window instead of dead-ending after the first failure.
             var connected = false
             for (attempt in 1..CONNECT_ATTEMPTS) {
                 try {
+                    hermesRuntime.ensureGatewayReady()
                     val state = gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
                     if (state is ConnectionState.Connected) {
                         connected = true

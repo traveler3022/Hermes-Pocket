@@ -276,6 +276,28 @@ class TermuxBridge @Inject constructor(
             return currentState.gateway
         }
 
+        // Reuse fast-path: a dashboard may already be up — the user started it
+        // earlier, or it survived an app restart while the app's own state had
+        // reset to Detected/Installed. Sync our token from Termux and probe
+        // BEFORE killing anything. If it's reachable we adopt it as-is.
+        //
+        // This is the fix for "the first connection doesn't work": the previous
+        // behaviour killed and cold-restarted the dashboard on every tap of
+        // "Start Agent Gateway", and a cold start takes 30-90s — so the chat
+        // screen always opened before the gateway had finished booting. Reusing
+        // a healthy dashboard makes the first connection succeed immediately.
+        syncSessionTokenFromTermux()
+        if (waitForGatewayReady(timeoutMs = QUICK_PROBE_TIMEOUT_MS)) {
+            Timber.i("[Gateway] Existing dashboard reachable — reusing without restart")
+            val existing = GatewayHandle(
+                pid = null,
+                startedAt = System.currentTimeMillis(),
+                webSocketUrl = getWebSocketUrl(),
+            )
+            _state.value = RuntimeState.Running(info, existing)
+            return existing
+        }
+
         // Per gateway-bind-audit.md (2026-06-27):
         // The correct command to launch the WS server is `hermes dashboard`,
         // NOT `hermes gateway start`. Verified in hermes_cli/gateway.py:6201
