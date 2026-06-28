@@ -19,8 +19,6 @@ import com.hermes.android.MainActivity
 import com.hermes.android.R
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.ConnectionState
-import com.hermes.android.runtime.DetectionResult
-import com.hermes.android.runtime.RuntimeState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -110,44 +108,11 @@ class HermesGatewayService : Service() {
 
 
     private suspend fun ensureRuntimeGatewayStarted() {
-        when (val state = hermesRuntime.state.value) {
-            is RuntimeState.Running -> return
-            is RuntimeState.Installed -> {
-                updateNotification("Starting Hermes gateway…")
-                hermesRuntime.startGateway()
-                return
-            }
-            is RuntimeState.NotDetected,
-            is RuntimeState.Error -> {
-                updateNotification("Detecting Hermes runtime…")
-                when (val detection = hermesRuntime.detect()) {
-                    is DetectionResult.Missing -> {
-                        updateNotification("Termux setup required")
-                        throw IllegalStateException(detection.title)
-                    }
-                    is DetectionResult.Incompatible -> {
-                        updateNotification("Runtime incompatible")
-                        throw IllegalStateException(detection.reason)
-                    }
-                    is DetectionResult.Available -> Unit
-                }
-                if (hermesRuntime.state.value is RuntimeState.Installed) {
-                    updateNotification("Starting Hermes gateway…")
-                    hermesRuntime.startGateway()
-                    return
-                }
-                updateNotification("Hermes install required")
-                throw IllegalStateException("Hermes is not installed yet")
-            }
-            is RuntimeState.Detected -> {
-                updateNotification("Hermes install required")
-                throw IllegalStateException("Hermes is not installed yet")
-            }
-            RuntimeState.Detecting,
-            RuntimeState.Installing -> {
-                updateNotification("Runtime is busy…")
-                throw IllegalStateException("Runtime is busy: $state")
-            }
+        updateNotification("Connecting to Hermes gateway…")
+        val ready = hermesRuntime.ensureGatewayReady()
+        if (!ready) {
+            updateNotification("Hermes not ready — Termux setup required")
+            throw IllegalStateException("ensureGatewayReady() returned false — runtime not ready")
         }
     }
 
