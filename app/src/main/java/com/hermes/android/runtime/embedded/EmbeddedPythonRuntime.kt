@@ -82,22 +82,12 @@ class EmbeddedPythonRuntime @Inject constructor() : HermesRuntime {
         )
     }
 
-    override suspend fun ensureGatewayReady(): Boolean {
-        // Stub: the embedded runtime hosts the gateway in-process, so it is
-        // ready whenever the runtime is running. No token re-sync needed.
-        return _state.value is RuntimeState.Running
-    }
-
     override suspend fun stopGateway(): StopResult {
         return StopResult.Success
     }
 
     override suspend fun fetchLogs() {
         // Embedded runtime logs are managed in-app
-    }
-
-    override suspend fun runDoctor(): String {
-        return "Embedded Python runtime doctor: stub OK"
     }
 
     override suspend fun isHealthy(): Boolean {

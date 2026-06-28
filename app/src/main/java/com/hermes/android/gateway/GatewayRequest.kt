@@ -69,7 +69,6 @@ object GatewayMethods {
     const val TERMINAL_RESIZE = "terminal.resize"
     const val RELOAD_MCP = "reload.mcp"
     const val RELOAD_ENV = "reload.env"
-    const val PROCESS_STOP = "process.stop"
 
     const val APPROVAL_RESPOND = "approval.respond"
     const val CLARIFY_RESPOND = "clarify.respond"

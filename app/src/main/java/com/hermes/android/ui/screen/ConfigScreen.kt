@@ -172,9 +172,9 @@ private fun GeneralTab(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                state.fallbackSummary?.let { summary ->
+                state.fallbackSummary?.let { fallback ->
                     Text(
-                        text = t("Fallback: $summary", "جایگزین: $summary"),
+                        text = "Fallback: $fallback",
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -319,10 +319,11 @@ private fun QuickBackendSetup(viewModel: ConfigViewModel) {
             )
             Text(
                 text = t(
-                    "If the active provider runs out of quota or fails, Hermes will retry with the fallback automatically.",
-                    "اگر ارائه‌دهنده فعلی به محدودیت برسد یا خطا بدهد، هرمس به‌طور خودکار با جایگزین تلاش مجدد می‌کند.",
+                    "If the active provider runs out of quota or fails, Hermes will try the fallback provider without losing the conversation.",
+                    "اگر توکن یا سهمیه مدل اصلی تمام شود یا خطا بدهد، هرمس بدون قطع گفتگو سراغ پرووایدر جایگزین می‌رود.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             androidx.compose.material3.Button(
                 onClick = { viewModel.configureFallbackProvider("gemini", geminiModel) },

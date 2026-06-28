@@ -179,7 +179,6 @@ class SessionsViewModel @Inject constructor(
                     userMd = userMd,
                     memoryMd = memoryMd,
                     isLoading = false,
-                    errorMessage = null,
                 )
                 Timber.i("[Memory] Loaded USER.md (${userMd.length} chars), MEMORY.md (${memoryMd.length} chars)")
             } catch (e: Exception) {
@@ -188,27 +187,6 @@ class SessionsViewModel @Inject constructor(
                     userMd = "(failed to load)",
                     memoryMd = "(failed to load)",
                     isLoading = false,
-                    errorMessage = e.message,
-                )
-            }
-        }
-    }
-
-    fun initializeMemoryFiles() {
-        viewModelScope.launch {
-            _memoryState.value = _memoryState.value.copy(isLoading = true)
-            try {
-                gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf("command" to JsonPrimitive("mkdir -p ~/.hermes/memories && touch ~/.hermes/memories/USER.md ~/.hermes/memories/MEMORY.md && echo 'memory files ready'")),
-                    timeoutMs = 30_000,
-                )
-                loadMemory()
-            } catch (e: Exception) {
-                Timber.e(e, "[Memory] Failed to initialize memory files")
-                _memoryState.value = _memoryState.value.copy(
-                    isLoading = false,
-                    errorMessage = "Failed to initialize memory: ${e.message}",
                 )
             }
         }
@@ -237,7 +215,6 @@ data class MemoryUiState(
     val userMd: String = "",
     val memoryMd: String = "",
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
 )
 
 data class SessionSummary(

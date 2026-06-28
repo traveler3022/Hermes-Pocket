@@ -1,9 +1,5 @@
 package com.hermes.android.ui.screen
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,14 +15,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -42,21 +35,16 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ChatConnectionState
@@ -76,9 +64,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SessionItem
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Main Chat screen.
@@ -217,41 +202,6 @@ fun ChatScreen(
                     .padding(padding)
                     .fillMaxSize()
             ) {
-                // Gateway not running — show setup banner instead of empty chat
-                if (uiState.connectionState == ChatConnectionState.Failed && uiState.messages.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            Text(
-                                text = t("Gateway not running", "گیت‌وی اجرا نیست"),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = t(
-                                    "Open Termux, then tap \"Start Agent Gateway\" in setup.",
-                                    "ترموکس را باز کنید، سپس در تنظیمات «شروع گیت‌وی» را بزنید."
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Button(onClick = onNavigateToRuntime) {
-                                Text(t("Open Setup", "باز کردن تنظیمات"))
-                            }
-                            TextButton(onClick = { viewModel.retryConnection() }) {
-                                Text(t("Retry connection", "تلاش دوباره"))
-                            }
-                        }
-                    }
-                } else {
                 // Message list
                 LazyColumn(
                     state = listState,
@@ -265,7 +215,6 @@ fun ChatScreen(
                     items(uiState.messages, key = { it.id }) { message ->
                         MessageBubble(message)
                     }
-                }
                 }
 
                 // Sending progress bar
@@ -346,297 +295,160 @@ private fun ConnectionIndicator(state: ChatConnectionState) {
 @Composable
 private fun MessageBubble(message: ChatMessage) {
     when (message) {
-        is ChatMessage.User -> UserBubble(message)
-        is ChatMessage.Assistant -> AssistantBubble(message)
-        is ChatMessage.ToolCall -> ToolCallCard(message)
-        is ChatMessage.Status -> StatusLine(message)
-    }
-}
-
-@Composable
-private fun UserBubble(message: ChatMessage.User) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.End,
-    ) {
-        Card(
-            modifier = Modifier.widthIn(max = 320.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-            ),
-            shape = RoundedCornerShape(18.dp, 4.dp, 18.dp, 18.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Text(
-                text = message.text,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
-        Text(
-            text = formatTime(message.timestamp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.padding(top = 2.dp, end = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun AssistantBubble(message: ChatMessage.Assistant) {
-    var showReasoning by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.Top,
-    ) {
-        // Hermes avatar
-        Surface(
-            modifier = Modifier
-                .padding(end = 8.dp, top = 4.dp)
-                .size(30.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = 1.dp,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = "H",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+        is ChatMessage.User -> {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Card(
+                    modifier = Modifier.widthIn(max = 420.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                    shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
+                ) {
+                    Text(
+                        text = message.text,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
             }
         }
 
-        Column(modifier = Modifier.widthIn(max = 340.dp)) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-                shape = RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        is ChatMessage.Assistant -> {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    // Collapsible thinking section
-                    val hasReasoning = !message.reasoning.isNullOrEmpty()
-                    if (hasReasoning) {
-                        val wordCount = message.reasoning
-                            ?.trim()?.split(Regex("\\s+"))?.size ?: 0
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 6.dp)
-                                .clickable { showReasoning = !showReasoning },
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.0f),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Text("💭", fontSize = 11.sp)
-                                Text(
-                                    text = t("Thinking", "فکر کردن"),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    text = "$wordCount ${t("words", "کلمه")}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                )
-                                Icon(
-                                    imageVector = if (showReasoning) Icons.Default.KeyboardArrowUp
-                                                  else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                )
-                            }
-                        }
-                        AnimatedVisibility(
-                            visible = showReasoning,
-                            enter = expandVertically(),
-                            exit = shrinkVertically(),
-                        ) {
-                            Column {
-                                Text(
-                                    text = message.reasoning ?: "",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                        lineHeight = 18.sp,
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                            RoundedCornerShape(8.dp),
-                                        )
-                                        .padding(10.dp),
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        }
-                        if (message.text.isNotEmpty()) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(bottom = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            )
-                        }
-                    }
-
-                    // Main response text
-                    if (message.text.isEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(10.dp),
-                                strokeWidth = 1.5.dp,
-                            )
+                Card(
+                    modifier = Modifier.widthIn(max = 420.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                    shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        if (message.reasoning != null && message.reasoning.isNotEmpty()) {
                             Text(
-                                text = if (hasReasoning) t("Responding…", "در حال پاسخ…")
-                                       else t("Thinking…", "در حال فکر کردن…"),
+                                text = "💭 ${message.reasoning}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 4.dp),
                             )
                         }
-                    } else {
-                        SelectionContainer {
-                            dev.jeziellago.compose.markdowntext.MarkdownText(
-                                markdown = message.text,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                ),
+                        // Fix S4F01: Render assistant messages as Markdown,
+                        // but do not also render the same text as plain Text.
+                        if (message.text.isEmpty()) {
+                            Text(
+                                text = "…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
+                        } else {
+                            SelectionContainer {
+                                dev.jeziellago.compose.markdowntext.MarkdownText(
+                                    markdown = message.text,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                )
+                            }
                         }
                         if (message.isStreaming) {
                             Spacer(modifier = Modifier.height(4.dp))
                             CircularProgressIndicator(
-                                modifier = Modifier.size(10.dp),
-                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 2.dp,
                             )
                         }
                     }
                 }
             }
+        }
+
+        is ChatMessage.ToolCall -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "🔧 ${message.toolName}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        if (message.isRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                        message.durationS?.let {
+                            Text(
+                                text = "${"%.1f".format(it)}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                    }
+                    message.argsText?.let { args ->
+                        if (args.isNotBlank()) {
+                            Text(
+                                text = args,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    message.resultText?.let { result ->
+                        if (result.isNotBlank()) {
+                            Text(
+                                text = result.take(500) + if (result.length > 500) "…" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    message.error?.let { err ->
+                        if (err.isNotBlank()) {
+                            Text(
+                                text = "❌ $err",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        is ChatMessage.Status -> {
             Text(
-                text = formatTime(message.timestamp),
+                text = message.text,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp),
+                color = if (message.isError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
             )
         }
     }
 }
-
-@Composable
-private fun ToolCallCard(message: ChatMessage.ToolCall) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (message.isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        strokeWidth = 1.5.dp,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                } else {
-                    Text(
-                        text = if (message.error != null) "✕" else "✓",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (message.error != null) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(
-                    text = message.toolName,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                message.durationS?.let {
-                    Text(
-                        text = "${"%.1f".format(it)}s",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
-            message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
-                Text(
-                    text = args.replace('\n', ' ').take(200) + if (args.length > 200) "…" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(6.dp),
-                        )
-                        .padding(6.dp),
-                )
-            }
-            message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
-                Text(
-                    text = result.take(300) + if (result.length > 300) "…" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            message.error?.takeIf { it.isNotBlank() }?.let { err ->
-                Text(
-                    text = err.take(220),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusLine(message: ChatMessage.Status) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = message.text,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (message.isError) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
-    }
-}
-
-private fun formatTime(timestamp: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
 
 @Composable
 private fun InputBar(

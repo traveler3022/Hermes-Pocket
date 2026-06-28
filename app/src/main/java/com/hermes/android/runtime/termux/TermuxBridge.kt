@@ -1,8 +1,6 @@
 package com.hermes.android.runtime.termux
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
@@ -21,7 +19,6 @@ import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -81,11 +78,6 @@ class TermuxBridge @Inject constructor(
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotDetected)
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
 
-    // Tracks when the last `hermes dashboard` script was dispatched to Termux.
-    // Used by ensureGatewayReady() to avoid killing a still-starting dashboard
-    // when the initial wait times out and ChatViewModel retries.
-    private var lastGatewayDispatchMs: Long = 0L
-
     override val installProgress: StateFlow<InstallProgress?> = progressFlow.asStateFlow()
 
     override suspend fun detect(): DetectionResult {
@@ -116,22 +108,19 @@ class TermuxBridge @Inject constructor(
             )
         }
 
-        val probe = probeHermesInstall()
-        val previouslyInstalled = isPreviouslyInstalled() || probe?.installed == true
+        val previouslyInstalled = isPreviouslyInstalled()
         val info = RuntimeInfo(
             type = RuntimeType.TERMUX,
             version = detection.termuxVersion,
             path = TERMUX_PREFIX_PATH,
-            pythonVersion = probe?.pythonVersion, // best-effort RUN_COMMAND probe
+            pythonVersion = null, // probed during install script (Fix S2F01)
             diskFreeBytes = detection.diskFreeBytes,
-            hermesVersion = probe?.hermesVersion?.takeIf { it.isNotBlank() }
-                ?: if (previouslyInstalled) "installed" else null,
+            hermesVersion = if (previouslyInstalled) "installed" else null,
             extras = buildMap {
                 put("termuxApiInstalled", detection.termuxApiInstalled.toString())
                 put("termuxBootInstalled", detection.termuxBootInstalled.toString())
-                // Fix S2F07: flag if this is a re-install or a manual Termux install
+                // Fix S2F07: flag if this is a re-install
                 put("previouslyInstalled", previouslyInstalled.toString())
-                put("manualProbe", (probe?.installed == true).toString())
             },
         )
 
@@ -276,28 +265,6 @@ class TermuxBridge @Inject constructor(
             return currentState.gateway
         }
 
-        // Reuse fast-path: a dashboard may already be up — the user started it
-        // earlier, or it survived an app restart while the app's own state had
-        // reset to Detected/Installed. Sync our token from Termux and probe
-        // BEFORE killing anything. If it's reachable we adopt it as-is.
-        //
-        // This is the fix for "the first connection doesn't work": the previous
-        // behaviour killed and cold-restarted the dashboard on every tap of
-        // "Start Agent Gateway", and a cold start takes 30-90s — so the chat
-        // screen always opened before the gateway had finished booting. Reusing
-        // a healthy dashboard makes the first connection succeed immediately.
-        syncSessionTokenFromTermux()
-        if (waitForGatewayReady(timeoutMs = QUICK_PROBE_TIMEOUT_MS)) {
-            Timber.i("[Gateway] Existing dashboard reachable — reusing without restart")
-            val existing = GatewayHandle(
-                pid = null,
-                startedAt = System.currentTimeMillis(),
-                webSocketUrl = getWebSocketUrl(),
-            )
-            _state.value = RuntimeState.Running(info, existing)
-            return existing
-        }
-
         // Per gateway-bind-audit.md (2026-06-27):
         // The correct command to launch the WS server is `hermes dashboard`,
         // NOT `hermes gateway start`. Verified in hermes_cli/gateway.py:6201
@@ -321,13 +288,6 @@ class TermuxBridge @Inject constructor(
         //     (else web_server.py:11401 refuses). We create a placeholder dir.
         Timber.i("[Gateway] Sending 'hermes dashboard' to Termux via RUN_COMMAND")
 
-        // Anchor the WS auth token in Termux (survives app reinstall) and pull
-        // it into our local cache so the token we hand the dashboard matches
-        // the token getWebSocketUrl() will use. Without this, a direct
-        // startGateway() caller (Runtime screen button, boot service) could
-        // seed the file with a freshly generated token while getWebSocketUrl()
-        // returns a different cached one.
-        syncSessionTokenFromTermux()
         val sessionToken = getOrCreateSessionToken()
 
         // Note: all bash ${VAR} references must be escaped as ${'$'}{VAR}
@@ -345,18 +305,7 @@ class TermuxBridge @Inject constructor(
             fi
             # Start dashboard with our session token, no browser, no SPA build.
             # The Android app connects to ws://127.0.0.1:9119/api/ws?token=<sessionToken>.
-            #
-            # The token's source of truth is a file inside Termux that survives
-            # an Android app reinstall. The app reads the same file back (see
-            # syncSessionTokenFromTermux) so both sides always agree even after
-            # the app's private storage is wiped. Seed it on first start with
-            # the token the app passed in; afterwards the existing file wins.
-            TOKEN_FILE="${'$'}HERMES_HOME/.dashboard_session_token"
-            if [ ! -s "${'$'}TOKEN_FILE" ]; then
-                printf '%s' "$sessionToken" > "${'$'}TOKEN_FILE"
-                chmod 600 "${'$'}TOKEN_FILE" 2>/dev/null || true
-            fi
-            export HERMES_DASHBOARD_SESSION_TOKEN="$(cat "${'$'}TOKEN_FILE" | tr -d '\n')"
+            export HERMES_DASHBOARD_SESSION_TOKEN="$sessionToken"
             export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
             export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
             HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
@@ -373,19 +322,6 @@ class TermuxBridge @Inject constructor(
                 echo "Hermes command not found. Install likely failed before linking hermes. Expected: ${'$'}HERMES_CMD"
                 exit 1
             fi
-            # App reinstall resets the Android-side session token, while an old
-            # Termux dashboard can keep running on :9119 with the old token.
-            # Stop stale dashboard/uvicorn listeners before starting a fresh
-            # one with the token generated by this app install.
-            "${'$'}HERMES_CMD" dashboard --stop >/dev/null 2>&1 || true
-            pkill -f "hermes.*dashboard" 2>/dev/null || true
-            pkill -f "uvicorn.*9119" 2>/dev/null || true
-            if command -v lsof >/dev/null 2>&1; then
-                for PID_ON_PORT in $(lsof -ti tcp:$DEFAULT_GATEWAY_PORT -sTCP:LISTEN 2>/dev/null || true); do
-                    kill "${'$'}PID_ON_PORT" 2>/dev/null || true
-                done
-            fi
-            sleep 1
             # hermes dashboard execution via flexible path
             nohup "${'$'}HERMES_CMD" dashboard \
                 --host $DEFAULT_GATEWAY_HOST \
@@ -412,10 +348,6 @@ class TermuxBridge @Inject constructor(
         when (result) {
             is TermuxCommandExecutor.Result.Accepted -> {
                 Timber.i("[Gateway] RUN_COMMAND accepted")
-                // Record the dispatch time so ensureGatewayReady() can probe
-                // with remaining cooldown time instead of kill-restarting the
-                // dashboard if it hasn't bound the port yet.
-                lastGatewayDispatchMs = System.currentTimeMillis()
             }
             is TermuxCommandExecutor.Result.TermuxMissing -> {
                 _state.value = RuntimeState.Error(result.message)
@@ -432,23 +364,22 @@ class TermuxBridge @Inject constructor(
             }
         }
 
-        // Wait for the gateway to bind the port and send gateway.ready.
-        // Cold start on a phone (plugin discovery + MCP scan + uvicorn boot)
-        // typically takes 30-90s. We wait up to GATEWAY_READY_TIMEOUT_MS.
+        // Wait briefly for the gateway to come up by attempting a WS connect.
+        // The OkHttpGatewayClient handles retries internally; we just need
+        // to know whether the gateway is reachable.
         val handle = GatewayHandle(
             pid = null, // unknown — Termux doesn't expose child PIDs back to us
             startedAt = System.currentTimeMillis(),
             webSocketUrl = getWebSocketUrl(),
         )
 
+        // Give the gateway a few seconds to bind the port. We don't block on
+        // full WS handshake here — isHealthy() does that.
         val reachable = waitForGatewayReady(timeoutMs = GATEWAY_READY_TIMEOUT_MS)
         if (!reachable) {
-            // Don't set Error state — keep the current Installed/Detected state
-            // so that ensureGatewayReady()'s cooldown path can keep probing
-            // without triggering another kill-and-restart cycle.
-            val msg = "Gateway not reachable within ${GATEWAY_READY_TIMEOUT_MS / 1_000}s (still starting). " +
-                "Check ~/.hermes/logs/gateway_stdout.log in Termux."
+            val msg = "Gateway did not become reachable within $GATEWAY_READY_TIMEOUT_MS ms. Check ~/.hermes/logs/gateway_stdout.log."
             Timber.w("[Gateway] $msg")
+            _state.value = RuntimeState.Error(msg)
             throw IllegalStateException(msg)
         }
 
@@ -457,84 +388,6 @@ class TermuxBridge @Inject constructor(
         _state.value = RuntimeState.Running(runningInfo, handle)
         return handle
     }
-
-    override suspend fun ensureGatewayReady(): Boolean {
-        // 1) Re-sync the WS auth token from Termux. After an app reinstall our
-        //    cached token is gone; pull the persisted one so getWebSocketUrl()
-        //    matches a dashboard that may still be running with the old token.
-        syncSessionTokenFromTermux()
-
-        // 2) Fast path: a dashboard is already up and accepts our (now-synced)
-        //    token — connect to it without killing/restarting anything. This is
-        //    the common case after a plain app reinstall, and it avoids the
-        //    20-40s cold-start of `hermes dashboard` on a phone.
-        if (waitForGatewayReady(timeoutMs = QUICK_PROBE_TIMEOUT_MS)) {
-            Timber.i("[Gateway] ensureGatewayReady: existing dashboard reachable with synced token")
-            val handle = GatewayHandle(
-                pid = null,
-                startedAt = System.currentTimeMillis(),
-                webSocketUrl = getWebSocketUrl(),
-            )
-            _state.value = RuntimeState.Running(currentInfo(), handle)
-            return true
-        }
-
-        // 3) Cooldown path: a startGateway() was dispatched recently and the
-        //    dashboard is still cold-starting. Don't kill-and-restart — just
-        //    keep probing with whatever time is left in the cooldown window.
-        //    Without this guard, ChatViewModel's retry loop would dispatch a new
-        //    `hermes dashboard` script every 30s, each one killing the previous
-        //    attempt before it could finish binding port 9119 (kill-restart cycle).
-        val timeSinceDispatch = System.currentTimeMillis() - lastGatewayDispatchMs
-        if (lastGatewayDispatchMs > 0 && timeSinceDispatch < GATEWAY_DISPATCH_COOLDOWN_MS) {
-            val remaining = GATEWAY_DISPATCH_COOLDOWN_MS - timeSinceDispatch
-            Timber.i("[Gateway] ensureGatewayReady: dispatch ${timeSinceDispatch}ms ago, probing ${remaining}ms more")
-            if (waitForGatewayReady(timeoutMs = remaining)) {
-                val handle = GatewayHandle(
-                    pid = null,
-                    startedAt = System.currentTimeMillis(),
-                    webSocketUrl = getWebSocketUrl(),
-                )
-                _state.value = RuntimeState.Running(currentInfo(), handle)
-                return true
-            }
-            Timber.w("[Gateway] ensureGatewayReady: dashboard did not come up within cooldown window")
-            return false
-        }
-
-        // 4) Replace path: no recent dispatch and no reachable dashboard →
-        //    make sure we're detected, then (re)start with the synced token.
-        val s = _state.value
-        if (s !is RuntimeState.Installed && s !is RuntimeState.Detected && s !is RuntimeState.Running) {
-            try {
-                detect()
-            } catch (e: Exception) {
-                Timber.w(e, "[Gateway] ensureGatewayReady: detect() failed")
-            }
-        }
-        val detected = _state.value
-        if (detected !is RuntimeState.Installed && detected !is RuntimeState.Detected && detected !is RuntimeState.Running) {
-            Timber.w("[Gateway] ensureGatewayReady: runtime not ready to start (state=$detected)")
-            return false
-        }
-        return try {
-            startGateway()
-            _state.value is RuntimeState.Running
-        } catch (e: Exception) {
-            Timber.w(e, "[Gateway] ensureGatewayReady: startGateway threw (dashboard still starting?)")
-            // startGateway() threw because GATEWAY_READY_TIMEOUT_MS elapsed before
-            // gateway.ready arrived. The dispatch timestamp is recorded so the
-            // next ensureGatewayReady() call takes the cooldown path above.
-            false
-        }
-    }
-
-    /** Best-effort current runtime info from state, or a minimal Termux default. */
-    private fun currentInfo(): RuntimeInfo =
-        (_state.value as? RuntimeState.Installed)?.info
-            ?: (_state.value as? RuntimeState.Running)?.info
-            ?: (_state.value as? RuntimeState.Detected)?.info
-            ?: RuntimeInfo(type = RuntimeType.TERMUX, hermesVersion = "installed")
 
     override suspend fun stopGateway(): StopResult {
         val currentState = _state.value
@@ -627,29 +480,8 @@ class TermuxBridge @Inject constructor(
                 echo "(No gateway log found)" >> "${'$'}LOG_FILE"
             fi
             
-            echo "" >> "${'$'}LOG_FILE"
-            echo "=== HERMES VERSION + DOCTOR ===" >> "${'$'}LOG_FILE"
-            export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-            HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-            elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                HERMES_CMD="$(command -v hermes)"
-            fi
-            if [ -x "${'$'}HERMES_CMD" ]; then
-                "${'$'}HERMES_CMD" --version >> "${'$'}LOG_FILE" 2>&1 || true
-                echo "" >> "${'$'}LOG_FILE"
-                "${'$'}HERMES_CMD" doctor >> "${'$'}LOG_FILE" 2>&1 || true
-            else
-                echo "Hermes command not found: ${'$'}HERMES_CMD" >> "${'$'}LOG_FILE"
-            fi
-
-            # Take last 4000 chars for broadcast to avoid intent size limits
-            LOG_TAIL="$(tail -c 4000 "${'$'}LOG_FILE")"
+            # Take last 2000 chars for broadcast to avoid intent size limits
+            LOG_TAIL="$(tail -c 2000 "${'$'}LOG_FILE")"
             am broadcast -p "${context.packageName}" -a "com.hermes.android.LOG_UPDATE" --es logs "${'$'}LOG_TAIL" >/dev/null 2>&1 || true
             echo "Logs copied to /sdcard/Download/hermes_logs.txt and broadcasted"
         """.trimIndent()
@@ -659,65 +491,6 @@ class TermuxBridge @Inject constructor(
             workingDirectory = TermuxCommandExecutor.TERMUX_HOME,
         )
         Timber.i("[Logs] Fetch logs script dispatched to Termux")
-    }
-
-    override suspend fun runDoctor(): String {
-        val action = "${context.packageName}.DOCTOR_RESULT"
-        val result = CompletableDeferred<String>()
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == action && !result.isCompleted) {
-                    result.complete(intent.getStringExtra("doctor") ?: "(no doctor output)")
-                }
-            }
-        }
-        val filter = IntentFilter(action)
-        return try {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
-            val script = """
-                set +e
-                RECEIVER="${context.packageName}"
-                ACTION="$action"
-                export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-                HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-                if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-                elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                    HERMES_CMD="$(command -v hermes)"
-                fi
-                OUT="${'$'}HOME/.hermes/logs/doctor_from_app.log"
-                mkdir -p "${'$'}HOME/.hermes/logs"
-                {
-                    echo "=== hermes --version ==="
-                    if [ -x "${'$'}HERMES_CMD" ]; then
-                        "${'$'}HERMES_CMD" --version 2>&1
-                        echo ""
-                        echo "=== hermes doctor ==="
-                        "${'$'}HERMES_CMD" doctor 2>&1
-                    else
-                        echo "Hermes command not found: ${'$'}HERMES_CMD"
-                    fi
-                } > "${'$'}OUT"
-                DOCTOR_TAIL="$(tail -c 12000 "${'$'}OUT")"
-                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION" --es doctor "${'$'}DOCTOR_TAIL" >/dev/null 2>&1 || true
-            """.trimIndent()
-            when (val dispatch = executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
-                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(90.seconds) { result.await() }
-                    ?: "Doctor timed out. Check ~/.hermes/logs/doctor_from_app.log in Termux."
-                is TermuxCommandExecutor.Result.TermuxMissing -> dispatch.message
-                is TermuxCommandExecutor.Result.AllowExternalAppsDisabled -> dispatch.message
-                is TermuxCommandExecutor.Result.Failure -> dispatch.message
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "[Doctor] Failed to run doctor")
-            "Failed to run doctor: ${e.message}"
-        } finally {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
-        }
     }
 
     override suspend fun isHealthy(): Boolean {
@@ -859,20 +632,11 @@ class TermuxBridge @Inject constructor(
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
         private val INSTALL_TIMEOUT = 30.minutes
         private const val POLL_INTERVAL_MS = 500L
-        // Cold start on a phone (plugin discovery + MCP scan + uvicorn boot)
-        // takes 30-90 s. Use 90 s so the first startGateway() attempt has a
-        // realistic chance of succeeding without triggering a retry.
-        private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
+        // Bumped from 15s to 30s: `hermes dashboard` does plugin discovery
+        // + MCP discovery + uvicorn startup, which on a slow phone takes
+        // longer than 15s on a cold start.
+        private const val GATEWAY_READY_TIMEOUT_MS = 30_000L
         private const val HEALTH_CHECK_TIMEOUT_MS = 3_000L
-        // Short probe used by ensureGatewayReady() to detect an already-running
-        // dashboard before deciding to (re)start one. Kept small so the cold
-        // path isn't delayed much when no dashboard is up yet.
-        private const val QUICK_PROBE_TIMEOUT_MS = 5_000L
-        // After dispatching a `hermes dashboard` script, don't dispatch another
-        // one for this many ms even if the first GATEWAY_READY_TIMEOUT_MS probe
-        // times out. Prevents the kill-restart cycle where each retry in
-        // ChatViewModel kills the still-starting dashboard.
-        private const val GATEWAY_DISPATCH_COOLDOWN_MS = 120_000L
 
         // Fix S2F03: SharedPreferences keys for install state caching
         private const val PREFS_NAME = "hermes_runtime"
@@ -885,74 +649,6 @@ class TermuxBridge @Inject constructor(
         // in startGateway(), and the ?token= query param we add to the WS URL
         // in getWebSocketUrl()) must use this same value.
         private const val KEY_SESSION_TOKEN = "session_token"
-    }
-
-    private data class HermesInstallProbe(
-        val installed: Boolean,
-        val hermesVersion: String?,
-        val pythonVersion: String?,
-    )
-
-    /**
-     * Best-effort probe for manual installs that survive Android app reinstall.
-     *
-     * Android cannot directly read Termux private files, so we ask Termux to
-     * resolve `hermes` and broadcast the result back. If RUN_COMMAND is not yet
-     * allowed, this simply returns null and detect() falls back to Detected.
-     */
-    private suspend fun probeHermesInstall(): HermesInstallProbe? {
-        val action = "${context.packageName}.RUNTIME_PROBE_RESULT"
-        val result = CompletableDeferred<HermesInstallProbe>()
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action != action || result.isCompleted) return
-                result.complete(
-                    HermesInstallProbe(
-                        installed = intent.getBooleanExtra("installed", false),
-                        hermesVersion = intent.getStringExtra("hermes_version"),
-                        pythonVersion = intent.getStringExtra("python_version"),
-                    )
-                )
-            }
-        }
-        val filter = IntentFilter(action)
-        return try {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
-            val script = """
-                set +e
-                RECEIVER="${context.packageName}"
-                ACTION="$action"
-                export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-                HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-                if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-                elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                    HERMES_CMD="$(command -v hermes)"
-                fi
-                if [ -x "${'$'}HERMES_CMD" ]; then
-                    INSTALLED=true
-                    HERMES_VERSION=$("${'$'}HERMES_CMD" --version 2>&1 | head -n 1)
-                else
-                    INSTALLED=false
-                    HERMES_VERSION=""
-                fi
-                PYTHON_VERSION=$(python3 --version 2>&1 | head -n 1)
-                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION"                     --ez installed "${'$'}INSTALLED"                     --es hermes_version "${'$'}HERMES_VERSION"                     --es python_version "${'$'}PYTHON_VERSION" >/dev/null 2>&1 || true
-            """.trimIndent()
-            when (executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
-                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(6.seconds) { result.await() }
-                else -> null
-            }
-        } catch (e: Exception) {
-            Timber.d(e, "[Runtime] Hermes manual-install probe failed")
-            null
-        } finally {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
-        }
     }
 
     // Fix S2F03: Cache install state
@@ -977,91 +673,6 @@ class TermuxBridge @Inject constructor(
             prefs.getBoolean(KEY_INSTALLED, false)
         } catch (e: Exception) {
             false
-        }
-    }
-
-    /**
-     * Pull the WebSocket auth token from Termux, generating + persisting it
-     * there on first use, and cache it locally.
-     *
-     * ## Why this exists
-     *
-     * The token must match on both ends: the `HERMES_DASHBOARD_SESSION_TOKEN`
-     * env var we pass to `hermes dashboard`, and the `?token=` query param we
-     * add in [getWebSocketUrl]. Originally the token lived only in Android
-     * [android.content.SharedPreferences], which Android **wipes on app
-     * uninstall**. So every app reinstall minted a brand-new token while a
-     * `hermes dashboard` started by the previous install kept running with the
-     * old token — the WS handshake was then rejected and the app could never
-     * reconnect without a reboot.
-     *
-     * Anchoring the token in a Termux-side file
-     * (`$HERMES_HOME/.dashboard_session_token`, which survives an Android
-     * reinstall) and reading it back over the RUN_COMMAND channel (which does
-     * NOT require the WS token) lets a reinstalled app adopt the token the
-     * running dashboard already uses — and connect with no restart.
-     *
-     * Reuses the same `am broadcast` → dynamically-registered receiver
-     * round-trip as [probeHermesInstall] / [runDoctor]. Best-effort: returns
-     * null (and leaves the local cache untouched) if RUN_COMMAND is not yet
-     * allowed.
-     */
-    private suspend fun syncSessionTokenFromTermux(): String? {
-        val action = "${context.packageName}.SESSION_TOKEN_RESULT"
-        val result = CompletableDeferred<String>()
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == action && !result.isCompleted) {
-                    result.complete(intent.getStringExtra("token") ?: "")
-                }
-            }
-        }
-        val filter = IntentFilter(action)
-        return try {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
-            val script = """
-                set +e
-                RECEIVER="${context.packageName}"
-                ACTION="$action"
-                export HERMES_HOME="${'$'}{HERMES_HOME:-${'$'}HOME/.hermes}"
-                mkdir -p "${'$'}HERMES_HOME"
-                TOKEN_FILE="${'$'}HERMES_HOME/.dashboard_session_token"
-                if [ ! -s "${'$'}TOKEN_FILE" ]; then
-                    TOK=""
-                    if command -v python3 >/dev/null 2>&1; then
-                        TOK=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))' 2>/dev/null)
-                    fi
-                    if [ -z "${'$'}TOK" ]; then
-                        TOK=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=' | tr -d '\n')
-                    fi
-                    printf '%s' "${'$'}TOK" > "${'$'}TOKEN_FILE"
-                    chmod 600 "${'$'}TOKEN_FILE" 2>/dev/null || true
-                fi
-                TOKEN_VALUE="$(cat "${'$'}TOKEN_FILE" 2>/dev/null | tr -d '\n')"
-                am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION" --es token "${'$'}TOKEN_VALUE" >/dev/null 2>&1 || true
-            """.trimIndent()
-            when (executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
-                is TermuxCommandExecutor.Result.Accepted -> {
-                    val token = withTimeoutOrNull(8.seconds) { result.await() }
-                        ?.takeIf { it.isNotBlank() }
-                    if (token != null) {
-                        try {
-                            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                                .edit().putString(KEY_SESSION_TOKEN, token).apply()
-                            Timber.i("[Runtime] Session token synced from Termux")
-                        } catch (e: Exception) {
-                            Timber.w(e, "[Runtime] Failed to cache synced session token")
-                        }
-                    }
-                    token
-                }
-                else -> null
-            }
-        } catch (e: Exception) {
-            Timber.d(e, "[Runtime] Session token sync failed")
-            null
-        } finally {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
 

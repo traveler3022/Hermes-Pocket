@@ -135,63 +135,46 @@ class TermuxBridgeTest {
         // Given: runtime is Installed
         val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0", hermesVersion = "0.17.0")
         bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
-
-        // startGateway() first probes for an already-running dashboard and
-        // reuses it without restarting if it is reachable. To exercise the
-        // *dispatch* path we model "nothing is running yet": the gateway only
-        // becomes reachable AFTER the `hermes dashboard` script is dispatched.
-        var dashboardDispatched = false
-        every { executor.executeBackgroundScript(any(), any()) } answers {
-            if (firstArg<String>().contains("hermes dashboard")) dashboardDispatched = true
+        every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Accepted
-        }
-        coEvery { gatewayClient.connect(any(), any()) } answers {
-            if (dashboardDispatched) ConnectionState.Connected(sessionId = null)
-            else ConnectionState.Connecting
-        }
+        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connected(sessionId = null)
 
         // When: startGateway is called
         val handle = bridge.startGateway()
 
         // Then: executor was called with a script that contains "hermes dashboard"
-        // (NOT "hermes gateway start" — that fails on Termux per gateway.py:6201).
-        //
-        // startGateway() now also dispatches a token-sync script before the
-        // dashboard script (so the token survives an app reinstall), so capture
-        // ALL dispatched scripts and assert against the dashboard one.
-        val scripts = mutableListOf<String>()
-        coVerify { executor.executeBackgroundScript(capture(scripts), any()) }
-        val dashboardScript = scripts.firstOrNull { it.contains("hermes dashboard") }
-            ?: error("No 'hermes dashboard' script was dispatched. Scripts: $scripts")
+        // (NOT "hermes gateway start" — that fails on Termux per gateway.py:6201)
+        val scriptSlot = slot<String>()
+        coVerify { executor.executeBackgroundScript(capture(scriptSlot), any()) }
+        assertTrue(
+            "Script must invoke 'hermes dashboard' (not 'gateway start')",
+            scriptSlot.captured.contains("hermes dashboard"),
+        )
         assertTrue(
             "Script must NOT use 'gateway start' (fails on Termux)",
-            !dashboardScript.contains("gateway start"),
+            !scriptSlot.captured.contains("gateway start"),
         )
         // Per gateway-bind-audit.md: must set HERMES_DASHBOARD_SESSION_TOKEN
         assertTrue(
             "Script must set HERMES_DASHBOARD_SESSION_TOKEN env var",
-            dashboardScript.contains("HERMES_DASHBOARD_SESSION_TOKEN"),
+            scriptSlot.captured.contains("HERMES_DASHBOARD_SESSION_TOKEN"),
         )
         assertTrue(
             "Script must prefer official Termux install layout (~/.hermes/hermes-agent/venv)",
-            dashboardScript.contains(".hermes/hermes-agent/venv/bin/hermes"),
+            scriptSlot.captured.contains(".hermes/hermes-agent/venv/bin/hermes"),
         )
         assertTrue(
             "Script must create a placeholder assets dir for dashboard StaticFiles",
-            dashboardScript.contains("web_dist_placeholder/assets"),
-        )
-        assertTrue(
-            "Script must stop stale dashboard processes before rebinding 9119",
-            dashboardScript.contains("dashboard --stop") && dashboardScript.contains("lsof -ti tcp:"),
+            scriptSlot.captured.contains("web_dist_placeholder/assets"),
         )
         // Must bind to 127.0.0.1:9119 (default dashboard port)
         assertTrue(
             "Script must use --host 127.0.0.1",
-            dashboardScript.contains("--host 127.0.0.1"),
+            scriptSlot.captured.contains("--host 127.0.0.1"),
         )
         assertTrue(
             "Script must use --port 9119",
-            dashboardScript.contains("--port 9119"),
+            scriptSlot.captured.contains("--port 9119"),
         )
         assertTrue("Handle must have WS URL", handle.webSocketUrl.startsWith("ws://"))
     }
@@ -220,9 +203,6 @@ class TermuxBridgeTest {
         bridgeTest_setState(RuntimeState.Installed(runtimeInfo))
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Failure("explosion")
-        // No dashboard is running, so the reuse probe must fail and startGateway
-        // must proceed to the dispatch path where the executor reports Failure.
-        coEvery { gatewayClient.connect(any(), any()) } returns ConnectionState.Connecting
 
         var threw = false
         try {
