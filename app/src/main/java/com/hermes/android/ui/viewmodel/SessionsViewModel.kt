@@ -1,11 +1,14 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionsUiState())
@@ -132,6 +136,25 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
+    // ── Delete with confirmation (#9) ─────────────────────────────────────
+
+    /** Show confirmation dialog before deleting. */
+    fun confirmDelete(sessionId: String) {
+        _uiState.value = _uiState.value.copy(showDeleteConfirm = sessionId)
+    }
+
+    /** Cancel the pending delete. */
+    fun cancelDelete() {
+        _uiState.value = _uiState.value.copy(showDeleteConfirm = null)
+    }
+
+    /** Execute the confirmed delete. */
+    fun executeDelete() {
+        val sessionId = _uiState.value.showDeleteConfirm ?: return
+        _uiState.value = _uiState.value.copy(showDeleteConfirm = null)
+        deleteSession(sessionId)
+    }
+
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
             try {
@@ -141,6 +164,119 @@ class SessionsViewModel @Inject constructor(
                 loadSessions()
             } catch (e: Exception) {
                 Timber.e(e, "[Sessions] Delete failed")
+            }
+        }
+    }
+
+    // ── Rename session (#6) ───────────────────────────────────────────────
+
+    fun showRenameDialog(sessionId: String, currentTitle: String) {
+        _uiState.value = _uiState.value.copy(
+            showRenameDialog = SessionRenameDialog(sessionId, currentTitle),
+        )
+    }
+
+    fun hideRenameDialog() {
+        _uiState.value = _uiState.value.copy(showRenameDialog = null)
+    }
+
+    fun renameSession(sessionId: String, newTitle: String) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("session_id", sessionId)
+                    put("title", newTitle)
+                }
+                gatewayClient.request(GatewayMethods.SESSION_TITLE, params.toMap())
+                Timber.i("[Sessions] Renamed $sessionId to: $newTitle")
+                hideRenameDialog()
+                loadSessions()
+            } catch (e: Exception) {
+                Timber.e(e, "[Sessions] Rename failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to rename session: ${e.message}",
+                )
+            }
+        }
+    }
+
+    // ── Search sessions (#17) ─────────────────────────────────────────────
+
+    fun updateSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+
+    // ── Pin session (#18) ─────────────────────────────────────────────────
+
+    fun togglePin(sessionId: String) {
+        val current = _uiState.value.pinnedSessionIds
+        _uiState.value = _uiState.value.copy(
+            pinnedSessionIds = if (sessionId in current) current - sessionId else current + sessionId,
+        )
+    }
+
+    // ── Sort sessions (#19) ───────────────────────────────────────────────
+
+    fun setSortOrder(order: SessionSortOrder) {
+        _uiState.value = _uiState.value.copy(sortOrder = order)
+    }
+
+    // ── Export / Share session (#20, #21) ──────────────────────────────────
+
+    fun exportSession(sessionId: String) {
+        shareOrExportSession(sessionId)
+    }
+
+    fun shareSession(sessionId: String) {
+        shareOrExportSession(sessionId)
+    }
+
+    private fun shareOrExportSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                // Load history if not already loaded for this session
+                val messages = if (_uiState.value.selectedSessionId == sessionId) {
+                    _uiState.value.selectedSessionHistory
+                } else {
+                    val params = buildJsonObject { put("session_id", sessionId) }
+                    val result = gatewayClient.request(
+                        GatewayMethods.SESSION_HISTORY,
+                        params.toMap(),
+                    )
+                    parseHistory(result)
+                }
+
+                // Find session title
+                val session = _uiState.value.sessions.find { it.id == sessionId }
+                val title = session?.title ?: "Untitled"
+
+                // Format as Markdown
+                val markdownText = buildString {
+                    appendLine("# $title")
+                    appendLine()
+                    messages.forEach { msg ->
+                        appendLine("**${msg.role}:**")
+                        appendLine(msg.content)
+                        appendLine()
+                    }
+                }
+
+                // Launch share intent
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, markdownText)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(
+                    Intent.createChooser(shareIntent, title)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                Timber.i("[Sessions] Exported/shared session: $sessionId")
+            } catch (e: Exception) {
+                Timber.e(e, "[Sessions] Export/share failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to export session: ${e.message}",
+                )
             }
         }
     }
@@ -202,6 +338,17 @@ class SessionsViewModel @Inject constructor(
 
 // ── UI State models ──────────────────────────────────────────────────────
 
+enum class SessionSortOrder {
+    NEWEST_FIRST,
+    OLDEST_FIRST,
+    NAME_AZ,
+}
+
+data class SessionRenameDialog(
+    val sessionId: String,
+    val currentTitle: String,
+)
+
 data class SessionsUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSessionId: String? = null,
@@ -209,6 +356,11 @@ data class SessionsUiState(
     val isLoadingSessions: Boolean = false,
     val isLoadingHistory: Boolean = false,
     val errorMessage: String? = null,
+    val searchQuery: String = "",
+    val sortOrder: SessionSortOrder = SessionSortOrder.NEWEST_FIRST,
+    val pinnedSessionIds: Set<String> = emptySet(),
+    val showRenameDialog: SessionRenameDialog? = null,
+    val showDeleteConfirm: String? = null,
 )
 
 data class MemoryUiState(
