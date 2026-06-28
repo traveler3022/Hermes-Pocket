@@ -143,42 +143,44 @@ class TermuxBridgeTest {
         val handle = bridge.startGateway()
 
         // Then: executor was called with a script that contains "hermes dashboard"
-        // (NOT "hermes gateway start" — that fails on Termux per gateway.py:6201)
-        val scriptSlot = slot<String>()
-        coVerify { executor.executeBackgroundScript(capture(scriptSlot), any()) }
-        assertTrue(
-            "Script must invoke 'hermes dashboard' (not 'gateway start')",
-            scriptSlot.captured.contains("hermes dashboard"),
-        )
+        // (NOT "hermes gateway start" — that fails on Termux per gateway.py:6201).
+        //
+        // startGateway() now also dispatches a token-sync script before the
+        // dashboard script (so the token survives an app reinstall), so capture
+        // ALL dispatched scripts and assert against the dashboard one.
+        val scripts = mutableListOf<String>()
+        coVerify { executor.executeBackgroundScript(capture(scripts), any()) }
+        val dashboardScript = scripts.firstOrNull { it.contains("hermes dashboard") }
+            ?: error("No 'hermes dashboard' script was dispatched. Scripts: $scripts")
         assertTrue(
             "Script must NOT use 'gateway start' (fails on Termux)",
-            !scriptSlot.captured.contains("gateway start"),
+            !dashboardScript.contains("gateway start"),
         )
         // Per gateway-bind-audit.md: must set HERMES_DASHBOARD_SESSION_TOKEN
         assertTrue(
             "Script must set HERMES_DASHBOARD_SESSION_TOKEN env var",
-            scriptSlot.captured.contains("HERMES_DASHBOARD_SESSION_TOKEN"),
+            dashboardScript.contains("HERMES_DASHBOARD_SESSION_TOKEN"),
         )
         assertTrue(
             "Script must prefer official Termux install layout (~/.hermes/hermes-agent/venv)",
-            scriptSlot.captured.contains(".hermes/hermes-agent/venv/bin/hermes"),
+            dashboardScript.contains(".hermes/hermes-agent/venv/bin/hermes"),
         )
         assertTrue(
             "Script must create a placeholder assets dir for dashboard StaticFiles",
-            scriptSlot.captured.contains("web_dist_placeholder/assets"),
+            dashboardScript.contains("web_dist_placeholder/assets"),
         )
         assertTrue(
             "Script must stop stale dashboard processes before rebinding 9119",
-            scriptSlot.captured.contains("dashboard --stop") && scriptSlot.captured.contains("lsof -ti tcp:"),
+            dashboardScript.contains("dashboard --stop") && dashboardScript.contains("lsof -ti tcp:"),
         )
         // Must bind to 127.0.0.1:9119 (default dashboard port)
         assertTrue(
             "Script must use --host 127.0.0.1",
-            scriptSlot.captured.contains("--host 127.0.0.1"),
+            dashboardScript.contains("--host 127.0.0.1"),
         )
         assertTrue(
             "Script must use --port 9119",
-            scriptSlot.captured.contains("--port 9119"),
+            dashboardScript.contains("--port 9119"),
         )
         assertTrue("Handle must have WS URL", handle.webSocketUrl.startsWith("ws://"))
     }

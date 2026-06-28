@@ -17,6 +17,12 @@ jobs:
     name: Build Debug APK
     runs-on: ubuntu-latest
 
+    # contents: write is needed to publish the APK to a GitHub Release
+    # (a durable delivery channel that does not consume the Actions
+    # artifact-storage quota).
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,21 +56,43 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
 
-      - name: Upload APK artifact
+      # Primary delivery: publish the APK to a rolling pre-release. Release
+      # assets do NOT count against the Actions artifact-storage quota, so this
+      # keeps working even when that quota is exhausted. The `debug-latest` tag
+      # is recreated each run so the download URL is always stable:
+      #   .../releases/download/debug-latest/app-debug.apk
+      - name: Publish APK to rolling debug release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete debug-latest --yes --cleanup-tag || true
+          gh release create debug-latest app/build/outputs/apk/debug/*.apk \
+            --prerelease \
+            --title "Debug APK (latest)" \
+            --target "$GITHUB_SHA" \
+            --notes "Auto-built debug APK from ${GITHUB_SHA} on ${GITHUB_REF_NAME}."
+
+      # Secondary (best-effort) delivery: also upload as an Actions artifact.
+      # continue-on-error so a full artifact-storage quota does not fail the
+      # build — the Release above is the reliable channel.
+      - name: Upload APK artifact (best-effort)
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: hermes2-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: error
 
-      - name: Upload test results
+      - name: Upload test results (best-effort)
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: |
             app/build/reports/tests/
             app/build/test-results/
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: warn
