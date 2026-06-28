@@ -7,7 +7,7 @@ name: Build Debug APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'claude/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -61,29 +61,26 @@ jobs:
       # keeps working even when that quota is exhausted. The `debug-latest` tag
       # is recreated each run so the download URL is always stable:
       #   .../releases/download/debug-latest/app-debug.apk
+      # Publish rolling debug release — stable download URL:
+      #   .../releases/download/debug-latest/app-debug.apk
+      # Old release is deleted first so only one exists at any time (saves storage).
       - name: Publish APK to rolling debug release
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Delete ALL existing pre-releases except debug-latest to keep storage clean
+          gh release list --limit 20 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease==true and .tagName!="debug-latest") | .tagName' \
+            | xargs -r -I{} gh release delete {} --yes --cleanup-tag || true
+          # Recreate the single rolling release
           gh release delete debug-latest --yes --cleanup-tag || true
           gh release create debug-latest app/build/outputs/apk/debug/*.apk \
             --prerelease \
             --title "Debug APK (latest)" \
             --target "$GITHUB_SHA" \
-            --notes "Auto-built debug APK from ${GITHUB_SHA} on ${GITHUB_REF_NAME}."
-
-      # Secondary (best-effort) delivery: also upload as an Actions artifact.
-      # continue-on-error so a full artifact-storage quota does not fail the
-      # build — the Release above is the reliable channel.
-      - name: Upload APK artifact (best-effort)
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: hermes2-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-          if-no-files-found: error
+            --notes "$(printf 'Branch: %s\nCommit: %s\nBuilt: %s' \
+              "$GITHUB_REF_NAME" "${GITHUB_SHA:0:8}" "$(date -u '+%Y-%m-%d %H:%M UTC')")"
 
       - name: Upload test results (best-effort)
         if: always()
@@ -94,5 +91,5 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/test-results/
-          retention-days: 7
+          retention-days: 3
           if-no-files-found: warn
