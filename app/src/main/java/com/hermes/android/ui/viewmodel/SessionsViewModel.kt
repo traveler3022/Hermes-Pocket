@@ -1,16 +1,17 @@
 package com.hermes.android.ui.viewmodel
 
-import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -28,10 +29,14 @@ import javax.inject.Inject
  *
  * Reference: Phase 1.5 Rule 1, Rule 2
  */
+/** One-shot side-effects emitted by [SessionsViewModel] for the UI to handle. */
+sealed interface SessionsEffect {
+    data class ShareText(val text: String, val title: String) : SessionsEffect
+}
+
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
-    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionsUiState())
@@ -39,6 +44,9 @@ class SessionsViewModel @Inject constructor(
 
     private val _memoryState = MutableStateFlow(MemoryUiState())
     val memoryState: StateFlow<MemoryUiState> = _memoryState.asStateFlow()
+
+    private val _effects = MutableSharedFlow<SessionsEffect>(extraBufferCapacity = 1)
+    val effects: SharedFlow<SessionsEffect> = _effects.asSharedFlow()
 
     init {
         loadSessions()
@@ -261,17 +269,10 @@ class SessionsViewModel @Inject constructor(
                     }
                 }
 
-                // Launch share intent
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, markdownText)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(
-                    Intent.createChooser(shareIntent, title)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
+                _effects.emit(SessionsEffect.ShareText(markdownText, title))
                 Timber.i("[Sessions] Exported/shared session: $sessionId")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "[Sessions] Export/share failed")
                 _uiState.value = _uiState.value.copy(
@@ -332,8 +333,6 @@ class SessionsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
-    private fun normalizeEpochMillis(value: Long): Long =
-        if (value in 1..999_999_999_999L) value * 1000L else value
 }
 
 // ── UI State models ──────────────────────────────────────────────────────

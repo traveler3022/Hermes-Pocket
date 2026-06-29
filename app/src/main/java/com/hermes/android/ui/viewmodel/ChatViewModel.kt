@@ -694,9 +694,6 @@ class ChatViewModel @Inject constructor(
     private fun jsonToElementMap(obj: kotlinx.serialization.json.JsonObject):
         Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 
-    private fun normalizeEpochMillis(value: Long): Long =
-        if (value in 1..999_999_999_999L) value * 1000L else value
-
     private companion object {
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
         private const val PREFS_NAME = "hermes_chat_prefs"
