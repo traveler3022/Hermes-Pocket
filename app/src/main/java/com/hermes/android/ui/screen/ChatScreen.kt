@@ -234,17 +234,6 @@ fun ChatScreen(
         }
     }
 
-    // Feature #8: Model switcher dialog
-    if (uiState.showModelSwitcher) {
-        ModelSwitcherDialog(
-            currentModel = uiState.currentModelName,
-            onDismiss = { viewModel.toggleModelSwitcher() },
-            onConfirm = { provider, model ->
-                viewModel.switchModelFromChat(provider, model)
-            },
-        )
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -313,13 +302,6 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            TextButton(onClick = { viewModel.toggleModelSwitcher() }) {
-                                Text(
-                                    text = uiState.currentModelName.ifEmpty { t("Model", "مدل") },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                )
-                            }
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
@@ -735,72 +717,6 @@ private fun ShimmerSkeleton() {
             )
         }
     }
-}
-
-// ── Feature #8: Model switcher dialog ────────────────────────────────────
-
-@Composable
-private fun ModelSwitcherDialog(
-    currentModel: String,
-    onDismiss: () -> Unit,
-    onConfirm: (provider: String, model: String) -> Unit,
-) {
-    var providerText by remember { mutableStateOf("") }
-    var modelText by remember { mutableStateOf("") }
-
-    // Pre-fill from current model if it has provider/model format
-    LaunchedEffect(currentModel) {
-        if (currentModel.contains("/")) {
-            val parts = currentModel.split("/", limit = 2)
-            providerText = parts[0]
-            modelText = parts[1]
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(t("Switch Model", "تغییر مدل")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (currentModel.isNotEmpty()) {
-                    Text(
-                        text = t("Current: $currentModel", "فعلی: $currentModel"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                OutlinedTextField(
-                    value = providerText,
-                    onValueChange = { providerText = it },
-                    label = { Text(t("Provider", "ارائه‌دهنده")) },
-                    placeholder = { Text("e.g. anthropic, openai") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = modelText,
-                    onValueChange = { modelText = it },
-                    label = { Text(t("Model", "مدل")) },
-                    placeholder = { Text("e.g. claude-sonnet-4-20250514") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(providerText.trim(), modelText.trim()) },
-                enabled = providerText.isNotBlank() && modelText.isNotBlank(),
-            ) {
-                Text(t("Switch", "تغییر"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(t("Cancel", "لغو"))
-            }
-        },
-    )
 }
 
 // ── Regex for code block detection ───────────────────────────────────────

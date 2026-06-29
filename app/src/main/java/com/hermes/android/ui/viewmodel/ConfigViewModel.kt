@@ -238,11 +238,14 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
+                // Persist provider/model + base_url to config.yaml (for new
+                // sessions), then switch the LIVE agent via config.set key=model.
                 writeModelConfig("xiaomi", targetModel, baseUrl.trim().ifBlank { null })
+                val switchError = applyHermesModelSwitch("xiaomi", targetModel)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "xiaomi",
                     activeModel = targetModel,
-                    errorMessage = "MiMo backend saved",
+                    errorMessage = switchError ?: "MiMo backend saved",
                 )
                 loadConfig()
                 loadModels()
@@ -266,11 +269,14 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
+                // Persist to config.yaml (for new sessions), then switch the
+                // LIVE agent via config.set key=model.
                 writeModelConfig("gemini", targetModel)
+                val switchError = applyHermesModelSwitch("gemini", targetModel)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "gemini",
                     activeModel = targetModel,
-                    errorMessage = "Gemini backend saved",
+                    errorMessage = switchError ?: "Gemini backend saved",
                 )
                 loadConfig()
                 loadModels()
@@ -413,11 +419,14 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
+                // Persist base_url + provider/model to config.yaml (for new
+                // sessions), then switch the LIVE agent via config.set key=model.
                 writeModelConfig(provider, model, baseUrl.ifBlank { null })
+                val switchError = applyHermesModelSwitch(provider, model)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = provider,
                     activeModel = model,
-                    errorMessage = "Backend set to $provider/$model",
+                    errorMessage = switchError ?: "Backend set to $provider/$model",
                 )
                 loadConfig()
                 loadModels()
@@ -433,7 +442,11 @@ class ConfigViewModel @Inject constructor(
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {
-                writeModelConfig(model.provider, model.modelId)
+                val error = applyHermesModelSwitch(model.provider, model.modelId)
+                if (error != null) {
+                    _uiState.value = _uiState.value.copy(errorMessage = error)
+                    return@launch
+                }
                 _uiState.value = _uiState.value.copy(
                     activeProvider = model.provider,
                     activeModel = model.modelId,
@@ -446,6 +459,55 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to select model: ${e.message}",
                 )
+            }
+        }
+    }
+
+    /**
+     * Switch model + provider the Hermes-native way, via `config.set` key="model".
+     *
+     * Earlier the app wrote `~/.hermes/config.yaml` directly (writeModelConfig).
+     * That only affects the NEXT session — the live running agent keeps the old
+     * model, which is why "switch provider" appeared to do nothing.
+     *
+     * The correct path is Hermes' own `config.set` handler with key="model".
+     * Its `value` mirrors the `/model` command grammar parsed by
+     * `parse_model_flags`:
+     *   "<model> --provider <provider> --global"
+     *     • `--provider` pins the provider (else Hermes infers it from the model)
+     *     • `--global` persists the choice to config.yaml so new sessions inherit it
+     *
+     * We target the most-recent live session so the running agent switches too.
+     * Returns null on success, or a user-facing error string on failure.
+     */
+    private suspend fun applyHermesModelSwitch(provider: String, model: String): String? {
+        val sid = try {
+            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+        } catch (e: Exception) {
+            null
+        }
+        val value = buildString {
+            append(model)
+            if (provider.isNotBlank()) append(" --provider ").append(provider)
+            append(" --global")
+        }
+        val params = buildJsonObject {
+            put("key", "model")
+            put("value", value)
+            if (!sid.isNullOrBlank()) put("session_id", sid)
+        }
+        return try {
+            gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
+            null
+        } catch (e: GatewayException) {
+            // 4009 = session busy (mid-turn). Hermes rejects model swaps while a
+            // turn is in flight; surface an actionable message.
+            val m = e.message.orEmpty()
+            if (m.contains("busy") || m.contains("4009")) {
+                "Session is busy — interrupt the current turn before switching models."
+            } else {
+                "Failed to switch model: $m"
             }
         }
     }
