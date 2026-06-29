@@ -35,10 +35,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -292,47 +290,21 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            // Feature #8: Model indicator chip
-                            if (uiState.currentModelName.isNotEmpty()) {
-                                Card(
-                                    modifier = Modifier
-                                        .clickable { viewModel.toggleModelSwitcher() }
-                                        .padding(vertical = 8.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    ),
-                                    shape = RoundedCornerShape(16.dp),
-                                ) {
-                                    Text(
-                                        text = uiState.currentModelName,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    )
-                                }
-                            } else {
-                                TextButton(onClick = { viewModel.toggleModelSwitcher() }) {
-                                    Text(
-                                        t("Model", "مدل"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
+                            TextButton(onClick = { viewModel.toggleModelSwitcher() }) {
+                                Text(
+                                    text = uiState.currentModelName.ifEmpty { t("Model", "مدل") },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                )
                             }
-                            // Feature #16: Search icon
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                                     contentDescription = t("Search", "جستجو"),
                                 )
                             }
-                            IconButton(onClick = onNavigateToSessions) {
-                                Icon(Icons.Default.History, contentDescription = t("Sessions", "تاریخچه"))
-                            }
                             IconButton(onClick = onNavigateToSettings) {
                                 Icon(Icons.Default.Settings, contentDescription = t("Settings", "تنظیمات"))
-                            }
-                            IconButton(onClick = { viewModel.newConversation() }) {
-                                Icon(Icons.Default.Add, contentDescription = t("New conversation", "گفتگوی جدید"))
                             }
                         },
                     )
@@ -888,9 +860,13 @@ private fun MessageBubble(
             var isResponseExpanded by remember { mutableStateOf(true) }
             var isThinkingExpanded by remember { mutableStateOf(false) }
             val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
-            val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]") }
+            val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\\([^()]{1,12}\\)") }
             val emotions = remember(message.reasoning) {
-                message.reasoning?.let { emotionRegex.findAll(it).map { m -> m.value }.toList() } ?: emptyList()
+                message.reasoning?.let { text ->
+                    emotionRegex.findAll(text).map { m -> m.value }.filter { v ->
+                        v.length == 1 || v.any { c -> !c.isLetterOrDigit() && c != '(' && c != ')' && c != ' ' }
+                    }.toList()
+                } ?: emptyList()
             }
 
             Row(

@@ -27,7 +27,7 @@ enum class ThemeMode(val key: String) {
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
-    CLAUDE("claude", "Claude", "کلود");
+    CLAUDE("claude", "Mocha", "موکا");
 
     companion object {
         fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: HERMES
