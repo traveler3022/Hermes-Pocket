@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -38,6 +39,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -133,6 +136,7 @@ fun ChatScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSessions: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    sharedText: String? = null,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -199,6 +203,13 @@ fun ChatScreen(
         if (uiState.inputText.isNotEmpty()) {
             kotlinx.coroutines.delay(500L)
             viewModel.saveDraft()
+        }
+    }
+
+    // Pre-fill input from share intent
+    LaunchedEffect(sharedText) {
+        if (!sharedText.isNullOrBlank()) {
+            viewModel.updateInputText(sharedText)
         }
     }
 
@@ -809,6 +820,9 @@ private fun MessageBubble(
 ) {
     when (message) {
         is ChatMessage.User -> {
+            val isLongMessage = message.text.length > 500
+            var isExpanded by remember { mutableStateOf(!isLongMessage) }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -816,9 +830,8 @@ private fun MessageBubble(
                 Card(
                     modifier = Modifier
                         .widthIn(max = 420.dp)
-                        // Feature #2: Long-press to copy
                         .combinedClickable(
-                            onClick = {},
+                            onClick = { if (isLongMessage) isExpanded = !isExpanded },
                             onLongClick = { onCopyMessage(message.text) },
                         ),
                     colors = CardDefaults.cardColors(
@@ -826,26 +839,58 @@ private fun MessageBubble(
                     ),
                     shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
                 ) {
-                    // Feature #16: Highlight search matches
-                    if (searchQuery.isNotBlank()) {
-                        Text(
-                            text = highlightText(message.text, searchQuery),
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    } else {
-                        Text(
-                            text = message.text,
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                    Column(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .animateContentSize(),
+                    ) {
+                        val displayText = if (!isExpanded && isLongMessage) {
+                            message.text.take(300) + "…"
+                        } else {
+                            message.text
+                        }
+                        if (searchQuery.isNotBlank()) {
+                            Text(
+                                text = highlightText(displayText, searchQuery),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            Text(
+                                text = displayText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        if (isLongMessage) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isExpanded) "جمع کردن" else "باز کردن",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
         is ChatMessage.Assistant -> {
+            val isLongResponse = message.text.length > 1500
+            var isResponseExpanded by remember { mutableStateOf(true) }
+            var isThinkingExpanded by remember { mutableStateOf(false) }
+            val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
+            val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]") }
+            val emotions = remember(message.reasoning) {
+                message.reasoning?.let { emotionRegex.findAll(it).map { m -> m.value }.toList() } ?: emptyList()
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
@@ -853,7 +898,6 @@ private fun MessageBubble(
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
                     Card(
                         modifier = Modifier
-                            // Feature #2: Long-press to copy
                             .combinedClickable(
                                 onClick = {},
                                 onLongClick = { onCopyMessage(message.text) },
@@ -863,17 +907,48 @@ private fun MessageBubble(
                         ),
                         shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            if (message.reasoning != null && message.reasoning.isNotEmpty()) {
-                                Text(
-                                    text = "💭 ${message.reasoning}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
+                        Column(
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .animateContentSize(),
+                        ) {
+                            if (hasThinking) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { isThinkingExpanded = !isThinkingExpanded }
+                                        .padding(bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = "💭",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    if (emotions.isNotEmpty() && !isThinkingExpanded) {
+                                        Text(
+                                            text = emotions.distinct().take(5).joinToString(" "),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    Text(
+                                        text = if (isThinkingExpanded) t("Thinking ▲", "فکر کردن ▲")
+                                               else t("Thinking ▼", "فکر کردن ▼"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    )
+                                }
+                                AnimatedVisibility(visible = isThinkingExpanded) {
+                                    Text(
+                                        text = message.reasoning ?: "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp),
+                                    )
+                                }
                             }
-                            // Fix S4F01: Render assistant messages as Markdown,
-                            // but do not also render the same text as plain Text.
                             if (message.text.isEmpty()) {
                                 Text(
                                     text = "...",
@@ -881,13 +956,35 @@ private fun MessageBubble(
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                             } else {
+                                val displayMd = if (!isResponseExpanded && isLongResponse) {
+                                    message.text.take(800) + "\n\n…"
+                                } else {
+                                    message.text
+                                }
                                 SelectionContainer {
                                     dev.jeziellago.compose.markdowntext.MarkdownText(
-                                        markdown = message.text,
+                                        markdown = displayMd,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             color = MaterialTheme.colorScheme.onSurface,
                                         ),
                                     )
+                                }
+                                if (isLongResponse) {
+                                    TextButton(
+                                        onClick = { isResponseExpanded = !isResponseExpanded },
+                                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isResponseExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isResponseExpanded) t("Collapse", "جمع کردن") else t("Show more", "ادامه..."),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
                                 }
                             }
                             if (message.isStreaming) {
