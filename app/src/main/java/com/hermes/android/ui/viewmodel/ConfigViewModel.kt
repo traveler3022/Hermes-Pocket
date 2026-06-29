@@ -238,29 +238,7 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", "xiaomi")
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", targetModel)
-                    }.toMap(),
-                )
-                if (baseUrl.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.CONFIG_SET,
-                        buildJsonObject {
-                            put("key", "model.base_url")
-                            put("value", baseUrl.trim())
-                        }.toMap(),
-                    )
-                }
+                writeModelConfig("xiaomi", targetModel, baseUrl.trim().ifBlank { null })
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "xiaomi",
                     activeModel = targetModel,
@@ -288,20 +266,7 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", "gemini")
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", targetModel)
-                    }.toMap(),
-                )
+                writeModelConfig("gemini", targetModel)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "gemini",
                     activeModel = targetModel,
@@ -362,6 +327,35 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // config.set RPC doesn't accept dotted keys (model.provider, model.default) — write config.yaml directly
+    private suspend fun writeModelConfig(provider: String, model: String, baseUrl: String? = null) {
+        val safeProvider = provider.escapeJson()
+        val safeModel = model.escapeJson()
+        val baseUrlLine = if (baseUrl != null) "cfg.setdefault('model', {})['base_url'] = '${baseUrl.escapeJson()}'" else ""
+        val command = """
+            python3 - <<'PY'
+            from pathlib import Path
+            import yaml
+            path = Path.home() / '.hermes' / 'config.yaml'
+            if path.exists():
+                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                cfg = {}
+            cfg.setdefault('model', {})['provider'] = '$safeProvider'
+            cfg.setdefault('model', {})['default'] = '$safeModel'
+            $baseUrlLine
+            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
+            print('model config updated: provider=$safeProvider model=$safeModel')
+            PY
+        """.trimIndent()
+        gatewayClient.request(
+            GatewayMethods.SHELL_EXEC,
+            mapOf("command" to JsonPrimitive(command)),
+            timeoutMs = 10_000,
+        )
+    }
+
     private suspend fun writeFallbackChain(entries: List<FallbackProviderConfig>) {
         val json = entries.joinToString(prefix = "[", postfix = "]") { entry ->
             buildString {
@@ -411,29 +405,7 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", provider)
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", model)
-                    }.toMap(),
-                )
-                if (baseUrl.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.CONFIG_SET,
-                        buildJsonObject {
-                            put("key", "model.base_url")
-                            put("value", baseUrl)
-                        }.toMap(),
-                    )
-                }
+                writeModelConfig(provider, model, baseUrl.ifBlank { null })
                 _uiState.value = _uiState.value.copy(
                     activeProvider = provider,
                     activeModel = model,
@@ -453,20 +425,7 @@ class ConfigViewModel @Inject constructor(
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", model.provider)
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", model.modelId)
-                    }.toMap(),
-                )
+                writeModelConfig(model.provider, model.modelId)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = model.provider,
                     activeModel = model.modelId,

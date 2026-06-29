@@ -200,7 +200,8 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun loadSessionHistory(sessionId: String) {
         try {
-            val params = buildJsonObject { put("session_id", sessionId) }
+            // session.history uses "id" param (not "session_id") — matches session.list response field
+            val params = buildJsonObject { put("id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
             if (messages.isNotEmpty()) {
@@ -210,10 +211,8 @@ class ChatViewModel @Inject constructor(
                 Timber.w("[Chat] Session history returned empty for $sessionId")
             }
         } catch (e: Exception) {
-            Timber.w(e, "[Chat] Failed to load session history")
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Could not load session history: ${e.message}"
-            )
+            // History load failure is non-fatal — messages arrive via event stream after resume
+            Timber.w(e, "[Chat] Could not load session history for $sessionId, continuing without it")
         }
     }
 
