@@ -46,7 +46,11 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.hermes.android.ui.i18n.AppLanguage
+import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.theme.ThemeMode
+import com.hermes.android.ui.theme.ThemeModeState
 
 /**
  * Configuration screen — model picker, tool toggles, config viewer.
@@ -63,6 +67,8 @@ fun ConfigScreen(
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    themeModeState: ThemeModeState? = null,
+    appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -111,6 +117,8 @@ fun ConfigScreen(
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToRuntime = onNavigateToRuntime,
+                    themeModeState = themeModeState,
+                    appLanguageState = appLanguageState,
                 )
                 ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
                 ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
@@ -127,6 +135,8 @@ private fun GeneralTab(
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    themeModeState: ThemeModeState? = null,
+    appLanguageState: AppLanguageState? = null,
 ) {
     if (state.isLoadingConfig) {
         LoadingIndicator("Loading config…")
@@ -140,6 +150,80 @@ private fun GeneralTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // -- Theme toggle --
+        if (themeModeState != null) {
+            Text(
+                text = t("Appearance", "ظاهر"),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = t("Theme", "تم"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemeMode.entries.forEach { mode ->
+                            val label = when (mode) {
+                                ThemeMode.SYSTEM -> t("System", "سیستم")
+                                ThemeMode.LIGHT -> t("Light", "روشن")
+                                ThemeMode.DARK -> t("Dark", "تاریک")
+                            }
+                            androidx.compose.material3.FilterChip(
+                                selected = themeModeState.mode == mode,
+                                onClick = { themeModeState.setMode(mode) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // -- Language selector --
+        if (appLanguageState != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = t("Language", "زبان"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppLanguage.entries.forEach { lang ->
+                            val label = when (lang) {
+                                AppLanguage.AUTO -> t("Auto", "خودکار")
+                                AppLanguage.ENGLISH -> "English"
+                                AppLanguage.FARSI -> "فارسی"
+                            }
+                            androidx.compose.material3.FilterChip(
+                                selected = appLanguageState.language == lang,
+                                onClick = { appLanguageState.setLanguage(lang) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Text(
             text = "Backend & Capabilities",
             style = MaterialTheme.typography.titleMedium,

@@ -189,10 +189,37 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "API key saved for $provider",
                 )
+                validateApiKey(provider)
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to save API key")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to save API key: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun validateApiKey(provider: String) {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
+                val obj = result as? JsonObject
+                val providers = obj?.get("providers") as? JsonArray
+                if (providers != null && providers.isNotEmpty()) {
+                    Timber.i("[Config] API key validated for $provider")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "API key validated successfully",
+                    )
+                } else {
+                    Timber.w("[Config] API key validation: no providers returned for $provider")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "API key may be invalid (could not verify)",
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] API key validation failed for $provider")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "API key may be invalid (could not verify)",
                 )
             }
         }
