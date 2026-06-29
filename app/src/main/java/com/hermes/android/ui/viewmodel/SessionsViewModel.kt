@@ -14,11 +14,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
+import java.util.Base64
 import javax.inject.Inject
 
 /**
@@ -103,45 +105,134 @@ class SessionsViewModel @Inject constructor(
 
     fun loadSessionHistory(sessionId: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingHistory = true)
-            try {
-                val params = buildJsonObject {
-                    put("id", sessionId)
+            // Open detail view immediately so the user sees the loading state
+            _uiState.value = _uiState.value.copy(
+                isLoadingHistory = true,
+                selectedSessionId = sessionId,
+                selectedSessionHistory = emptyList(),
+            )
+            val messages = try {
+                val params = buildJsonObject { put("id", sessionId) }
+                val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, params.toMap())
+                parseHistory(result).also { msgs ->
+                    Timber.i("[Sessions] session.history returned ${msgs.size} messages for $sessionId")
                 }
-                val result = gatewayClient.request(
-                    GatewayMethods.SESSION_HISTORY,
-                    params.toMap(),
-                )
-                val messages = parseHistory(result)
-                _uiState.value = _uiState.value.copy(
-                    selectedSessionHistory = messages,
-                    selectedSessionId = sessionId,
-                    isLoadingHistory = false,
-                )
-                Timber.i("[Sessions] History loaded: ${messages.size} messages")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Timber.e(e, "[Sessions] Failed to load history")
-                _uiState.value = _uiState.value.copy(isLoadingHistory = false)
+                Timber.w(e, "[Sessions] session.history RPC failed — trying filesystem fallback")
+                loadHistoryFromFilesystem(sessionId)
             }
+
+            _uiState.value = _uiState.value.copy(
+                selectedSessionHistory = messages,
+                isLoadingHistory = false,
+                errorMessage = if (messages.isEmpty()) "پیامی برای این گفتگو پیدا نشد" else null,
+            )
+        }
+    }
+
+    private suspend fun loadHistoryFromFilesystem(sessionId: String): List<HistoryMessage> {
+        return try {
+            val payload = Base64.getEncoder().encodeToString(sessionId.toByteArray(Charsets.UTF_8))
+            val command = """
+                python3 - <<'PY'
+                import base64, json
+                from pathlib import Path
+
+                session_id = base64.b64decode('$payload').decode('utf-8')
+                base = Path.home() / '.hermes'
+                messages = []
+
+                for dir_name in ['sessions', 'conversations', 'chats']:
+                    sdir = base / dir_name
+                    if not sdir.exists():
+                        continue
+                    for entry in sorted(sdir.iterdir()):
+                        if session_id not in entry.name:
+                            continue
+                        paths_to_try = []
+                        if entry.is_dir():
+                            for fname in ['messages.jsonl', 'conversation.jsonl', 'messages.json', 'history.json']:
+                                paths_to_try.append(entry / fname)
+                        else:
+                            paths_to_try.append(entry)
+                        for path in paths_to_try:
+                            if not path.exists():
+                                continue
+                            try:
+                                for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    try:
+                                        obj = json.loads(line)
+                                        role = obj.get('role', '')
+                                        if role in ('user', 'assistant', 'human', 'ai'):
+                                            role = 'user' if role in ('user', 'human') else 'assistant'
+                                            content = obj.get('content', obj.get('text', ''))
+                                            if isinstance(content, list):
+                                                content = ' '.join(b.get('text', '') for b in content if isinstance(b, dict))
+                                            messages.append({'role': role, 'text': str(content)})
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
+                            if messages:
+                                break
+                        if messages:
+                            break
+                    if messages:
+                        break
+
+                print(json.dumps({'messages': messages}))
+                PY
+            """.trimIndent()
+            val result = gatewayClient.request(
+                GatewayMethods.SHELL_EXEC,
+                mapOf("command" to JsonPrimitive(command)),
+                timeoutMs = 10_000,
+            )
+            parseHistory(result).also { msgs ->
+                Timber.i("[Sessions] Filesystem fallback found ${msgs.size} messages for $sessionId")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "[Sessions] Filesystem fallback failed")
+            emptyList()
         }
     }
 
     private fun parseHistory(result: kotlinx.serialization.json.JsonElement): List<HistoryMessage> {
         return try {
             val obj = result as? JsonObject ?: return emptyList()
-            // Fix S9F02: response is {count, messages: [{role, text}]} — field is "text" not "content"
-            val arr = obj["messages"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+            // Support both "messages" and "history" as the array key (Hermes may use either)
+            val arr = obj["messages"] as? JsonArray
+                ?: obj["history"] as? JsonArray
+                ?: return emptyList()
             arr.mapNotNull { item ->
                 val m = item as? JsonObject ?: return@mapNotNull null
+                // Support both "text" (Hermes WS) and "content" (OpenAI-style)
+                val content = m["text"]?.let { (it as? JsonPrimitive)?.content }
+                    ?: m["content"]?.let { (it as? JsonPrimitive)?.content }
+                    ?: ""
                 HistoryMessage(
                     role = m["role"]?.let { (it as? JsonPrimitive)?.content } ?: "unknown",
-                    content = m["text"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    timestamp = 0L, // Hermes doesn't include timestamp in history
+                    content = content,
+                    timestamp = 0L,
                 )
             }
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    fun closeHistory() {
+        _uiState.value = _uiState.value.copy(
+            selectedSessionId = null,
+            selectedSessionHistory = emptyList(),
+        )
     }
 
     // ── Delete with confirmation (#9) ─────────────────────────────────────
