@@ -919,20 +919,11 @@ private fun MessageBubble(
                 } ?: emptyList()
             }
 
-            // Feature 7.1: animated dots for streaming reasoning
-            val dotTransition = rememberInfiniteTransition(label = "thinking_dots")
-            val rawDotStep by dotTransition.animateInt(
-                initialValue = 0,
-                targetValue = 4,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 900, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                ),
-                label = "dots",
-            )
-            val dotStr = when (rawDotStep % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
+            // Feature 7.1: animated dots only while streaming with reasoning
+            val dotStr = if (message.isStreaming && hasThinking) thinkingDotStr() else ""
 
             val assistantContext = LocalContext.current
+            val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1056,22 +1047,18 @@ private fun MessageBubble(
                                     Icon(Icons.Default.ContentCopy, contentDescription = null)
                                 },
                             )
-                            if (message.text.isNotEmpty() && codeBlockRegex.containsMatchIn(message.text)) {
-                                val firstCode = remember(message.text) {
-                                    extractCodeBlocks(message.text).firstOrNull()
-                                }
-                                if (firstCode != null) {
-                                    DropdownMenuItem(
-                                        text = { Text(t("Copy code", "کپی کد")) },
-                                        onClick = {
-                                            onCopyCode(firstCode)
-                                            showContextMenu = false
-                                        },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.ContentCopy, contentDescription = null)
-                                        },
-                                    )
-                                }
+                            val firstCode = codeBlocks.firstOrNull()
+                            if (firstCode != null) {
+                                DropdownMenuItem(
+                                    text = { Text(t("Copy code", "کپی کد")) },
+                                    onClick = {
+                                        onCopyCode(firstCode)
+                                        showContextMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                    },
+                                )
                             }
                             DropdownMenuItem(
                                 text = { Text(t("Share", "اشتراک‌گذاری")) },
@@ -1094,8 +1081,7 @@ private fun MessageBubble(
                     }
 
                     // Feature #3: "Copy Code" button for messages with code blocks
-                    if (message.text.isNotEmpty() && codeBlockRegex.containsMatchIn(message.text)) {
-                        val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
+                    if (codeBlocks.isNotEmpty()) {
                         codeBlocks.forEachIndexed { index, code ->
                             Row(
                                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
@@ -1405,6 +1391,21 @@ private fun highlightText(text: String, query: String): AnnotatedString {
             append(text.substring(start))
         }
     }
+}
+
+@Composable
+private fun thinkingDotStr(): String {
+    val transition = rememberInfiniteTransition(label = "thinking_dots")
+    val rawStep by transition.animateInt(
+        initialValue = 0,
+        targetValue = 4,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "dots",
+    )
+    return when (rawStep % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
 }
 
 @Composable
