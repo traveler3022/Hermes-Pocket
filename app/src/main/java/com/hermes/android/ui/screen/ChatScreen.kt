@@ -412,6 +412,8 @@ fun ChatScreen(
                     ShimmerSkeleton()
                 } else {
                     // Message list
+                    val copiedToast = t("Copied", "کپی شد")
+                    val codeCopiedToast = t("Code copied", "کد کپی شد")
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -433,11 +435,11 @@ fun ChatScreen(
                                 isSending = uiState.isSending,
                                 onCopyMessage = { text ->
                                     clipboardManager.setText(AnnotatedString(text))
-                                    Toast.makeText(context, t("Copied", "کپی شد"), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onCopyCode = { code ->
                                     clipboardManager.setText(AnnotatedString(code))
-                                    Toast.makeText(context, t("Code copied", "کد کپی شد"), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onRetry = { viewModel.retryLastMessage() },
                             )
