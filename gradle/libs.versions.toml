@@ -2,7 +2,7 @@
 agp = "8.7.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
-composeMarkdown = "0.5.7"
+composeMarkdown = "0.7.2"
 coil = "2.7.0"
 
 # AndroidX
@@ -89,7 +89,7 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 # Markdown
 compose-markdown = { group = "com.github.jeziellago", name = "compose-markdown", version.ref = "composeMarkdown" }
 
-# Image loading (for markdown images, future media support)
+# Coil (image loading for markdown)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
 
