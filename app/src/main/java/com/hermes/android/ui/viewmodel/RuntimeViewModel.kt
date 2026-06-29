@@ -9,12 +9,22 @@ import com.hermes.android.runtime.InstallResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
+
+/** One-shot side-effects emitted by [RuntimeViewModel] for the UI to handle. */
+sealed interface RuntimeEffect {
+    /** Start the foreground gateway service. */
+    data object StartForegroundService : RuntimeEffect
+}
 
 /**
  * ViewModel for the Runtime Setup screen.
@@ -57,6 +67,9 @@ class RuntimeViewModel @Inject constructor(
 
     private val _logs = MutableStateFlow<String?>(null)
     val logs: StateFlow<String?> = _logs.asStateFlow()
+
+    private val _effects = MutableSharedFlow<RuntimeEffect>(extraBufferCapacity = 1)
+    val effects: SharedFlow<RuntimeEffect> = _effects.asSharedFlow()
 
     private val logReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
@@ -160,7 +173,9 @@ class RuntimeViewModel @Inject constructor(
             try {
                 val handle = runtimeManager.runtime.startGateway()
                 Timber.i("[Runtime] Gateway started: ${handle.webSocketUrl}")
-                com.hermes.android.service.HermesGatewayService.start(context)
+                _effects.emit(RuntimeEffect.StartForegroundService)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to start gateway")
                 _errorMessage.value = e.message ?: "Failed to start gateway in Termux"

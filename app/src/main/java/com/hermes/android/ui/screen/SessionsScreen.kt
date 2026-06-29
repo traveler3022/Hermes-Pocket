@@ -53,8 +53,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import com.hermes.android.ui.viewmodel.HistoryMessage
 import com.hermes.android.ui.viewmodel.SessionSortOrder
+import com.hermes.android.ui.viewmodel.SessionsEffect
 import com.hermes.android.ui.viewmodel.SessionSummary
 import com.hermes.android.ui.viewmodel.SessionsUiState
 import com.hermes.android.ui.viewmodel.SessionsViewModel
@@ -82,6 +85,25 @@ fun SessionsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val memoryState by viewModel.memoryState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    LaunchedEffect(viewModel.effects) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is SessionsEffect.ShareText -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, effect.text)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(
+                        Intent.createChooser(intent, effect.title)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }
+        }
+    }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {

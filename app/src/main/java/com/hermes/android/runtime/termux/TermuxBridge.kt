@@ -21,10 +21,11 @@ import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -77,6 +78,9 @@ class TermuxBridge @Inject constructor(
 ) : HermesRuntime {
 
     override val type: RuntimeType = RuntimeType.TERMUX
+
+    // Single SharedPreferences instance — avoids opening 4 separate handles
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotDetected)
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
@@ -454,6 +458,8 @@ class TermuxBridge @Inject constructor(
         // Disconnect the WS client (if connected) and revert state.
         try {
             gatewayClient.disconnect()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.w(e, "[Gateway] Error disconnecting WS client during stop")
         }
@@ -541,12 +547,14 @@ class TermuxBridge @Inject constructor(
                 am broadcast -p "${'$'}RECEIVER" -a "${'$'}ACTION" --es doctor "${'$'}DOCTOR_TAIL" >/dev/null 2>&1 || true
             """.trimIndent()
             when (val dispatch = executor.executeBackgroundScript(script, TermuxCommandExecutor.TERMUX_HOME)) {
-                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(90.seconds) { result.await() }
+                is TermuxCommandExecutor.Result.Accepted -> withTimeoutOrNull(DOCTOR_COMMAND_TIMEOUT) { result.await() }
                     ?: "Doctor timed out. Check ~/.hermes/logs/doctor_from_app.log in Termux."
                 is TermuxCommandExecutor.Result.TermuxMissing -> dispatch.message
                 is TermuxCommandExecutor.Result.AllowExternalAppsDisabled -> dispatch.message
                 is TermuxCommandExecutor.Result.Failure -> dispatch.message
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "[Doctor] Failed to run doctor")
             "Failed to run doctor: ${e.message}"
@@ -572,6 +580,8 @@ class TermuxBridge @Inject constructor(
                 connectTimeoutMs = HEALTH_CHECK_TIMEOUT_MS,
             )
             state is ConnectionState.Connected
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.w(e, "[Health] Gateway health check failed")
             false
@@ -671,6 +681,8 @@ class TermuxBridge @Inject constructor(
                         url = getWebSocketUrl(),
                         connectTimeoutMs = 2_000,
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Timber.d(e, "[Gateway] Connect attempt failed while waiting for ready")
                     null
@@ -693,6 +705,7 @@ class TermuxBridge @Inject constructor(
         private const val DEFAULT_GATEWAY_HOST = "127.0.0.1"
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
         private val INSTALL_TIMEOUT = 30.minutes
+        private val DOCTOR_COMMAND_TIMEOUT = 90.seconds
         private const val POLL_INTERVAL_MS = 500L
         // Bumped from 15s to 30s: `hermes dashboard` does plugin discovery
         // + MCP discovery + uvicorn startup, which on a slow phone takes
@@ -716,7 +729,6 @@ class TermuxBridge @Inject constructor(
     // Fix S2F03: Cache install state
     private fun cacheInstallState(info: RuntimeInfo) {
         try {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit()
                 .putBoolean(KEY_INSTALLED, true)
                 .putString(KEY_VERSION, info.hermesVersion)
@@ -731,7 +743,6 @@ class TermuxBridge @Inject constructor(
     // Fix S2F07: Check if previously installed (re-install detection)
     private fun isPreviouslyInstalled(): Boolean {
         return try {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.getBoolean(KEY_INSTALLED, false)
         } catch (e: Exception) {
             false
@@ -752,7 +763,6 @@ class TermuxBridge @Inject constructor(
      */
     private fun getOrCreateSessionToken(): String {
         return try {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             var token = prefs.getString(KEY_SESSION_TOKEN, null)
             if (token.isNullOrBlank()) {
                 // 32 bytes of URL-safe randomness, matching the entropy of
@@ -783,7 +793,6 @@ class TermuxBridge @Inject constructor(
     @Suppress("unused")
     private fun getCachedInstallInfo(): RuntimeInfo? {
         return try {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (prefs.getBoolean(KEY_INSTALLED, false)) {
                 RuntimeInfo(
                     type = RuntimeType.TERMUX,
