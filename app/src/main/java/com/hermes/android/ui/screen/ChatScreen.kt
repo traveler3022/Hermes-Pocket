@@ -135,6 +135,7 @@ fun ChatScreen(
     onNavigateToSessions: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     sharedText: String? = null,
+    resumeSessionId: String? = null,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -205,6 +206,12 @@ fun ChatScreen(
     }
 
     // Pre-fill input from share intent
+    LaunchedEffect(resumeSessionId) {
+        if (!resumeSessionId.isNullOrBlank()) {
+            viewModel.resumeSession(resumeSessionId)
+        }
+    }
+
     LaunchedEffect(sharedText) {
         if (!sharedText.isNullOrBlank()) {
             viewModel.updateInputText(sharedText)

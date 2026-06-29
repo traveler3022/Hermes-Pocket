@@ -121,6 +121,7 @@ private fun AppRoot(
     }
 
     var pendingSharedText by remember { mutableStateOf(sharedText) }
+    var pendingResumeSessionId by remember { mutableStateOf<String?>(null) }
 
     when (screen) {
         Screen.ONBOARDING -> OnboardingScreen(
@@ -135,9 +136,11 @@ private fun AppRoot(
                 onNavigateToSessions = { screen = Screen.SESSIONS },
                 onNavigateToRuntime = { screen = Screen.RUNTIME },
                 sharedText = pendingSharedText,
+                resumeSessionId = pendingResumeSessionId,
             )
             LaunchedEffect(Unit) {
                 pendingSharedText = null
+                pendingResumeSessionId = null
             }
         }
         Screen.CONFIG -> ConfigScreen(
@@ -154,6 +157,10 @@ private fun AppRoot(
         )
         Screen.SESSIONS -> SessionsScreen(
             onNavigateBack = { screen = Screen.CHAT },
+            onResumeSession = { sessionId ->
+                pendingResumeSessionId = sessionId
+                screen = Screen.CHAT
+            },
         )
         Screen.SKILLS -> SkillsScreen(
             onNavigateBack = { screen = Screen.CONFIG },
