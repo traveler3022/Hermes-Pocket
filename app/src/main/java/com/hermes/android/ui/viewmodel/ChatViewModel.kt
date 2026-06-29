@@ -576,15 +576,29 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.Error -> {
+                val isRateLimit = event.message?.contains("rate_limit", ignoreCase = true) == true ||
+                        event.message?.contains("429") == true
+                val displayMsg = if (isRateLimit) "Rate limited — please wait" else event.message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
                         if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, error = event.message)
+                            msg.copy(isRunning = false, error = displayMsg)
                         } else msg
                     },
-                    errorMessage = event.message,
+                    errorMessage = displayMsg,
                     isSending = false,
                 )
+                if (isRateLimit) {
+                    val statusMsg = ChatMessage.Status(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        text = "⏸ Rate limited — please wait a moment",
+                        isError = false,
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages + statusMsg,
+                    )
+                }
                 activeAssistantMessageId = null
             }
 
@@ -763,6 +777,14 @@ class ChatViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + msg,
                 )
+            }
+
+            is GatewayEvent.SessionInfo -> {
+                Timber.d("[Chat] Session info: ${event.info}")
+            }
+
+            is GatewayEvent.GatewayStderr -> {
+                Timber.w("[Chat] Gateway stderr: ${event.line}")
             }
 
             else -> {

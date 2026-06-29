@@ -1,10 +1,12 @@
 package com.hermes.android.ui.screen
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateInt
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -30,11 +32,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
@@ -44,12 +48,15 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +68,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -190,9 +198,9 @@ fun ChatScreen(
         if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
     }
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
+        if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }
@@ -900,6 +908,7 @@ private fun MessageBubble(
             val isLongResponse = message.text.length > 1500
             var isResponseExpanded by remember { mutableStateOf(true) }
             var isThinkingExpanded by remember { mutableStateOf(false) }
+            var showContextMenu by remember { mutableStateOf(false) }
             val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
             val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\\([^()]{1,12}\\)") }
             val emotions = remember(message.reasoning) {
@@ -910,22 +919,38 @@ private fun MessageBubble(
                 } ?: emptyList()
             }
 
+            // Feature 7.1: animated dots for streaming reasoning
+            val dotTransition = rememberInfiniteTransition(label = "thinking_dots")
+            val rawDotStep by dotTransition.animateInt(
+                initialValue = 0,
+                targetValue = 4,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 900, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+                label = "dots",
+            )
+            val dotStr = when (rawDotStep % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
+
+            val assistantContext = LocalContext.current
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
-                    Card(
-                        modifier = Modifier
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onCopyMessage(message.text) },
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { showContextMenu = true },
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                        shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
-                    ) {
+                            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
+                        ) {
                         Column(
                             modifier = Modifier
                                 .padding(12.dp)
@@ -951,17 +976,23 @@ private fun MessageBubble(
                                         )
                                     }
                                     Text(
-                                        text = if (isThinkingExpanded) t("Thinking ▲", "فکر کردن ▲")
-                                               else t("Thinking ▼", "فکر کردن ▼"),
+                                        text = when {
+                                            message.isStreaming && hasThinking && !isThinkingExpanded ->
+                                                "💭$dotStr"
+                                            isThinkingExpanded -> t("Thinking ▲", "فکر کردن ▲")
+                                            else -> t("Thinking ▼", "فکر کردن ▼")
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     )
                                 }
                                 AnimatedVisibility(visible = isThinkingExpanded) {
-                                    Text(
-                                        text = message.reasoning ?: "",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    // Feature 7.2: HermesMarkdown for reasoning
+                                    HermesMarkdown(
+                                        markdown = message.reasoning ?: "",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 8.dp),
@@ -1008,6 +1039,57 @@ private fun MessageBubble(
                                     strokeWidth = 2.dp,
                                 )
                             }
+                        }
+                        }
+                        // Feature 9: long-press context menu
+                        DropdownMenu(
+                            expanded = showContextMenu,
+                            onDismissRequest = { showContextMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(t("Copy text", "کپی متن")) },
+                                onClick = {
+                                    onCopyMessage(message.text)
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                },
+                            )
+                            if (message.text.isNotEmpty() && codeBlockRegex.containsMatchIn(message.text)) {
+                                val firstCode = remember(message.text) {
+                                    extractCodeBlocks(message.text).firstOrNull()
+                                }
+                                if (firstCode != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(t("Copy code", "کپی کد")) },
+                                        onClick = {
+                                            onCopyCode(firstCode)
+                                            showContextMenu = false
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                        },
+                                    )
+                                }
+                            }
+                            DropdownMenuItem(
+                                text = { Text(t("Share", "اشتراک‌گذاری")) },
+                                onClick = {
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, message.text)
+                                        type = "text/plain"
+                                    }
+                                    assistantContext.startActivity(
+                                        Intent.createChooser(sendIntent, null),
+                                    )
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null)
+                                },
+                            )
                         }
                     }
 
@@ -1107,20 +1189,45 @@ private fun MessageBubble(
                             )
                         }
                     }
+                    // Feature 4.2: collapsible args
                     message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
-                        Text(
-                            text = args.replace('\n', ' ').take(180) + if (args.length > 180) "..." else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        var argsExpanded by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { argsExpanded = !argsExpanded },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = t("Arguments", "آرگومان‌ها"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                imageVector = if (argsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        AnimatedVisibility(visible = argsExpanded) {
+                            Text(
+                                text = args,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
+                    // Feature 4.1/4.3: HermesMarkdown for result, outline color when running (preview)
                     message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
-                        Text(
-                            text = result.take(300) + if (result.length > 300) "..." else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        HermesMarkdown(
+                            markdown = result,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = if (message.isRunning) MaterialTheme.colorScheme.outline
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         )
                     }
                     message.error?.takeIf { it.isNotBlank() }?.let { err ->
@@ -1308,45 +1415,86 @@ private fun InputBar(
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
-    Row(
+    val context = LocalContext.current
+    // Feature 5.2: slash command suggestions
+    val slashCommands = listOf("/help", "/clear", "/config", "/model", "/session")
+    val showSuggestions = text.startsWith("/") && !isSending
+    val suggestions = remember(text) {
+        if (text == "/") slashCommands
+        else slashCommands.filter { it.startsWith(text) }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
-            .padding(12.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .imePadding(),
     ) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = onTextChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
-            maxLines = 4,
-            shape = RoundedCornerShape(24.dp),
-        )
-
-        if (isSending) {
+        if (showSuggestions && suggestions.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(suggestions) { cmd ->
+                    SuggestionChip(
+                        onClick = { onTextChange(cmd) },
+                        label = { Text(cmd) },
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Feature 5.1: attachment button
             IconButton(
-                onClick = onStop,
+                onClick = {
+                    Toast.makeText(context, t("Coming soon", "به زودی"), Toast.LENGTH_SHORT).show()
+                },
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(
-                    Icons.Default.Stop,
-                    contentDescription = t("Stop", "توقف"),
-                    tint = MaterialTheme.colorScheme.error,
+                    Icons.Default.AttachFile,
+                    contentDescription = t("Attach", "پیوست"),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        } else {
-            IconButton(
-                onClick = onSend,
-                enabled = text.isNotBlank(),
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = t("Send", "ارسال"),
-                )
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
+                maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
+            )
+            if (isSending) {
+                IconButton(
+                    onClick = onStop,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Stop,
+                        contentDescription = t("Stop", "توقف"),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onSend,
+                    enabled = text.isNotBlank(),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = t("Send", "ارسال"),
+                    )
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ package com.hermes.android.ui.component
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -19,11 +20,13 @@ fun HermesMarkdown(
     ),
 ) {
     val context = LocalContext.current
-    val imageLoader = ImageLoader.Builder(context)
-        .components { add(GifDecoder.Factory()) }
-        .memoryCachePolicy(CachePolicy.ENABLED)
-        .diskCachePolicy(CachePolicy.ENABLED)
-        .build()
+    val imageLoader = remember(context) {
+        ImageLoader.Builder(context)
+            .components { add(GifDecoder.Factory()) }
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
 
     MarkdownText(
         markdown = markdown,
