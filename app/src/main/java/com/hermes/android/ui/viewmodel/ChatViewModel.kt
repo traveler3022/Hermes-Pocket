@@ -40,7 +40,6 @@ import javax.inject.Inject
  * - Manage session list (create, list, resume)
  * - Draft persistence (SharedPreferences)
  * - Search in messages
- * - Quick model switch
  * - Retry last message
  *
  * Reference: Phase 1.5 Rule 1 (Strict Layer Dependency),
@@ -183,18 +182,30 @@ class ChatViewModel @Inject constructor(
     fun resumeSession(sessionId: String) {
         viewModelScope.launch {
             try {
+                // Hermes `session.resume` (param: session_id) returns the full
+                // transcript directly in its response payload:
+                //   { message_count, messages: [...] }
+                // Parse messages straight from the response — no separate
+                // session.history call needed.
                 val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                val result = gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
+                val history = parseSessionHistory(result)
                 _uiState.value = _uiState.value.copy(
                     activeSessionId = sessionId,
-                    messages = emptyList(),
+                    messages = history,
                     showSessionDrawer = false,
                     errorMessage = null,
                 )
-                Timber.i("[Chat] Resumed session: $sessionId")
-                loadSessionHistory(sessionId)
+                if (history.isNotEmpty()) {
+                    Timber.i("[Chat] Resumed session $sessionId with ${history.size} messages")
+                } else {
+                    // Fallback: lazy/live resume paths may not inline the
+                    // transcript — fetch it explicitly via session.history.
+                    Timber.w("[Chat] Resume returned no inline messages for $sessionId, falling back to session.history")
+                    loadSessionHistory(sessionId)
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
@@ -204,8 +215,9 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun loadSessionHistory(sessionId: String) {
         try {
-            // session.history uses "id" param (not "session_id") — matches session.list response field
-            val params = buildJsonObject { put("id", sessionId) }
+            // Hermes `session.history` resolves the session via _sess_nowait,
+            // which reads params["session_id"] — NOT "id".
+            val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
             if (messages.isNotEmpty()) {
@@ -442,45 +454,9 @@ class ChatViewModel @Inject constructor(
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
-    // ── Feature #8: Quick model switch from chat ─────────────────────────
-
-    fun toggleModelSwitcher() {
-        _uiState.value = _uiState.value.copy(
-            showModelSwitcher = !_uiState.value.showModelSwitcher,
-        )
-    }
-
-    fun switchModelFromChat(provider: String, model: String) {
-        viewModelScope.launch {
-            try {
-                // Set provider
-                val providerParams = buildJsonObject {
-                    put("key", "llm.provider")
-                    put("value", provider)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, providerParams.toMap())
-
-                // Set model
-                val modelParams = buildJsonObject {
-                    put("key", "llm.model")
-                    put("value", model)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, modelParams.toMap())
-
-                _uiState.value = _uiState.value.copy(
-                    currentModelName = "$provider/$model",
-                    showModelSwitcher = false,
-                )
-                Timber.i("[Chat] Model switched to $provider/$model")
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to switch model")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to switch model: ${e.message}",
-                    showModelSwitcher = false,
-                )
-            }
-        }
-    }
+    // Model switching lives in the Settings screen (ConfigViewModel), not in
+    // chat — it must go through `config.set` with key="model" against the
+    // active session, which Settings owns.
 
     // ── Event handling ────────────────────────────────────────────────────
 
