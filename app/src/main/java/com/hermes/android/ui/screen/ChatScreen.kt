@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -307,6 +308,10 @@ fun ChatScreen(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                                     contentDescription = t("Search", "جستجو"),
                                 )
+                            }
+                            // Full session manager: rename / delete / pin / export / memory
+                            IconButton(onClick = onNavigateToSessions) {
+                                Icon(Icons.Default.History, contentDescription = t("Sessions & history", "گفتگوها و تاریخچه"))
                             }
                             IconButton(onClick = onNavigateToSettings) {
                                 Icon(Icons.Default.Settings, contentDescription = t("Settings", "تنظیمات"))

@@ -182,29 +182,35 @@ class ChatViewModel @Inject constructor(
     fun resumeSession(sessionId: String) {
         viewModelScope.launch {
             try {
-                // Hermes `session.resume` (param: session_id) returns the full
-                // transcript directly in its response payload:
-                //   { message_count, messages: [...] }
-                // Parse messages straight from the response — no separate
-                // session.history call needed.
+                // Hermes `session.resume` (param: session_id) MINTS A NEW live
+                // session id bound to the old transcript and returns it as
+                // `session_id` (the original db id comes back as `resumed`).
+                // The response also inlines the full transcript:
+                //   { session_id, resumed, message_count, messages: [...] }
+                // We MUST adopt the returned `session_id` as the active session —
+                // sending prompt.submit with the old id fails "session not found".
                 val params = buildJsonObject { put("session_id", sessionId) }
                 val result = gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
+                val liveSessionId = (result as? JsonObject)
+                    ?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                    ?.takeIf { it.isNotBlank() } ?: sessionId
                 val history = parseSessionHistory(result)
                 _uiState.value = _uiState.value.copy(
-                    activeSessionId = sessionId,
+                    activeSessionId = liveSessionId,
                     messages = history,
                     showSessionDrawer = false,
                     errorMessage = null,
                 )
                 if (history.isNotEmpty()) {
-                    Timber.i("[Chat] Resumed session $sessionId with ${history.size} messages")
+                    Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
                 } else {
                     // Fallback: lazy/live resume paths may not inline the
-                    // transcript — fetch it explicitly via session.history.
-                    Timber.w("[Chat] Resume returned no inline messages for $sessionId, falling back to session.history")
-                    loadSessionHistory(sessionId)
+                    // transcript — fetch it explicitly via session.history using
+                    // the live id.
+                    Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
+                    loadSessionHistory(liveSessionId)
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
