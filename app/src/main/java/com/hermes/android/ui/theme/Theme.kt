@@ -47,12 +47,12 @@ class ThemeModeState(context: Context) {
     )
         private set
 
-    fun setMode(newMode: ThemeMode) {
+    fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
     }
 
-    fun setColorTheme(newTheme: ColorTheme) {
+    fun updateColorTheme(newTheme: ColorTheme) {
         colorTheme = newTheme
         prefs.edit().putString("color_theme", newTheme.key).apply()
     }

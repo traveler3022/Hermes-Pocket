@@ -28,7 +28,7 @@ class AppLanguageState(context: Context) {
     )
         private set
 
-    fun setLanguage(newLang: AppLanguage) {
+    fun updateLanguage(newLang: AppLanguage) {
         language = newLang
         prefs.edit().putString("app_language", newLang.key).apply()
     }

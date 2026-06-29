@@ -181,7 +181,7 @@ private fun GeneralTab(
                             }
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.mode == mode,
-                                onClick = { themeModeState.setMode(mode) },
+                                onClick = { themeModeState.updateMode(mode) },
                                 label = { Text(label) },
                             )
                         }
@@ -199,7 +199,7 @@ private fun GeneralTab(
                             val label = t(theme.displayEn, theme.displayFa)
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.colorTheme == theme,
-                                onClick = { themeModeState.setColorTheme(theme) },
+                                onClick = { themeModeState.updateColorTheme(theme) },
                                 label = { Text(label) },
                             )
                         }
@@ -234,7 +234,7 @@ private fun GeneralTab(
                             }
                             androidx.compose.material3.FilterChip(
                                 selected = appLanguageState.language == lang,
-                                onClick = { appLanguageState.setLanguage(lang) },
+                                onClick = { appLanguageState.updateLanguage(lang) },
                                 label = { Text(label) },
                             )
                         }
