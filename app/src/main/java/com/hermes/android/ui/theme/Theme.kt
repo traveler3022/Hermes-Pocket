@@ -1,5 +1,6 @@
 package com.hermes.android.ui.theme
 
+import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -8,7 +9,34 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+
+enum class ThemeMode(val key: String) {
+    SYSTEM("system"),
+    LIGHT("light"),
+    DARK("dark");
+
+    companion object {
+        fun fromKey(key: String): ThemeMode = entries.firstOrNull { it.key == key } ?: SYSTEM
+    }
+}
+
+class ThemeModeState(context: Context) {
+    private val prefs = context.getSharedPreferences("hermes_prefs", Context.MODE_PRIVATE)
+
+    var mode: ThemeMode by mutableStateOf(
+        ThemeMode.fromKey(prefs.getString("theme_mode", "system") ?: "system")
+    )
+        private set
+
+    fun setMode(newMode: ThemeMode) {
+        mode = newMode
+        prefs.edit().putString("theme_mode", newMode.key).apply()
+    }
+}
 
 private val LightColors = lightColorScheme(
     primary = md_light_primary,
@@ -64,28 +92,25 @@ private val DarkColors = darkColorScheme(
     outlineVariant = md_dark_outlineVariant,
 )
 
-/**
- * Hermes2 Compose theme.
- *
- * - Material 3 with Material You dynamic color on Android 12+ (API 31+)
- * - Falls back to custom Hermes color palette on Android 10-11 (API 29-30)
- * - Supports light and dark mode
- * - RTL-ready (per ADR-013: i18n from day one)
- *
- * Reference: ADR-002 (Native Compose), ADR-013 (i18n)
- */
 @Composable
 fun Hermes2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val useDark = when (themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> darkTheme
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColors
+        useDark -> DarkColors
         else -> LightColors
     }
 
