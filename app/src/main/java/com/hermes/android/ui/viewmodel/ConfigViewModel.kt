@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
+import java.util.Base64
 import javax.inject.Inject
 
 /**
@@ -188,10 +189,37 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "API key saved for $provider",
                 )
+                validateApiKey(provider)
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to save API key")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to save API key: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun validateApiKey(provider: String) {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
+                val obj = result as? JsonObject
+                val providers = obj?.get("providers") as? JsonArray
+                if (providers != null && providers.isNotEmpty()) {
+                    Timber.i("[Config] API key validated for $provider")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "API key validated successfully",
+                    )
+                } else {
+                    Timber.w("[Config] API key validation: no providers returned for $provider")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "API key may be invalid (could not verify)",
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] API key validation failed for $provider")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "API key may be invalid (could not verify)",
                 )
             }
         }
@@ -210,29 +238,7 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", "xiaomi")
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", targetModel)
-                    }.toMap(),
-                )
-                if (baseUrl.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.CONFIG_SET,
-                        buildJsonObject {
-                            put("key", "model.base_url")
-                            put("value", baseUrl.trim())
-                        }.toMap(),
-                    )
-                }
+                writeModelConfig("xiaomi", targetModel, baseUrl.trim().ifBlank { null })
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "xiaomi",
                     activeModel = targetModel,
@@ -260,20 +266,7 @@ class ConfigViewModel @Inject constructor(
                         }.toMap(),
                     )
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", "gemini")
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", targetModel)
-                    }.toMap(),
-                )
+                writeModelConfig("gemini", targetModel)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = "gemini",
                     activeModel = targetModel,
@@ -288,58 +281,142 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun configureCustomBackend(apiKey: String, baseUrl: String, model: String) {
+    fun configureFallbackProvider(provider: String, model: String, baseUrl: String = "") {
         viewModelScope.launch {
             try {
-                val cleanBaseUrl = baseUrl.trim()
+                val cleanProvider = provider.trim()
                 val cleanModel = model.trim()
-                if (cleanBaseUrl.isBlank() || cleanModel.isBlank()) {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = "Custom base URL and model are required",
-                    )
+                if (cleanProvider.isBlank() || cleanModel.isBlank()) {
+                    _uiState.value = _uiState.value.copy(errorMessage = "Fallback provider and model are required")
                     return@launch
                 }
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", "custom")
-                    }.toMap(),
+                writeFallbackChain(
+                    listOf(
+                        FallbackProviderConfig(
+                            provider = cleanProvider,
+                            model = cleanModel,
+                            baseUrl = baseUrl.trim().ifBlank { null },
+                        )
+                    )
                 )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.base_url")
-                        put("value", cleanBaseUrl)
-                    }.toMap(),
+                _uiState.value = _uiState.value.copy(
+                    fallbackSummary = "$cleanProvider/$cleanModel",
+                    errorMessage = "Fallback set to $cleanProvider/$cleanModel",
                 )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", cleanModel)
-                    }.toMap(),
+                loadConfig()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to configure fallback")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure fallback: ${e.message}")
+            }
+        }
+    }
+
+    fun clearFallbackProviders() {
+        viewModelScope.launch {
+            try {
+                writeFallbackChain(emptyList())
+                _uiState.value = _uiState.value.copy(
+                    fallbackSummary = "none",
+                    errorMessage = "Fallback providers cleared",
                 )
+                loadConfig()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to clear fallback")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to clear fallback: ${e.message}")
+            }
+        }
+    }
+
+    // config.set RPC doesn't accept dotted keys (model.provider, model.default) — write config.yaml directly
+    private suspend fun writeModelConfig(provider: String, model: String, baseUrl: String? = null) {
+        val safeProvider = provider.escapeJson()
+        val safeModel = model.escapeJson()
+        val baseUrlLine = if (baseUrl != null) "cfg.setdefault('model', {})['base_url'] = '${baseUrl.escapeJson()}'" else ""
+        val command = """
+            python3 - <<'PY'
+            from pathlib import Path
+            import yaml
+            path = Path.home() / '.hermes' / 'config.yaml'
+            if path.exists():
+                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                cfg = {}
+            cfg.setdefault('model', {})['provider'] = '$safeProvider'
+            cfg.setdefault('model', {})['default'] = '$safeModel'
+            $baseUrlLine
+            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
+            print('model config updated: provider=$safeProvider model=$safeModel')
+            PY
+        """.trimIndent()
+        gatewayClient.request(
+            GatewayMethods.SHELL_EXEC,
+            mapOf("command" to JsonPrimitive(command)),
+            timeoutMs = 10_000,
+        )
+    }
+
+    private suspend fun writeFallbackChain(entries: List<FallbackProviderConfig>) {
+        val json = entries.joinToString(prefix = "[", postfix = "]") { entry ->
+            buildString {
+                append("{")
+                append("\"provider\":\"").append(entry.provider.escapeJson()).append("\"")
+                append(",\"model\":\"").append(entry.model.escapeJson()).append("\"")
+                entry.baseUrl?.let { append(",\"base_url\":\"").append(it.escapeJson()).append("\"") }
+                append("}")
+            }
+        }
+        val payload = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
+        val command = """
+            python3 - <<'PY'
+            import base64, json
+            from pathlib import Path
+            import yaml
+
+            entries = json.loads(base64.b64decode('$payload').decode('utf-8'))
+            path = Path.home() / '.hermes' / 'config.yaml'
+            if path.exists():
+                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                cfg = {}
+            cfg['fallback_providers'] = entries
+            cfg.pop('fallback_model', None)
+            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
+            print('fallback_providers updated:', entries)
+            PY
+        """.trimIndent()
+        gatewayClient.request(
+            GatewayMethods.SHELL_EXEC,
+            mapOf("command" to JsonPrimitive(command)),
+            timeoutMs = 10_000,
+        )
+    }
+
+    fun configureCustomProvider(provider: String, model: String, apiKey: String, baseUrl: String) {
+        viewModelScope.launch {
+            try {
                 if (apiKey.isNotBlank()) {
                     gatewayClient.request(
-                        GatewayMethods.CONFIG_SET,
+                        GatewayMethods.MODEL_SAVE_KEY,
                         buildJsonObject {
-                            put("key", "model.api_key")
-                            put("value", apiKey.trim())
+                            put("slug", provider)
+                            put("api_key", apiKey)
                         }.toMap(),
                     )
                 }
+                writeModelConfig(provider, model, baseUrl.ifBlank { null })
                 _uiState.value = _uiState.value.copy(
-                    activeProvider = "custom",
-                    activeModel = cleanModel,
-                    errorMessage = "Custom backend saved",
+                    activeProvider = provider,
+                    activeModel = model,
+                    errorMessage = "Backend set to $provider/$model",
                 )
                 loadConfig()
                 loadModels()
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure custom backend")
+                Timber.e(e, "[Config] Failed to configure custom provider")
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to configure custom backend: ${e.message}",
+                    errorMessage = "Failed to configure $provider: ${e.message}",
                 )
             }
         }
@@ -348,20 +425,7 @@ class ConfigViewModel @Inject constructor(
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.provider")
-                        put("value", model.provider)
-                    }.toMap(),
-                )
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    buildJsonObject {
-                        put("key", "model.default")
-                        put("value", model.modelId)
-                    }.toMap(),
-                )
+                writeModelConfig(model.provider, model.modelId)
                 _uiState.value = _uiState.value.copy(
                     activeProvider = model.provider,
                     activeModel = model.modelId,
@@ -467,6 +531,7 @@ data class ConfigUiState(
     val isLoadingConfig: Boolean = false,
     val activeProvider: String? = null,
     val activeModel: String? = null,
+    val fallbackSummary: String? = null,
     val availableModels: List<ModelOption> = emptyList(),
     val isLoadingModels: Boolean = false,
     val availableTools: List<ToolOption> = emptyList(),
@@ -479,6 +544,15 @@ enum class ConfigTab(val label: String) {
     MODELS("Models"),
     TOOLS("Tools"),
 }
+
+data class FallbackProviderConfig(
+    val provider: String,
+    val model: String,
+    val baseUrl: String? = null,
+)
+
+private fun String.escapeJson(): String =
+    replace("\\", "\\\\").replace("\"", "\\\"")
 
 data class ModelOption(
     val provider: String,

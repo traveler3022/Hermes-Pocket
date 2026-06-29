@@ -101,10 +101,8 @@ interface HermesRuntime {
     suspend fun fetchLogs()
 
     /**
-     * Run `hermes doctor` inside the runtime and return the captured output.
-     *
-     * This keeps the UI on the runtime abstraction boundary: screens and
-     * ViewModels never shell out directly and never know Termux-specific paths.
+     * Run `hermes --version` + `hermes doctor` inside the runtime and return the
+     * captured output for display. Read-only diagnostics — does not change state.
      */
     suspend fun runDoctor(): String
 
