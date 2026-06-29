@@ -111,9 +111,6 @@ data class ChatUiState(
     // Feature #16: Search in current chat
     val searchQuery: String = "",
     val showSearch: Boolean = false,
-    // Feature #8: Quick model switch from chat
-    val showModelSwitcher: Boolean = false,
-    val currentModelName: String = "",
 )
 
 enum class ChatConnectionState {
