@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "Hermes2"
 include(":app")
-include(":prototype12a")
