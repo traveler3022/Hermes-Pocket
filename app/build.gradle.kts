@@ -119,6 +119,10 @@ dependencies {
     // Markdown rendering (Fix S4F01)
     implementation(libs.compose.markdown)
 
+    // Image loading (markdown images + future media)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
