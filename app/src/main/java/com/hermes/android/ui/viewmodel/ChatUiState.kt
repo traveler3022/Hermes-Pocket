@@ -52,7 +52,37 @@ sealed class ChatMessage {
         val text: String,
         val isError: Boolean,
     ) : ChatMessage()
+
+    /** Interactive request: clarify question, sudo prompt, or secret input. */
+    data class InteractiveRequest(
+        override val id: String,
+        override val timestamp: Long,
+        val requestId: String,
+        val question: String,
+        val choices: List<String>?,
+        val answered: Boolean = false,
+        val kind: InteractiveKind = InteractiveKind.CLARIFY,
+    ) : ChatMessage()
+
+    /** Sub-agent execution card. */
+    data class SubagentCard(
+        override val id: String,
+        override val timestamp: Long,
+        val subagentType: String,
+        val text: String,
+        val isComplete: Boolean = false,
+    ) : ChatMessage()
 }
+
+enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+
+data class NotificationUi(
+    val key: String?,
+    val kind: String?,
+    val level: String?,
+    val text: String?,
+    val ttlMs: Long?,
+)
 
 /**
  * A conversation session.

@@ -55,11 +55,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -78,6 +80,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,9 +88,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import com.hermes.android.ui.viewmodel.InteractiveKind
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -139,6 +144,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val notification by viewModel.notification.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -172,6 +178,8 @@ fun ChatScreen(
                             msg.argsText?.lowercase()?.contains(query) == true ||
                             msg.resultText?.lowercase()?.contains(query) == true)
                     is ChatMessage.Status -> msg.text.lowercase().contains(query)
+                    is ChatMessage.InteractiveRequest -> msg.question.lowercase().contains(query)
+                    is ChatMessage.SubagentCard -> msg.text.lowercase().contains(query)
                 }
             }
         }
@@ -390,6 +398,26 @@ fun ChatScreen(
                 if (uiState.connectionState == ChatConnectionState.Connecting && uiState.messages.isEmpty()) {
                     ShimmerSkeleton()
                 } else {
+                    // Notification banner
+                    notification?.let { notif ->
+                        Surface(
+                            color = when (notif.level) {
+                                "error" -> MaterialTheme.colorScheme.errorContainer
+                                "warn" -> MaterialTheme.colorScheme.tertiaryContainer
+                                "success" -> MaterialTheme.colorScheme.primaryContainer
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text(
+                                text = notif.text ?: "",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+
                     // Message list
                     val copiedToast = t("Copied", "کپی شد")
                     val codeCopiedToast = t("Code copied", "کد کپی شد")
@@ -421,6 +449,9 @@ fun ChatScreen(
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onRetry = { viewModel.retryLastMessage() },
+                                onRespondToClarify = viewModel::respondToClarify,
+                                onRespondToSudo = viewModel::respondToSudo,
+                                onRespondToSecret = viewModel::respondToSecret,
                             )
                         }
                     }
@@ -798,6 +829,9 @@ private fun MessageBubble(
     onCopyMessage: (String) -> Unit = {},
     onCopyCode: (String) -> Unit = {},
     onRetry: () -> Unit = {},
+    onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
+    onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
+    onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -947,12 +981,7 @@ private fun MessageBubble(
                                     message.text
                                 }
                                 SelectionContainer {
-                                    dev.jeziellago.compose.markdowntext.MarkdownText(
-                                        markdown = displayMd,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                    )
+                                    HermesMarkdown(markdown = displayMd)
                                 }
                                 if (isLongResponse) {
                                     TextButton(
@@ -1115,6 +1144,129 @@ private fun MessageBubble(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
             )
+        }
+
+        is ChatMessage.InteractiveRequest -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "❓ ${message.question}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (message.answered) {
+                        Text(
+                            text = t("Answered", "پاسخ داده شد"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    } else when (message.kind) {
+                        InteractiveKind.CLARIFY -> if (message.choices != null) {
+                            message.choices.forEach { choice ->
+                                OutlinedButton(
+                                    onClick = { onRespondToClarify(message.requestId, choice) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                ) { Text(choice) }
+                            }
+                        } else {
+                            var answer by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = answer,
+                                onValueChange = { answer = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(t("Type answer...", "جواب بنویسید...")) },
+                            )
+                            Button(
+                                onClick = { onRespondToClarify(message.requestId, answer) },
+                                enabled = answer.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                        InteractiveKind.SUDO -> {
+                            var password by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(t("Enter sudo password...", "رمز sudo بنویسید...")) },
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                            Button(
+                                onClick = { onRespondToSudo(message.requestId, password) },
+                                enabled = password.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                        InteractiveKind.SECRET -> {
+                            var secretValue by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = secretValue,
+                                onValueChange = { secretValue = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(message.question) },
+                                placeholder = { Text(t("Enter value...", "مقدار را وارد کنید...")) },
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                            Button(
+                                onClick = { onRespondToSecret(message.requestId, secretValue) },
+                                enabled = secretValue.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                    }
+                }
+            }
+        }
+
+        is ChatMessage.SubagentCard -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!message.isComplete) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("✓", color = MaterialTheme.colorScheme.primary)
+                    }
+                    Column {
+                        Text(
+                            text = "🤖 Sub-agent",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(
+                            text = message.text.take(200),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
         }
     }
 }
