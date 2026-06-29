@@ -206,9 +206,14 @@ class ChatViewModel @Inject constructor(
             if (messages.isNotEmpty()) {
                 _uiState.value = _uiState.value.copy(messages = messages)
                 Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
+            } else {
+                Timber.w("[Chat] Session history returned empty for $sessionId")
             }
         } catch (e: Exception) {
-            Timber.w(e, "[Chat] Failed to load session history (non-fatal)")
+            Timber.w(e, "[Chat] Failed to load session history")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Could not load session history: ${e.message}"
+            )
         }
     }
 
