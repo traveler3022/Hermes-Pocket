@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hermes.android.ui.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
 
@@ -181,6 +182,24 @@ private fun GeneralTab(
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.mode == mode,
                                 onClick = { themeModeState.setMode(mode) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = t("Color Theme", "رنگ تم"),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ColorTheme.entries.forEach { theme ->
+                            val label = t(theme.displayEn, theme.displayFa)
+                            androidx.compose.material3.FilterChip(
+                                selected = themeModeState.colorTheme == theme,
+                                onClick = { themeModeState.setColorTheme(theme) },
                                 label = { Text(label) },
                             )
                         }
