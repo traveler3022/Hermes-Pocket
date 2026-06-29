@@ -1312,16 +1312,18 @@ private fun highlightText(text: String, query: String): AnnotatedString {
 @Composable
 private fun thinkingDotStr(): String {
     val transition = rememberInfiniteTransition(label = "thinking_dots")
-    val rawStep by transition.animateInt(
-        initialValue = 0,
-        targetValue = 4,
+    // InfiniteTransition exposes animateFloat (not animateInt); animate 0f..4f
+    // and floor to an int step.
+    val rawStep by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 900, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "dots",
     )
-    return when (rawStep % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
+    return when (rawStep.toInt() % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
 }
 
 @Composable
@@ -1333,6 +1335,8 @@ private fun InputBar(
     onStop: () -> Unit,
 ) {
     val context = LocalContext.current
+    // t() is @Composable — hoist out of the onClick lambda below.
+    val comingSoonToast = t("Coming soon", "به زودی")
     // Feature 5.2: slash command suggestions
     val slashCommands = listOf("/help", "/clear", "/config", "/model", "/session")
     val showSuggestions = text.startsWith("/") && !isSending
@@ -1372,7 +1376,7 @@ private fun InputBar(
             // Feature 5.1: attachment button
             IconButton(
                 onClick = {
-                    Toast.makeText(context, t("Coming soon", "به زودی"), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, comingSoonToast, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(48.dp),
             ) {
