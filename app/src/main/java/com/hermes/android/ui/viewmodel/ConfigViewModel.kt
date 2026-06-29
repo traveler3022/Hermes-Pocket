@@ -327,26 +327,34 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    // config.set RPC doesn't accept dotted keys (model.provider, model.default) — write config.yaml directly
+    // config.set RPC doesn't accept dotted keys (model.provider, model.default) — write config.yaml directly.
+    // Data is passed via Base64 JSON to avoid shell/Python injection for any provider or model name.
     private suspend fun writeModelConfig(provider: String, model: String, baseUrl: String? = null) {
-        val safeProvider = provider.escapeJson()
-        val safeModel = model.escapeJson()
-        val baseUrlLine = if (baseUrl != null) "cfg.setdefault('model', {})['base_url'] = '${baseUrl.escapeJson()}'" else ""
+        val json = buildString {
+            append("{\"provider\":\"").append(provider.escapeJson()).append("\"")
+            append(",\"model\":\"").append(model.escapeJson()).append("\"")
+            if (baseUrl != null) append(",\"base_url\":\"").append(baseUrl.escapeJson()).append("\"")
+            append("}")
+        }
+        val payload = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
         val command = """
             python3 - <<'PY'
+            import base64, json
             from pathlib import Path
             import yaml
+            data = json.loads(base64.b64decode('$payload').decode('utf-8'))
             path = Path.home() / '.hermes' / 'config.yaml'
             if path.exists():
                 cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 cfg = {}
-            cfg.setdefault('model', {})['provider'] = '$safeProvider'
-            cfg.setdefault('model', {})['default'] = '$safeModel'
-            $baseUrlLine
+            cfg.setdefault('model', {})['provider'] = data['provider']
+            cfg.setdefault('model', {})['default'] = data['model']
+            if 'base_url' in data:
+                cfg.setdefault('model', {})['base_url'] = data['base_url']
             path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
-            print('model config updated: provider=$safeProvider model=$safeModel')
+            print('model config updated: provider=' + data['provider'] + ' model=' + data['model'])
             PY
         """.trimIndent()
         gatewayClient.request(
