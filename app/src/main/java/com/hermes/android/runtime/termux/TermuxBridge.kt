@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
@@ -82,12 +81,6 @@ class TermuxBridge @Inject constructor(
 
     // Single SharedPreferences instance — avoids opening 4 separate handles
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    // Serializes startGateway() so two concurrent callers (e.g. the foreground
-    // service and a user tap) can't both launch `hermes dashboard` and fight
-    // over port 9119. Without this, the port-free-then-start sequence below
-    // could interleave and kill each other's just-launched process.
-    private val gatewayStartMutex = Mutex()
 
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotDetected)
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
@@ -267,9 +260,6 @@ class TermuxBridge @Inject constructor(
     }
 
     override suspend fun startGateway(): GatewayHandle {
-        // Serialize: never let two starts race over the port.
-        gatewayStartMutex.lock()
-        try {
         val currentState = _state.value
         val info = (currentState as? RuntimeState.Installed)?.info
             ?: (currentState as? RuntimeState.Running)?.info
@@ -339,31 +329,6 @@ class TermuxBridge @Inject constructor(
                 echo "Hermes command not found. Install likely failed before linking hermes. Expected: ${'$'}HERMES_CMD"
                 exit 1
             fi
-            # ── Free the port before starting (stale-gateway fix) ──
-            # A previous `hermes dashboard` (e.g. left over from before an app
-            # reinstall, holding an OLD session token) may still own the port.
-            # If we just start a second one, it hits "address already in use",
-            # exits immediately, and we end up in a restart loop. So: kill any
-            # old instance, then ACTIVELY WAIT until the port is bindable again
-            # before launching the new one. The new token then wins cleanly.
-            echo "Freeing port $DEFAULT_GATEWAY_PORT before start…"
-            "${'$'}HERMES_CMD" dashboard --stop >/dev/null 2>&1 || true
-            pkill -f "hermes.*dashboard" 2>/dev/null || true
-            pkill -f "uvicorn" 2>/dev/null || true
-            # Wait up to ~10s for the port to actually become free. python3 is
-            # always present (Hermes runs on it), so we probe with a real bind
-            # instead of relying on lsof/ss/netstat being installed.
-            port_free=0
-            for _ in $(seq 1 20); do
-                if python3 -c "import socket; s=socket.socket(); s.bind(('$DEFAULT_GATEWAY_HOST', $DEFAULT_GATEWAY_PORT)); s.close()" 2>/dev/null; then
-                    port_free=1
-                    break
-                fi
-                sleep 0.5
-            done
-            if [ "${'$'}port_free" != "1" ]; then
-                echo "Warning: port $DEFAULT_GATEWAY_PORT still busy after wait — starting anyway"
-            fi
             # hermes dashboard execution via flexible path
             nohup "${'$'}HERMES_CMD" dashboard \
                 --host $DEFAULT_GATEWAY_HOST \
@@ -429,9 +394,6 @@ class TermuxBridge @Inject constructor(
         cacheInstallState(runningInfo)
         _state.value = RuntimeState.Running(runningInfo, handle)
         return handle
-        } finally {
-            gatewayStartMutex.unlock()
-        }
     }
 
     override suspend fun stopGateway(): StopResult {
