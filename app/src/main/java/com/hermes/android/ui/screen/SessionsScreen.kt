@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,6 +70,7 @@ import java.util.Locale
 @Composable
 fun SessionsScreen(
     onNavigateBack: () -> Unit = {},
+    onResumeSession: (String) -> Unit = {},
     viewModel: SessionsViewModel = hiltViewModel(),
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -207,6 +209,9 @@ fun SessionsScreen(
                 inHistoryDetail -> HistoryDetailView(
                     messages = uiState.selectedSessionHistory,
                     isLoading = uiState.isLoadingHistory,
+                    onResumeSession = {
+                        uiState.selectedSessionId?.let { onResumeSession(it) }
+                    },
                 )
                 selectedTab == 0 -> SessionsTab(uiState, viewModel)
                 else -> MemoryTab(memoryState)
@@ -441,41 +446,54 @@ private fun SessionCard(
 private fun HistoryDetailView(
     messages: List<HistoryMessage>,
     isLoading: Boolean,
+    onResumeSession: () -> Unit,
 ) {
     if (isLoading) {
         LoadingIndicator(t("Loading messages...", "در حال بارگذاری پیام‌ها..."))
         return
     }
-    if (messages.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                t("No messages found", "پیامی پیدا نشد"),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                t("This session may be empty or inaccessible", "این گفتگو خالی یا در دسترس نیست"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        return
-    }
 
-    val listState = rememberLazyListState()
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(messages, key = { it.role + it.content.take(40) + messages.indexOf(it) }) { msg ->
-            HistoryMessageBubble(msg)
+    Column(modifier = Modifier.fillMaxSize()) {
+        // "Continue chat" button always visible at top
+        Button(
+            onClick = onResumeSession,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Text(t("Continue this chat", "ادامه این گفتگو"))
+        }
+
+        if (messages.isEmpty()) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    t("No messages found", "پیامی پیدا نشد"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    t("This session may be empty or inaccessible", "این گفتگو خالی یا در دسترس نیست"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        } else {
+            val listState = rememberLazyListState()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(messages, key = { it.role + it.content.take(40) + messages.indexOf(it) }) { msg ->
+                    HistoryMessageBubble(msg)
+                }
+            }
         }
     }
 }
