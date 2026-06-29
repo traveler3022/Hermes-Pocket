@@ -533,11 +533,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ThinkingDelta -> {
+                val targetId = activeAssistantMessageId ?: return
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                        ) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
                             msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
                         } else msg
                     }
@@ -681,8 +680,10 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.SubagentEvent -> {
                 when (event.subagentType) {
                     "spawn_requested", "start" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
+                            ?: "subagent-${UUID.randomUUID()}"
                         val msg = ChatMessage.SubagentCard(
-                            id = "subagent-${UUID.randomUUID()}",
+                            id = subagentId,
                             timestamp = System.currentTimeMillis(),
                             subagentType = event.subagentType,
                             text = event.payload["description"]?.jsonPrimitive?.content ?: "Sub-agent",
@@ -692,20 +693,24 @@ class ChatViewModel @Inject constructor(
                         )
                     }
                     "complete" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
                         val text = event.payload["text"]?.jsonPrimitive?.content ?: ""
                         _uiState.value = _uiState.value.copy(
                             messages = _uiState.value.messages.map { msg ->
-                                if (msg is ChatMessage.SubagentCard && !msg.isComplete) {
+                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)) {
                                     msg.copy(isComplete = true, text = text.ifEmpty { msg.text })
                                 } else msg
                             }
                         )
                     }
                     "thinking", "progress" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
                         val text = event.payload["text"]?.jsonPrimitive?.content ?: return
                         _uiState.value = _uiState.value.copy(
                             messages = _uiState.value.messages.map { msg ->
-                                if (msg is ChatMessage.SubagentCard && !msg.isComplete) {
+                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)) {
                                     msg.copy(text = text)
                                 } else msg
                             }
@@ -729,11 +734,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ReasoningDelta -> {
+                val targetId = activeAssistantMessageId ?: return
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                        ) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
                             msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
                         } else msg
                     }
@@ -862,16 +866,17 @@ class ChatViewModel @Inject constructor(
     fun respondToClarify(requestId: String, answer: String) {
         viewModelScope.launch {
             try {
-                markAnswered(requestId)
                 gatewayClient.request(
-                    method = "clarify.respond",
+                    method = GatewayMethods.CLARIFY_RESPOND,
                     params = buildJsonObject {
                         put("request_id", requestId)
                         put("answer", answer)
                     },
                 )
+                markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to clarify")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }
     }
@@ -879,16 +884,17 @@ class ChatViewModel @Inject constructor(
     fun respondToSudo(requestId: String, password: String) {
         viewModelScope.launch {
             try {
-                markAnswered(requestId)
                 gatewayClient.request(
-                    method = "sudo.respond",
+                    method = GatewayMethods.SUDO_RESPOND,
                     params = buildJsonObject {
                         put("request_id", requestId)
                         put("password", password)
                     },
                 )
+                markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to sudo")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }
     }
@@ -896,16 +902,17 @@ class ChatViewModel @Inject constructor(
     fun respondToSecret(requestId: String, value: String) {
         viewModelScope.launch {
             try {
-                markAnswered(requestId)
                 gatewayClient.request(
-                    method = "secret.respond",
+                    method = GatewayMethods.SECRET_RESPOND,
                     params = buildJsonObject {
                         put("request_id", requestId)
                         put("value", value)
                     },
                 )
+                markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to secret")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
             }
         }
     }
