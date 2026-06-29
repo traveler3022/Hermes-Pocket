@@ -229,5 +229,31 @@ Independent project · not affiliated with or endorsed by Nous Research. "Hermes
 �
 
 
+---
+
+## 🔐 یه چند تا نکته امنیتی (جدی بگیر)
+
+### کلید API
+هیچوقت کلیدت رو تو چت نفرست. نه کامل، نه ماسکشده، نه اولش. اگه یه ربات یا نفر ببینه، حسابت تمومه. کلید فقط باید تو فایل `.env` یا `auth.json` باشه، نه جای دیگه.
+
+### خروجی اسکریپتها
+وقتی داری با API کار میکنی، اسکریپتت فقط بگه "شد" یا "نشد". هیچوقت کلید یا توکن رو پرینت نکن. حتی `len(key)` یا ۴ حرف اولش هم میتونه لو بره.
+
+### فایلهای حساس رو نیار تو چت
+فایلهایی مثل `auth.json`، `.env`، `config.yaml`، یا هر فایلی که توش کلید یا رمز هست رو اینجا نفرست. نه محتواش، نه اسکرینشاتش.
+
+### خروجی Terminal میره به provider
+هر چیزی که Hermes تو terminal اجرا کنه و خروجی بده، ممکنه بره به سرور مدل. پس اگه توش کلید باشه، provider میبینه. برای کار حساس، خروجی رو redirect کن به `/dev/null`.
+
+### کلید لو رفت؟
+فوراً عوضش. نگو "بعداً". Hermes از چند کلید پشتیبانی میکنه — میتونی جدید اضافه کنی و قبلی رو حذف کنی.
+
 ⬡ Built for Android · Powered by Hermes Agent ⬡
-�
+
+---
+
+## References
+
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+- [Termux on F-Droid](https://f-droid.org/en/packages/com.termux/)
+- [Xiaomi MiMo API](https://platform.xiaomimimo.com)
