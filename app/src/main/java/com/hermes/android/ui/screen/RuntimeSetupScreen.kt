@@ -220,7 +220,7 @@ fun RuntimeSetupScreen(
             ) {
                 Icon(Icons.Default.Description, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Run Hermes Doctor")
+                Text("Run diagnostics (hermes doctor)")
             }
 
             AnimatedVisibility(visible = logs != null) {

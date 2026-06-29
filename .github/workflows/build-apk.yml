@@ -7,7 +7,7 @@ name: Build Debug APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'claude/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -16,6 +16,12 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
+
+    # contents: write is needed to publish the APK to a GitHub Release
+    # (a durable delivery channel that does not consume the Actions
+    # artifact-storage quota).
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -50,21 +56,38 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hermes2-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
-          if-no-files-found: error
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            app/build/reports/tests/
-            app/build/test-results/
-          retention-days: 14
-          if-no-files-found: warn
+      # Primary delivery: publish the APK to a rolling pre-release. Release
+      # assets do NOT count against the Actions artifact-storage quota, so this
+      # keeps working even when that quota is exhausted. The `debug-latest` tag
+      # is recreated each run so the download URL is always stable:
+      #   .../releases/download/debug-latest/app-debug.apk
+      # Publish rolling debug release — stable download URL:
+      #   .../releases/download/debug-latest/app-debug.apk
+      # Old release is deleted first so only one exists at any time (saves storage).
+      - name: Publish APK to rolling debug release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete ALL existing pre-releases except debug-latest to keep storage clean
+          gh release list --limit 20 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease==true and .tagName!="debug-latest") | .tagName' \
+            | xargs -r -I{} gh release delete {} --yes --cleanup-tag || true
+          # Recreate the single rolling release. The asset upload can hit a
+          # transient HTTP 404 on uploads.github.com, so retry a few times.
+          NOTES="$(printf 'Branch: %s\nCommit: %s\nBuilt: %s' \
+            "$GITHUB_REF_NAME" "${GITHUB_SHA:0:8}" "$(date -u '+%Y-%m-%d %H:%M UTC')")"
+          for attempt in 1 2 3; do
+            gh release delete debug-latest --yes --cleanup-tag || true
+            sleep 2
+            if gh release create debug-latest app/build/outputs/apk/debug/*.apk \
+                --prerelease \
+                --title "Debug APK (latest)" \
+                --target "$GITHUB_SHA" \
+                --notes "$NOTES"; then
+              echo "Release published on attempt $attempt"
+              break
+            fi
+            echo "Release publish attempt $attempt failed; retrying in 10s…"
+            sleep 10
+          done

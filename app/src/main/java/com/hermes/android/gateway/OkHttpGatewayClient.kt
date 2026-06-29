@@ -71,6 +71,13 @@ class OkHttpGatewayClient @Inject constructor(
     private var reconnectJob: Job? = null
     private var connectJob: Job? = null
 
+    // The single in-flight connect attempt. Concurrent/looping callers join
+    // this instead of each opening their own WebSocket — otherwise every extra
+    // open orphans the previous socket, which the gateway logs as a dead
+    // connection (messages=0, reason=client_disconnect code=1006).
+    @Volatile
+    private var pendingConnect: kotlinx.coroutines.CompletableDeferred<ConnectionState>? = null
+
     private val nextRequestId = AtomicLong(1)
     private val pendingRequests = ConcurrentHashMap<Long, kotlinx.coroutines.CompletableDeferred<JsonElement>>()
 
@@ -84,6 +91,16 @@ class OkHttpGatewayClient @Inject constructor(
         if (_connectionState.value is ConnectionState.Connected) {
             return _connectionState.value
         }
+        // A connect attempt is already in flight — join it instead of opening a
+        // second WebSocket. Without this, callers that race (ChatViewModel, the
+        // foreground service) or poll (TermuxBridge.waitForGatewayReady, which
+        // calls connect() every 500ms) each open a fresh socket and orphan the
+        // previous one, producing the messages=0 / code=1006 ghost connections
+        // seen in the gateway log.
+        pendingConnect?.let { existing ->
+            if (!existing.isCompleted) return existing.await()
+        }
+
         // Cancel any pending reconnect
         reconnectJob?.cancel()
         connectJob?.cancel()
@@ -92,11 +109,16 @@ class OkHttpGatewayClient @Inject constructor(
         _connectionState.value = ConnectionState.Connecting
 
         val connectDeferred = kotlinx.coroutines.CompletableDeferred<ConnectionState>()
+        pendingConnect = connectDeferred
         connectJob = scope.launch {
             doConnect(url, connectDeferred, connectTimeoutMs)
         }
 
-        return connectDeferred.await()
+        return try {
+            connectDeferred.await()
+        } finally {
+            if (pendingConnect === connectDeferred) pendingConnect = null
+        }
     }
 
     private suspend fun doConnect(
@@ -105,6 +127,13 @@ class OkHttpGatewayClient @Inject constructor(
         timeoutMs: Long,
     ) {
         try {
+            // Always close any existing socket before opening a new one. Both
+            // the initial connect() and the reconnect() loop funnel through
+            // here, so this is the single place that guarantees we never leave
+            // an orphaned WebSocket alive on the gateway.
+            webSocket?.close(1000, "reconnecting")
+            webSocket = null
+
             val request = Request.Builder().url(url).build()
             val listener = GatewayWebSocketListener { state ->
                 when (state) {
