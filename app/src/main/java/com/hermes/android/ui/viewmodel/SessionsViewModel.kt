@@ -98,7 +98,7 @@ class SessionsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingHistory = true)
             try {
                 val params = buildJsonObject {
-                    put("session_id", sessionId)
+                    put("id", sessionId)
                 }
                 val result = gatewayClient.request(
                     GatewayMethods.SESSION_HISTORY,
@@ -238,7 +238,7 @@ class SessionsViewModel @Inject constructor(
                 val messages = if (_uiState.value.selectedSessionId == sessionId) {
                     _uiState.value.selectedSessionHistory
                 } else {
-                    val params = buildJsonObject { put("session_id", sessionId) }
+                    val params = buildJsonObject { put("id", sessionId) }
                     val result = gatewayClient.request(
                         GatewayMethods.SESSION_HISTORY,
                         params.toMap(),
