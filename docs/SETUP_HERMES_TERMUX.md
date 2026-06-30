@@ -315,7 +315,7 @@ Select Search Provider:
 
 ---
 
-**→ بعد: [نصب APK و اتصال Gateway](GATEWAY_SETUP.md)**
+**→ بعد: [نصب APK و اتصال Gateway](GATEWAY_SETUP.md)** · **[راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)**
 
 **← بازگشت: [نصب هرمس](INSTALL_HERMES_TERMUX.md)** · **[README اصلی](../README.md)**
 </div>

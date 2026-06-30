@@ -64,4 +64,4 @@ hermes dashboard --stop
 
 ---
 
-**← بازگشت: [README اصلی](../README.md)**
+**← بازگشت: [README اصلی](../README.md)** · **[راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)**
