@@ -95,6 +95,12 @@ Hermes asks before running commands it considers dangerous. Prompts appear as An
 
 ---
 
+## Setup
+
+Full setup guide: **[Running Hermes2 on Android + Termux](docs/RUNNING_ON_ANDROID_TERMUX.md)** — covers install, config, first connection, and debugging.
+
+---
+
 ## Controlling Costs
 
 - 💳 **Set a spending limit** in your provider's dashboard — your single best protection.
