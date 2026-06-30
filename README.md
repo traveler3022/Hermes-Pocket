@@ -59,9 +59,15 @@
 
 > ⚠️ **Do not root your phone to run this.** Rooting removes the sandbox.
 
-**Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
+> 🔒 **یک نکته:** پیامهایی که توی چت مینویسی به ارائهدهندهی هوش مصنوعی که انتخاب کردی میره (مثلاً گوگل). از فرستادن رمز عبور، اطلاعات بانکی یا هر چیز حساس دیگه خودداری کن. کلید API تو فقط روی گوشیت ذخیره میشه و به هیچ سروری فرستاده نمیشه.
 
-> 🔒 **A note from the developer:** Your API key is stored locally on your device and is never sent to us. However, your messages are sent to the AI provider you choose — this is how all AI APIs work. Be mindful of what you share, and never paste API keys, passwords, or sensitive data into public places like GitHub issues or screenshots.
+```
+تو ← اپ Hermes2 ← ارائهدهنده هوش مصنوعی (مثلاً گوگل)
+         │
+         └─ کلید API فقط روی گوشیت میمونه ✅
+```
+
+**Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
 
 ---
 
