@@ -45,7 +45,6 @@ import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hermes.android.ui.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
@@ -66,7 +65,6 @@ fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
-    onNavigateToPlugins: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
@@ -117,7 +115,6 @@ fun ConfigScreen(
                     viewModel = viewModel,
                     onNavigateToPlatforms = onNavigateToPlatforms,
                     onNavigateToSkills = onNavigateToSkills,
-                    onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToRuntime = onNavigateToRuntime,
                     themeModeState = themeModeState,
@@ -136,7 +133,6 @@ private fun GeneralTab(
     viewModel: ConfigViewModel,
     onNavigateToPlatforms: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
-    onNavigateToPlugins: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
@@ -278,19 +274,31 @@ private fun GeneralTab(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-                state.fallbackSummary?.let { fallback ->
-                    Text(
-                        text = "Fallback: $fallback",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
             }
         }
 
-        QuickBackendSetup(viewModel)
-
+        // Provider configuration placeholder
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = t("Provider 1  ·  Provider 2", "پرووایدر ۱  ·  پرووایدر ۲"),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = t("Coming Soon", "به زودی"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
 
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
@@ -314,14 +322,6 @@ private fun GeneralTab(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(t("Skills Browser", "مهارت‌ها"))
-        }
-
-        // Link to Plugins
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlugins,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Plugins", "پلاگین‌ها"))
         }
 
         // Reload config without restart (reload.mcp / reload.env)
@@ -368,184 +368,6 @@ private fun GeneralTab(
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(12.dp),
             )
-        }
-    }
-}
-
-@Composable
-private fun QuickBackendSetup(viewModel: ConfigViewModel) {
-    var mimoKey by remember { mutableStateOf("") }
-    var mimoBaseUrl by remember { mutableStateOf("https://api.xiaomimimo.com/v1") }
-    var mimoModel by remember { mutableStateOf("mimo-v2.5-free") }
-    var geminiKey by remember { mutableStateOf("") }
-    var geminiModel by remember { mutableStateOf("gemini-2.5-flash") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = t("Add / switch API backend", "افزودن / تغییر بک‌اند API"),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            OutlinedTextField(
-                value = mimoKey,
-                onValueChange = { mimoKey = it },
-                label = { Text(t("MiMo API key", "کلید MiMo")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-            )
-            OutlinedTextField(
-                value = mimoBaseUrl,
-                onValueChange = { mimoBaseUrl = it },
-                label = { Text(t("MiMo base URL", "آدرس API میمو")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = mimoModel,
-                onValueChange = { mimoModel = it },
-                label = { Text(t("MiMo model", "مدل میمو")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            androidx.compose.material3.Button(
-                onClick = { viewModel.configureXiaomiBackend(mimoKey, mimoBaseUrl, mimoModel) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Save MiMo backend", "ذخیره بک‌اند MiMo"))
-            }
-
-            androidx.compose.material3.HorizontalDivider()
-
-            OutlinedTextField(
-                value = geminiKey,
-                onValueChange = { geminiKey = it },
-                label = { Text(t("Gemini API key", "کلید Gemini")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-            )
-            OutlinedTextField(
-                value = geminiModel,
-                onValueChange = { geminiModel = it },
-                label = { Text(t("Gemini model", "مدل Gemini")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.configureGeminiBackend(geminiKey, geminiModel) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Save Gemini backend", "ذخیره بک‌اند Gemini"))
-            }
-
-            androidx.compose.material3.HorizontalDivider()
-            Text(
-                text = t("Automatic fallback", "جایگزین خودکار"),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = t(
-                    "If the active provider runs out of quota or fails, Hermes will try the fallback provider without losing the conversation.",
-                    "اگر توکن یا سهمیه مدل اصلی تمام شود یا خطا بدهد، هرمس بدون قطع گفتگو سراغ پرووایدر جایگزین می‌رود.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            androidx.compose.material3.Button(
-                onClick = { viewModel.configureFallbackProvider("gemini", geminiModel) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Use Gemini as fallback", "Gemini جایگزین باشد"))
-            }
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.configureFallbackProvider("xiaomi", mimoModel, mimoBaseUrl) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Use MiMo as fallback", "MiMo جایگزین باشد"))
-            }
-            TextButton(
-                onClick = { viewModel.clearFallbackProviders() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Clear fallbacks", "پاک کردن جایگزین‌ها"))
-            }
-
-            androidx.compose.material3.HorizontalDivider()
-
-            CustomProviderSetup(viewModel)
-        }
-    }
-}
-
-@Composable
-private fun CustomProviderSetup(viewModel: ConfigViewModel) {
-    var provider by remember { mutableStateOf("") }
-    var model by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf("") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = t("Custom Provider", "پرووایدر دلخواه"),
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            text = t(
-                "Set any OpenAI-compatible provider as the active backend.",
-                "هر پرووایدر سازگار با OpenAI رو به عنوان بک‌اند فعال تنظیم کن.",
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedTextField(
-            value = provider,
-            onValueChange = { provider = it },
-            label = { Text(t("Provider slug", "نام پرووایدر")) },
-            placeholder = { Text("openai, deepseek, groq, ...") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = model,
-            onValueChange = { model = it },
-            label = { Text(t("Model ID", "شناسه مدل")) },
-            placeholder = { Text("gpt-4o, deepseek-chat, ...") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = { apiKey = it },
-            label = { Text(t("API Key (optional if already saved)", "کلید API (اختیاری)")) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-        )
-        OutlinedTextField(
-            value = baseUrl,
-            onValueChange = { baseUrl = it },
-            label = { Text(t("Base URL (optional)", "آدرس API (اختیاری)")) },
-            placeholder = { Text("https://api.example.com/v1") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        androidx.compose.material3.Button(
-            onClick = {
-                viewModel.configureCustomProvider(
-                    provider.trim(), model.trim(), apiKey.trim(), baseUrl.trim()
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = provider.isNotBlank() && model.isNotBlank(),
-        ) {
-            Text(t("Save & Activate", "ذخیره و فعال‌سازی"))
         }
     }
 }
@@ -711,26 +533,11 @@ private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel, isActive: 
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             if (isActive) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "Active backend",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    // model.disconnect — wipe the saved key for this provider
-                    androidx.compose.material3.TextButton(
-                        onClick = { viewModel.disconnectProvider(model.provider) },
-                    ) {
-                        Text(
-                            t("Disconnect", "قطع اتصال"),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
+                Text(
+                    text = "Active backend",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             } else {
                 androidx.compose.material3.TextButton(
                     onClick = { viewModel.selectModel(model) },
