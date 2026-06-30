@@ -140,15 +140,34 @@ python -m pip install -e '.[termux]' -c constraints-termux.txt
 
 > ⏱️ این مرحله **۵ تا ۱۵ دقیقه** طول می‌کشد. صفحه را روشن نگه دار.
 
-اگر فقط هسته اصلی ایجنت را میخواهی (بدون ابزارهای اضافی):
+#### ۵. نصب psutil برای اندروید
+
+<div dir="rtl">
+
+psutil روی اندروید مستقیم نصب نمیشود. اسکریپت shim لازم است:
 
 </div>
 
 ```bash
-python -m pip install -e '.' -c constraints-termux.txt
+python scripts/install_psutil_android.py --pip "python -m pip"
 ```
 
-#### ۵. قراردادن hermes در PATH
+#### ۶. نصب وب‌سرور dashboard (برای اتصال اپ)
+
+<div dir="rtl">
+
+اپ Hermes2 از طریق WebSocket به dashboard وصل میشود. این extra لازم است:
+
+</div>
+
+```bash
+python -m pip install -e '.[web]' -c constraints-termux.txt
+```
+
+> [!NOTE]
+> مستندات رسمی Termux این دو مرحله را ندارد چون فقط برای CLI است. ولی برای اتصال اپ Hermes2 **لازم هستند**.
+
+#### ۷. قراردادن hermes در PATH
 
 ```bash
 ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
