@@ -373,21 +373,52 @@ hermes chat -q "سلام، تست اتصال مدل"
 
 ## 9. Start from the Android app
 
+<div dir="rtl">
+
+این مراحل را فقط **یکبار**، برای اولین اتصال انجام بده. بعد از آن، هر بار که اپ را باز کنی **خودکار وصل میشود**.
+
+</div>
+
+### 9a. Release Termux ports
+
 Stop any manually running dashboard first:
 
 ```bash
 hermes dashboard --stop
 ```
 
-Open Hermes2 app:
+Then **leave Termux and force-stop it**:
 
-```text
-Termux & Agent Connection → Start Agent Gateway
-```
+**Android Settings → Apps → Termux → Force stop**
+
+<div dir="rtl">
+
+> **چرا force-stop؟** موقع نصب، Termux پورتهایی را اشغال میکند و رها نمیکند. با force-stop، تمام پورتهای فعال روی Termux غیرفعال میشوند تا اپ بتواند یک اتصال تمیز بگیرد. این فقط **دفعهی اول** لازم است.
+
+</div>
+
+### 9b. Connect from the app
+
+1. Open **Hermes2** app
+2. Tap **`Open runtime host app`** → Termux opens
+3. **Come back to Hermes2**
+4. Tap **`Start Agent Gateway`**
+5. **Wait up to 30 seconds** — status turns to **✓ Connected**
 
 Why start from the app?
 
 The app generates and injects its own `HERMES_DASHBOARD_SESSION_TOKEN`. If you manually start `hermes dashboard` with a different token, the app WebSocket authentication will fail.
+
+> [!TIP]
+> If it doesn't connect within 30 s, **repeat steps 9a and 9b**. The first handshake occasionally needs a second pass — after that it stays automatic.
+
+### 9c. From second time onwards
+
+<div dir="rtl">
+
+فقط اپ را باز کن. خودش وصل میشود. نه Termux، نه force-stop، نه هیچ کار اضافی.
+
+</div>
 
 After gateway starts, go to:
 
