@@ -1,20 +1,16 @@
-<div align="center">
-
-# ⬡ Hermes2
-
-### همراه نیتیو اندروید برای **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**
-
-![Material 3](https://img.shields.io/badge/Material_3-6750A4?style=for-the-badge&logo=materialdesign&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
-![Jetpack Compose](https://img.shields.io/badge/Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
-
-[![Build](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml)
-[![Download APK](https://img.shields.io/badge/⬇_Download-APK-6750A4?style=flat-square&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes2/releases/tag/debug-latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square)](LICENSE)
-
-[English 🇬🇧](README.md) · **فارسی**
-
-</div>
+<p align="center">
+  <img src="https://img.shields.io/badge/⬡-Hermes2-6750A4?style=for-the-badge&labelColor=1a1a2e&color=6750A4" height="48px"/>
+  <br><br>
+  <b>همراه نیتیو اندروید برای Hermes Agent</b>
+  <br>
+  <sub>یک اتاق فرمان متمرکز برای ایجنت هوش مصنوعی — کاملاً روی گوشی.</sub>
+  <br><br>
+  <a href="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml"><img src="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/traveler3022/Hermes2/releases/tag/debug-latest"><img src="https://img.shields.io/badge/⬇_Download-APK-6750A4?style=flat-square&logo=android&logoColor=white" alt="Download APK"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square" alt="License"></a>
+  <br><br>
+  <a href="README.md">English 🇬🇧</a> · <a href="README.fa.md">فارسی</a>
+</p>
 
 <div dir="rtl">
 
@@ -22,96 +18,66 @@
 
 ## این چیه؟
 
-**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** یک دستیار هوش مصنوعی متنباز و قدرتمند از [Nous Research](https://nousresearch.com) است. یک ایجنت کاملاً مستقل، با احترام به حریم خصوصی، که به دهها ابزار و سرویس بیرونی وصل میشود و به نیابت از تو کار انجام میدهد.
+**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** یک ایجنت هوش مصنوعی متنباز از [Nous Research](https://nousresearch.com) است که محلی روی دستگاه اجرا میشود. کد مینویسد، دستور اجرا میکند، فایل مدیریت میکند، وب مرور میکند، کار را به زیرایجنتها واگذار میکند و به دهها ابزار وصل میشود.
 
-برخلاف چتباتهای ساده، Hermes واقعاً *کار انجام میدهد*:
+**Hermes2** آن ایجنت را به اندروید میآورد — یک اپ نیتیو Material 3. اپ جلوی صحنه است — Hermes داخل Termux مغز. تمام ارتباطات روی گوشی میماند.
 
-- 🧠 **کدنویسی** — نوشتن، ویرایش، دیباگ، lint و اجرای کد در هر زبانی
-- 📁 **مدیریت فایل** — خواندن، نوشتن، جستوجو، تبدیل اسناد (PDF، DOCX، تصویر، صدا، ویدیو)
-- 🌐 **مرور وب** — جستوجو (Google، Brave، Perplexity)، دریافت صفحه، کار با اپهای وب
-- 📅 **ابزارهای بهرهوری** — Gmail، Google Calendar، Slack، Discord، Telegram، Notion، GitHub، Jira، Linear و بیشتر
-- 🖼️ **تولید و تحلیل رسانه** — تولید تصویر (DALL·E، Stable Diffusion)، OCR، تبدیل گفتار به متن، TTS
-- 🧩 **قابل گسترش** — مهارت سفارشی، پلاگین، سرور MCP، زمانبند cron، حافظهی پایدار با جستوجوی برداری
-- 🤖 **واگذاری به زیرایجنت** — اسپن ایجنتهای تخصصی برای کارهای موازی
-- 🔒 **حفظ حریم خصوصی** — local-first، دادهات روی دستگاهت میماند
-
-از هر ارائهدهندهی مدل سازگار با OpenAI پشتیبانی میکند: Gemini، OpenRouter، Claude، Mistral، Groq، Ollama و بیشتر. مستندات کامل: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs)**
-
-**Hermes2** همهی اینها را به اندروید میآورد — یک اپ نیتیو Material 3. اپ جلوی صحنه است — Hermes داخل Termux مغز است. تمام ارتباطات روی گوشی و از طریق WebSocket محلی میماند.
-
-**بدون واسطهی ابری · بدون حساب کاربری · بدون تلهمتری**
+**بدون واسطهی ابری · بدون حساب · بدون تلهمتری**
 
 ---
 
-## این اپ چه میدهد
+## 💪 قابلیتها
 
-- **چت زنده** با پاسخهای استریم، نمایش استدلال، و کارتهای فراخوانی ابزار جمعشونده
-- **مدیریت سشن** — جستوجو، سنجاق، تغییرنام، ادامهی هر گفتوگوی قبلی
-- **تأیید ابزار** بهصورت اعلان اندروید — Approve یا Deny قبل از هر اجرا
-- **Runtime Setup** — تشخیص، نصب و استارت gateway از داخل اپ
-- **مدیریت تنظیمات و مدل** بدون خروج از اپ
-- **۶ تم رنگی**، حالت روشن/تاریک/سیستم، طراحی کامل Material 3
-- **دوزبانه** — انگلیسی و فارسی
-- **Foreground service** — زنده نگهداشتن gateway وقتی صفحه خاموش است
-- **Share intent** — فرستادن متن از هر اپی به چت هرمس۲
-
-> [!IMPORTANT]
-> **این یک ابزار حرفهای است، نه اپ چت معمولی.** Hermes Agent دستورهای واقعی روی دستگاهت اجرا میکند. اگر فقط میخواهی گپ بزنی، اپ معمولی بهتر است. اگر ایجنت واقعی میخواهی — بخوان.
+- 💬 **چت زنده** با پاسخهای استریم، نمایش استدلال، و کارتهای فراخوانی ابزار
+- 🗂️ **مدیریت سشن** — جستوجو، سنجاق، تغییرنام، ادامهی هر گفتوگوی قبلی
+- ✅ **تأیید ابزار** بهصورت اعلان اندروید — Approve یا Deny قبل از هر اجرا
+- ⚙️ **Runtime Setup** — تشخیص، نصب و استارت gateway از داخل اپ
+- 🎨 **۶ تم رنگی**، حالت روشن/تاریک/سیستم، طراحی کامل Material 3
+- 🌐 **دوزبانه** — انگلیسی و فارسی
+- 🔋 **Foreground service** — زنده نگهداشتن gateway وقتی صفحه خاموش است
+- 📤 **Share intent** — فرستادن متن از هر اپی به چت هرمس۲
 
 ---
 
-## حریم خصوصی و امنیت
+## 🔽 دانلود
 
-> [!WARNING]
-> قبل از نصب بخوان.
+<p align="center">
+  <a href="https://github.com/traveler3022/Hermes2/releases/download/debug-latest/app-debug.apk">
+    <img src="https://img.shields.io/badge/⬇_دانلود_آخرین_APK-6750A4?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" height="48px"/>
+  </a>
+  <br>
+  <sub>بیلد debug همیشهتازه — با هر push خودکار ساخته میشود.</sub>
+</p>
 
-### 🟢 روی گوشیات میماند
+---
 
-| چی | کجا |
+## 🛡️ حریم خصوصی و امنیت
+
+**روی گوشی میماند:** کلید API تو در تنظیمات Hermes در Termux ذخیره میشود. ارتباط اپ و ایجنت روی `127.0.0.1` اجرا میشود — هرگز دستگاه را ترک نمیکند.
+
+**خارج میشود:** پیامهایت به ارائهدهندهی مدل میرود (Gemini → گوگل، OpenRouter → مختلف). چیزی نفرست که نمیخواهی ارائهدهنده ببیند.
+
+**ایجنت چه کاری میتواند بکند:** Hermes دستور شل داخل Termux اجرا میکند. روی گوشی روتنشده، sandbox اندروید این را به حافظهی Termux محدود میکند.
+
+> ⚠️ **گوشیات را روت نکن.** روت sandbox را از بین میبرد.
+
+**تأیید ابزار را روشن نگه دار** — خط دفاعی توست. در شک، Deny بزن.
+
+---
+
+## 📚 مستندات
+
+| | |
 |---|---|
-| **کلید API** | تنظیمات Hermes در Termux. این اپ هیچجا نمیفرستد. |
-| **ارتباط اپ ↔ ایجنت** | `127.0.0.1` — هرگز دستگاه را ترک نمیکند. |
-| **دادهی سشن** | SQLite داخل `~/.hermes/` — فقط روی دستگاه. |
-
-### 🟠 خارج میشود
-
-| چی | کجا |
-|---|---|
-| **پیامهایت** | به ارائهدهندهی مدل — Gemini → گوگل، OpenRouter → ارائهدهندگان مختلف. |
-
-**قاعده:** چیزی نفرست که نمیخواهی ارائهدهنده ببیند.
-
-### 🛡️ sandbox اندروید
-
-روی گوشی **روتنشده**، ایجنت فقط به حافظهی Termux دسترسی دارد.
-
-> [!CAUTION]
-> **گوشیات را روت نکن.** روت sandbox را از بین میبرد.
-
-### ✅ تأیید ابزار را روشن نگه دار
-
-Hermes قبل از دستورهای خطرناک میپرسد. در شک، **Deny** بزن.
-
-> [!NOTE]
-> این اپ همانطور که هست تحت MIT ارائه میشود. مسئولیت کلیدها و دستورها با خودت است.
+| **[راهنمای فنی کامل](docs/RUNNING_ON_ANDROID_TERMUX.md)** | نصب، تنظیم، اولین اتصال و عیبیابی |
+| **[نصب در Termux](docs/INSTALL_HERMES_TERMUX.md)** | نصب گام‌به‌گام |
+| **[ویزارد راهاندازی](docs/SETUP_HERMES_TERMUX.md)** | راهنمای `hermes setup` |
+| **[اتصال اول](docs/GATEWAY_SETUP.md)** | وصلکردن اپ به هرمس |
+| **[مستندات رسمی](https://hermes-agent.nousresearch.com/docs)** | مستندات بالادستی |
 
 ---
 
-## راهاندازی
-
-راهنمای کامل: **[اجرای هرمس۲ روی اندروید + Termux](docs/RUNNING_ON_ANDROID_TERMUX.md)** — نصب، تنظیم، اولین اتصال و عیبیابی.
-
----
-
-## کنترل هزینه
-
-- 💳 **سقف خرج** در داشبورد ارائهدهنده — بهترین محافظت.
-- 🆓 با **مدل رایگان** شروع کن.
-- 👀 چند سشن اول را تماشا کن.
-
----
-
-## عیبیابی
+## ❓ سؤالات متداول
 
 <details>
 <summary><b>اپ روی «Connecting...» گیر کرده</b></summary>
@@ -120,35 +86,22 @@ Hermes قبل از دستورهای خطرناک میپرسد. در شک، **Den
 </details>
 
 <details>
-<summary><b>بیلد <code>jiter</code> / <code>pydantic-core</code> شکست میخورد</b></summary>
-
-```bash
-export CARGO_HOME="$HOME/.hermes/cargo"
-export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-export CARGO_PROFILE_RELEASE_LTO=false
-export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-export CARGO_BUILD_JOBS=1
-```
-</details>
-
-<details>
-<summary><b><code>hermes: command not found</code></b></summary>
-
-```bash
-cd ~/.hermes/hermes-agent
-ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
-```
-</details>
-
-<details>
 <summary><b>قطعشدن وقتی صفحه خاموش است</b></summary>
 
-تنظیمات → برنامهها → [برنامه] → باتری → بدون محدودیت
+تنظیمات → برنامهها → [برنامه] → باتری → بدون محدودیت.
+</details>
+
+<details>
+<summary><b>چه مدلهایی پشتیبانی میشود؟</b></summary>
+
+هر ارائهدهندهی سازگار با OpenAI: Gemini، OpenRouter، Claude، Mistral، Groq، Ollama، DeepSeek و بیشتر.
 </details>
 
 ---
 
-## ساخت از سورس
+## 🛠️ ساخت از سورس
+
+</div>
 
 ```bash
 git clone https://github.com/traveler3022/Hermes2.git
@@ -156,20 +109,26 @@ cd Hermes2
 bash ./gradlew :app:assembleDebug
 ```
 
+<div dir="rtl">
+
 نیاز: JDK 17 · Android SDK 35 · Android Studio Ladybug+
 
 ---
 
-## مشارکت
+## 🤝 مشارکت
 
-issue و PR خوشآمدند. پورت مستقل جامعهمحور — نه محصول رسمی Nous Research.
+issue و PR خوشآمدند. پورت مستقل جامعهمحور — نه محصول رسمی Nous Research. موقع گزارش باگ، نسخهی اندروید، مدل گوشی و لاگهای مرتبط را بگذار.
 
 ---
 
-**MIT** — [LICENSE](LICENSE) · پروژهی مستقل · وابسته به Nous Research نیست
+## 📄 لایسنس
 
-<div align="center"><br>
+**MIT** — [LICENSE](LICENSE).
 
-**⬡ ساختهشده برای اندروید · با قدرت Hermes Agent ⬡**
+<sub>پروژهی مستقل · وابسته به Nous Research نیست · «Hermes Agent» متعلق به نویسندگان آن است.</sub>
 
+<p align="center">
+  <br>
+  <b>⬡ ساختهشده برای اندروید · با قدرت Hermes Agent ⬡</b>
+</p>
 </div>
