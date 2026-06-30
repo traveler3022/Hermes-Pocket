@@ -1522,15 +1522,39 @@ private fun MessageBubble(
                             )
                         }
                     }
-                    // Feature 4.1/4.3: HermesMarkdown for result, outline color when running (preview)
+                    // Feature 4.1/4.3: collapsible result
                     message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
+                        val isLongResult = result.length > 300
+                        var resultExpanded by remember { mutableStateOf(false) }
+                        val displayResult = if (isLongResult && !resultExpanded) {
+                            result.take(300) + "…"
+                        } else {
+                            result
+                        }
                         HermesMarkdown(
-                            markdown = result,
+                            markdown = displayResult,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = if (message.isRunning) MaterialTheme.colorScheme.outline
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
                         )
+                        if (isLongResult) {
+                            TextButton(
+                                onClick = { resultExpanded = !resultExpanded },
+                                modifier = Modifier.padding(top = 0.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (resultExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (resultExpanded) t("Collapse", "جمع کردن") else t("Show more", "بیشتر"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
                     }
                     message.error?.takeIf { it.isNotBlank() }?.let { err ->
                         Text(
@@ -1643,35 +1667,52 @@ private fun MessageBubble(
         }
 
         is ChatMessage.SubagentCard -> {
+            val isLongSubagent = message.text.length > 120
+            var subagentExpanded by remember { mutableStateOf(false) }
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = isLongSubagent) { subagentExpanded = !subagentExpanded },
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .animateContentSize(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (!message.isComplete) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("✓", color = MaterialTheme.colorScheme.primary)
+                        Text("✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "🤖 Sub-agent",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = t("🤖 Sub-agent", "🤖 زیر ایجنت"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                         )
+                        val displayText = if (isLongSubagent && !subagentExpanded) {
+                            message.text.take(120) + "…"
+                        } else {
+                            message.text
+                        }
                         Text(
-                            text = message.text.take(200),
+                            text = displayText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    if (isLongSubagent) {
+                        Icon(
+                            imageVector = if (subagentExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
                         )
                     }
                 }
