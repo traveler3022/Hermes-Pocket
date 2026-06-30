@@ -33,7 +33,7 @@ Unlike simple chatbots, Hermes can actually *do things*:
 - 🤖 **Delegate to sub-agents** — spawn specialized agents for parallel tasks
 - 🔒 **Stay private** — local-first, your data stays on your machine
 
-It supports any OpenAI-compatible model provider: MiMo, Gemini, OpenRouter, Claude, Mistral, Groq, Ollama, and more. Full docs at **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs)**.
+It supports any OpenAI-compatible model provider: Gemini, OpenRouter, Claude, Mistral, Groq, Ollama, and more. Full docs at **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs)**.
 
 **Hermes2** brings all of that to Android as a native Material 3 app. The app is the front-end — Hermes running inside Termux is the brain. All communication stays on your phone over a local WebSocket.
 
@@ -75,7 +75,7 @@ It supports any OpenAI-compatible model provider: MiMo, Gemini, OpenRouter, Clau
 
 | What | Where |
 |---|---|
-| **Your messages** | Go to the model provider you chose — MiMo → Xiaomi, Gemini → Google, etc. |
+| **Your messages** | Go to the model provider you chose — Gemini → Google, OpenRouter → various, etc. |
 
 **Rule of thumb:** Don't send anything you wouldn't want the provider to see.
 
@@ -104,7 +104,7 @@ Full setup guide: **[Running Hermes2 on Android + Termux](docs/RUNNING_ON_ANDROI
 ## Controlling Costs
 
 - 💳 **Set a spending limit** in your provider's dashboard — your single best protection.
-- 🆓 Start with a **free model** like `mimo-v2.5-free` to learn how the agent behaves.
+- 🆓 Start with a **free model** like `gemini-2.5-flash` to learn how the agent behaves.
 - 👀 Watch the first few sessions to gauge token usage.
 
 ---
