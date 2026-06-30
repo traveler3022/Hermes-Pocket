@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -122,6 +124,7 @@ fun ConfigScreen(
                 )
                 ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
                 ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
+                ConfigTab.MEMORY -> MemorySection(uiState, viewModel)
             }
         }
     }
@@ -628,6 +631,86 @@ private fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel) {
             Switch(
                 checked = tool.enabled,
                 onCheckedChange = { viewModel.toggleTool(tool.name, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemorySection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    if (state.isLoadingMemory) {
+        LoadingIndicator(t("Loading memory...", "در حال بارگذاری حافظه..."))
+        return
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = t("Memory files", "فایل‌های حافظه"),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            TextButton(onClick = { viewModel.loadMemory() }) {
+                Text(t("Refresh", "بارگذاری مجدد"))
+            }
+        }
+        MemoryFileCard(
+            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+            title = "USER.md",
+            content = state.memoryUserMd,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        MemoryFileCard(
+            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
+            title = "MEMORY.md",
+            content = state.memoryMd,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
+@Composable
+private fun MemoryFileCard(
+    icon: @Composable () -> Unit,
+    title: String,
+    content: String,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+) {
+    val displayText = content
+        .ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }
+        .replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده"))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                icon()
+                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
+            }
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = contentColor,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
     }

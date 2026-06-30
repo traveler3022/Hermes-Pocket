@@ -50,6 +50,7 @@ class ConfigViewModel @Inject constructor(
         loadConfig()
         loadModels()
         loadTools()
+        loadMemory()
     }
 
     // ── Config ────────────────────────────────────────────────────────────
@@ -367,6 +368,38 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // ── Memory (USER.md / MEMORY.md) ─────────────────────────────────────
+
+    fun loadMemory() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMemory = true)
+            try {
+                val userResult = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("cat ~/.hermes/memories/USER.md 2>/dev/null || echo '(not found)'")),
+                )
+                val userMd = (userResult as? JsonObject)
+                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: "(not found)"
+
+                val memResult = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("cat ~/.hermes/memories/MEMORY.md 2>/dev/null || echo '(not found)'")),
+                )
+                val memoryMd = (memResult as? JsonObject)
+                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: "(not found)"
+
+                _uiState.value = _uiState.value.copy(
+                    memoryUserMd = userMd,
+                    memoryMd = memoryMd,
+                    isLoadingMemory = false,
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load memory")
+                _uiState.value = _uiState.value.copy(isLoadingMemory = false)
+            }
+        }
+    }
+
     // ── Reload config without restart (reload.mcp / reload.env) ────────────
 
     fun reloadMcp() {
@@ -416,6 +449,9 @@ data class ConfigUiState(
     val isLoadingModels: Boolean = false,
     val availableTools: List<ToolOption> = emptyList(),
     val isLoadingTools: Boolean = false,
+    val memoryUserMd: String = "",
+    val memoryMd: String = "",
+    val isLoadingMemory: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -423,6 +459,7 @@ enum class ConfigTab(val label: String) {
     GENERAL("General"),
     MODELS("Models"),
     TOOLS("Tools"),
+    MEMORY("Memory"),
 }
 
 data class ModelOption(

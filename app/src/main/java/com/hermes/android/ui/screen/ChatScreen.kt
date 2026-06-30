@@ -244,11 +244,22 @@ fun ChatScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
             ) {
-                Text(
-                    text = t("Conversations", "گفتگوها"),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(20.dp),
-                )
+                // ── Header ─────────────────────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = t("Hermes", "هرمس"),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    IconButton(onClick = { scope.launch { drawerState.close() } }) {
+                        Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
+                    }
+                }
                 Button(
                     onClick = {
                         viewModel.newConversation()
@@ -256,11 +267,40 @@ fun ChatScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
                     Text(t("New conversation", "گفتگوی جدید"))
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                TextButton(
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToSessions()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = t("Manage all sessions", "مدیریت همه گفتگوها"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // ── Session list (fills remaining space) ───────────────────
                 if (uiState.sessions.isEmpty()) {
                     Text(
                         text = t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
@@ -268,8 +308,9 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
                     )
+                    Spacer(modifier = Modifier.weight(1f))
                 } else {
-                    LazyColumn {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
                         items(uiState.sessions, key = { it.id }) { session ->
                             SessionDrawerRow(
                                 session = session,
@@ -281,6 +322,31 @@ fun ChatScreen(
                             )
                         }
                     }
+                }
+
+                // ── Footer: Settings ───────────────────────────────────────
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { drawerState.close() }
+                            onNavigateToSettings()
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = t("Settings", "تنظیمات"),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         },
@@ -310,13 +376,6 @@ fun ChatScreen(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                                     contentDescription = t("Search", "جستجو"),
                                 )
-                            }
-                            // Full session manager: rename / delete / pin / export / memory
-                            IconButton(onClick = onNavigateToSessions) {
-                                Icon(Icons.Default.History, contentDescription = t("Sessions & history", "گفتگوها و تاریخچه"))
-                            }
-                            IconButton(onClick = onNavigateToSettings) {
-                                Icon(Icons.Default.Settings, contentDescription = t("Settings", "تنظیمات"))
                             }
                         },
                     )
