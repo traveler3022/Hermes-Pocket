@@ -8,42 +8,11 @@
 
 ---
 
-## Step 1 — Select terminal backend
+## Step 1 — How would you like to set up Hermes?
 
 <div dir="rtl">
 
-اولین سوال: کدوم محیط اجرای دستور را میخواهی؟
-
-</div>
-
-```
-Select terminal backend:
-↑↓ navigate  ENTER/SPACE select  ESC cancel
-
-→ (0) Local - run directly on this machine (default)
-  (0) Docker - isolated container with configurable resources
-  (0) Modal - serverless cloud sandbox
-  (0) SSH - run on a remote machine
-  (0) Daytona - persistent cloud development environment
-  (●) Keep current (local)
-```
-
-<div dir="rtl">
-
-| گزینه | توضیح |
-|---|---|
-| **Local** | دستورات مستقیم روی Termux اجرا میشوند. **این گزینه برای اندروید درست است.** |
-| **Docker** | اجرای دستورات در کانتینر Docker (اندروید پشتیبانی نمیکند) |
-| **Modal** | سرورلس ابری (نیاز به حساب Modal دارد) |
-| **SSH** | اتصال به ماشین راه دور |
-| **Daytona** | محیط توسعهی ابری پایدار |
-| **Keep current** | همان تنظیمات فعلی را نگه دار |
-
-**→ اندروید: `Local` را انتخاب کن.** فشار `ENTER`.
-
----
-
-## Step 2 — How would you like to set up Hermes?
+اولین سوال: چطوری میخوای هرمس را تنظیم کنی؟
 
 </div>
 
@@ -67,11 +36,11 @@ How would you like to set up Hermes?
 **→ اگر میخوای همهچیز خودت تنظیم کنی: `Full Setup`**
 **→ اگر تازهکاری: `Quick Setup`**
 
+`ENTER` بزن تا بری مرحله بعد.
+
 ---
 
-## Step 3 — Select provider
-
-<div dir="rtl">
+## Step 2 — Select provider
 
 انتخاب ارائهدهندهی مدل هوش مصنوعی:
 
@@ -131,7 +100,42 @@ Select provider:
 
 **→ برای اندروید: `Xiaomi MiMo` یا `Google AI Studio` پیشنهاد میشود.**
 
-بعد از انتخاب، احتمالاً ازت کلید API میخواهد (مگر اینکه Nous Portal یا OAuth انتخاب کرده باشی).
+بعد از انتخاب، احتمالاً ازت کلید API میخواهد (مگر اینکه Nous Portal یا OAuth انتخاب کرده باشی). `ENTER` بزن.
+
+---
+
+## Step 3 — Select terminal backend
+
+<div dir="rtl">
+
+**حتماً باید روی `Local` باشد.** این تنظیم برای اندروید ضروری است.
+
+</div>
+
+```
+Select terminal backend:
+↑↓ navigate  ENTER/SPACE select  ESC cancel
+
+→ (0) Local - run directly on this machine (default)
+  (0) Docker - isolated container with configurable resources
+  (0) Modal - serverless cloud sandbox
+  (0) SSH - run on a remote machine
+  (0) Daytona - persistent cloud development environment
+  (●) Keep current (local)
+```
+
+<div dir="rtl">
+
+| گزینه | توضیح |
+|---|---|
+| **Local** | دستورات مستقیم روی Termux اجرا میشوند. **این گزینه برای اندروید درست است.** |
+| **Docker** | اجرای دستورات در کانتینر Docker (اندروید پشتیبانی نمیکند) |
+| **Modal** | سرورلس ابری (نیاز به حساب Modal دارد) |
+| **SSH** | اتصال به ماشین راه دور |
+| **Daytona** | محیط توسعهی ابری پایدار |
+| **Keep current** | همان تنظیمات فعلی را نگه دار |
+
+**→ اندروید: حتماً `Local` را انتخاب کن.** فشار `ENTER`.
 
 ---
 
@@ -139,7 +143,7 @@ Select provider:
 
 <div dir="rtl">
 
-انتخاب پلتفرمهای پیامرسان برای اتصال:
+انتخاب پلتفرمهای پیامرسان برای اتصال. با `ENTER` از این مرحله رد شو و برو مرحله بعد.
 
 </div>
 
@@ -176,22 +180,13 @@ Select platforms to configure:
 
 <div dir="rtl">
 
-| کنترل | عمل |
-|---|---|
-| `↑↓` | حرکت بین گزینهها |
-| `SPACE` | تیک زدن / برداشتن تیک |
-| `ENTER` | تأیید انتخابها |
-| `ESC` | رد شدن |
-
-**→ برای شروع، لازم نیست پلتفرمی انتخاب کنی.** بعداً از داخل اپ Hermes2 هم میتوانی تنظیم کنی. `ESC` بزن تا رد شوی یا فقط `ENTER` بدون انتخاب.
+**→ برای شروع لازم نیست پلتفرمی انتخاب کنی.** فقط `ENTER` بزن تا رد شوی. بعداً از داخل اپ Hermes2 هم میتوانی تنظیم کنی.
 
 ---
 
-## Step 5 — Tools for CLI
+## Step 5 — Tools for CLI (تنظیمات پیشنهادی)
 
-<div dir="rtl">
-
-فعال/غیرفعالکردن ابزارهای ایجنت:
+ابزارهای ایجنت. با `SPACE` تیک بزن، بعد `ENTER` تأیید کن.
 
 </div>
 
@@ -226,24 +221,40 @@ Tools for 📱 CLI
 
 <div dir="rtl">
 
-ابزارهای پیشنهادی برای شروع روی اندروید:
+اینها ابزارهایی هستن که **روی اندروید کار میکنن و پیشنهاد میشن**:
 
-| ابزار | فعال؟ | چرا |
+| # | ابزار | چرا فعال کنی |
 |---|---|---|
-| **Web Search** | ✅ | جستوجوی وب — خیلی کاربردی |
-| **Terminal & Processes** | ✅ | اجرای دستور — هستهی اصلی |
-| **File Operations** | ✅ | مدیریت فایل — ضروری |
-| **Code Execution** | ✅ | اجرای کد — قابلیت کلیدی |
-| **Memory** | ✅ | حافظهی پایدار بین سشنها |
-| **Session Search** | ✅ | جستوجوی تاریخچه |
-| **Skills** | ✅ | مدیریت مهارتها |
-| **Task Planning** | ✅ | لیست کارها |
-| **Clarifying Questions** | ✅ | سؤال برای شفافسازی |
-| **Browser Automation** | ❌ | اندروید Tier 2 — پشتیبانی نمیشود |
-| **Image/Video Gen** | ❌ | نیاز به مدل خاص + GPU |
-| **Spotify/Home Assistant** | ❌ | نیاز به تنظیمات اضافی |
+| 1 | 🔍 **Web Search & Scraping** | جستوجوی وب — خیلی کاربردی |
+| 2 | 💻 **Terminal & Processes** | اجرای دستور — هستهی اصلی |
+| 3 | 📁 **File Operations** | مدیریت فایل — ضروری |
+| 4 | ⚡ **Code Execution** | اجرای کد — قابلیت کلیدی |
+| 5 | 📚 **Skills** | مدیریت مهارتها |
+| 6 | 📝 **Task Planning** | لیست کارها |
+| 7 | 🧠 **Memory** | حافظهی پایدار بین سشنها |
+| 8 | 🔄 **Context Engine** | ابزارهای runtime از context فعال |
+| 9 | 🔍 **Session Search** | جستوجوی تاریخچه |
+| 10 | ❓ **Clarifying Questions** | سؤال برای شفافسازی |
+| 11 | 📤 **Task Delegation** | واگذاری کار به زیرایجنت |
+| 12 | 🕒 **Cron Jobs** | زمانبندی کارهای تکراری |
 
-**→ ابزارهای بالا را با `SPACE` فعال کن، بعد `ENTER` بزن.**
+اینها را **فعال نکن** (روی اندروید کار نمیکنن یا نیاز به تنظیم اضافی دارن):
+
+| ابزار | دلیل |
+|---|---|
+| 🌐 Browser Automation | اندروید Tier 2 — پشتیبانی نمیشود |
+| 🔬 Vision / Image Analysis | نیاز به مدل vision-capable |
+| 🎥 Video Analysis | نیاز به مدل ویدیویی |
+| 🎨 Image Generation | نیاز به API جداگانه |
+| 🎬 Video Generation | نیاز به API جداگانه |
+| 🐦 X (Twitter) Search | نیاز به xAI OAuth |
+| 🔊 Text-to-Speech | نیاز به API جداگانه |
+| 🏠 Home Assistant | نیاز به HA instance |
+| 🎵 Spotify | نیاز به حساب Spotify |
+| 💬 Yuanbao | نیاز به تنظیم جداگانه |
+| 💻 Computer Use | مخصوص دسکتاپ |
+
+**→ ابزارهای پیشنهادی بالا را با `SPACE` فعال کن، بعد `ENTER` بزن.**
 
 ---
 
@@ -276,7 +287,7 @@ Select Search Provider:
 
 | ارائهدهنده | هزینه | نیاز به کلید | توضیح |
 |---|---|---|---|
-| **DuckDuckGo** | رایگان | ❌ | بدون کلید، فقط جستوجو (بدون استخراج محتوا). **بهترین گزینه برای شروع.** |
+| **DuckDuckGo** | رایگان | ❌ | بدون کلید، فقط جستوجو. **بهترین گزینه برای شروع.** |
 | **Brave Search** | رایگان | ✅ | ۲۰۰۰ پرسوجو در ماه |
 | **Nous Subscription** | اشتراکی | ✅ | Firecrawl مدیریتشده |
 | **SearXNG** | رایگان | ❌ | خودمیزبان، نیاز به سرور |
@@ -295,12 +306,12 @@ Select Search Provider:
 
 | مرحله | گزینه |
 |---|---|
-| Terminal backend | **Local** |
-| Setup mode | **Full Setup** (یا Quick Setup اگر تازهکاری) |
-| Provider | **Xiaomi MiMo** یا **Google AI Studio** |
-| Platforms | **ESC** — بعداً از اپ تنظیم کن |
-| Tools | **Web Search, Terminal, File, Code, Memory, Skills, Session Search, Task Planning, Clarify** |
-| Search Provider | **DuckDuckGo** (رایگان، بدون کلید) |
+| ۱. Setup mode | **Full Setup** (یا Quick Setup اگر تازهکاری) |
+| ۲. Provider | **Xiaomi MiMo** یا **Google AI Studio** |
+| ۳. Terminal backend | **Local** (حتماً) |
+| ۴. Platforms | **ENTER** — بعداً از اپ تنظیم کن |
+| ۵. Tools | ابزارهای پیشنهادی بالا را فعال کن |
+| ۶. Search Provider | **DuckDuckGo** (رایگان، بدون کلید) |
 
 ---
 
