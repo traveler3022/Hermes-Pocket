@@ -97,27 +97,6 @@ Hermes قبل از دستورهای خطرناک میپرسد. در شک، **Den
 
 ---
 
-## دانلود
-
-<div align="center">
-
-### [⬇ دانلود آخرین APK](https://github.com/traveler3022/Hermes2/releases/download/debug-latest/app-debug.apk)
-
-</div>
-
----
-
-## راهاندازی
-
-به **Termux** و **APK هرمس۲** نیاز داری.
-
-1. **[نصب Termux](https://f-droid.org/en/packages/com.termux/)** — فقط از F-Droid
-2. **[نصب هرمس در Termux](docs/INSTALL_HERMES_TERMUX.md)** — نصبکنندهی رسمی
-3. **[تنظیم اولیه هرمس](docs/SETUP_HERMES_TERMUX.md)** — کلید API، انتخاب مدل
-4. **[نصب اپ و اتصال](docs/GATEWAY_SETUP.md)** — نصب APK، استارت gateway، اولین چت
-
----
-
 ## کنترل هزینه
 
 - 💳 **سقف خرج** در داشبورد ارائهدهنده — بهترین محافظت.

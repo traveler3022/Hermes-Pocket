@@ -95,29 +95,6 @@ Hermes asks before running commands it considers dangerous. Prompts appear as An
 
 ---
 
-## Download
-
-<div align="center">
-
-### [⬇ Download the latest APK](https://github.com/traveler3022/Hermes2/releases/download/debug-latest/app-debug.apk)
-
-*Always-fresh debug build — rebuilt automatically on every push.*
-
-</div>
-
----
-
-## Setup
-
-You need **Termux** (runs the agent) and the **Hermes2 APK** (the interface).
-
-1. **[Install Termux](https://f-droid.org/en/packages/com.termux/)** — from F-Droid only, not Play Store
-2. **[Install Hermes Agent in Termux](docs/INSTALL_HERMES_TERMUX.md)** — the official installer
-3. **[Initial Hermes setup](docs/SETUP_HERMES_TERMUX.md)** — API key, model selection, first config
-4. **[Download & connect](docs/GATEWAY_SETUP.md)** — install the APK, start the gateway, first chat
-
----
-
 ## Controlling Costs
 
 - 💳 **Set a spending limit** in your provider's dashboard — your single best protection.
