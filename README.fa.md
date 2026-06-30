@@ -35,7 +35,7 @@
 - 🤖 **واگذاری به زیرایجنت** — اسپن ایجنتهای تخصصی برای کارهای موازی
 - 🔒 **حفظ حریم خصوصی** — local-first، دادهات روی دستگاهت میماند
 
-از هر ارائهدهندهی مدل سازگار با OpenAI پشتیبانی میکند: MiMo، Gemini، OpenRouter، Claude، Mistral، Groq، Ollama و بیشتر. مستندات کامل: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs)**
+از هر ارائهدهندهی مدل سازگار با OpenAI پشتیبانی میکند: Gemini، OpenRouter، Claude، Mistral، Groq، Ollama و بیشتر. مستندات کامل: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs)**
 
 **Hermes2** همهی اینها را به اندروید میآورد — یک اپ نیتیو Material 3. اپ جلوی صحنه است — Hermes داخل Termux مغز است. تمام ارتباطات روی گوشی و از طریق WebSocket محلی میماند.
 
@@ -77,7 +77,7 @@
 
 | چی | کجا |
 |---|---|
-| **پیامهایت** | به ارائهدهندهی مدل — MiMo → شیائومی، Gemini → گوگل. |
+| **پیامهایت** | به ارائهدهندهی مدل — Gemini → گوگل، OpenRouter → ارائهدهندگان مختلف. |
 
 **قاعده:** چیزی نفرست که نمیخواهی ارائهدهنده ببیند.
 
