@@ -459,7 +459,6 @@ enum class ConfigTab(val label: String) {
     GENERAL("General"),
     MODELS("Models"),
     TOOLS("Tools"),
-    MEMORY("Memory"),
 }
 
 data class ModelOption(
