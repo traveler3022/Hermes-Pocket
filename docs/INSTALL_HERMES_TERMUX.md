@@ -242,16 +242,123 @@ hermes setup
 
 <div dir="rtl">
 
-ویزارد خودش ازت میپرسه:
-- **ارائهدهنده** (Gemini، OpenRouter، و غیره)
-- **کلید API**
-- **ابزارهای فعال**
-- **موتور جستوجوی وب**
+ویزارد ۶ صفحه داره. یکی یکی رد کن:
 
-راهنمای کامل ویزارد: **[تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)**
+---
 
-> [!TIP]
-> اگر `hermes setup` اجرا نشد، `hermes` را بدون آرگومان امتحان کن — بعضی نسخه‌ها خودکار ویزارد را نشان می‌دهند.
+### ۸.۱ — انتخاب نحوه راهاندازی
+
+```
+How would you like to set up Hermes?
+  ( ) Quick Setup (Nous Portal) – free OAuth, no API keys
+● ( ) Full setup – configure everything yourself
+  ( ) Blank Slate – everything off except bare minimum
+```
+
+**→ `Full Setup`** را انتخاب کن. `ENTER` بزن.
+
+---
+
+### ۸.۲ — انتخاب ارائهدهنده
+
+```
+Select provider:
+→ Nous Portal
+  OpenRouter
+  Anthropic
+  OpenAI
+  Gemini
+  Google AI Studio
+  DeepSeek
+  Custom endpoint
+  Leave unchanged
+```
+
+**→ `Gemini` یا `Google AI Studio`** پیشنهاد میشود. `ENTER` بزن.
+
+ویزارد ازت کلید API میخواهد. کلیدت را وارد کن.
+
+---
+
+### ۸.۳ — انتخاب terminal backend
+
+```
+Select terminal backend:
+→ (0) Local - run directly on this machine (default)
+  (0) Docker
+  (0) Modal
+  (0) SSH
+  (0) Daytona
+  (●) Keep current (local)
+```
+
+**→ حتماً `Local`** را انتخاب کن. `ENTER` بزن.
+
+---
+
+### ۸.۴ — پلتفرمهای پیامرسان
+
+```
+Select platforms to configure:
+[ ] Mattermost    [ ] Discord       [ ] Slack
+[ ] Signal        [ ] Email         [ ] Telegram
+[ ] WhatsApp      [ ] Matrix        [ ] Microsoft Teams
+... (25 پلتفرم)
+```
+
+**→ فعلاً لازم نیست. فقط `ENTER` بزن تا رد شوی.**
+
+---
+
+### ۸.۵ — ابزارهای CLI (تنظیمات پیشنهادی)
+
+با `SPACE` تیک بزن، بعد `ENTER` تأیید کن.
+
+**فعال کن:**
+
+```
+[x] 🔍 Web Search & Scraping
+[x] 💻 Terminal & Processes
+[x] 📁 File Operations
+[x] ⚡ Code Execution
+[x] 🔊 Text-to-Speech
+[x] 📚 Skills
+[x] 📝 Task Planning
+[x] 🧠 Memory
+[x] 🔍 Session Search
+[x] ❓ Clarifying Questions
+[x] 📤 Task Delegation
+[x] 🕒 Cron Jobs
+```
+
+**فعال نکن:**
+
+```
+[ ] 🌐 Browser Automation    — اندروید پشتیبانی نمیکنه
+[ ] 💻 Computer Use           — مخصوص دسکتاپ
+[ ] 🎨 Image Generation       — نیاز به API جدا
+[ ] 🎬 Video Generation       — نیاز به API جدا
+[ ] 🐦 X (Twitter) Search     — نیاز به xAI OAuth
+[ ] 🏠 Home Assistant         — نیاز به HA instance
+[ ] 🎵 Spotify                — نیاز به حساب
+[ ] 💬 Yuanbao                — نیاز به تنظیم جدا
+```
+
+---
+
+### ۸.۶ — انتخاب موتور جستوجو
+
+```
+Select Search Provider:
+  (0) Brave Search (Free) – 2k queries/mo
+→ (0) DuckDuckGo (ddgs) – free, no key
+  (0) Tavily – paid
+  (0) Skip
+```
+
+**→ `DuckDuckGo`** — رایگان، بدون کلید، فوراً کار میکند. `ENTER` بزن.
+
+</div>
 
 ---
 
