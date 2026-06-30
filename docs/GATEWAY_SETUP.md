@@ -30,7 +30,7 @@ hermes dashboard --stop
 
 **تنظیمات اندروید → برنامهها → Termux → Force stop**
 
-> **چرا force-stop؟** موقع نصب، Termux پورتهایی را اشغال میکند و رها نمیکند. با force-stop، تمام پورتهای فعال روی Termux غیرفعال میشوند تا اپ بتواند یک اتصال تمیز بگیرد. این مشکل فقط **دفعهی اول** هست — بعدش خودکار میشود.
+> **چرا force-stop؟** موقع نصب، Termux پورتهایی را اشغال میکند و رها نمیکند. با force-stop، تمام پورتهای فعال روی Termux غیرفعال میشوند تا اپ بتواند یک اتصال تمیز بگیرد. این فقط **دفعهی اول** لازم است.
 
 ---
 
@@ -41,6 +41,9 @@ hermes dashboard --stop
 ۳. **برگرد به اپ Hermes2**
 ۴. روی **`Start Agent Gateway`** بزن
 ۵. **تا ۳۰ ثانیه صبر کن** — وضعیت به **✓ Connected** تغییر میکند
+
+> **چرا از اپ استارت کنیم نه دستی؟**
+> اپ خودش یک `HERMES_DASHBOARD_SESSION_TOKEN` تولید و تزریق میکند. اگر دستی `hermes dashboard` را با توکن دیگری استارت کنی، احراز هویت WebSocket شکست میخورد.
 
 > [!TIP]
 > اگر تا ۳۰ ثانیه وصل نشد، **مراحل ۱ و ۲ را دوباره تکرار کن.** دستدادن اول گاهی یکبار دوم لازم دارد — بعدش هر بار خودکار وصل میشود.
@@ -55,6 +58,23 @@ hermes dashboard --stop
 
 ---
 
+## بعد از اتصال
+
+به **Settings** برو و چک کن:
+
+</div>
+
+```text
+Provider: xiaomi (یا هر ارائهدهندهای که انتخاب کردی)
+Model: mimo-v2.5-free / mimo-v2.5 / mimo-v2.5-pro
+```
+
+<div dir="rtl">
+
+تب **Tools** هم باید ابزارهای فعال هرمس را نشان بدهد.
+
+---
+
 ## اگر صفحه خاموش شد قطع شد
 
 </div>
@@ -64,4 +84,33 @@ hermes dashboard --stop
 
 ---
 
+## عیبیابی
+
+### لاگ gateway
+
+```bash
+cat "$HOME/.hermes/logs/gateway_stdout.log"
+```
+
+یا از داخل اپ: **Termux & Agent Connection → Fetch & View Logs**
+
+### از کجا بفهمم درست کار میکنه؟
+
+<div dir="rtl">
+
+در Termux:
+
+</div>
+
+```bash
+hermes doctor
+```
+
+<div dir="rtl">
+
+باید `✓ xiaomi (key configured)` ببینی.
+
+---
+
 **← بازگشت: [README اصلی](../README.md)** · **[راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)**
+</div>
