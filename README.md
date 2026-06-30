@@ -61,7 +61,7 @@
 
 **Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
 
-> 🔒 **Never share sensitive information** — API keys, passwords, tokens, or credentials. Do not paste them into screenshots, chats, GitHub issues, or commits. If a key leaks, revoke it immediately in the provider dashboard.
+> 🔒 **A note from the developer:** Your API key is stored locally on your device and is never sent to us. However, your messages are sent to the AI provider you choose — this is how all AI APIs work. Be mindful of what you share, and never paste API keys, passwords, or sensitive data into public places like GitHub issues or screenshots.
 
 ---
 
