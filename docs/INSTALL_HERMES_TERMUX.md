@@ -2,7 +2,9 @@
 
 # نصب Hermes Agent در Termux
 
-راهنمای گام‌به‌گام نصب Hermes Agent روی اندروید از طریق Termux.
+راهنمای نصب Hermes Agent روی اندروید از طریق Termux.
+
+> مستندات رسمی: **[hermes-agent.nousresearch.com/docs/getting-started/termux](https://hermes-agent.nousresearch.com/docs/getting-started/termux)**
 
 </div>
 
@@ -10,15 +12,12 @@
 
 ## پیش‌نیازها
 
-قبل از شروع، مطمئن شو:
-
 | پیش‌نیاز | توضیح |
 |---|---|
 | **گوشی اندروید** | اندروید ۱۰ یا بالاتر |
 | **Termux** | از F-Droid نصب شده (نه Play Store) |
 | **فضای ذخیره** | حداقل ۵۰۰ مگابایت خالی |
 | **اینترنت** | برای دانلود پکیج‌ها |
-| **کلید API** | حداقل یک ارائه‌دهنده (مثلاً Gemini، OpenRouter، و غیره) |
 
 > [!WARNING]
 > Termux را **فقط از F-Droid** نصب کن. نسخه Play Store رها شده و کار نمیکند.
@@ -33,8 +32,6 @@
 
 این تنظیم لازم است تا اپ Hermes2 بتواند دستور در Termux اجرا کند.
 
-**در Termux بنویس:**
-
 </div>
 
 ```bash
@@ -44,174 +41,129 @@ echo 'allow-external-apps=true' >> ~/.termux/termux.properties
 
 <div dir="rtl">
 
-**بعد Termux را ببند و دوباره باز کن** (یا force-stop کن از تنظیمات اندروید).
+**بعد Termux را ببند و دوباره باز کن.**
 
 ---
 
 ## مرحله ۲ — نصب پکیج‌های سیستمی
 
-این پکیج‌ها برای کامپایل و اجرای Hermes لازماند.
-
 </div>
 
 ```bash
-pkg update -y && pkg upgrade -y
-pkg install -y git python clang rust make pkg-config libffi openssl ca-certificates curl llvm lld nodejs ripgrep ffmpeg
+pkg update -y
+pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgrep ffmpeg
 ```
 
 <div dir="rtl">
 
-> ⏱️ نصب پکیج‌ها ۲ تا ۵ دقیقه طول می‌کشد.
+| پکیج | دلیل |
+|---|---|
+| python | اجرا + venv |
+| git | دانلود کد |
+| clang, rust, make, pkg-config, libffi, openssl | کامپایل dependency‌های پایتون |
+| nodejs | ابزارهای اختیاری |
+| ripgrep | جستوجوی سریع فایل |
+| ffmpeg | تبدیل صدا/ویدیو |
 
 ---
 
-## مرحله ۳ — تنظیم محیط کامپایل Rust
+## نصب Hermes Agent
 
-بعضی dependency‌های پایتون (مثل `pydantic-core` و `jiter`) با Rust کامپایل می‌شوند. این متغیرها باید تنظیم بشوند.
+<div dir="rtl">
+
+**دو روش وجود دارد. یکی را انتخاب کن:**
+
+---
+
+### روش A — نصب خودکار (ساده‌تر)
+
+</div>
+
+```bash
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+```
+
+<div dir="rtl">
+
+نصبکننده خودکار:
+- پکیج‌های سیستمی را نصب میکند
+- محیط مجازی پایتون میسازد
+- اول `.[termux-all]` را امتحان میکند، اگر نشد `.[termux]`، اگر نشد نصب پایه
+- `hermes` را در PATH قرار میدهد
+
+> ⏱️ نصب اول **۵ تا ۱۵ دقیقه** طول می‌کشد (Rust کد کامپایل می‌شود). صفحه را روشن نگه دار.
+
+اگر نصبکننده خطا داد، **روش B** را امتحان کن.
+
+---
+
+### روش B — نصب دستی (کامل و شفاف)
+
+#### ۱. تنظیم محیط کامپایل
 
 </div>
 
 ```bash
 export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
-export CARGO_BUILD_TARGET="$(rustc -Vv | awk '/^host:/ {print $2; exit}')"
-export CARGO_HOME="$HOME/.hermes/cargo"
-mkdir -p "$CARGO_HOME"
-export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-export CARGO_PROFILE_RELEASE_LTO=false
-export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-export CARGO_PROFILE_RELEASE_STRIP=none
-export CARGO_BUILD_JOBS=1
 ```
 
 <div dir="rtl">
 
 > [!NOTE]
-> **این مرحله را باید هر بار که Termux را باز می‌کنی تکرار کنی** (قبل از pip install). یا می‌توانی آن را در `~/.bashrc` بگذاری تا خودکار اجرا شود.
+> `ANDROID_API_LEVEL` برای کامپایل پکیج‌های Rust مثل `jiter` و `pydantic-core` لازم است.
 
----
-
-## مرحله ۴ — پاک‌سازی نصب‌های قبلی (اگر وجود دارد)
-
-اگر قبلاً نصب ناموفق داشتی:
+#### ۲. دانلود کد
 
 </div>
 
 ```bash
-if [ -e "$HOME/.hermes/hermes-agent" ] && [ ! -d "$HOME/.hermes/hermes-agent/.git" ]; then
-  mv "$HOME/.hermes/hermes-agent" "$HOME/.hermes/hermes-agent.broken-$(date +%Y%m%d-%H%M%S)"
-fi
+git clone https://github.com/NousResearch/hermes-agent.git
+cd hermes-agent
 ```
 
-<div dir="rtl">
-
-اگر می‌خوای کاملاً از اول شروع کنی:
-
-</div>
+#### ۳. ساخت محیط مجازی پایتون
 
 ```bash
-mv "$HOME/.hermes/hermes-agent" "$HOME/.hermes/hermes-agent.backup-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
-```
-
----
-
-## مرحله ۵ — دانلود Hermes Agent
-
-<div dir="rtl">
-
-کد رسمی را از GitHub دانلود کن:
-
-</div>
-
-```bash
-mkdir -p "$HOME/.hermes"
-git clone https://github.com/NousResearch/hermes-agent.git "$HOME/.hermes/hermes-agent"
-cd "$HOME/.hermes/hermes-agent"
-```
-
----
-
-## مرحله ۶ — ساخت محیط پایتون و نصب
-
-<div dir="rtl">
-
-یک محیط مجازی پایتون بساز و dependency‌ها را نصب کن:
-
-</div>
-
-```bash
-rm -rf venv
 python -m venv venv
 source venv/bin/activate
+export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
 python -m pip install --upgrade pip setuptools wheel
 ```
 
-<div dir="rtl">
-
-**دوباره متغیرهای Rust را داخل venv تنظیم کن** (چون venv یک شل جدید باز می‌کند):
-
-</div>
+#### ۴. نصب پروفایل Termux
 
 ```bash
-export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
-export CARGO_BUILD_TARGET="$(rustc -Vv | awk '/^host:/ {print $2; exit}')"
-export CARGO_HOME="$HOME/.hermes/cargo"
-mkdir -p "$CARGO_HOME"
-export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-export CARGO_PROFILE_RELEASE_LTO=false
-export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-export CARGO_PROFILE_RELEASE_STRIP=none
-export CARGO_BUILD_JOBS=1
+python -m pip install -e '.[termux]' -c constraints-termux.txt
 ```
 
 <div dir="rtl">
 
-**نصب psutil برای اندروید:**
+> ⏱️ این مرحله **۵ تا ۱۵ دقیقه** طول می‌کشد. صفحه را روشن نگه دار.
+
+اگر فقط هسته اصلی ایجنت را میخواهی (بدون ابزارهای اضافی):
 
 </div>
 
 ```bash
-python scripts/install_psutil_android.py --pip "python -m pip"
+python -m pip install -e '.' -c constraints-termux.txt
 ```
 
-<div dir="rtl">
-
-**نصب پروفایل Termux:**
-
-</div>
-
-```bash
-python -m pip install -e '.[termux]' -c constraints-termux.txt 2>&1 | tee ~/hermes-termux-install.log
-```
-
-<div dir="rtl">
-
-> ⏱️ این مرحله **۵ تا ۱۵ دقیقه** طول می‌کشد (Rust کد کامپایل می‌شود). صفحه را روشن نگه دار.
-
-**نصب وب‌سرور داشبورد (برای اتصال اپ):**
-
-</div>
-
-```bash
-python -m pip install -e '.[web]' -c constraints-termux.txt 2>&1 | tee ~/hermes-web-install.log
-```
-
-<div dir="rtl">
-
-**لینک دستور hermes:**
-
-</div>
+#### ۵. قراردادن hermes در PATH
 
 ```bash
 ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
 ```
 
+<div dir="rtl">
+
+`$PREFIX/bin` در Termux از قبل در PATH هست، پس دستور `hermes` در هر شل جدید کار میکند.
+
 ---
 
-## مرحله ۷ — بررسی نصب
+## مرحله ۳ — بررسی نصب
 
 ```bash
-which hermes
-hermes --version
+hermes version
 hermes doctor
 ```
 
@@ -222,19 +174,55 @@ hermes doctor
 </div>
 
 ```text
-Hermes Agent v0.17.0
+Hermes Agent v0.17.x
 Python: 3.13.x
-OpenAI SDK: 2.24.0
 ```
 
 <div dir="rtl">
 
 > [!NOTE]
-> «OpenAI SDK» اسم یک dependency است. **به این معنی نیست** که باید از OpenAI استفاده کنی.
+> اگر `hermes doctor` خطا نشان داد، `hermes doctor --fix` را امتحان کن.
 
 ---
 
-## مرحله ۸ — راهاندازی هرمس
+## مرحله ۴ — شروع هرمس
+
+```bash
+hermes
+```
+
+<div dir="rtl">
+
+اگر بار اول باشد، ویزارد راهاندازی اجرا میشود. اگر قبلاً تنظیم کرده باشی، مستقیم وارد چت میشوی.
+
+---
+
+## مرحله ۵ — تنظیم مدل
+
+```bash
+hermes model
+```
+
+<div dir="rtl">
+
+یا کلید API را مستقیم در `~/.hermes/.env` تنظیم کن. مثال:
+
+</div>
+
+```bash
+nano ~/.hermes/.env
+```
+
+```env
+GEMINI_API_KEY=*** hermes config set model.provider gemini
+hermes config set model.default gemini-2.5-flash
+```
+
+<div dir="rtl">
+
+یا ویزارد کامل راهاندازی:
+
+</div>
 
 ```bash
 hermes setup
@@ -242,38 +230,46 @@ hermes setup
 
 <div dir="rtl">
 
-ویزارد راهاندازی اجرا میشود. راهنمای کامل هر ۶ صفحه ویزارد:
-
-**→ [تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)**
+راهنمای کامل ویزارد: **[تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)**
 
 ---
 
-## مرحله ۹ — تست اتصال مدل
+## مرحله ۶ — اتصال به اپ Hermes2
 
 </div>
 
 ```bash
-hermes -q "سلام، فقط در یک جمله بگو با چه مدلی جواب میدهی."
+hermes dashboard --stop
 ```
 
 <div dir="rtl">
 
-اگر جواب گرفتی، نصب کامل است. ✅
+از Termux خارج شو → تنظیمات اندروید → برنامه‌ها → Termux → Force stop.
+
+اپ Hermes2 را باز کن → **Start Agent Gateway** → ۳۰ ثانیه صبر → **✓ Connected**
+
+راهنمای کامل اتصال: **[اتصال Gateway به اپ](GATEWAY_SETUP.md)**
+
+> [!TIP]
+> فقط دفعه اول نیاز به force-stop داره. بعدش خودکار وصل میشود.
 
 ---
 
-## مرحله ۱۰ — اتصال به اپ Hermes2
+## مرحله ۷ — نصب ابزارهای Node (اختیاری)
+
+نصب Termux عمداً ابزارهای Node/browser را رد میکند. اگر میخوای browser tool رو امتحان کنی:
+
+</div>
+
+```bash
+pkg install nodejs-lts
+npm install
+```
 
 <div dir="rtl">
 
-نصب کامل شد. حالا اپ را به هرمس وصل کن:
-
-**→ [اتصال Gateway به اپ](GATEWAY_SETUP.md)**
-
-> [!TIP]
-> فقط دفعه اول نیاز به تنظیم داره. بعدش خودکار وصل میشود.
-
-</div>
+> [!NOTE]
+> ابزارهای browser/WhatsApp روی اندروید **تجربی** هستند.
 
 ---
 
@@ -284,37 +280,21 @@ hermes -q "سلام، فقط در یک جمله بگو با چه مدلی جوا
 </div>
 
 ```bash
-cd "$HOME/.hermes/hermes-agent"
+cd hermes-agent
 ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
 which hermes
 ```
 
-### pydantic-core / rustc crash
+### خطای نصب `.[all]`
 
 <div dir="rtl">
 
-مطمئن شو اینها قبل از pip install تنظیم شده‌اند:
+`.[all]` روی اندروید پشتیبانی نمیشود. از پروفایل Termux استفاده کن:
 
 </div>
 
 ```bash
-export CARGO_PROFILE_RELEASE_LTO=false
-export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-export CARGO_PROFILE_RELEASE_STRIP=none
-export CARGO_BUILD_JOBS=1
-```
-
-### Cargo mirror 404
-
-```text
-Updating `ustc` index
-unexpected http status code: 404
-```
-
-```bash
-export CARGO_HOME="$HOME/.hermes/cargo"
-mkdir -p "$CARGO_HOME"
-export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+python -m pip install -e '.[termux]' -c constraints-termux.txt
 ```
 
 ### Termux در پس‌زمینه کشته می‌شود
@@ -334,9 +314,9 @@ termux-wake-lock
 <div dir="rtl">
 
 > [!NOTE]
-> **اندروید پلتفرم «Tier 2»** است. Browser Automation و Computer Use روی اندروید کار نمی‌کنند.
+> **اندروید پلتفرم «Tier 2»** است. Browser Automation، Computer Use، voice transcription و Docker روی اندروید کار نمی‌کنند. بقیه چیزها کار میکنن.
 
 ---
 
-**→ بعد: [راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)** · **[README اصلی](../README.md)**
+**→ [تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)** · **[اتصال Gateway](GATEWAY_SETUP.md)** · **[راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)**
 </div>
