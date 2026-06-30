@@ -96,6 +96,13 @@ data class SessionItem(
     val messageCount: Int? = null,
 )
 
+/** Rename dialog state for the session drawer. */
+data class DrawerRenameState(
+    val sessionId: String,
+    val currentTitle: String,
+    val inputText: String = currentTitle,
+)
+
 /**
  * Overall state of the Chat screen.
  */
@@ -111,6 +118,14 @@ data class ChatUiState(
     // Feature #16: Search in current chat
     val searchQuery: String = "",
     val showSearch: Boolean = false,
+    // Drawer: search / sort / pin / rename / delete
+    val drawerSearchQuery: String = "",
+    val drawerSortNewest: Boolean = true,
+    val drawerPinnedIds: Set<String> = emptySet(),
+    val drawerRenameTarget: DrawerRenameState? = null,
+    val drawerDeleteTarget: String? = null,
+    // Triggers scroll-to-bottom on session load (changes value each time)
+    val sessionLoadedAt: Long = 0L,
 )
 
 enum class ChatConnectionState {

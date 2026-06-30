@@ -93,8 +93,9 @@ class SessionsViewModel @Inject constructor(
                     // Fix S9F01: field is "preview" not "last_message"
                     lastMessagePreview = s["preview"]?.let { (it as? JsonPrimitive)?.content },
                     // Fix S9F01: field is "started_at" not "updated_at"
-                    updatedAt = s["started_at"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                        ?.let(::normalizeEpochMillis) ?: 0L,
+                    updatedAt = (s["started_at"] ?: s["updated_at"])
+                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
+                        ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis(),
                     messageCount = s["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
                         ?: 0,
                 )
