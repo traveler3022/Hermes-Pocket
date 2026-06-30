@@ -124,6 +124,24 @@ class ChatViewModel @Inject constructor(
                     }
                     _uiState.value = _uiState.value.copy(connectionState = chatState)
 
+                    // Fix F-A5: When connection is lost mid-stream, finalize any
+                    // assistant message that was left in isStreaming=true state.
+                    // Without this, the spinner spins forever and the user can't
+                    // tell the message is incomplete. We mark it as not-streaming
+                    // and append a small "(connection lost)" marker so the user
+                    // knows the turn was interrupted.
+                    if (state is ConnectionState.Disconnected ||
+                        state is ConnectionState.Failed
+                    ) {
+                        finalizeOrphanedStreamingMessage(
+                            marker = if (state is ConnectionState.Failed) {
+                                "(connection failed)"
+                            } else {
+                                "(connection lost)"
+                            }
+                        )
+                    }
+
                     // When connected, create or resume a session
                     if (state is ConnectionState.Connected && _uiState.value.activeSessionId == null) {
                         createSession()
@@ -347,18 +365,31 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun sendPrompt(text: String, sessionId: String) {
+    private fun sendPrompt(
+        text: String,
+        sessionId: String,
+        truncateBeforeUserOrdinal: Int? = null,
+    ) {
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
                     put("text", text)
                     put("session_id", sessionId)
+                    // Fix F-A3: when retrying, pass truncate_before_user_ordinal
+                    // so the server truncates history at the target user message
+                    // before appending the new one. Without this, retry would
+                    // duplicate the user message in server history.
+                    // Verified in tui_gateway/server.py:7448,7467-7484.
+                    if (truncateBeforeUserOrdinal != null) {
+                        put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
+                    }
                 }
                 gatewayClient.request(
                     method = GatewayMethods.PROMPT_SUBMIT,
                     params = jsonToElementMap(params),
                 )
-                // Response is just {"ok": true} — actual content comes via events
+                // Server returns {"status": "streaming"} — actual content comes
+                // via message.start / message.delta / message.complete events.
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
                 _uiState.value = _uiState.value.copy(
@@ -451,6 +482,15 @@ class ChatViewModel @Inject constructor(
         val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
         val lastUserText = lastUserMsg.text
 
+        // Fix F-A3: Compute the user-message ordinal (0-based index among
+        // user messages only) of the last user message. The server's
+        // prompt.submit handler accepts `truncate_before_user_ordinal` and
+        // truncates history at history[:user_indices[ordinal]] BEFORE appending
+        // the new text — so the user message is replaced, not duplicated.
+        // Verified in tui_gateway/server.py:7448,7467-7484.
+        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
+        val lastUserOrdinal = userMessages.size - 1  // 0-based index of last user msg
+
         // Remove the last assistant response (and any tool calls / status after it)
         val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
@@ -461,8 +501,16 @@ class ChatViewModel @Inject constructor(
             )
         }
 
-        // Resend the prompt
-        sendPrompt(lastUserText, sessionId)
+        // Resend the prompt with truncation — server will drop history from
+        // the target user message onward, then append the new text as a fresh
+        // user message. Net effect on server: [user(msg1), assistant(old),
+        // user(msg1)] becomes [user(msg1), assistant(old_truncated_away),
+        // user(msg1_fresh)]. The retried turn runs against a clean history.
+        sendPrompt(
+            text = lastUserText,
+            sessionId = sessionId,
+            truncateBeforeUserOrdinal = lastUserOrdinal,
+        )
     }
 
     // ── Feature #16: Search in current chat ──────────────────────────────
@@ -851,6 +899,47 @@ class ChatViewModel @Inject constructor(
         streamingBuffer.setLength(0)
     }
 
+    /**
+     * Finalize any assistant message left in `isStreaming=true` state.
+     *
+     * Called when the WebSocket disconnects mid-stream. Without this, the
+     * spinner would spin forever and the user couldn't tell the message was
+     * incomplete. We:
+     *   1. Flush any buffered deltas to the message text (don't lose partial output)
+     *   2. Mark the message as `isStreaming = false`
+     *   3. Append a small marker so the user sees the turn was interrupted
+     *   4. Clear `activeAssistantMessageId` so a fresh MessageStart doesn't
+     *      accidentally target this orphaned message
+     *   5. Reset `isSending` so the input bar is interactive again
+     *
+     * Fix for F-A5: orphaned streaming message on disconnect.
+     */
+    private fun finalizeOrphanedStreamingMessage(marker: String) {
+        // Flush any buffered text first so the user sees what was streamed
+        // before the disconnect.
+        flushStreamingBuffer()
+
+        val orphanedId = activeAssistantMessageId ?: return
+        var found = false
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == orphanedId) {
+                    found = true
+                    msg.copy(
+                        isStreaming = false,
+                        text = if (msg.text.isBlank()) marker else "$msg.text\n\n$marker",
+                    )
+                } else msg
+            },
+            isSending = false,
+        )
+        if (found) {
+            Timber.w("[Chat] Finalized orphaned streaming message $orphanedId with marker: $marker")
+        }
+        activeAssistantMessageId = null
+        resetStreamingBuffer()
+    }
+
     // ── Drawer: search / sort / pin / rename / delete ─────────────────────
 
     fun updateDrawerSearch(query: String) {
@@ -1048,6 +1137,12 @@ class ChatViewModel @Inject constructor(
         resetStreamingBuffer()
         // Feature #23: Save draft when ViewModel is cleared
         saveDraft()
-        viewModelScope.launch { gatewayClient.disconnect() }
+        // Note: we intentionally do NOT call gatewayClient.disconnect() here.
+        // GatewayClient is a process-scoped @Singleton (GatewayModule.kt:31)
+        // shared with HermesGatewayService (foreground service) and other
+        // ViewModels. The ViewModel should not tear down a connection it
+        // doesn't own. The previous `viewModelScope.launch { disconnect() }`
+        // call here was also dead code: viewModelScope is already cancelled
+        // by the time onCleared() runs, so the coroutine never executed.
     }
 }
