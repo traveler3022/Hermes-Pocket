@@ -53,6 +53,8 @@ class SessionsViewModel @Inject constructor(
     init {
         loadSessions()
         loadMemory()
+        loadAgents()
+        loadInsights()
     }
 
     // ── Sessions ──────────────────────────────────────────────────────────
@@ -110,9 +112,13 @@ class SessionsViewModel @Inject constructor(
                 isLoadingHistory = true,
                 selectedSessionId = sessionId,
                 selectedSessionHistory = emptyList(),
+                selectedSessionUsage = null,
             )
+            // Fetch token usage for the opened session in parallel.
+            loadUsage(sessionId)
             val messages = try {
-                val params = buildJsonObject { put("id", sessionId) }
+                // Hermes session.history resolves via _sess_nowait → params["session_id"].
+                val params = buildJsonObject { put("session_id", sessionId) }
                 val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, params.toMap())
                 parseHistory(result).also { msgs ->
                     Timber.i("[Sessions] session.history returned ${msgs.size} messages for $sessionId")
@@ -337,7 +343,7 @@ class SessionsViewModel @Inject constructor(
                 val messages = if (_uiState.value.selectedSessionId == sessionId) {
                     _uiState.value.selectedSessionHistory
                 } else {
-                    val params = buildJsonObject { put("id", sessionId) }
+                    val params = buildJsonObject { put("session_id", sessionId) }
                     val result = gatewayClient.request(
                         GatewayMethods.SESSION_HISTORY,
                         params.toMap(),
@@ -420,6 +426,104 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
+    // ── Token usage / cost (session.usage) ────────────────────────────────
+
+    /**
+     * Fetch token usage for a session. Hermes `session.usage` (param session_id)
+     * returns { calls, input, output, total, credits_lines? }. Surfaces the
+     * user's main concern — how many tokens a session burned.
+     */
+    fun loadUsage(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("session_id", sessionId) }
+                val result = gatewayClient.request(GatewayMethods.SESSION_USAGE, params.toMap())
+                val obj = result as? JsonObject
+                fun longOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+                val credits = (obj?.get("credits_lines") as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                _uiState.value = _uiState.value.copy(
+                    selectedSessionUsage = SessionUsage(
+                        calls = longOf("calls"),
+                        input = longOf("input"),
+                        output = longOf("output"),
+                        total = longOf("total"),
+                        creditsLines = credits,
+                    ),
+                )
+                Timber.i("[Sessions] Usage for $sessionId: total=${longOf("total")} tokens")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Sessions] Failed to load usage")
+                _uiState.value = _uiState.value.copy(selectedSessionUsage = null)
+            }
+        }
+    }
+
+    // ── Active agents (agents.list) ───────────────────────────────────────
+
+    /**
+     * List running agent/sub-agent processes. Hermes `agents.list` (no params)
+     * returns { processes: [{session_id, command, status, uptime}] }.
+     */
+    fun loadAgents() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.AGENTS_LIST)
+                val arr = (result as? JsonObject)?.get("processes") as? JsonArray ?: JsonArray(emptyList())
+                val procs = arr.mapNotNull { item ->
+                    val p = item as? JsonObject ?: return@mapNotNull null
+                    AgentProcess(
+                        sessionId = (p["session_id"] as? JsonPrimitive)?.content ?: "",
+                        command = (p["command"] as? JsonPrimitive)?.content ?: "",
+                        status = (p["status"] as? JsonPrimitive)?.content ?: "",
+                        uptimeSeconds = (p["uptime"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+                    )
+                }
+                _uiState.value = _uiState.value.copy(activeAgents = procs)
+                Timber.i("[Sessions] ${procs.size} active agents")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Sessions] Failed to load agents")
+                _uiState.value = _uiState.value.copy(activeAgents = emptyList())
+            }
+        }
+    }
+
+    // ── Usage insights (insights.get) ─────────────────────────────────────
+
+    /**
+     * Aggregate usage insights over a window. Hermes `insights.get` (param days)
+     * returns { days, sessions, messages }.
+     */
+    fun loadInsights(days: Int = 30) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingInsights = true)
+            try {
+                val params = buildJsonObject { put("days", days) }
+                val result = gatewayClient.request(GatewayMethods.INSIGHTS_GET, params.toMap())
+                val obj = result as? JsonObject
+                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                _uiState.value = _uiState.value.copy(
+                    insights = InsightsData(
+                        days = intOf("days").takeIf { it > 0 } ?: days,
+                        sessions = intOf("sessions"),
+                        messages = intOf("messages"),
+                    ),
+                    isLoadingInsights = false,
+                )
+                Timber.i("[Sessions] Insights ${days}d: ${intOf("sessions")} sessions, ${intOf("messages")} messages")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Sessions] Failed to load insights")
+                _uiState.value = _uiState.value.copy(isLoadingInsights = false)
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
@@ -451,6 +555,34 @@ data class SessionsUiState(
     val pinnedSessionIds: Set<String> = emptySet(),
     val showRenameDialog: SessionRenameDialog? = null,
     val showDeleteConfirm: String? = null,
+    // Token usage for the currently-open session (session.usage)
+    val selectedSessionUsage: SessionUsage? = null,
+    // Running agent processes (agents.list)
+    val activeAgents: List<AgentProcess> = emptyList(),
+    // Aggregate usage insights (insights.get)
+    val insights: InsightsData? = null,
+    val isLoadingInsights: Boolean = false,
+)
+
+data class SessionUsage(
+    val calls: Long,
+    val input: Long,
+    val output: Long,
+    val total: Long,
+    val creditsLines: List<String> = emptyList(),
+)
+
+data class AgentProcess(
+    val sessionId: String,
+    val command: String,
+    val status: String,
+    val uptimeSeconds: Long,
+)
+
+data class InsightsData(
+    val days: Int,
+    val sessions: Int,
+    val messages: Int,
 )
 
 data class MemoryUiState(

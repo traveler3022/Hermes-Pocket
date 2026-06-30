@@ -66,6 +66,7 @@ fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
@@ -116,6 +117,7 @@ fun ConfigScreen(
                     viewModel = viewModel,
                     onNavigateToPlatforms = onNavigateToPlatforms,
                     onNavigateToSkills = onNavigateToSkills,
+                    onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToRuntime = onNavigateToRuntime,
                     themeModeState = themeModeState,
@@ -134,6 +136,7 @@ private fun GeneralTab(
     viewModel: ConfigViewModel,
     onNavigateToPlatforms: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
@@ -311,6 +314,33 @@ private fun GeneralTab(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(t("Skills Browser", "مهارت‌ها"))
+        }
+
+        // Link to Plugins
+        androidx.compose.material3.OutlinedButton(
+            onClick = onNavigateToPlugins,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(t("Plugins", "پلاگین‌ها"))
+        }
+
+        // Reload config without restart (reload.mcp / reload.env)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.reloadMcp() },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(t("Reload MCP", "بارگذاری MCP"))
+            }
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.reloadEnv() },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(t("Reload env", "بارگذاری env"))
+            }
         }
 
         // Link to Cron Jobs
@@ -681,11 +711,26 @@ private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel, isActive: 
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             if (isActive) {
-                Text(
-                    text = "Active backend",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Active backend",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    // model.disconnect — wipe the saved key for this provider
+                    androidx.compose.material3.TextButton(
+                        onClick = { viewModel.disconnectProvider(model.provider) },
+                    ) {
+                        Text(
+                            t("Disconnect", "قطع اتصال"),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             } else {
                 androidx.compose.material3.TextButton(
                     onClick = { viewModel.selectModel(model) },

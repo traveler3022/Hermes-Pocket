@@ -209,6 +209,7 @@ fun SessionsScreen(
                 inHistoryDetail -> HistoryDetailView(
                     messages = uiState.selectedSessionHistory,
                     isLoading = uiState.isLoadingHistory,
+                    usage = uiState.selectedSessionUsage,
                     onResumeSession = {
                         uiState.selectedSessionId?.let { onResumeSession(it) }
                     },
@@ -337,6 +338,14 @@ private fun SessionsTab(state: SessionsUiState, viewModel: SessionsViewModel) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Aggregate usage insights (insights.get) — only when present.
+            state.insights?.let { ins ->
+                item(key = "insights") { InsightsCard(ins) }
+            }
+            // Active agent processes (agents.list) — hidden when none.
+            if (state.activeAgents.isNotEmpty()) {
+                item(key = "agents") { ActiveAgentsCard(state.activeAgents) }
+            }
             items(displaySessions, key = { it.id }) { session ->
                 SessionCard(
                     session = session,
@@ -446,6 +455,7 @@ private fun SessionCard(
 private fun HistoryDetailView(
     messages: List<HistoryMessage>,
     isLoading: Boolean,
+    usage: com.hermes.android.ui.viewmodel.SessionUsage?,
     onResumeSession: () -> Unit,
 ) {
     if (isLoading) {
@@ -462,6 +472,39 @@ private fun HistoryDetailView(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text(t("Continue this chat", "ادامه این گفتگو"))
+        }
+
+        // Token usage / cost (session.usage) — the user's main concern.
+        usage?.takeIf { it.total > 0 || it.calls > 0 }?.let { u ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = t("Token usage", "مصرف توکن"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        text = "▸ in ${u.input} · out ${u.output} · total ${u.total} · ${u.calls} calls",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    u.creditsLines.forEach { line ->
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                        )
+                    }
+                }
+            }
         }
 
         if (messages.isEmpty()) {
@@ -597,6 +640,62 @@ private fun MemoryCard(
                 color = contentColor,
                 modifier = Modifier.padding(top = 8.dp),
             )
+        }
+    }
+}
+
+// ── Insights & active agents ────────────────────────────────────────────
+
+@Composable
+private fun InsightsCard(insights: com.hermes.android.ui.viewmodel.InsightsData) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = t("Last ${insights.days} days", "${insights.days} روز اخیر"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = t(
+                    "${insights.sessions} sessions · ${insights.messages} messages",
+                    "${insights.sessions} گفتگو · ${insights.messages} پیام",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActiveAgentsCard(agents: List<com.hermes.android.ui.viewmodel.AgentProcess>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = t("Active agents (${agents.size})", "ایجنت‌های فعال (${agents.size})"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            agents.take(8).forEach { a ->
+                Text(
+                    text = "• ${a.command}  —  ${a.status}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
 }

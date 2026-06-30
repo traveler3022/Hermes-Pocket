@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { CHAT, CONFIG, PLATFORMS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
+private enum class Screen { CHAT, CONFIG, PLATFORMS, SESSIONS, SKILLS, PLUGINS, CRON, RUNTIME, ONBOARDING }
 
 @Composable
 private fun AppRoot(
@@ -147,6 +147,7 @@ private fun AppRoot(
             onNavigateBack = { screen = Screen.CHAT },
             onNavigateToPlatforms = { screen = Screen.PLATFORMS },
             onNavigateToSkills = { screen = Screen.SKILLS },
+            onNavigateToPlugins = { screen = Screen.PLUGINS },
             onNavigateToCron = { screen = Screen.CRON },
             onNavigateToRuntime = { screen = Screen.RUNTIME },
             themeModeState = themeModeState,
@@ -163,6 +164,9 @@ private fun AppRoot(
             },
         )
         Screen.SKILLS -> SkillsScreen(
+            onNavigateBack = { screen = Screen.CONFIG },
+        )
+        Screen.PLUGINS -> com.hermes.android.ui.screen.PluginsScreen(
             onNavigateBack = { screen = Screen.CONFIG },
         )
         Screen.CRON -> CronScreen(

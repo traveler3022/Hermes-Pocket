@@ -582,6 +582,53 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // ── Disconnect provider (model.disconnect) ────────────────────────────
+
+    /**
+     * Remove saved credentials for a provider. Hermes `model.disconnect`
+     * (param slug) wipes the stored key; errors 4001 (no slug) / 4005 (no creds).
+     */
+    fun disconnectProvider(slug: String) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("slug", slug) }
+                gatewayClient.request(GatewayMethods.MODEL_DISCONNECT, params.toMap())
+                _uiState.value = _uiState.value.copy(errorMessage = "Disconnected $slug")
+                loadModels()
+                loadConfig()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to disconnect $slug")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to disconnect $slug: ${e.message}")
+            }
+        }
+    }
+
+    // ── Reload config without restart (reload.mcp / reload.env) ────────────
+
+    fun reloadMcp() {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(GatewayMethods.RELOAD_MCP, buildJsonObject { put("confirm", true) }.toMap())
+                _uiState.value = _uiState.value.copy(errorMessage = "MCP servers reloaded")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] reload.mcp failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to reload MCP: ${e.message}")
+            }
+        }
+    }
+
+    fun reloadEnv() {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(GatewayMethods.RELOAD_ENV)
+                _uiState.value = _uiState.value.copy(errorMessage = "Environment reloaded")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] reload.env failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to reload env: ${e.message}")
+            }
+        }
+    }
+
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun clearError() {
