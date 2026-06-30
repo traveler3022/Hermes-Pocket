@@ -137,5 +137,5 @@ pkg install -y termux-api
 
 ---
 
-**→ بعد: [تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)**
+**→ بعد: [تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)** · **[راهنمای فنی کامل](RUNNING_ON_ANDROID_TERMUX.md)**
 </div>
