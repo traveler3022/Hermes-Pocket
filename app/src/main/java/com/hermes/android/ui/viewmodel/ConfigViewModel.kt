@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
-import java.util.Base64
 import javax.inject.Inject
 
 /**
@@ -225,220 +224,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun configureXiaomiBackend(apiKey: String, baseUrl: String, model: String) {
-        viewModelScope.launch {
-            try {
-                val targetModel = model.ifBlank { "mimo-v2.5-free" }
-                if (apiKey.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.MODEL_SAVE_KEY,
-                        buildJsonObject {
-                            put("slug", "xiaomi")
-                            put("api_key", apiKey.trim())
-                        }.toMap(),
-                    )
-                }
-                // Persist provider/model + base_url to config.yaml (for new
-                // sessions), then switch the LIVE agent via config.set key=model.
-                writeModelConfig("xiaomi", targetModel, baseUrl.trim().ifBlank { null })
-                val switchError = applyHermesModelSwitch("xiaomi", targetModel)
-                _uiState.value = _uiState.value.copy(
-                    activeProvider = "xiaomi",
-                    activeModel = targetModel,
-                    errorMessage = switchError ?: "MiMo backend saved",
-                )
-                loadConfig()
-                loadModels()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure MiMo")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure MiMo: ${e.message}")
-            }
-        }
-    }
-
-    fun configureGeminiBackend(apiKey: String, model: String) {
-        viewModelScope.launch {
-            try {
-                val targetModel = model.ifBlank { "gemini-2.5-flash" }
-                if (apiKey.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.MODEL_SAVE_KEY,
-                        buildJsonObject {
-                            put("slug", "gemini")
-                            put("api_key", apiKey.trim())
-                        }.toMap(),
-                    )
-                }
-                // Persist to config.yaml (for new sessions), then switch the
-                // LIVE agent via config.set key=model.
-                writeModelConfig("gemini", targetModel)
-                val switchError = applyHermesModelSwitch("gemini", targetModel)
-                _uiState.value = _uiState.value.copy(
-                    activeProvider = "gemini",
-                    activeModel = targetModel,
-                    errorMessage = switchError ?: "Gemini backend saved",
-                )
-                loadConfig()
-                loadModels()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure Gemini")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure Gemini: ${e.message}")
-            }
-        }
-    }
-
-    fun configureFallbackProvider(provider: String, model: String, baseUrl: String = "") {
-        viewModelScope.launch {
-            try {
-                val cleanProvider = provider.trim()
-                val cleanModel = model.trim()
-                if (cleanProvider.isBlank() || cleanModel.isBlank()) {
-                    _uiState.value = _uiState.value.copy(errorMessage = "Fallback provider and model are required")
-                    return@launch
-                }
-                writeFallbackChain(
-                    listOf(
-                        FallbackProviderConfig(
-                            provider = cleanProvider,
-                            model = cleanModel,
-                            baseUrl = baseUrl.trim().ifBlank { null },
-                        )
-                    )
-                )
-                _uiState.value = _uiState.value.copy(
-                    fallbackSummary = "$cleanProvider/$cleanModel",
-                    errorMessage = "Fallback set to $cleanProvider/$cleanModel",
-                )
-                loadConfig()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure fallback")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to configure fallback: ${e.message}")
-            }
-        }
-    }
-
-    fun clearFallbackProviders() {
-        viewModelScope.launch {
-            try {
-                writeFallbackChain(emptyList())
-                _uiState.value = _uiState.value.copy(
-                    fallbackSummary = "none",
-                    errorMessage = "Fallback providers cleared",
-                )
-                loadConfig()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to clear fallback")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to clear fallback: ${e.message}")
-            }
-        }
-    }
-
-    // config.set RPC doesn't accept dotted keys (model.provider, model.default) — write config.yaml directly.
-    // Data is passed via Base64 JSON to avoid shell/Python injection for any provider or model name.
-    private suspend fun writeModelConfig(provider: String, model: String, baseUrl: String? = null) {
-        val json = buildString {
-            append("{\"provider\":\"").append(provider.escapeJson()).append("\"")
-            append(",\"model\":\"").append(model.escapeJson()).append("\"")
-            if (baseUrl != null) append(",\"base_url\":\"").append(baseUrl.escapeJson()).append("\"")
-            append("}")
-        }
-        val payload = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
-        val command = """
-            python3 - <<'PY'
-            import base64, json
-            from pathlib import Path
-            import yaml
-            data = json.loads(base64.b64decode('$payload').decode('utf-8'))
-            path = Path.home() / '.hermes' / 'config.yaml'
-            if path.exists():
-                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                cfg = {}
-            cfg.setdefault('model', {})['provider'] = data['provider']
-            cfg.setdefault('model', {})['default'] = data['model']
-            if 'base_url' in data:
-                cfg.setdefault('model', {})['base_url'] = data['base_url']
-            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
-            print('model config updated: provider=' + data['provider'] + ' model=' + data['model'])
-            PY
-        """.trimIndent()
-        gatewayClient.request(
-            GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive(command)),
-            timeoutMs = 10_000,
-        )
-    }
-
-    private suspend fun writeFallbackChain(entries: List<FallbackProviderConfig>) {
-        val json = entries.joinToString(prefix = "[", postfix = "]") { entry ->
-            buildString {
-                append("{")
-                append("\"provider\":\"").append(entry.provider.escapeJson()).append("\"")
-                append(",\"model\":\"").append(entry.model.escapeJson()).append("\"")
-                entry.baseUrl?.let { append(",\"base_url\":\"").append(it.escapeJson()).append("\"") }
-                append("}")
-            }
-        }
-        val payload = Base64.getEncoder().encodeToString(json.toByteArray(Charsets.UTF_8))
-        val command = """
-            python3 - <<'PY'
-            import base64, json
-            from pathlib import Path
-            import yaml
-
-            entries = json.loads(base64.b64decode('$payload').decode('utf-8'))
-            path = Path.home() / '.hermes' / 'config.yaml'
-            if path.exists():
-                cfg = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                cfg = {}
-            cfg['fallback_providers'] = entries
-            cfg.pop('fallback_model', None)
-            path.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
-            print('fallback_providers updated:', entries)
-            PY
-        """.trimIndent()
-        gatewayClient.request(
-            GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive(command)),
-            timeoutMs = 10_000,
-        )
-    }
-
-    fun configureCustomProvider(provider: String, model: String, apiKey: String, baseUrl: String) {
-        viewModelScope.launch {
-            try {
-                if (apiKey.isNotBlank()) {
-                    gatewayClient.request(
-                        GatewayMethods.MODEL_SAVE_KEY,
-                        buildJsonObject {
-                            put("slug", provider)
-                            put("api_key", apiKey)
-                        }.toMap(),
-                    )
-                }
-                // Persist base_url + provider/model to config.yaml (for new
-                // sessions), then switch the LIVE agent via config.set key=model.
-                writeModelConfig(provider, model, baseUrl.ifBlank { null })
-                val switchError = applyHermesModelSwitch(provider, model)
-                _uiState.value = _uiState.value.copy(
-                    activeProvider = provider,
-                    activeModel = model,
-                    errorMessage = switchError ?: "Backend set to $provider/$model",
-                )
-                loadConfig()
-                loadModels()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to configure custom provider")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to configure $provider: ${e.message}",
-                )
-            }
-        }
-    }
-
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {
@@ -582,27 +367,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    // ── Disconnect provider (model.disconnect) ────────────────────────────
-
-    /**
-     * Remove saved credentials for a provider. Hermes `model.disconnect`
-     * (param slug) wipes the stored key; errors 4001 (no slug) / 4005 (no creds).
-     */
-    fun disconnectProvider(slug: String) {
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject { put("slug", slug) }
-                gatewayClient.request(GatewayMethods.MODEL_DISCONNECT, params.toMap())
-                _uiState.value = _uiState.value.copy(errorMessage = "Disconnected $slug")
-                loadModels()
-                loadConfig()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to disconnect $slug")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to disconnect $slug: ${e.message}")
-            }
-        }
-    }
-
     // ── Reload config without restart (reload.mcp / reload.env) ────────────
 
     fun reloadMcp() {
@@ -648,7 +412,6 @@ data class ConfigUiState(
     val isLoadingConfig: Boolean = false,
     val activeProvider: String? = null,
     val activeModel: String? = null,
-    val fallbackSummary: String? = null,
     val availableModels: List<ModelOption> = emptyList(),
     val isLoadingModels: Boolean = false,
     val availableTools: List<ToolOption> = emptyList(),
@@ -661,15 +424,6 @@ enum class ConfigTab(val label: String) {
     MODELS("Models"),
     TOOLS("Tools"),
 }
-
-data class FallbackProviderConfig(
-    val provider: String,
-    val model: String,
-    val baseUrl: String? = null,
-)
-
-private fun String.escapeJson(): String =
-    replace("\\", "\\\\").replace("\"", "\\\"")
 
 data class ModelOption(
     val provider: String,
