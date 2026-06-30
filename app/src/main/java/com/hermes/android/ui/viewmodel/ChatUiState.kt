@@ -52,7 +52,37 @@ sealed class ChatMessage {
         val text: String,
         val isError: Boolean,
     ) : ChatMessage()
+
+    /** Interactive request: clarify question, sudo prompt, or secret input. */
+    data class InteractiveRequest(
+        override val id: String,
+        override val timestamp: Long,
+        val requestId: String,
+        val question: String,
+        val choices: List<String>?,
+        val answered: Boolean = false,
+        val kind: InteractiveKind = InteractiveKind.CLARIFY,
+    ) : ChatMessage()
+
+    /** Sub-agent execution card. */
+    data class SubagentCard(
+        override val id: String,
+        override val timestamp: Long,
+        val subagentType: String,
+        val text: String,
+        val isComplete: Boolean = false,
+    ) : ChatMessage()
 }
+
+enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+
+data class NotificationUi(
+    val key: String?,
+    val kind: String?,
+    val level: String?,
+    val text: String?,
+    val ttlMs: Long?,
+)
 
 /**
  * A conversation session.
@@ -64,6 +94,13 @@ data class SessionItem(
     val updatedAt: Long,
     /** Number of messages in this session (if known). */
     val messageCount: Int? = null,
+)
+
+/** Rename dialog state for the session drawer. */
+data class DrawerRenameState(
+    val sessionId: String,
+    val currentTitle: String,
+    val inputText: String = currentTitle,
 )
 
 /**
@@ -81,9 +118,14 @@ data class ChatUiState(
     // Feature #16: Search in current chat
     val searchQuery: String = "",
     val showSearch: Boolean = false,
-    // Feature #8: Quick model switch from chat
-    val showModelSwitcher: Boolean = false,
-    val currentModelName: String = "",
+    // Drawer: search / sort / pin / rename / delete
+    val drawerSearchQuery: String = "",
+    val drawerSortNewest: Boolean = true,
+    val drawerPinnedIds: Set<String> = emptySet(),
+    val drawerRenameTarget: DrawerRenameState? = null,
+    val drawerDeleteTarget: String? = null,
+    // Triggers scroll-to-bottom on session load (changes value each time)
+    val sessionLoadedAt: Long = 0L,
 )
 
 enum class ChatConnectionState {
