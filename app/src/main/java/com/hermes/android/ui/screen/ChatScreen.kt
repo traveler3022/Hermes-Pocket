@@ -113,6 +113,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SessionItem
+import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import kotlinx.coroutines.launch
 
 /**
@@ -154,6 +155,7 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
+    val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -465,6 +467,7 @@ fun ChatScreen(
                 InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
+                    slashCommands = slashCommands,
                     onTextChange = viewModel::updateInputText,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
@@ -1335,6 +1338,7 @@ private fun thinkingDotStr(): String {
 private fun InputBar(
     text: String,
     isSending: Boolean,
+    slashCommands: List<SlashCommandSuggestion>,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -1342,12 +1346,17 @@ private fun InputBar(
     val context = LocalContext.current
     // t() is @Composable — hoist out of the onClick lambda below.
     val comingSoonToast = t("Coming soon", "به زودی")
-    // Feature 5.2: slash command suggestions
-    val slashCommands = listOf("/help", "/clear", "/config", "/model", "/session")
+    // Feature 5.2: slash command suggestions — from the gateway catalog
+    // (commands.catalog); falls back to a minimal built-in list if empty.
+    val fallbackCommands = remember {
+        listOf("/help", "/clear", "/config", "/model", "/session")
+            .map { SlashCommandSuggestion(it, "") }
+    }
+    val commandList = slashCommands.ifEmpty { fallbackCommands }
     val showSuggestions = text.startsWith("/") && !isSending
-    val suggestions = remember(text) {
-        if (text == "/") slashCommands
-        else slashCommands.filter { it.startsWith(text) }
+    val suggestions = remember(text, commandList) {
+        if (text == "/") commandList
+        else commandList.filter { it.command.startsWith(text) }
     }
 
     Column(
@@ -1365,8 +1374,8 @@ private fun InputBar(
             ) {
                 items(suggestions) { cmd ->
                     SuggestionChip(
-                        onClick = { onTextChange(cmd) },
-                        label = { Text(cmd) },
+                        onClick = { onTextChange(cmd.command) },
+                        label = { Text(cmd.command) },
                     )
                 }
             }

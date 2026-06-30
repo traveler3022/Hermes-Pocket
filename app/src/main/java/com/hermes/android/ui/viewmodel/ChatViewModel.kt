@@ -60,6 +60,10 @@ class ChatViewModel @Inject constructor(
     private val _notification = MutableStateFlow<NotificationUi?>(null)
     val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
 
+    /** Slash-command catalog from the gateway (replaces the hardcoded list). */
+    private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
+    val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
+
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
     private var activeAssistantMessageId: String? = null
@@ -72,6 +76,33 @@ class ChatViewModel @Inject constructor(
     init {
         loadDraft()
         connectAndCollect()
+        loadCommandCatalog()
+    }
+
+    /**
+     * Load the real slash-command catalog from Hermes (`commands.catalog`,
+     * no params) instead of a hardcoded list. Response shape:
+     *   { pairs: [[name, description], ...], ... }
+     */
+    private fun loadCommandCatalog() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG)
+                val pairs = (result as? JsonObject)?.get("pairs") as? kotlinx.serialization.json.JsonArray
+                val cmds = pairs?.mapNotNull { row ->
+                    val arr = row as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+                    val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
+                    val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
+                    SlashCommandSuggestion(command = name, description = desc)
+                } ?: emptyList()
+                if (cmds.isNotEmpty()) {
+                    _slashCommands.value = cmds
+                    Timber.i("[Chat] Loaded ${cmds.size} slash commands from catalog")
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] commands.catalog failed — keeping fallback list")
+            }
+        }
     }
 
     // ── Connection ────────────────────────────────────────────────────────
