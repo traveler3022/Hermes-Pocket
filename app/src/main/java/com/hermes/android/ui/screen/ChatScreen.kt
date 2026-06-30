@@ -111,7 +111,13 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material3.TextField
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import kotlinx.coroutines.launch
@@ -208,6 +214,13 @@ fun ChatScreen(
         }
     }
 
+    // Jump to last message whenever a session is loaded/resumed
+    LaunchedEffect(uiState.sessionLoadedAt) {
+        if (uiState.sessionLoadedAt > 0L && uiState.messages.isNotEmpty()) {
+            listState.scrollToItem(uiState.messages.size - 1)
+        }
+    }
+
     // Show error snackbar
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -271,39 +284,92 @@ fun ChatScreen(
                 ) {
                     Text(t("New conversation", "گفتگوی جدید"))
                 }
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateToSessions()
-                    },
+                // ── Drawer search + sort bar ───────────────────────────────
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = t("Manage all sessions", "مدیریت همه گفتگوها"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    OutlinedTextField(
+                        value = uiState.drawerSearchQuery,
+                        onValueChange = { viewModel.updateDrawerSearch(it) },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                t("Search chats…", "جستجو در گفتگوها…"),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailingIcon = {
+                            if (uiState.drawerSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.updateDrawerSearch("") }) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = t("Clear", "پاک کردن"),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        textStyle = MaterialTheme.typography.bodySmall,
+                    )
+                    IconButton(onClick = { viewModel.toggleDrawerSort() }) {
                         Icon(
-                            Icons.Default.History,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Icons.Default.Sort,
+                            contentDescription = if (uiState.drawerSortNewest)
+                                t("Newest first", "جدیدترین اول")
+                            else
+                                t("Oldest first", "قدیمی‌ترین اول"),
+                            tint = if (!uiState.drawerSortNewest)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                 // ── Session list (fills remaining space) ───────────────────
-                if (uiState.sessions.isEmpty()) {
+                val drawerSessions = remember(
+                    uiState.sessions,
+                    uiState.drawerSearchQuery,
+                    uiState.drawerSortNewest,
+                    uiState.drawerPinnedIds,
+                ) {
+                    var list = uiState.sessions
+                    val q = uiState.drawerSearchQuery.trim().lowercase()
+                    if (q.isNotEmpty()) {
+                        list = list.filter { it.title.lowercase().contains(q) }
+                    }
+                    list = if (uiState.drawerSortNewest) {
+                        list.sortedByDescending { it.updatedAt }
+                    } else {
+                        list.sortedBy { it.updatedAt }
+                    }
+                    // pinned items float to top
+                    val pinned = list.filter { it.id in uiState.drawerPinnedIds }
+                    val unpinned = list.filter { it.id !in uiState.drawerPinnedIds }
+                    pinned + unpinned
+                }
+
+                if (drawerSessions.isEmpty()) {
                     Text(
-                        text = t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
+                        text = if (uiState.drawerSearchQuery.isNotEmpty())
+                            t("No results", "نتیجه‌ای یافت نشد")
+                        else
+                            t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
@@ -311,17 +377,83 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.weight(1f))
                 } else {
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(uiState.sessions, key = { it.id }) { session ->
+                        items(drawerSessions, key = { it.id }) { session ->
                             SessionDrawerRow(
                                 session = session,
                                 isActive = session.id == uiState.activeSessionId,
+                                isPinned = session.id in uiState.drawerPinnedIds,
                                 onClick = {
                                     viewModel.resumeSession(session.id)
                                     scope.launch { drawerState.close() }
                                 },
+                                onLongClick = {
+                                    viewModel.drawerShowRename(session.id, session.title)
+                                },
+                                onPin = { viewModel.drawerTogglePin(session.id) },
+                                onRename = { viewModel.drawerShowRename(session.id, session.title) },
+                                onDelete = { viewModel.drawerShowDelete(session.id) },
                             )
                         }
                     }
+                }
+
+                // ── Rename dialog ──────────────────────────────────────────
+                uiState.drawerRenameTarget?.let { rename ->
+                    AlertDialog(
+                        onDismissRequest = { viewModel.drawerHideRename() },
+                        title = { Text(t("Rename chat", "تغییر نام گفتگو")) },
+                        text = {
+                            OutlinedTextField(
+                                value = rename.inputText,
+                                onValueChange = { viewModel.drawerUpdateRenameText(it) },
+                                singleLine = true,
+                                placeholder = { Text(rename.currentTitle) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        },
+                        confirmButton = {
+                            Button(onClick = { viewModel.drawerConfirmRename() }) {
+                                Text(t("Save", "ذخیره"))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.drawerHideRename() }) {
+                                Text(t("Cancel", "لغو"))
+                            }
+                        },
+                    )
+                }
+
+                // ── Delete confirm dialog ──────────────────────────────────
+                if (uiState.drawerDeleteTarget != null) {
+                    val targetSession = uiState.sessions.find { it.id == uiState.drawerDeleteTarget }
+                    AlertDialog(
+                        onDismissRequest = { viewModel.drawerHideDelete() },
+                        title = { Text(t("Delete chat?", "حذف گفتگو؟")) },
+                        text = {
+                            Text(
+                                t(
+                                    "\"${targetSession?.title ?: "This chat"}\" will be permanently deleted.",
+                                    "گفتگوی \"${targetSession?.title ?: "این گفتگو"}\" برای همیشه حذف می‌شود.",
+                                )
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = { viewModel.drawerConfirmDelete() },
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Text(t("Delete", "حذف"))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.drawerHideDelete() }) {
+                                Text(t("Cancel", "لغو"))
+                            }
+                        },
+                    )
                 }
 
                 // ── Footer: Settings ───────────────────────────────────────
@@ -579,17 +711,24 @@ private fun formatRelativeTime(timestampMs: Long): String {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionDrawerRow(
     session: SessionItem,
     isActive: Boolean,
+    isPinned: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onPin: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val relativeTime = formatRelativeTime(session.updatedAt)
     val messageCountText = session.messageCount?.let { count ->
         t("$count messages", "$count پیام")
     }
     val subtitle = buildString {
+        if (isPinned) append("📌 ")
         if (messageCountText != null) {
             append(messageCountText)
             append(" · ")
@@ -597,34 +736,88 @@ private fun SessionDrawerRow(
         append(relativeTime)
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = session.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-            )
-            // Feature #26: Show relative time instead of raw timestamp
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { showMenu = true },
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = it.take(80),
+                    text = session.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = it.take(80),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (isPinned) t("Unpin", "برداشتن سنجاق")
+                        else t("Pin", "سنجاق کردن")
+                    )
+                },
+                leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onPin()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(t("Rename", "تغییر نام")) },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onRename()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        t("Delete", "حذف"),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    showMenu = false
+                    onDelete()
+                },
+            )
         }
     }
 }
