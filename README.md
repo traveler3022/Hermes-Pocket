@@ -53,19 +53,19 @@
 
 **Stays on your phone:** Your API key lives in Hermes' config inside Termux. The app-to-agent link runs over `127.0.0.1` — it never leaves the device.
 
-**Leaves your phone:** Your messages go to the model provider you chose (Gemini → Google, OpenRouter → various). Don't send anything you wouldn't want the provider to see.
+**Leaves your phone:** Your messages go to the model provider you chose (Gemini → Google, OpenRouter → various). That's how any AI API works.
+
+```
+You → Hermes2 → AI Provider (e.g. Google)
+         │
+         └─ API key stays on your phone ✅
+```
+
+> ⚠️ Avoid sending passwords, banking info, or anything sensitive in your chats.
 
 **What the agent can do:** Hermes runs shell commands inside Termux. On a non-rooted phone, Android's sandbox confines this to Termux's storage only.
 
 > ⚠️ **Do not root your phone to run this.** Rooting removes the sandbox.
-
-> 🔒 **یک نکته:** پیامهایی که توی چت مینویسی به ارائهدهندهی هوش مصنوعی که انتخاب کردی میره (مثلاً گوگل). از فرستادن رمز عبور، اطلاعات بانکی یا هر چیز حساس دیگه خودداری کن. کلید API تو فقط روی گوشیت ذخیره میشه و به هیچ سروری فرستاده نمیشه.
-
-```
-تو ← اپ Hermes2 ← ارائهدهنده هوش مصنوعی (مثلاً گوگل)
-         │
-         └─ کلید API فقط روی گوشیت میمونه ✅
-```
 
 **Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
 
