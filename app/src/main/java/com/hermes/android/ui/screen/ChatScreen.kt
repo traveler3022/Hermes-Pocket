@@ -1,10 +1,12 @@
 package com.hermes.android.ui.screen
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateInt
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -30,36 +32,45 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -78,6 +89,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,9 +97,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import com.hermes.android.ui.viewmodel.InteractiveKind
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -97,8 +111,14 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Sort
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.SessionItem
+import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import kotlinx.coroutines.launch
 
 /**
@@ -139,6 +159,8 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val notification by viewModel.notification.collectAsStateWithLifecycle()
+    val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -172,6 +194,8 @@ fun ChatScreen(
                             msg.argsText?.lowercase()?.contains(query) == true ||
                             msg.resultText?.lowercase()?.contains(query) == true)
                     is ChatMessage.Status -> msg.text.lowercase().contains(query)
+                    is ChatMessage.InteractiveRequest -> msg.question.lowercase().contains(query)
+                    is ChatMessage.SubagentCard -> msg.text.lowercase().contains(query)
                 }
             }
         }
@@ -182,10 +206,17 @@ fun ChatScreen(
         if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
     }
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
+        if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
             listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    // Jump to last message whenever a session is loaded/resumed
+    LaunchedEffect(uiState.sessionLoadedAt) {
+        if (uiState.sessionLoadedAt > 0L && uiState.messages.isNotEmpty()) {
+            listState.scrollToItem(uiState.messages.size - 1)
         }
     }
 
@@ -218,17 +249,6 @@ fun ChatScreen(
         }
     }
 
-    // Feature #8: Model switcher dialog
-    if (uiState.showModelSwitcher) {
-        ModelSwitcherDialog(
-            currentModel = uiState.currentModelName,
-            onDismiss = { viewModel.toggleModelSwitcher() },
-            onConfirm = { provider, model ->
-                viewModel.switchModelFromChat(provider, model)
-            },
-        )
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -236,11 +256,22 @@ fun ChatScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
             ) {
-                Text(
-                    text = t("Conversations", "گفتگوها"),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(20.dp),
-                )
+                // ── Header ─────────────────────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = t("Hermes", "هرمس"),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    IconButton(onClick = { scope.launch { drawerState.close() } }) {
+                        Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
+                    }
+                }
                 Button(
                     onClick = {
                         viewModel.newConversation()
@@ -248,31 +279,205 @@ fun ChatScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
                     Text(t("New conversation", "گفتگوی جدید"))
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                if (uiState.sessions.isEmpty()) {
+                // ── Drawer search + sort bar ───────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    OutlinedTextField(
+                        value = uiState.drawerSearchQuery,
+                        onValueChange = { viewModel.updateDrawerSearch(it) },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                t("Search chats…", "جستجو در گفتگوها…"),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        trailingIcon = {
+                            if (uiState.drawerSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.updateDrawerSearch("") }) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = t("Clear", "پاک کردن"),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        textStyle = MaterialTheme.typography.bodySmall,
+                    )
+                    IconButton(onClick = { viewModel.toggleDrawerSort() }) {
+                        Icon(
+                            Icons.Default.Sort,
+                            contentDescription = if (uiState.drawerSortNewest)
+                                t("Newest first", "جدیدترین اول")
+                            else
+                                t("Oldest first", "قدیمی‌ترین اول"),
+                            tint = if (!uiState.drawerSortNewest)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // ── Session list (fills remaining space) ───────────────────
+                val drawerSessions = remember(
+                    uiState.sessions,
+                    uiState.drawerSearchQuery,
+                    uiState.drawerSortNewest,
+                    uiState.drawerPinnedIds,
+                ) {
+                    var list = uiState.sessions
+                    val q = uiState.drawerSearchQuery.trim().lowercase()
+                    if (q.isNotEmpty()) {
+                        list = list.filter { it.title.lowercase().contains(q) }
+                    }
+                    list = if (uiState.drawerSortNewest) {
+                        list.sortedByDescending { it.updatedAt }
+                    } else {
+                        list.sortedBy { it.updatedAt }
+                    }
+                    // pinned items float to top
+                    val pinned = list.filter { it.id in uiState.drawerPinnedIds }
+                    val unpinned = list.filter { it.id !in uiState.drawerPinnedIds }
+                    pinned + unpinned
+                }
+
+                if (drawerSessions.isEmpty()) {
                     Text(
-                        text = t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
+                        text = if (uiState.drawerSearchQuery.isNotEmpty())
+                            t("No results", "نتیجه‌ای یافت نشد")
+                        else
+                            t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
                     )
+                    Spacer(modifier = Modifier.weight(1f))
                 } else {
-                    LazyColumn {
-                        items(uiState.sessions, key = { it.id }) { session ->
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(drawerSessions, key = { it.id }) { session ->
                             SessionDrawerRow(
                                 session = session,
                                 isActive = session.id == uiState.activeSessionId,
+                                isPinned = session.id in uiState.drawerPinnedIds,
                                 onClick = {
                                     viewModel.resumeSession(session.id)
                                     scope.launch { drawerState.close() }
                                 },
+                                onLongClick = {
+                                    viewModel.drawerShowRename(session.id, session.title)
+                                },
+                                onPin = { viewModel.drawerTogglePin(session.id) },
+                                onRename = { viewModel.drawerShowRename(session.id, session.title) },
+                                onDelete = { viewModel.drawerShowDelete(session.id) },
                             )
                         }
                     }
+                }
+
+                // ── Rename dialog ──────────────────────────────────────────
+                uiState.drawerRenameTarget?.let { rename ->
+                    AlertDialog(
+                        onDismissRequest = { viewModel.drawerHideRename() },
+                        title = { Text(t("Rename chat", "تغییر نام گفتگو")) },
+                        text = {
+                            OutlinedTextField(
+                                value = rename.inputText,
+                                onValueChange = { viewModel.drawerUpdateRenameText(it) },
+                                singleLine = true,
+                                placeholder = { Text(rename.currentTitle) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        },
+                        confirmButton = {
+                            Button(onClick = { viewModel.drawerConfirmRename() }) {
+                                Text(t("Save", "ذخیره"))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.drawerHideRename() }) {
+                                Text(t("Cancel", "لغو"))
+                            }
+                        },
+                    )
+                }
+
+                // ── Delete confirm dialog ──────────────────────────────────
+                if (uiState.drawerDeleteTarget != null) {
+                    val targetSession = uiState.sessions.find { it.id == uiState.drawerDeleteTarget }
+                    AlertDialog(
+                        onDismissRequest = { viewModel.drawerHideDelete() },
+                        title = { Text(t("Delete chat?", "حذف گفتگو؟")) },
+                        text = {
+                            Text(
+                                t(
+                                    "\"${targetSession?.title ?: "This chat"}\" will be permanently deleted.",
+                                    "گفتگوی \"${targetSession?.title ?: "این گفتگو"}\" برای همیشه حذف می‌شود.",
+                                )
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = { viewModel.drawerConfirmDelete() },
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Text(t("Delete", "حذف"))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.drawerHideDelete() }) {
+                                Text(t("Cancel", "لغو"))
+                            }
+                        },
+                    )
+                }
+
+                // ── Footer: Settings ───────────────────────────────────────
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { drawerState.close() }
+                            onNavigateToSettings()
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = t("Settings", "تنظیمات"),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         },
@@ -297,21 +502,11 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            TextButton(onClick = { viewModel.toggleModelSwitcher() }) {
-                                Text(
-                                    text = uiState.currentModelName.ifEmpty { t("Model", "مدل") },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                )
-                            }
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                                     contentDescription = t("Search", "جستجو"),
                                 )
-                            }
-                            IconButton(onClick = onNavigateToSettings) {
-                                Icon(Icons.Default.Settings, contentDescription = t("Settings", "تنظیمات"))
                             }
                         },
                     )
@@ -390,6 +585,26 @@ fun ChatScreen(
                 if (uiState.connectionState == ChatConnectionState.Connecting && uiState.messages.isEmpty()) {
                     ShimmerSkeleton()
                 } else {
+                    // Notification banner
+                    notification?.let { notif ->
+                        Surface(
+                            color = when (notif.level) {
+                                "error" -> MaterialTheme.colorScheme.errorContainer
+                                "warn" -> MaterialTheme.colorScheme.tertiaryContainer
+                                "success" -> MaterialTheme.colorScheme.primaryContainer
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text(
+                                text = notif.text ?: "",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+
                     // Message list
                     val copiedToast = t("Copied", "کپی شد")
                     val codeCopiedToast = t("Code copied", "کد کپی شد")
@@ -421,6 +636,9 @@ fun ChatScreen(
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onRetry = { viewModel.retryLastMessage() },
+                                onRespondToClarify = viewModel::respondToClarify,
+                                onRespondToSudo = viewModel::respondToSudo,
+                                onRespondToSecret = viewModel::respondToSecret,
                             )
                         }
                     }
@@ -439,6 +657,7 @@ fun ChatScreen(
                 InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
+                    slashCommands = slashCommands,
                     onTextChange = viewModel::updateInputText,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
@@ -491,17 +710,24 @@ private fun formatRelativeTime(timestampMs: Long): String {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionDrawerRow(
     session: SessionItem,
     isActive: Boolean,
+    isPinned: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onPin: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val relativeTime = formatRelativeTime(session.updatedAt)
     val messageCountText = session.messageCount?.let { count ->
         t("$count messages", "$count پیام")
     }
     val subtitle = buildString {
+        if (isPinned) append("📌 ")
         if (messageCountText != null) {
             append(messageCountText)
             append(" · ")
@@ -509,34 +735,88 @@ private fun SessionDrawerRow(
         append(relativeTime)
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = session.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-            )
-            // Feature #26: Show relative time instead of raw timestamp
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { showMenu = true },
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = it.take(80),
+                    text = session.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = it.take(80),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (isPinned) t("Unpin", "برداشتن سنجاق")
+                        else t("Pin", "سنجاق کردن")
+                    )
+                },
+                leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onPin()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(t("Rename", "تغییر نام")) },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onRename()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        t("Delete", "حذف"),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    showMenu = false
+                    onDelete()
+                },
+            )
         }
     }
 }
@@ -698,72 +978,6 @@ private fun ShimmerSkeleton() {
     }
 }
 
-// ── Feature #8: Model switcher dialog ────────────────────────────────────
-
-@Composable
-private fun ModelSwitcherDialog(
-    currentModel: String,
-    onDismiss: () -> Unit,
-    onConfirm: (provider: String, model: String) -> Unit,
-) {
-    var providerText by remember { mutableStateOf("") }
-    var modelText by remember { mutableStateOf("") }
-
-    // Pre-fill from current model if it has provider/model format
-    LaunchedEffect(currentModel) {
-        if (currentModel.contains("/")) {
-            val parts = currentModel.split("/", limit = 2)
-            providerText = parts[0]
-            modelText = parts[1]
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(t("Switch Model", "تغییر مدل")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (currentModel.isNotEmpty()) {
-                    Text(
-                        text = t("Current: $currentModel", "فعلی: $currentModel"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                OutlinedTextField(
-                    value = providerText,
-                    onValueChange = { providerText = it },
-                    label = { Text(t("Provider", "ارائه‌دهنده")) },
-                    placeholder = { Text("e.g. anthropic, openai") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = modelText,
-                    onValueChange = { modelText = it },
-                    label = { Text(t("Model", "مدل")) },
-                    placeholder = { Text("e.g. claude-sonnet-4-20250514") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(providerText.trim(), modelText.trim()) },
-                enabled = providerText.isNotBlank() && modelText.isNotBlank(),
-            ) {
-                Text(t("Switch", "تغییر"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(t("Cancel", "لغو"))
-            }
-        },
-    )
-}
-
 // ── Regex for code block detection ───────────────────────────────────────
 
 private val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
@@ -798,6 +1012,9 @@ private fun MessageBubble(
     onCopyMessage: (String) -> Unit = {},
     onCopyCode: (String) -> Unit = {},
     onRetry: () -> Unit = {},
+    onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
+    onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
+    onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -866,6 +1083,7 @@ private fun MessageBubble(
             val isLongResponse = message.text.length > 1500
             var isResponseExpanded by remember { mutableStateOf(true) }
             var isThinkingExpanded by remember { mutableStateOf(false) }
+            var showContextMenu by remember { mutableStateOf(false) }
             val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
             val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\\([^()]{1,12}\\)") }
             val emotions = remember(message.reasoning) {
@@ -876,22 +1094,29 @@ private fun MessageBubble(
                 } ?: emptyList()
             }
 
+            // Feature 7.1: animated dots only while streaming with reasoning
+            val dotStr = if (message.isStreaming && hasThinking) thinkingDotStr() else ""
+
+            val assistantContext = LocalContext.current
+            val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
-                    Card(
-                        modifier = Modifier
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onCopyMessage(message.text) },
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { showContextMenu = true },
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        ),
-                        shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
-                    ) {
+                            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
+                        ) {
                         Column(
                             modifier = Modifier
                                 .padding(12.dp)
@@ -917,17 +1142,23 @@ private fun MessageBubble(
                                         )
                                     }
                                     Text(
-                                        text = if (isThinkingExpanded) t("Thinking ▲", "فکر کردن ▲")
-                                               else t("Thinking ▼", "فکر کردن ▼"),
+                                        text = when {
+                                            message.isStreaming && hasThinking && !isThinkingExpanded ->
+                                                "💭$dotStr"
+                                            isThinkingExpanded -> t("Thinking ▲", "فکر کردن ▲")
+                                            else -> t("Thinking ▼", "فکر کردن ▼")
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     )
                                 }
                                 AnimatedVisibility(visible = isThinkingExpanded) {
-                                    Text(
-                                        text = message.reasoning ?: "",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    // Feature 7.2: HermesMarkdown for reasoning
+                                    HermesMarkdown(
+                                        markdown = message.reasoning ?: "",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 8.dp),
@@ -946,13 +1177,10 @@ private fun MessageBubble(
                                 } else {
                                     message.text
                                 }
-                                SelectionContainer {
-                                    dev.jeziellago.compose.markdowntext.MarkdownText(
-                                        markdown = displayMd,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                    )
+                                if (displayMd.isNotBlank()) {
+                                    SelectionContainer {
+                                        HermesMarkdown(markdown = displayMd)
+                                    }
                                 }
                                 if (isLongResponse) {
                                     TextButton(
@@ -980,11 +1208,57 @@ private fun MessageBubble(
                                 )
                             }
                         }
+                        }
+                        // Feature 9: long-press context menu
+                        DropdownMenu(
+                            expanded = showContextMenu,
+                            onDismissRequest = { showContextMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(t("Copy text", "کپی متن")) },
+                                onClick = {
+                                    onCopyMessage(message.text)
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                },
+                            )
+                            val firstCode = codeBlocks.firstOrNull()
+                            if (firstCode != null) {
+                                DropdownMenuItem(
+                                    text = { Text(t("Copy code", "کپی کد")) },
+                                    onClick = {
+                                        onCopyCode(firstCode)
+                                        showContextMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(t("Share", "اشتراک‌گذاری")) },
+                                onClick = {
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, message.text)
+                                        type = "text/plain"
+                                    }
+                                    assistantContext.startActivity(
+                                        Intent.createChooser(sendIntent, null),
+                                    )
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null)
+                                },
+                            )
+                        }
                     }
 
                     // Feature #3: "Copy Code" button for messages with code blocks
-                    if (message.text.isNotEmpty() && codeBlockRegex.containsMatchIn(message.text)) {
-                        val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
+                    if (codeBlocks.isNotEmpty()) {
                         codeBlocks.forEachIndexed { index, code ->
                             Row(
                                 modifier = Modifier.padding(start = 4.dp, top = 4.dp),
@@ -1034,6 +1308,7 @@ private fun MessageBubble(
                     }
                 }
             }
+
         }
 
         is ChatMessage.ToolCall -> {
@@ -1078,21 +1353,70 @@ private fun MessageBubble(
                             )
                         }
                     }
+                    // Feature 4.2: collapsible args
                     message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
-                        Text(
-                            text = args.replace('\n', ' ').take(180) + if (args.length > 180) "..." else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        var argsExpanded by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { argsExpanded = !argsExpanded },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = t("Arguments", "آرگومان‌ها"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                imageVector = if (argsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        AnimatedVisibility(visible = argsExpanded) {
+                            Text(
+                                text = args,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
+                    // Feature 4.1/4.3: collapsible result
                     message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
-                        Text(
-                            text = result.take(300) + if (result.length > 300) "..." else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        val isLongResult = result.length > 300
+                        var resultExpanded by remember { mutableStateOf(false) }
+                        val displayResult = if (isLongResult && !resultExpanded) {
+                            result.take(300) + "…"
+                        } else {
+                            result
+                        }
+                        HermesMarkdown(
+                            markdown = displayResult,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = if (message.isRunning) MaterialTheme.colorScheme.outline
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         )
+                        if (isLongResult) {
+                            TextButton(
+                                onClick = { resultExpanded = !resultExpanded },
+                                modifier = Modifier.padding(top = 0.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (resultExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (resultExpanded) t("Collapse", "جمع کردن") else t("Show more", "بیشتر"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
                     }
                     message.error?.takeIf { it.isNotBlank() }?.let { err ->
                         Text(
@@ -1115,6 +1439,146 @@ private fun MessageBubble(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
             )
+        }
+
+        is ChatMessage.InteractiveRequest -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "❓ ${message.question}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (message.answered) {
+                        Text(
+                            text = t("Answered", "پاسخ داده شد"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    } else when (message.kind) {
+                        InteractiveKind.CLARIFY -> if (message.choices != null) {
+                            message.choices.forEach { choice ->
+                                OutlinedButton(
+                                    onClick = { onRespondToClarify(message.requestId, choice) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                ) { Text(choice) }
+                            }
+                        } else {
+                            var answer by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = answer,
+                                onValueChange = { answer = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(t("Type answer...", "جواب بنویسید...")) },
+                            )
+                            Button(
+                                onClick = { onRespondToClarify(message.requestId, answer) },
+                                enabled = answer.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                        InteractiveKind.SUDO -> {
+                            var password by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(t("Enter sudo password...", "رمز sudo بنویسید...")) },
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                            Button(
+                                onClick = { onRespondToSudo(message.requestId, password) },
+                                enabled = password.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                        InteractiveKind.SECRET -> {
+                            var secretValue by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = secretValue,
+                                onValueChange = { secretValue = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(message.question) },
+                                placeholder = { Text(t("Enter value...", "مقدار را وارد کنید...")) },
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                            Button(
+                                onClick = { onRespondToSecret(message.requestId, secretValue) },
+                                enabled = secretValue.isNotBlank(),
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 4.dp),
+                            ) { Text(t("Send", "ارسال")) }
+                        }
+                    }
+                }
+            }
+        }
+
+        is ChatMessage.SubagentCard -> {
+            val isLongSubagent = message.text.length > 120
+            var subagentExpanded by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = isLongSubagent) { subagentExpanded = !subagentExpanded },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .animateContentSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!message.isComplete) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = t("🤖 Sub-agent", "🤖 زیر ایجنت"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                        )
+                        val displayText = if (isLongSubagent && !subagentExpanded) {
+                            message.text.take(120) + "…"
+                        } else {
+                            message.text
+                        }
+                        Text(
+                            text = displayText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    if (isLongSubagent) {
+                        Icon(
+                            imageVector = if (subagentExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1149,52 +1613,118 @@ private fun highlightText(text: String, query: String): AnnotatedString {
 }
 
 @Composable
+private fun thinkingDotStr(): String {
+    val transition = rememberInfiniteTransition(label = "thinking_dots")
+    // InfiniteTransition exposes animateFloat (not animateInt); animate 0f..4f
+    // and floor to an int step.
+    val rawStep by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "dots",
+    )
+    return when (rawStep.toInt() % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
+}
+
+@Composable
 private fun InputBar(
     text: String,
     isSending: Boolean,
+    slashCommands: List<SlashCommandSuggestion>,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
-    Row(
+    val context = LocalContext.current
+    // t() is @Composable — hoist out of the onClick lambda below.
+    val comingSoonToast = t("Coming soon", "به زودی")
+    // Feature 5.2: slash command suggestions — from the gateway catalog
+    // (commands.catalog); falls back to a minimal built-in list if empty.
+    val fallbackCommands = remember {
+        listOf("/help", "/clear", "/config", "/model", "/session")
+            .map { SlashCommandSuggestion(it, "") }
+    }
+    val commandList = slashCommands.ifEmpty { fallbackCommands }
+    val showSuggestions = text.startsWith("/") && !isSending
+    val suggestions = remember(text, commandList) {
+        if (text == "/") commandList
+        else commandList.filter { it.command.startsWith(text) }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
-            .padding(12.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .imePadding(),
     ) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = onTextChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
-            maxLines = 4,
-            shape = RoundedCornerShape(24.dp),
-        )
-
-        if (isSending) {
+        if (showSuggestions && suggestions.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(suggestions) { cmd ->
+                    SuggestionChip(
+                        onClick = { onTextChange(cmd.command) },
+                        label = { Text(cmd.command) },
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Feature 5.1: attachment button
             IconButton(
-                onClick = onStop,
+                onClick = {
+                    Toast.makeText(context, comingSoonToast, Toast.LENGTH_SHORT).show()
+                },
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(
-                    Icons.Default.Stop,
-                    contentDescription = t("Stop", "توقف"),
-                    tint = MaterialTheme.colorScheme.error,
+                    Icons.Default.AttachFile,
+                    contentDescription = t("Attach", "پیوست"),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        } else {
-            IconButton(
-                onClick = onSend,
-                enabled = text.isNotBlank(),
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = t("Send", "ارسال"),
-                )
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
+                maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
+            )
+            if (isSending) {
+                IconButton(
+                    onClick = onStop,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Stop,
+                        contentDescription = t("Stop", "توقف"),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onSend,
+                    enabled = text.isNotBlank(),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = t("Send", "ارسال"),
+                    )
+                }
             }
         }
     }

@@ -13,14 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,8 +33,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,9 +67,7 @@ fun SessionsScreen(
     onResumeSession: (String) -> Unit = {},
     viewModel: SessionsViewModel = hiltViewModel(),
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val memoryState by viewModel.memoryState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -154,8 +146,7 @@ fun SessionsScreen(
         )
     }
 
-    // When viewing history, show a dedicated top bar with a back button
-    val inHistoryDetail = uiState.selectedSessionId != null && selectedTab == 0
+    val inHistoryDetail = uiState.selectedSessionId != null
 
     Scaffold(
         topBar = {
@@ -166,7 +157,7 @@ fun SessionsScreen(
                             uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
                                 ?: t("Session history", "تاریخچه گفتگو")
                         else
-                            t("Sessions & Memory", "گفتگوها و حافظه"),
+                            t("Sessions", "گفتگوها"),
                     )
                 },
                 navigationIcon = {
@@ -190,31 +181,17 @@ fun SessionsScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            if (!inHistoryDetail) {
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text(t("Sessions", "گفتگوها")) },
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text(t("Memory", "حافظه")) },
-                    )
-                }
-            }
-
-            when {
-                inHistoryDetail -> HistoryDetailView(
+            if (inHistoryDetail) {
+                HistoryDetailView(
                     messages = uiState.selectedSessionHistory,
                     isLoading = uiState.isLoadingHistory,
+                    usage = uiState.selectedSessionUsage,
                     onResumeSession = {
                         uiState.selectedSessionId?.let { onResumeSession(it) }
                     },
                 )
-                selectedTab == 0 -> SessionsTab(uiState, viewModel)
-                else -> MemoryTab(memoryState)
+            } else {
+                SessionsTab(uiState, viewModel)
             }
         }
     }
@@ -337,6 +314,14 @@ private fun SessionsTab(state: SessionsUiState, viewModel: SessionsViewModel) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Aggregate usage insights (insights.get) — only when present.
+            state.insights?.let { ins ->
+                item(key = "insights") { InsightsCard(ins) }
+            }
+            // Active agent processes (agents.list) — hidden when none.
+            if (state.activeAgents.isNotEmpty()) {
+                item(key = "agents") { ActiveAgentsCard(state.activeAgents) }
+            }
             items(displaySessions, key = { it.id }) { session ->
                 SessionCard(
                     session = session,
@@ -446,6 +431,7 @@ private fun SessionCard(
 private fun HistoryDetailView(
     messages: List<HistoryMessage>,
     isLoading: Boolean,
+    usage: com.hermes.android.ui.viewmodel.SessionUsage?,
     onResumeSession: () -> Unit,
 ) {
     if (isLoading) {
@@ -462,6 +448,39 @@ private fun HistoryDetailView(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text(t("Continue this chat", "ادامه این گفتگو"))
+        }
+
+        // Token usage / cost (session.usage) — the user's main concern.
+        usage?.takeIf { it.total > 0 || it.calls > 0 }?.let { u ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = t("Token usage", "مصرف توکن"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        text = "▸ in ${u.input} · out ${u.output} · total ${u.total} · ${u.calls} calls",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    u.creditsLines.forEach { line ->
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                        )
+                    }
+                }
+            }
         }
 
         if (messages.isEmpty()) {
@@ -535,68 +554,58 @@ private fun HistoryMessageBubble(msg: HistoryMessage) {
     }
 }
 
-// ── Memory tab ──────────────────────────────────────────────────────────
+// ── Insights & active agents ────────────────────────────────────────────
 
 @Composable
-private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
-    if (state.isLoading) {
-        LoadingIndicator(t("Loading memory...", "در حال بارگذاری حافظه..."))
-        return
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        MemoryCard(
-            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-            title = "USER.md",
-            content = state.userMd,
+private fun InsightsCard(insights: com.hermes.android.ui.viewmodel.InsightsData) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        MemoryCard(
-            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
-            title = "MEMORY.md",
-            content = state.memoryMd,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = t("Last ${insights.days} days", "${insights.days} روز اخیر"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = t(
+                    "${insights.sessions} sessions · ${insights.messages} messages",
+                    "${insights.sessions} گفتگو · ${insights.messages} پیام",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun MemoryCard(
-    icon: @Composable () -> Unit,
-    title: String,
-    content: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color,
-) {
-    val displayText = content
-        .ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }
-        .replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده"))
+private fun ActiveAgentsCard(agents: List<com.hermes.android.ui.viewmodel.AgentProcess>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                icon()
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
-            }
             Text(
-                text = displayText,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = contentColor,
-                modifier = Modifier.padding(top = 8.dp),
+                text = t("Active agents (${agents.size})", "ایجنت‌های فعال (${agents.size})"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
+            agents.take(8).forEach { a ->
+                Text(
+                    text = "• ${a.command}  —  ${a.status}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
 }

@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.UUID
@@ -39,7 +41,6 @@ import javax.inject.Inject
  * - Manage session list (create, list, resume)
  * - Draft persistence (SharedPreferences)
  * - Search in messages
- * - Quick model switch
  * - Retry last message
  *
  * Reference: Phase 1.5 Rule 1 (Strict Layer Dependency),
@@ -57,6 +58,13 @@ class ChatViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val _notification = MutableStateFlow<NotificationUi?>(null)
+    val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
+
+    /** Slash-command catalog from the gateway (replaces the hardcoded list). */
+    private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
+    val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
+
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
     private var activeAssistantMessageId: String? = null
@@ -69,6 +77,33 @@ class ChatViewModel @Inject constructor(
     init {
         loadDraft()
         connectAndCollect()
+        loadCommandCatalog()
+    }
+
+    /**
+     * Load the real slash-command catalog from Hermes (`commands.catalog`,
+     * no params) instead of a hardcoded list. Response shape:
+     *   { pairs: [[name, description], ...], ... }
+     */
+    private fun loadCommandCatalog() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG)
+                val pairs = (result as? JsonObject)?.get("pairs") as? kotlinx.serialization.json.JsonArray
+                val cmds = pairs?.mapNotNull { row ->
+                    val arr = row as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+                    val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
+                    val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
+                    SlashCommandSuggestion(command = name, description = desc)
+                } ?: emptyList()
+                if (cmds.isNotEmpty()) {
+                    _slashCommands.value = cmds
+                    Timber.i("[Chat] Loaded ${cmds.size} slash commands from catalog")
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] commands.catalog failed — keeping fallback list")
+            }
+        }
     }
 
     // ── Connection ────────────────────────────────────────────────────────
@@ -165,8 +200,9 @@ class ChatViewModel @Inject constructor(
                     title = session["title"]?.let { (it as? JsonPrimitive)?.content }?.ifBlank { null }
                         ?: "Untitled",
                     lastMessagePreview = session["preview"]?.let { (it as? JsonPrimitive)?.content },
-                    updatedAt = session["started_at"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                        ?.let(::normalizeEpochMillis) ?: 0L,
+                    updatedAt = (session["started_at"] ?: session["updated_at"])
+                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
+                        ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis(),
                     messageCount = session["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() },
                 )
             }
@@ -179,18 +215,37 @@ class ChatViewModel @Inject constructor(
     fun resumeSession(sessionId: String) {
         viewModelScope.launch {
             try {
+                // Hermes `session.resume` (param: session_id) MINTS A NEW live
+                // session id bound to the old transcript and returns it as
+                // `session_id` (the original db id comes back as `resumed`).
+                // The response also inlines the full transcript:
+                //   { session_id, resumed, message_count, messages: [...] }
+                // We MUST adopt the returned `session_id` as the active session —
+                // sending prompt.submit with the old id fails "session not found".
                 val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                val result = gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
+                val liveSessionId = (result as? JsonObject)
+                    ?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                    ?.takeIf { it.isNotBlank() } ?: sessionId
+                val history = parseSessionHistory(result)
                 _uiState.value = _uiState.value.copy(
-                    activeSessionId = sessionId,
-                    messages = emptyList(),
+                    activeSessionId = liveSessionId,
+                    messages = history,
                     showSessionDrawer = false,
                     errorMessage = null,
+                    sessionLoadedAt = System.currentTimeMillis(),
                 )
-                Timber.i("[Chat] Resumed session: $sessionId")
-                loadSessionHistory(sessionId)
+                if (history.isNotEmpty()) {
+                    Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
+                } else {
+                    // Fallback: lazy/live resume paths may not inline the
+                    // transcript — fetch it explicitly via session.history using
+                    // the live id.
+                    Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
+                    loadSessionHistory(liveSessionId)
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to resume: ${e.message}")
@@ -200,12 +255,16 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun loadSessionHistory(sessionId: String) {
         try {
-            // session.history uses "id" param (not "session_id") — matches session.list response field
-            val params = buildJsonObject { put("id", sessionId) }
+            // Hermes `session.history` resolves the session via _sess_nowait,
+            // which reads params["session_id"] — NOT "id".
+            val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
             if (messages.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(messages = messages)
+                _uiState.value = _uiState.value.copy(
+                    messages = messages,
+                    sessionLoadedAt = System.currentTimeMillis(),
+                )
                 Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
             } else {
                 Timber.w("[Chat] Session history returned empty for $sessionId")
@@ -438,45 +497,9 @@ class ChatViewModel @Inject constructor(
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
-    // ── Feature #8: Quick model switch from chat ─────────────────────────
-
-    fun toggleModelSwitcher() {
-        _uiState.value = _uiState.value.copy(
-            showModelSwitcher = !_uiState.value.showModelSwitcher,
-        )
-    }
-
-    fun switchModelFromChat(provider: String, model: String) {
-        viewModelScope.launch {
-            try {
-                // Set provider
-                val providerParams = buildJsonObject {
-                    put("key", "llm.provider")
-                    put("value", provider)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, providerParams.toMap())
-
-                // Set model
-                val modelParams = buildJsonObject {
-                    put("key", "llm.model")
-                    put("value", model)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, modelParams.toMap())
-
-                _uiState.value = _uiState.value.copy(
-                    currentModelName = "$provider/$model",
-                    showModelSwitcher = false,
-                )
-                Timber.i("[Chat] Model switched to $provider/$model")
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to switch model")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to switch model: ${e.message}",
-                    showModelSwitcher = false,
-                )
-            }
-        }
-    }
+    // Model switching lives in the Settings screen (ConfigViewModel), not in
+    // chat — it must go through `config.set` with key="model" against the
+    // active session, which Settings owns.
 
     // ── Event handling ────────────────────────────────────────────────────
 
@@ -529,11 +552,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ThinkingDelta -> {
+                val targetId = activeAssistantMessageId ?: return
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                        ) {
+                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
                             msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
                         } else msg
                     }
@@ -572,15 +594,29 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.Error -> {
+                val isRateLimit = event.message?.contains("rate_limit", ignoreCase = true) == true ||
+                        event.message?.contains("429") == true
+                val displayMsg = if (isRateLimit) "Rate limited — please wait" else event.message
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages.map { msg ->
                         if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, error = event.message)
+                            msg.copy(isRunning = false, error = displayMsg)
                         } else msg
                     },
-                    errorMessage = event.message,
+                    errorMessage = displayMsg,
                     isSending = false,
                 )
+                if (isRateLimit) {
+                    val statusMsg = ChatMessage.Status(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        text = "⏸ Rate limited — please wait a moment",
+                        isError = false,
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages + statusMsg,
+                    )
+                }
                 activeAssistantMessageId = null
             }
 
@@ -618,8 +654,163 @@ class ChatViewModel @Inject constructor(
                 )
             }
 
+            is GatewayEvent.ClarifyRequest -> {
+                val msg = ChatMessage.InteractiveRequest(
+                    id = event.requestId,
+                    timestamp = System.currentTimeMillis(),
+                    requestId = event.requestId,
+                    question = event.question,
+                    choices = event.choices,
+                    kind = InteractiveKind.CLARIFY,
+                )
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + msg,
+                )
+            }
+
+            is GatewayEvent.SudoRequest -> {
+                val msg = ChatMessage.InteractiveRequest(
+                    id = event.requestId,
+                    timestamp = System.currentTimeMillis(),
+                    requestId = event.requestId,
+                    question = "Sudo password required",
+                    choices = null,
+                    kind = InteractiveKind.SUDO,
+                )
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + msg,
+                )
+            }
+
+            is GatewayEvent.SecretRequest -> {
+                val msg = ChatMessage.InteractiveRequest(
+                    id = event.requestId,
+                    timestamp = System.currentTimeMillis(),
+                    requestId = event.requestId,
+                    question = event.prompt,
+                    choices = null,
+                    kind = InteractiveKind.SECRET,
+                )
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + msg,
+                )
+            }
+
+            is GatewayEvent.SubagentEvent -> {
+                when (event.subagentType) {
+                    "spawn_requested", "start" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
+                            ?: "subagent-${UUID.randomUUID()}"
+                        val msg = ChatMessage.SubagentCard(
+                            id = subagentId,
+                            timestamp = System.currentTimeMillis(),
+                            subagentType = event.subagentType,
+                            text = event.payload["description"]?.jsonPrimitive?.content ?: "Sub-agent",
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages + msg,
+                        )
+                    }
+                    "complete" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
+                        val text = event.payload["text"]?.jsonPrimitive?.content ?: ""
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages.map { msg ->
+                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)) {
+                                    msg.copy(isComplete = true, text = text.ifEmpty { msg.text })
+                                } else msg
+                            }
+                        )
+                    }
+                    "thinking", "progress" -> {
+                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
+                        val text = event.payload["text"]?.jsonPrimitive?.content ?: return
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages.map { msg ->
+                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)) {
+                                    msg.copy(text = text)
+                                } else msg
+                            }
+                        )
+                    }
+                }
+            }
+
+            is GatewayEvent.ToolProgress -> {
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
+                            msg.copy(resultText = event.preview)
+                        } else msg
+                    }
+                )
+            }
+
+            is GatewayEvent.ToolGenerating -> {
+                Timber.d("[Chat] Tool generating: ${event.name}")
+            }
+
+            is GatewayEvent.ReasoningDelta -> {
+                val targetId = activeAssistantMessageId ?: return
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages.map { msg ->
+                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
+                            msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
+                        } else msg
+                    }
+                )
+            }
+
+            is GatewayEvent.ReasoningAvailable -> {
+                Timber.d("[Chat] Reasoning available")
+            }
+
+            is GatewayEvent.NotificationShow -> {
+                val notifUi = NotificationUi(
+                    key = event.key,
+                    kind = event.kind,
+                    level = event.level,
+                    text = event.text,
+                    ttlMs = event.ttlMs,
+                )
+                _notification.value = notifUi
+                val ttl = event.ttlMs
+                val key = event.key
+                if (event.kind != "sticky" && ttl != null) {
+                    viewModelScope.launch {
+                        delay(ttl)
+                        if (_notification.value?.key == key) _notification.value = null
+                    }
+                }
+            }
+
+            is GatewayEvent.NotificationClear -> {
+                if (_notification.value?.key == event.key) _notification.value = null
+            }
+
+            is GatewayEvent.BackgroundComplete -> {
+                val msg = ChatMessage.Status(
+                    id = "bg-${event.taskId}",
+                    timestamp = System.currentTimeMillis(),
+                    text = "✅ Background task complete: ${event.text.take(200)}",
+                    isError = false,
+                )
+                _uiState.value = _uiState.value.copy(
+                    messages = _uiState.value.messages + msg,
+                )
+            }
+
+            is GatewayEvent.SessionInfo -> {
+                Timber.d("[Chat] Session info: ${event.info}")
+            }
+
+            is GatewayEvent.GatewayStderr -> {
+                Timber.w("[Chat] Gateway stderr: ${event.line}")
+            }
+
             else -> {
-                // Other events (billing, voice, subagent, etc.) — ignore for now
                 Timber.d("[Chat] Unhandled event: ${event::class.simpleName}")
             }
         }
@@ -660,6 +851,90 @@ class ChatViewModel @Inject constructor(
         streamingBuffer.setLength(0)
     }
 
+    // ── Drawer: search / sort / pin / rename / delete ─────────────────────
+
+    fun updateDrawerSearch(query: String) {
+        _uiState.value = _uiState.value.copy(drawerSearchQuery = query)
+    }
+
+    fun toggleDrawerSort() {
+        _uiState.value = _uiState.value.copy(drawerSortNewest = !_uiState.value.drawerSortNewest)
+    }
+
+    fun drawerTogglePin(sessionId: String) {
+        val pins = _uiState.value.drawerPinnedIds
+        _uiState.value = _uiState.value.copy(
+            drawerPinnedIds = if (sessionId in pins) pins - sessionId else pins + sessionId,
+        )
+    }
+
+    fun drawerShowRename(sessionId: String, currentTitle: String) {
+        _uiState.value = _uiState.value.copy(
+            drawerRenameTarget = DrawerRenameState(sessionId, currentTitle),
+        )
+    }
+
+    fun drawerUpdateRenameText(text: String) {
+        _uiState.value = _uiState.value.copy(
+            drawerRenameTarget = _uiState.value.drawerRenameTarget?.copy(inputText = text),
+        )
+    }
+
+    fun drawerHideRename() {
+        _uiState.value = _uiState.value.copy(drawerRenameTarget = null)
+    }
+
+    fun drawerConfirmRename() {
+        val target = _uiState.value.drawerRenameTarget ?: return
+        val newTitle = target.inputText.trim().ifEmpty { return }
+        _uiState.value = _uiState.value.copy(drawerRenameTarget = null)
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("session_id", target.sessionId)
+                    put("title", newTitle)
+                }
+                gatewayClient.request(GatewayMethods.SESSION_TITLE, jsonToElementMap(params))
+                Timber.i("[Chat] Renamed ${target.sessionId} → $newTitle")
+                loadSessionList()
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Rename failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Rename failed: ${e.message}")
+            }
+        }
+    }
+
+    fun drawerShowDelete(sessionId: String) {
+        _uiState.value = _uiState.value.copy(drawerDeleteTarget = sessionId)
+    }
+
+    fun drawerHideDelete() {
+        _uiState.value = _uiState.value.copy(drawerDeleteTarget = null)
+    }
+
+    fun drawerConfirmDelete() {
+        val sessionId = _uiState.value.drawerDeleteTarget ?: return
+        _uiState.value = _uiState.value.copy(drawerDeleteTarget = null)
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("session_id", sessionId) }
+                gatewayClient.request(GatewayMethods.SESSION_DELETE, jsonToElementMap(params))
+                Timber.i("[Chat] Deleted $sessionId")
+                if (_uiState.value.activeSessionId == sessionId) {
+                    _uiState.value = _uiState.value.copy(
+                        activeSessionId = null,
+                        messages = emptyList(),
+                    )
+                    createSession()
+                }
+                loadSessionList()
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Delete failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Delete failed: ${e.message}")
+            }
+        }
+    }
+
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun toggleSessionDrawer() {
@@ -687,6 +962,72 @@ class ChatViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    // ── Interactive responds ──────────────────────────────────────────────
+
+    fun respondToClarify(requestId: String, answer: String) {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.CLARIFY_RESPOND,
+                    params = buildJsonObject {
+                        put("request_id", requestId)
+                        put("answer", answer)
+                    },
+                )
+                markAnswered(requestId)
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to respond to clarify")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    fun respondToSudo(requestId: String, password: String) {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.SUDO_RESPOND,
+                    params = buildJsonObject {
+                        put("request_id", requestId)
+                        put("password", password)
+                    },
+                )
+                markAnswered(requestId)
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to respond to sudo")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    fun respondToSecret(requestId: String, value: String) {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.SECRET_RESPOND,
+                    params = buildJsonObject {
+                        put("request_id", requestId)
+                        put("value", value)
+                    },
+                )
+                markAnswered(requestId)
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to respond to secret")
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
+    private fun markAnswered(requestId: String) {
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages.map { msg ->
+                if (msg is ChatMessage.InteractiveRequest && msg.requestId == requestId) {
+                    msg.copy(answered = true)
+                } else msg
+            }
+        )
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
