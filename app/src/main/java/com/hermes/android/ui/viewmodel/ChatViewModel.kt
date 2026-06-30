@@ -101,7 +101,7 @@ class ChatViewModel @Inject constructor(
                     Timber.i("[Chat] Loaded ${cmds.size} slash commands from catalog")
                 }
             } catch (e: Exception) {
-                Timber.w(e, "[Chat] commands.catalog failed — keeping fallback list")
+                Timber.w(e, "[Chat] commands.catalog failed — slash command autocomplete will be empty until next retry")
             }
         }
     }
@@ -557,6 +557,13 @@ class ChatViewModel @Inject constructor(
                 // Start a new assistant message (streaming). Use a unique
                 // message id; sessionId is stable for the whole conversation
                 // and would collide across multiple assistant turns.
+                //
+                // Fix F-A5 (regression): if a previous assistant message was
+                // left in isStreaming=true (e.g. because reconnect succeeded
+                // after a mid-stream drop and the server started a new turn),
+                // finalize it now before assigning a new activeAssistantMessageId.
+                // Otherwise the old message would orphan with spinner forever.
+                finalizeOrphanedStreamingMessage(marker = "(interrupted)")
                 resetStreamingBuffer()
                 val msgId = UUID.randomUUID().toString()
                 activeAssistantMessageId = msgId
