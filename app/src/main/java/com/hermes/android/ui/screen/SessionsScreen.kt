@@ -13,14 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,8 +33,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,9 +67,7 @@ fun SessionsScreen(
     onResumeSession: (String) -> Unit = {},
     viewModel: SessionsViewModel = hiltViewModel(),
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val memoryState by viewModel.memoryState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -154,8 +146,7 @@ fun SessionsScreen(
         )
     }
 
-    // When viewing history, show a dedicated top bar with a back button
-    val inHistoryDetail = uiState.selectedSessionId != null && selectedTab == 0
+    val inHistoryDetail = uiState.selectedSessionId != null
 
     Scaffold(
         topBar = {
@@ -166,7 +157,7 @@ fun SessionsScreen(
                             uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
                                 ?: t("Session history", "تاریخچه گفتگو")
                         else
-                            t("Sessions & Memory", "گفتگوها و حافظه"),
+                            t("Sessions", "گفتگوها"),
                     )
                 },
                 navigationIcon = {
@@ -190,23 +181,8 @@ fun SessionsScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            if (!inHistoryDetail) {
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text(t("Sessions", "گفتگوها")) },
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text(t("Memory", "حافظه")) },
-                    )
-                }
-            }
-
-            when {
-                inHistoryDetail -> HistoryDetailView(
+            if (inHistoryDetail) {
+                HistoryDetailView(
                     messages = uiState.selectedSessionHistory,
                     isLoading = uiState.isLoadingHistory,
                     usage = uiState.selectedSessionUsage,
@@ -214,8 +190,8 @@ fun SessionsScreen(
                         uiState.selectedSessionId?.let { onResumeSession(it) }
                     },
                 )
-                selectedTab == 0 -> SessionsTab(uiState, viewModel)
-                else -> MemoryTab(memoryState)
+            } else {
+                SessionsTab(uiState, viewModel)
             }
         }
     }
@@ -574,72 +550,6 @@ private fun HistoryMessageBubble(msg: HistoryMessage) {
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
-        }
-    }
-}
-
-// ── Memory tab ──────────────────────────────────────────────────────────
-
-@Composable
-private fun MemoryTab(state: com.hermes.android.ui.viewmodel.MemoryUiState) {
-    if (state.isLoading) {
-        LoadingIndicator(t("Loading memory...", "در حال بارگذاری حافظه..."))
-        return
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        MemoryCard(
-            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-            title = "USER.md",
-            content = state.userMd,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        MemoryCard(
-            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
-            title = "MEMORY.md",
-            content = state.memoryMd,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-    }
-}
-
-@Composable
-private fun MemoryCard(
-    icon: @Composable () -> Unit,
-    title: String,
-    content: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color,
-) {
-    val displayText = content
-        .ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }
-        .replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده"))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                icon()
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
-            }
-            Text(
-                text = displayText,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = contentColor,
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
     }
 }
