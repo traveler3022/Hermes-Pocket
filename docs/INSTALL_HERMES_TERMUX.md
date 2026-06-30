@@ -51,7 +51,7 @@ echo 'allow-external-apps=true' >> ~/.termux/termux.properties
 
 ```bash
 pkg update -y
-pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgrep ffmpeg
+pkg install -y git python clang rust make pkg-config libffi openssl ca-certificates curl llvm lld nodejs ripgrep ffmpeg
 ```
 
 <div dir="rtl">
@@ -61,6 +61,8 @@ pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgr
 | python | اجرا + venv |
 | git | دانلود کد |
 | clang, rust, make, pkg-config, libffi, openssl | کامپایل dependency‌های پایتون |
+| ca-certificates, curl | اتصال HTTPS |
+| llvm, lld | کامپایل بعضی پکیج‌های Rust |
 | nodejs | ابزارهای اختیاری |
 | ripgrep | جستوجوی سریع فایل |
 | ffmpeg | تبدیل صدا/ویدیو |
@@ -111,6 +113,30 @@ export ANDROID_API_LEVEL="$(getprop ro.build.version.sdk)"
 
 > [!NOTE]
 > `ANDROID_API_LEVEL` برای کامپایل پکیج‌های Rust مثل `jiter` و `pydantic-core` لازم است.
+
+اگر موقع نصب خطای Rust دیدی، این متغیرها را هم تنظیم کن:
+
+</div>
+
+```bash
+export CARGO_BUILD_TARGET="$(rustc -Vv | awk '/^host:/ {print $2; exit}')"
+export CARGO_HOME="$HOME/.hermes/cargo"
+mkdir -p "$CARGO_HOME"
+export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+export CARGO_PROFILE_RELEASE_LTO=false
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+export CARGO_PROFILE_RELEASE_STRIP=none
+export CARGO_BUILD_JOBS=1
+```
+
+<div dir="rtl">
+
+| متغیر | دلیل |
+|---|---|
+| `CARGO_HOME` | جلوگیری از خطای mirror مثل USTC 404 |
+| `CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse` | استفاده از ایندکس sparse |
+| `CARGO_PROFILE_RELEASE_LTO=false` | جلوگیری از crash rustc |
+| `CARGO_BUILD_JOBS=1` | کاهش فشار حافظه/CPU گوشی |
 
 #### ۲. دانلود کد
 
