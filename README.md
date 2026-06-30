@@ -46,6 +46,7 @@
 <td>
 
 - [What is this?](#-what-is-this)
+- [Features](#-features)
 - [How it works](#-how-it-works)
 - [Privacy & Security](#-privacy--security--read-first)
 - [Download](#-download)
@@ -82,6 +83,59 @@ The agent does the work — chatting, running tools, writing code. This app give
 
 > [!IMPORTANT]
 > **This is a power-user tool, not a casual chat app.** Hermes Agent can run real commands on your device (inside Termux). If you only want to chat with an AI, a normal chat app fits better. If you want a real agent that can *do things* on your phone — this is for you. **Please read [Privacy & Security](#-privacy--security--read-first) before installing.**
+
+---
+
+## ⬡ Features
+
+A native Material 3 control room — not a webview, not a terminal wrapper.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+#### 💬 Conversation
+- **Live streaming** responses, token by token
+- **Reasoning view** — see the model *think* before it answers
+- **Tool-call cards** — every command the agent runs, with collapsible output
+- **Sub-agent cards** — nested agent runs shown inline
+- **Slash commands** — `/help`, `/model`, `/config`, … pulled live from the gateway catalog
+- **Long-press menu** — copy, retry, regenerate
+- **Auto-scroll** that knows when to stop
+
+</td>
+<td width="50%" valign="top">
+
+#### 🗂️ Sessions & control
+- **Session drawer** — search · sort · pin · rename · delete
+- **Resume** any past conversation, full transcript restored
+- **Runtime Setup** screen — detect, install, start/stop the gateway
+- **Tool approval** as Android notifications — **Approve / Deny** before anything runs
+- **Config & model** management from inside the app
+- **Skills, Cron & Platforms** screens for the agent's extras
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+#### 🎨 Look & feel
+- **6 color themes** — Hermes · Blue Eye · Mocha · Midnight · Indigo Pro · Carbon
+- **Light · Dark · System** modes
+- Full **Material 3** design, dynamic color ready
+
+</td>
+<td width="50%" valign="top">
+
+#### 🔒 Built for trust
+- **100% local** app ↔ agent link (`127.0.0.1`)
+- **No account · no telemetry · no cloud middleman**
+- **Bilingual onboarding** — English & فارسی
+- Foreground service keeps the gateway alive in the background
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -196,21 +250,48 @@ hermes --version
 hermes doctor
 ```
 
+> [!NOTE]
+> **Android is a "Tier 2" platform** for Hermes Agent (per the [official Termux guide](https://hermes-agent.nousresearch.com/docs/getting-started/termux)). A few desktop-only features are intentionally off here: **voice transcription** (`faster-whisper`), the **Docker backend**, and **browser automation**. Everything the Hermes2 app surfaces — chat, tools, sessions, skills — works.
+>
+> If the one-line installer ever fails on dependencies, install the base packages manually first, then re-run it:
+> ```bash
+> pkg update && pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgrep ffmpeg
+> ```
+
 ### ④ Install the App
 
 1. Download the APK from the link above.
 2. Enable **"Install from unknown sources"** in Android settings.
 3. Open the APK and install.
 
-### ⑤ Connect
+### ⑤ First-time gateway connection
 
-1. Open **Hermes2**
-2. Tap **Runtime Setup**
-3. Tap **Start Gateway**
-4. Wait **30–90 s** on first launch *(Python boot + plugin scan — only slow once)*
-5. Status shows **● Connected** → start chatting
+The very first connection needs a short, **one-time** handshake to hand the gateway cleanly from the installer over to the app. After this, **every later launch reconnects automatically** — you never repeat these steps.
 
-> Later launches reconnect automatically. No need to repeat setup.
+> [!IMPORTANT]
+> Do this sequence once, in order:
+
+**In Termux** *(a fresh command prompt opens right after setup finishes)*
+
+```bash
+hermes dashboard --stop
+```
+
+Then **leave Termux and force-stop it**:
+**Android Settings → Apps → Termux → Force stop**
+
+> *Why force-stop?* The install session leaves the gateway **port still bound** inside Termux. Force-stopping releases it, so the app can claim a clean connection on the next start. This is **only** needed for the very first setup.
+
+**In the Hermes2 app — `Termux & Agent Setup` screen**
+
+1. Tap **`Open runtime host app`** → this opens Termux
+2. Come back to Hermes2
+3. Tap **`Start Agent Gateway (Termux)`**
+4. **Wait up to ~30 seconds** — the status card turns to **✓ Connected**
+5. Start chatting
+
+> [!TIP]
+> If it doesn't connect within ~30 s, just **repeat the steps above** (`Open runtime host app` → back to app → `Start Agent Gateway`). The first handshake occasionally needs a second pass — it settles after that and stays automatic.
 
 ---
 
