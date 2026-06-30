@@ -61,7 +61,7 @@ You → Hermes2 → AI Provider (e.g. Google)
          └─ API key stays on your phone ✅
 ```
 
-> ⚠️ Avoid sending passwords, banking info, or anything sensitive in your chats.
+> ⚠️ **Never send your API key, password, or credentials inside the chat.** Not even masked or partial — everything you type goes to the AI provider. If you need to change your key, do it in Termux: `nano ~/.hermes/.env`
 
 **What the agent can do:** Hermes runs shell commands inside Termux. On a non-rooted phone, Android's sandbox confines this to Termux's storage only.
 
