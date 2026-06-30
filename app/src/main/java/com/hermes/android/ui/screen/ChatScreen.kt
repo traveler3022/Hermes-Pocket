@@ -124,7 +124,6 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -181,6 +180,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -653,6 +653,7 @@ fun ChatScreen(
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
+                                onImageClick = { url -> fullscreenImageUrl = url },
                             )
                         }
                     }
@@ -676,6 +677,55 @@ fun ChatScreen(
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
                 )
+            }
+        }
+    }
+
+    // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
+    fullscreenImageUrl?.let { imageUrl ->
+        Dialog(
+            onDismissRequest = { fullscreenImageUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f))
+                    .clickable { fullscreenImageUrl = null },
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                )
+                IconButton(
+                    onClick = { fullscreenImageUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = t("Close", "بستن"),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+                IconButton(
+                    onClick = { saveImageToDownloads(context, imageUrl, "") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
+                ) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = t("Save image", "ذخیره تصویر"),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
             }
         }
     }
@@ -1056,6 +1106,7 @@ private fun MessageBubble(
     onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
+    onImageClick: (String) -> Unit = {},
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -1141,7 +1192,6 @@ private fun MessageBubble(
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
             val inlineImages = remember(message.text) { extractImages(message.text) }
-            var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1246,7 +1296,7 @@ private fun MessageBubble(
                                                         .fillMaxWidth()
                                                         .heightIn(max = 280.dp)
                                                         .clip(RoundedCornerShape(8.dp))
-                                                        .clickable { fullscreenImageUrl = url },
+                                                        .clickable { onImageClick(url) },
                                                     contentScale = ContentScale.Fit,
                                                 )
                                                 // Save button
@@ -1399,54 +1449,6 @@ private fun MessageBubble(
                 }
             }
 
-            // Fullscreen image viewer
-            fullscreenImageUrl?.let { imageUrl ->
-                Dialog(
-                    onDismissRequest = { fullscreenImageUrl = null },
-                    properties = DialogProperties(usePlatformDefaultWidth = false),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.92f))
-                            .clickable { fullscreenImageUrl = null },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxWidth(),
-                            contentScale = ContentScale.Fit,
-                        )
-                        IconButton(
-                            onClick = { fullscreenImageUrl = null },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(16.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape),
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = t("Close", "بستن"),
-                                tint = Color.White,
-                            )
-                        }
-                        IconButton(
-                            onClick = { saveImageToDownloads(assistantContext, imageUrl, "") },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape),
-                        ) {
-                            Icon(
-                                Icons.Default.Download,
-                                contentDescription = t("Save image", "ذخیره تصویر"),
-                                tint = Color.White,
-                            )
-                        }
-                    }
-                }
-            }
         }
 
         is ChatMessage.ToolCall -> {
