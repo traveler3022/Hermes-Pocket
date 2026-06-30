@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -111,10 +112,23 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material3.TextField
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.SessionItem
@@ -982,6 +996,33 @@ private fun ShimmerSkeleton() {
 
 private val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 
+// ── Image markdown helpers ────────────────────────────────────────────────
+
+private val imageMarkdownRegex = Regex("""!\[([^\]]*)\]\(([^)]+)\)""")
+
+/** Extract (alt, url) pairs from markdown text. */
+private fun extractImages(text: String): List<Pair<String, String>> =
+    imageMarkdownRegex.findAll(text).map { it.groupValues[1] to it.groupValues[2] }.toList()
+
+/** Remove `![alt](url)` patterns so HermesMarkdown doesn't double-render them. */
+private fun stripImages(text: String): String =
+    imageMarkdownRegex.replace(text, "").trimEnd()
+
+/** Save a remote image URL to the Downloads/Hermes folder via DownloadManager. */
+private fun saveImageToDownloads(context: Context, url: String, alt: String) {
+    val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
+        .ifBlank { "hermes_image.jpg" }
+        .let { if (!it.contains('.')) "$it.jpg" else it }
+    val request = DownloadManager.Request(Uri.parse(url))
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Hermes/$filename")
+        .setTitle(filename)
+        .setDescription("در حال دانلود از هرمس")
+        .setAllowedOverMetered(true)
+    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    dm.enqueue(request)
+}
+
 /**
  * Extract all code block contents from a markdown text.
  */
@@ -1099,6 +1140,8 @@ private fun MessageBubble(
 
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
+            val inlineImages = remember(message.text) { extractImages(message.text) }
+            var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1177,9 +1220,56 @@ private fun MessageBubble(
                                 } else {
                                     message.text
                                 }
-                                if (displayMd.isNotBlank()) {
+                                // Strip image syntax so HermesMarkdown won't double-render
+                                val displayMdNoImages = remember(displayMd, inlineImages) {
+                                    if (inlineImages.isEmpty()) displayMd else stripImages(displayMd)
+                                }
+                                if (displayMdNoImages.isNotBlank()) {
                                     SelectionContainer {
-                                        HermesMarkdown(markdown = displayMd)
+                                        HermesMarkdown(markdown = displayMdNoImages)
+                                    }
+                                }
+                                // Render images as interactive AsyncImage composables
+                                if (inlineImages.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        inlineImages.forEach { (alt, url) ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                            ) {
+                                                AsyncImage(
+                                                    model = url,
+                                                    contentDescription = alt.ifBlank { "تصویر" },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .heightIn(max = 280.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { fullscreenImageUrl = url },
+                                                    contentScale = ContentScale.Fit,
+                                                )
+                                                // Save button
+                                                IconButton(
+                                                    onClick = { saveImageToDownloads(assistantContext, url, alt) },
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomEnd)
+                                                        .padding(4.dp)
+                                                        .size(36.dp)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                            CircleShape,
+                                                        ),
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Download,
+                                                        contentDescription = t("Save image", "ذخیره تصویر"),
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 if (isLongResponse) {
@@ -1309,6 +1399,54 @@ private fun MessageBubble(
                 }
             }
 
+            // Fullscreen image viewer
+            fullscreenImageUrl?.let { imageUrl ->
+                Dialog(
+                    onDismissRequest = { fullscreenImageUrl = null },
+                    properties = DialogProperties(usePlatformDefaultWidth = false),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.92f))
+                            .clickable { fullscreenImageUrl = null },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Fit,
+                        )
+                        IconButton(
+                            onClick = { fullscreenImageUrl = null },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(16.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = t("Close", "بستن"),
+                                tint = Color.White,
+                            )
+                        }
+                        IconButton(
+                            onClick = { saveImageToDownloads(assistantContext, imageUrl, "") },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                        ) {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = t("Save image", "ذخیره تصویر"),
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         is ChatMessage.ToolCall -> {
