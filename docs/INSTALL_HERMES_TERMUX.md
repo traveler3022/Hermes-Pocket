@@ -234,48 +234,24 @@ OpenAI SDK: 2.24.0
 
 ---
 
-## مرحله ۸ — تنظیم کلید API
-
-</div>
+## مرحله ۸ — اجرای ویزارد راهاندازی
 
 ```bash
-nano "$HOME/.hermes/.env"
+hermes setup
 ```
 
 <div dir="rtl">
 
-کلید API ات را اضافه کن. مثال برای Gemini:
+ویزارد خودش ازت میپرسه:
+- **ارائهدهنده** (Gemini، OpenRouter، و غیره)
+- **کلید API**
+- **ابزارهای فعال**
+- **موتور جستوجوی وب**
 
-</div>
+راهنمای کامل ویزارد: **[تنظیم اولیه هرمس](SETUP_HERMES_TERMUX.md)**
 
-```env
-GEMINI_API_KEY=YOUR_K...div dir="rtl">
-
-ذخیره: `Ctrl+O` → `Enter` → `Ctrl+X`
-
-تنظیم ارائه‌دهنده و مدل:
-
-</div>
-
-```bash
-hermes config set model.provider gemini
-hermes config set model.default gemini-2.5-flash
-```
-
-<div dir="rtl">
-
-بررسی:
-
-</div>
-
-```bash
-cat "$HOME/.hermes/config.yaml"
-hermes doctor
-```
-
-<div dir="rtl">
-
-باید ببینی: `✓ gemini (key configured)`
+> [!TIP]
+> اگر `hermes setup` اجرا نشد، `hermes` را بدون آرگومان امتحان کن — بعضی نسخه‌ها خودکار ویزارد را نشان می‌دهند.
 
 ---
 
