@@ -61,6 +61,8 @@
 
 **Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
 
+> 🔒 **Never share sensitive information** — API keys, passwords, tokens, or credentials. Do not paste them into screenshots, chats, GitHub issues, or commits. If a key leaks, revoke it immediately in the provider dashboard.
+
 ---
 
 ## 📚 Documentation
