@@ -29,14 +29,11 @@ How would you like to set up Hermes?
 
 | گزینه | توضیح |
 |---|---|
-| **Quick Setup** | ورود با OAuth از طریق Nous Portal. بدون نیاز به کلید API. مدلها و ابزارهای پیشفرض فعال میشوند. **مناسب مبتدیها.** |
-| **Full Setup** | همهچیز دستی تنظیم میشود: ارائهدهنده، ابزار، پلاگین. **برای کاربران حرفهای.** |
-| **Blank Slate** | همهچیز خاموش بهجز حداقلها. بعداً خودت هر چیزی که لازم داری فعال میکنی. **برای کنترل کامل.** |
+| **Quick Setup** | ورود با OAuth از طریق Nous Portal. بدون نیاز به کلید API. **مناسب مبتدیها.** |
+| **Full Setup** | همهچیز دستی تنظیم میشود. **برای کاربران حرفهای.** |
+| **Blank Slate** | همهچیز خاموش بهجز حداقلها. بعداً خودت فعال میکنی. |
 
-**→ اگر میخوای همهچیز خودت تنظیم کنی: `Full Setup`**
-**→ اگر تازهکاری: `Quick Setup`**
-
-`ENTER` بزن تا بری مرحله بعد.
+**→ `Full Setup` را انتخاب کن.** `ENTER` بزن.
 
 ---
 
@@ -52,31 +49,11 @@ Select provider:
 
 → Nous Portal
   OpenRouter
-  Mixture of Agents
-  NovitaAI
-  LM Studio
   Anthropic
   OpenAI
-  Qwen Cloud / DashScope
-  xAI Grok
   Xiaomi MiMo
-  Tencent TokenHub
-  NVIDIA NIM
-  GitHub Copilot
-  Hugging Face Inference Providers
   Google AI Studio
   DeepSeek
-  Z.AI / GLM
-  Kimi / Moonshot
-  StepFun Step Plan
-  MiniMax
-  Ollama Cloud
-  Arcee AI
-  GMI Cloud
-  Kilo Code
-  OpenCode
-  AWS Bedrock
-  Azure Foundry
   ...
   Custom endpoint (enter URL manually)
   Leave unchanged
@@ -84,23 +61,18 @@ Select provider:
 
 <div dir="rtl">
 
-گزینههای مهم:
-
 | ارائهدهنده | توضیح |
 |---|---|
 | **Xiaomi MiMo** | ارزان و سریع، مناسب اندروید. نیاز به `XIAOMI_API_KEY` |
 | **Google AI Studio** | Gemini مستقیم. نیاز به `GEMINI_API_KEY` |
 | **OpenRouter** | آگریگیتور pay-per-use، صدها مدل |
-| **Anthropic** | مدل Claude. نیاز به `ANTHROPIC_API_KEY` |
-| **OpenAI** | GPT-4o و غیره. نیاز به `OPENAI_API_KEY` |
-| **DeepSeek** | ارزان و قوی برای کدنویسی |
 | **Nous Portal** | ورود OAuth، ۳۰۰+ مدل |
-| **Custom endpoint** | URL دستی برای هر API سازگار با OpenAI |
-| **Leave unchanged** | تغییر نده |
 
 **→ برای اندروید: `Xiaomi MiMo` یا `Google AI Studio` پیشنهاد میشود.**
 
-بعد از انتخاب، احتمالاً ازت کلید API میخواهد (مگر اینکه Nous Portal یا OAuth انتخاب کرده باشی). `ENTER` بزن.
+اگر ارائهدهندهای انتخاب کنی که کلید API لازم دارد، ویزارد ازت کلید میخواهد. قبلاً در [تنظیم اولیه](SETUP_HERMES_TERMUX.md) کلید را در `~/.hermes/.env` تنظیم کردهای.
+
+`ENTER` بزن.
 
 ---
 
@@ -129,13 +101,13 @@ Select terminal backend:
 | گزینه | توضیح |
 |---|---|
 | **Local** | دستورات مستقیم روی Termux اجرا میشوند. **این گزینه برای اندروید درست است.** |
-| **Docker** | اجرای دستورات در کانتینر Docker (اندروید پشتیبانی نمیکند) |
-| **Modal** | سرورلس ابری (نیاز به حساب Modal دارد) |
+| **Docker** | کانتینر Docker (اندروید پشتیبانی نمیکند) |
+| **Modal** | سرورلس ابری (نیاز به حساب Modal) |
 | **SSH** | اتصال به ماشین راه دور |
 | **Daytona** | محیط توسعهی ابری پایدار |
-| **Keep current** | همان تنظیمات فعلی را نگه دار |
+| **Keep current** | همان تنظیمات فعلی |
 
-**→ اندروید: حتماً `Local` را انتخاب کن.** فشار `ENTER`.
+**→ حتماً `Local` را انتخاب کن.** `ENTER` بزن.
 
 ---
 
@@ -143,7 +115,7 @@ Select terminal backend:
 
 <div dir="rtl">
 
-انتخاب پلتفرمهای پیامرسان برای اتصال. با `ENTER` از این مرحله رد شو و برو مرحله بعد.
+انتخاب پلتفرمهای پیامرسان. اینها فقط برای ربات تلگرام/دیسکورد/واتساپ و غیره لازماند. **فعلاً لازمشان نداری.**
 
 </div>
 
@@ -151,36 +123,16 @@ Select terminal backend:
 Select platforms to configure:
 ↑↓ navigate  SPACE toggle  ENTER confirm  ESC cancel
 
-[ ] Mattermost
-[ ] Signal
-[ ] Weixin / WeChat
-[ ] BlueBubbles (iMessage)
-[ ] QQ Bot
-[ ] Yuanbao
-[ ] DingTalk
-[ ] Discord
-[ ] Email
-[ ] Feishu / Lark
-[ ] Google Chat
-[ ] Home Assistant
-[ ] IRC
-[ ] LINE
-[ ] Matrix
-[ ] ntfy
-[ ] iMessage via Photon
-[ ] Raft
-[ ] SimpleX Chat
-[ ] Slack
-[ ] SMS (Twilio)
-[ ] Microsoft Teams
-[ ] Telegram
-[ ] WeCom (Enterprise WeChat)
-[ ] WhatsApp
+[ ] Mattermost    [ ] Discord       [ ] Slack
+[ ] Signal        [ ] Email         [ ] Telegram
+[ ] WeChat        [ ] Google Chat   [ ] WhatsApp
+[ ] LINE          [ ] Matrix        [ ] Microsoft Teams
+... (25 پلتفرم)
 ```
 
 <div dir="rtl">
 
-**→ برای شروع لازم نیست پلتفرمی انتخاب کنی.** فقط `ENTER` بزن تا رد شوی. بعداً از داخل اپ Hermes2 هم میتوانی تنظیم کنی.
+**→ فقط `ENTER` بزن تا رد شوی.** بعداً از داخل اپ Hermes2 هم میتوانی تنظیم کنی.
 
 ---
 
@@ -198,69 +150,54 @@ Tools for 📱 CLI
   [ ] 🌐 Browser Automation (navigate, click, type, scroll)
   [ ] 💻 Terminal & Processes (terminal, process)
   [ ] 📁 File Operations (read, write, patch, search)
-  [ ] ⚡ Code Execution (execute_code)
-  [ ] 🔬 Vision / Image Analysis (vision_analyze)
-  [ ] 🎥 Video Analysis (video_analyze)
-  [ ] 🎨 Image Generation (image_generate)
-  [ ] 🎬 Video Generation (video_generate)
-  [ ] 🐦 X (Twitter) Search (x_search)
-  [ ] 🔊 Text-to-Speech (text_to_speech)
-  [ ] 📚 Skills (list, view, manage)
-  [ ] 📝 Task Planning (todo)
-  [ ] 🧠 Memory (persistent memory across sessions)
-  [ ] 🔄 Context Engine (runtime tools)
-  [ ] 🔍 Session Search (search past conversations)
-  [ ] ❓ Clarifying Questions (clarify)
-  [ ] 📤 Task Delegation (delegate_task)
-  [ ] 🕒 Cron Jobs (create/list/update/pause/resume/run)
-  [ ] 🏠 Home Assistant (smart home)
-  [ ] 🎵 Spotify (playback, search, playlists)
-  [ ] 💬 Yuanbao (group info, member queries)
-  [ ] 💻 Computer Use (macOS/Windows/Linux)
+  ...
 ```
 
 <div dir="rtl">
 
-اینها ابزارهایی هستن که **روی اندروید کار میکنن و پیشنهاد میشن**:
+**فعال کن** (روی اندروید کار میکنن):
 
-| # | ابزار | چرا فعال کنی |
-|---|---|---|
-| 1 | 🔍 **Web Search & Scraping** | جستوجوی وب — خیلی کاربردی |
-| 2 | 💻 **Terminal & Processes** | اجرای دستور — هستهی اصلی |
-| 3 | 📁 **File Operations** | مدیریت فایل — ضروری |
-| 4 | ⚡ **Code Execution** | اجرای کد — قابلیت کلیدی |
-| 5 | 📚 **Skills** | مدیریت مهارتها |
-| 6 | 📝 **Task Planning** | لیست کارها |
-| 7 | 🧠 **Memory** | حافظهی پایدار بین سشنها |
-| 8 | 🔄 **Context Engine** | ابزارهای runtime از context فعال |
-| 9 | 🔍 **Session Search** | جستوجوی تاریخچه |
-| 10 | ❓ **Clarifying Questions** | سؤال برای شفافسازی |
-| 11 | 📤 **Task Delegation** | واگذاری کار به زیرایجنت |
-| 12 | 🕒 **Cron Jobs** | زمانبندی کارهای تکراری |
+</div>
 
-اینها را **فعال نکن** (روی اندروید کار نمیکنن یا نیاز به تنظیم اضافی دارن):
+```
+[x] 🔍 Web Search & Scraping
+[x] 💻 Terminal & Processes
+[x] 📁 File Operations
+[x] ⚡ Code Execution
+[x] 🔊 Text-to-Speech
+[x] 📚 Skills
+[x] 📝 Task Planning
+[x] 🧠 Memory
+[x] 🔍 Session Search
+[x] ❓ Clarifying Questions
+[x] 📤 Task Delegation
+[x] 🕒 Cron Jobs
+```
 
-| ابزار | دلیل |
-|---|---|
-| 🌐 Browser Automation | اندروید Tier 2 — پشتیبانی نمیشود |
-| 🔬 Vision / Image Analysis | نیاز به مدل vision-capable |
-| 🎥 Video Analysis | نیاز به مدل ویدیویی |
-| 🎨 Image Generation | نیاز به API جداگانه |
-| 🎬 Video Generation | نیاز به API جداگانه |
-| 🐦 X (Twitter) Search | نیاز به xAI OAuth |
-| 🔊 Text-to-Speech | نیاز به API جداگانه |
-| 🏠 Home Assistant | نیاز به HA instance |
-| 🎵 Spotify | نیاز به حساب Spotify |
-| 💬 Yuanbao | نیاز به تنظیم جداگانه |
-| 💻 Computer Use | مخصوص دسکتاپ |
+<div dir="rtl">
 
-**→ ابزارهای پیشنهادی بالا را با `SPACE` فعال کن، بعد `ENTER` بزن.**
+**فعال نکن** (اندروید پشتیبانی نمیکنه یا نیاز به تنظیم اضافی داره):
+
+</div>
+
+```
+[ ] 🌐 Browser Automation    — اندروید Tier 2
+[ ] 💻 Computer Use           — مخصوص دسکتاپ
+[ ] 🎨 Image Generation       — نیاز به API جداگانه
+[ ] 🎬 Video Generation       — نیاز به API جداگانه
+[ ] 🐦 X (Twitter) Search     — نیاز به xAI OAuth
+[ ] 🏠 Home Assistant         — نیاز به HA instance
+[ ] 🎵 Spotify                — نیاز به حساب Spotify
+[ ] 💬 Yuanbao                — نیاز به تنظیم جداگانه
+```
+
+<div dir="rtl">
+
+**→ ابزارهای بالا را با `SPACE` فعال/غیرفعال کن، بعد `ENTER` بزن.**
 
 ---
 
 ## Step 6 — Select Search Provider
-
-<div dir="rtl">
 
 انتخاب موتور جستوجوی وب:
 
@@ -276,10 +213,7 @@ Select Search Provider:
 → (0) DuckDuckGo (ddgs) [free - no key - search only]
   (0) Exa [paid]
   (0) Firecrawl [paid]
-  (0) Parallel [paid]
-  (0) SearXNG [free - self-hosted]
   (0) Tavily [paid]
-  (0) xAI Web Search (Grok) [paid]
   (0) Skip - keep defaults / configure later
 ```
 
@@ -289,28 +223,48 @@ Select Search Provider:
 |---|---|---|---|
 | **DuckDuckGo** | رایگان | ❌ | بدون کلید، فقط جستوجو. **بهترین گزینه برای شروع.** |
 | **Brave Search** | رایگان | ✅ | ۲۰۰۰ پرسوجو در ماه |
-| **Nous Subscription** | اشتراکی | ✅ | Firecrawl مدیریتشده |
-| **SearXNG** | رایگان | ❌ | خودمیزبان، نیاز به سرور |
 | **Tavily** | پولی | ✅ | جستوجو + استخراج |
-| **Firecrawl** | پولی | ✅ | جستوجو + استخراج کامل |
-| **xAI Grok** | پولی | ✅ | جستوجوی هوشمند |
 | **Skip** | — | — | بعداً تنظیم کن |
 
-**→ برای شروع: `DuckDuckGo` — رایگان، بدون کلید، فوراً کار میکند.**
+**→ `DuckDuckGo` — رایگان، بدون کلید، فوراً کار میکند.**
+
+> [!NOTE]
+> Browser Automation با Web Search فرق دارد. DuckDuckGo جستوجوی وب انجام میدهد. Browser Automation مرورگر واقعی کنترل میکند و روی اندروید کار نمیکند.
 
 ---
 
-## خلاصهی گزینههای پیشنهادی برای اندروید
+## Step 7 — تست اتصال
 
 <div dir="rtl">
 
+بعد از ویزارد، مدل را تست کن:
+
+</div>
+
+```bash
+hermes doctor --fix
+hermes doctor
+```
+
+```bash
+hermes -q "سلام، فقط در یک جمله بگو با چه مدلی جواب میدهی."
+```
+
+<div dir="rtl">
+
+اگر جواب گرفتی، هرمس آماده است.
+
+---
+
+## خلاصهی گزینههای پیشنهادی
+
 | مرحله | گزینه |
 |---|---|
-| ۱. Setup mode | **Full Setup** (یا Quick Setup اگر تازهکاری) |
+| ۱. Setup mode | **Full Setup** |
 | ۲. Provider | **Xiaomi MiMo** یا **Google AI Studio** |
 | ۳. Terminal backend | **Local** (حتماً) |
 | ۴. Platforms | **ENTER** — بعداً از اپ تنظیم کن |
-| ۵. Tools | ابزارهای پیشنهادی بالا را فعال کن |
+| ۵. Tools | ابزارهای پیشنهادی بالا |
 | ۶. Search Provider | **DuckDuckGo** (رایگان، بدون کلید) |
 
 ---
