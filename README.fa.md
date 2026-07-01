@@ -37,17 +37,6 @@
 - 🔋 **Foreground service** — زنده نگهداشتن gateway وقتی صفحه خاموش است
 - 📤 **Share intent** — فرستادن متن از هر اپی به چت هرمس۲
 
----
-
-## 🔽 دانلود
-
-<p align="center">
-  <a href="https://github.com/traveler3022/Hermes2/releases/download/debug-latest/app-debug.apk">
-    <img src="https://img.shields.io/badge/⬇_دانلود_آخرین_APK-6750A4?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" height="48px"/>
-  </a>
-  <br>
-  <sub>بیلد debug همیشهتازه — با هر push خودکار ساخته میشود.</sub>
-</p>
 
 ---
 
