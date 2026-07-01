@@ -49,6 +49,20 @@
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="240" alt="Chat"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="240" alt="Sessions"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="240" alt="Tools"/>
+</p>
+<p align="center">
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="240" alt="Models"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="240" alt="Settings"/>
+</p>
+
+---
+
 ## 🛡️ Privacy & Security
 
 **Stays on your phone:** Your API key lives in Hermes' config inside Termux. The app-to-agent link runs over `127.0.0.1` — it never leaves the device.
@@ -61,7 +75,7 @@ You → Hermes2 → AI Provider (e.g. Google)
          └─ API key stays on your phone ✅
 ```
 
-> ⚠️ **Never send your API key, password, or credentials inside the chat.** Not even masked or partial — everything you type goes to the AI provider. If you need to change your key, do it in Termux: `nano ~/.hermes/.env`
+> ⚠️ Never share your API key or passwords in the chat — everything you type goes to the AI provider.
 
 **What the agent can do:** Hermes runs shell commands inside Termux. On a non-rooted phone, Android's sandbox confines this to Termux's storage only.
 
