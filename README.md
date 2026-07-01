@@ -49,20 +49,6 @@
 
 ---
 
-## 📸 Screenshots
-
-<p align="center">
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="240" alt="Chat"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="240" alt="Sessions"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="240" alt="Tools"/>
-</p>
-<p align="center">
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="240" alt="Models"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="240" alt="Settings"/>
-</p>
-
----
-
 ## 🛡️ Privacy & Security
 
 **Stays on your phone:** Your API key lives in Hermes' config inside Termux. The app-to-agent link runs over `127.0.0.1` — it never leaves the device.
@@ -94,6 +80,18 @@ You → Hermes2 → AI Provider (e.g. Google)
 | **[Setup Wizard](docs/SETUP_HERMES_TERMUX.md)** | Guide to the `hermes setup` wizard |
 | **[First Connection](docs/GATEWAY_SETUP.md)** | Connect the app to Hermes for the first time |
 | **[Hermes Agent Docs](https://hermes-agent.nousresearch.com/docs)** | Official upstream documentation |
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="150" alt="Chat"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="150" alt="Sessions"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="150" alt="Tools"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="150" alt="Models"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="150" alt="Settings"/>
+</p>
 
 ---
 
