@@ -51,20 +51,6 @@
 
 ---
 
-## 📸 اسکرینشات
-
-<p align="center">
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="240" alt="چت"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="240" alt="نشست‌ها"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="240" alt="ابزارها"/>
-</p>
-<p align="center">
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="240" alt="مدل‌ها"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="240" alt="تنظیمات"/>
-</p>
-
----
-
 ## 🛡️ حریم خصوصی و امنیت
 
 **روی گوشی میماند:** کلید API تو در تنظیمات Hermes در Termux ذخیره میشود. ارتباط اپ و ایجنت روی `127.0.0.1` اجرا میشود — هرگز دستگاه را ترک نمیکند.
@@ -96,6 +82,18 @@
 | **[ویزارد راهاندازی](docs/SETUP_HERMES_TERMUX.md)** | راهنمای `hermes setup` |
 | **[اتصال اول](docs/GATEWAY_SETUP.md)** | وصلکردن اپ به هرمس |
 | **[مستندات رسمی](https://hermes-agent.nousresearch.com/docs)** | مستندات بالادستی |
+
+---
+
+## 📸 اسکرینشات
+
+<p align="center">
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="150" alt="چت"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="150" alt="نشستها"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="150" alt="ابزارها"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="150" alt="مدلها"/>
+  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="150" alt="تنظیمات"/>
+</p>
 
 ---
 
