@@ -49,11 +49,10 @@ You → Hermes2 → AI Provider (e.g. Google)
          └─ API key stays on your phone ✅
 ```
 
-> ⚠️ Never share your API key or passwords in the chat — everything you type goes to the AI provider.
+> ⚠️ Never share your API key or passwords in the chat — 
 
 **What the agent can do:** Hermes runs shell commands inside Termux. On a non-rooted phone, Android's sandbox confines this to Termux's storage only.
 
-> ⚠️ **Do not root your phone to run this.** Rooting removes the sandbox.
 
 **Keep tool approval on** — it's your line of defense. When in doubt, Deny and ask the agent what it planned to do.
 
