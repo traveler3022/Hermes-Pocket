@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,23 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
 }
+
+// ── Release signing credentials ──────────────────────────────────────────────
+// Credentials come from EITHER:
+//   • CI: environment variables (GitHub Actions secrets) — KEYSTORE_FILE,
+//     KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+//   • Local: a gitignored `keystore.properties` at repo root with keys
+//     storeFile, storePassword, keyAlias, keyPassword
+// If NEITHER is present, the release build stays UNSIGNED so anyone can still
+// run `assembleRelease` without owning the keystore.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.inputStream().use { keystoreProps.load(it) }
+}
+fun signingCred(envName: String, propName: String): String? =
+    System.getenv(envName) ?: keystoreProps.getProperty(propName)
+val releaseStorePath: String? = signingCred("KEYSTORE_FILE", "storeFile")
 
 android {
     namespace = "com.hermes.android"
@@ -22,6 +41,17 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        create("release") {
+            if (releaseStorePath != null) {
+                storeFile = file(releaseStorePath)
+                storePassword = signingCred("KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingCred("KEY_ALIAS", "keyAlias")
+                keyPassword = signingCred("KEY_PASSWORD", "keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -29,6 +59,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Sign only when a keystore is actually available; otherwise the
+            // release APK is produced unsigned (build never breaks).
+            signingConfig = if (releaseStorePath != null) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
         }
         debug {
             isMinifyEnabled = false
