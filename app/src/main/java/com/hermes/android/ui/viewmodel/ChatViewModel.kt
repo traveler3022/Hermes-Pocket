@@ -1,6 +1,9 @@
 package com.hermes.android.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.ConnectionState
@@ -11,6 +14,7 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -321,29 +325,150 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
-        if (text.isEmpty()) return
+        val attachments = _uiState.value.pendingAttachments
+        if (text.isEmpty() && attachments.isEmpty()) return
         val sessionId = _uiState.value.activeSessionId ?: return
 
         // Feature #23: Clear draft when message is sent
         clearDraft()
 
+        // Non-image files are referenced by @file: tokens in the prompt text;
+        // images were already queued gateway-side and ride along automatically.
+        val refs = attachments.mapNotNull { it.refText }
+        val outgoing = (text + if (refs.isEmpty()) "" else "\n" + refs.joinToString("\n")).trim()
+        val bubbleText = text.ifEmpty { attachments.joinToString("\n") { "📎 ${it.name}" } }
+
         // Add user message to UI immediately
         val userMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
-            text = text,
+            text = bubbleText,
         )
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + userMsg,
             inputText = "",
             isSending = true,
+            pendingAttachments = emptyList(),
         )
 
         // Check for slash commands
         if (text.startsWith("/")) {
             handleSlashCommand(text, sessionId)
         } else {
-            sendPrompt(text, sessionId)
+            sendPrompt(outgoing, sessionId)
+        }
+    }
+
+    // ── Attachments — files/images travel over the loopback gateway only ──
+    // (Termux keeps its sandbox: no shared-storage permission is involved.)
+
+    /** Max upload size; matches the gateway's image.attach_bytes cap (25 MB). */
+    private val maxAttachBytes = 25 * 1024 * 1024
+
+    /**
+     * Upload a user-picked file to the gateway session.
+     *
+     * Images → `image.attach_bytes` (queued for native vision on the next
+     * prompt). Everything else → `file.attach` (staged in the workspace,
+     * referenced from the prompt via the returned `@file:` token).
+     */
+    fun attachFromUri(uri: Uri) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isAttaching) return
+        _uiState.value = _uiState.value.copy(isAttaching = true)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolver = context.contentResolver
+                val name = resolver.query(uri, null, null, null, null)?.use { c ->
+                    val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+                } ?: uri.lastPathSegment ?: "attachment"
+                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IllegalStateException("Cannot read file")
+                if (bytes.size > maxAttachBytes) {
+                    throw IllegalStateException("File too large (max 25 MB)")
+                }
+                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+
+                val attachment = if (mime.startsWith("image/")) {
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        put("content_base64", b64)
+                        put("filename", name)
+                    }
+                    val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
+                    val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
+                    PendingAttachment(name = name, isImage = true, gatewayPath = path)
+                } else {
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        put("data_url", "data:$mime;base64,$b64")
+                        put("name", name)
+                    }
+                    val result = gatewayClient.request("file.attach", jsonToElementMap(params))
+                    val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
+                        ?: throw IllegalStateException("Gateway returned no file reference")
+                    PendingAttachment(name = name, isImage = false, refText = ref)
+                }
+                _uiState.value = _uiState.value.copy(
+                    pendingAttachments = _uiState.value.pendingAttachments + attachment,
+                    isAttaching = false,
+                )
+                Timber.i("[Chat] Attached ${attachment.name} (image=${attachment.isImage})")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Attach failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Attach failed: ${e.message}",
+                    isAttaching = false,
+                )
+            }
+        }
+    }
+
+    /** Remove a staged attachment (detaches queued images gateway-side too). */
+    fun removeAttachment(attachment: PendingAttachment) {
+        _uiState.value = _uiState.value.copy(
+            pendingAttachments = _uiState.value.pendingAttachments - attachment,
+        )
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (attachment.isImage && attachment.gatewayPath != null) {
+            viewModelScope.launch {
+                try {
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        put("path", attachment.gatewayPath)
+                    }
+                    gatewayClient.request("image.detach", jsonToElementMap(params))
+                } catch (e: Exception) {
+                    Timber.w(e, "[Chat] image.detach failed (ignored)")
+                }
+            }
+        }
+    }
+
+    /**
+     * Map a gateway-local image/file path (from `![..](..)` markdown) to an
+     * HTTP URL the app can actually load. Agent-written files live inside
+     * Termux's sandbox, which this app cannot read directly — but the
+     * dashboard's `/api/files/download` endpoint streams them over loopback
+     * and accepts the session token as a query param, so the resulting URL
+     * works as-is for both Coil and DownloadManager.
+     */
+    fun resolveMediaUrl(raw: String): String {
+        if (raw.startsWith("http://") || raw.startsWith("https://") ||
+            raw.startsWith("content://") || raw.startsWith("data:")
+        ) return raw
+        val path = if (raw.startsWith("file://")) raw.removePrefix("file://") else raw
+        if (!path.startsWith("/") && !path.startsWith("~")) return raw
+        val ws = hermesRuntime.getWebSocketUrl()
+        val base = ws.replaceFirst("ws://", "http://").replaceFirst("wss://", "https://")
+            .substringBefore("/api/ws")
+        val token = ws.substringAfter("token=", "").substringBefore('&')
+        val encoded = java.net.URLEncoder.encode(path, "UTF-8")
+        return buildString {
+            append(base).append("/api/files/download?path=").append(encoded)
+            if (token.isNotEmpty()) append("&token=").append(token)
         }
     }
 

@@ -302,3 +302,52 @@ claude/image-feature branch (current):
 ================================================================================
 END OF CONTEXT
 ================================================================================
+
+================================================================================
+11. ADDENDUM 2026-07-02 — GATEWAY API RESEARCH DONE + PHASE 2 IMPLEMENTED
+================================================================================
+
+RESEARCH RESULT (hermes-agent 0.18.0 source, via PyPI sdist):
+The gateway ALREADY has everything needed. Nothing to build on the Python side.
+
+  Inbound (app → agent), JSON-RPC over the existing WebSocket:
+  - image.attach_bytes {session_id, content_base64, filename}
+      → writes to ~/.hermes/images, queues on session, auto-included in the
+        NEXT prompt.submit (native vision). Cap 25 MB. Returns {path,...}.
+  - file.attach {session_id, data_url: "data:<mime>;base64,<b64>", name}
+      → stages file in workspace, returns ref_text "@file:<path>" that must be
+        appended to the prompt text.
+  - pdf.attach, image.detach also exist.
+
+  Outbound (agent → app), HTTP on the same 127.0.0.1:9119 server:
+  - GET /api/files/download?path=<abs>&token=<session_token>
+      → streams raw file bytes; token accepted as QUERY PARAM (the only such
+        route, see _QUERY_TOKEN_API_PATHS). Works directly as a Coil model URL
+        and with DownloadManager. Path policy: home-rooted (Termux), so
+        ~/.hermes/images/... is reachable.
+  - GET /api/media?path=... → base64 data_url JSON, header-auth only,
+        restricted to ~/.hermes/{images,screenshots,cache}. NOT used (download
+        endpoint is simpler).
+
+SECURITY DECISION: no termux-setup-storage / shared storage. All file transfer
+goes through the loopback gateway only. Termux sandbox stays intact. The only
+file crossing the boundary is the one the user explicitly picked (SAF).
+
+IMPLEMENTED (this commit):
+  - ChatViewModel.resolveMediaUrl(): local/file:// paths in ![..](..) →
+    http://127.0.0.1:9119/api/files/download?path=..&token=..
+  - ChatViewModel.attachFromUri(): SAF picker Uri → image.attach_bytes or
+    file.attach; pending list in ChatUiState.pendingAttachments.
+  - ChatViewModel.removeAttachment(): image.detach for queued images.
+  - sendMessage(): appends @file: refs to outgoing prompt; images ride along
+    automatically; bubble shows 📎 names.
+  - InputBar: real file picker (GetContent "*/*"), attach spinner, staged-
+    attachment chips (tap = remove). "Coming soon" toast removed.
+  - MessageBubble: inlineImages now mapped through resolveUrl.
+
+STILL TODO:
+  - On-device test (image render via download endpoint, attach flow, save).
+  - upload-stream (multipart) for very large files — current path is base64
+    in-memory, fine up to 25 MB cap.
+  - Content-block renderer (terminal/mermaid/html/video blocks) — designed,
+    not started.

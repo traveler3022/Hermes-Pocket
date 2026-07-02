@@ -126,6 +126,25 @@ data class ChatUiState(
     val drawerDeleteTarget: String? = null,
     // Triggers scroll-to-bottom on session load (changes value each time)
     val sessionLoadedAt: Long = 0L,
+    // Files/images staged on the gateway, waiting to go with the next prompt
+    val pendingAttachments: List<PendingAttachment> = emptyList(),
+    val isAttaching: Boolean = false,
+)
+
+/**
+ * A file or image already uploaded to the gateway (over the loopback
+ * WebSocket), queued to be referenced by the next prompt.
+ *
+ * Images are queued gateway-side by `image.attach_bytes` and consumed
+ * automatically by the next `prompt.submit`; [gatewayPath] lets us
+ * `image.detach` them. Non-image files come back from `file.attach` with a
+ * [refText] (`@file:...`) that must be appended to the prompt text.
+ */
+data class PendingAttachment(
+    val name: String,
+    val isImage: Boolean,
+    val gatewayPath: String? = null,
+    val refText: String? = null,
 )
 
 enum class ChatConnectionState {

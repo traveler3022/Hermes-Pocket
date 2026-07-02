@@ -130,8 +130,11 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.DrawerRenameState
+import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 
 /**
@@ -654,6 +657,7 @@ fun ChatScreen(
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
                                 onImageClick = { url -> fullscreenImageUrl = url },
+                                resolveUrl = viewModel::resolveMediaUrl,
                             )
                         }
                     }
@@ -672,10 +676,14 @@ fun ChatScreen(
                 InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
+                    isAttaching = uiState.isAttaching,
+                    pendingAttachments = uiState.pendingAttachments,
                     slashCommands = slashCommands,
                     onTextChange = viewModel::updateInputText,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
+                    onAttachFile = viewModel::attachFromUri,
+                    onRemoveAttachment = viewModel::removeAttachment,
                 )
             }
         }
@@ -1107,6 +1115,7 @@ private fun MessageBubble(
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
     onImageClick: (String) -> Unit = {},
+    resolveUrl: (String) -> String = { it },
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -1191,7 +1200,11 @@ private fun MessageBubble(
 
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
-            val inlineImages = remember(message.text) { extractImages(message.text) }
+            // Local Termux paths are unreadable from this app's sandbox; map
+            // them through the gateway's HTTP download endpoint (loopback).
+            val inlineImages = remember(message.text) {
+                extractImages(message.text).map { (alt, url) -> alt to resolveUrl(url) }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1773,14 +1786,18 @@ private fun thinkingDotStr(): String {
 private fun InputBar(
     text: String,
     isSending: Boolean,
+    isAttaching: Boolean = false,
+    pendingAttachments: List<PendingAttachment> = emptyList(),
     slashCommands: List<SlashCommandSuggestion>,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onAttachFile: (Uri) -> Unit = {},
+    onRemoveAttachment: (PendingAttachment) -> Unit = {},
 ) {
-    val context = LocalContext.current
-    // t() is @Composable — hoist out of the onClick lambda below.
-    val comingSoonToast = t("Coming soon", "به زودی")
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri -> uri?.let(onAttachFile) }
     // Feature 5.2: slash command suggestions — from the gateway catalog
     // (commands.catalog); falls back to a minimal built-in list if empty.
     val fallbackCommands = remember {
@@ -1815,6 +1832,30 @@ private fun InputBar(
                 }
             }
         }
+        // Staged attachments — already uploaded to the gateway, sent with the
+        // next prompt. Tap a chip to remove it.
+        if (pendingAttachments.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(pendingAttachments) { attachment ->
+                    SuggestionChip(
+                        onClick = { onRemoveAttachment(attachment) },
+                        icon = {
+                            Icon(
+                                Icons.Default.AttachFile,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        },
+                        label = { Text("${attachment.name}  ✕", maxLines = 1) },
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1822,18 +1863,22 @@ private fun InputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Feature 5.1: attachment button
+            // Feature 5.1: attachment button — picks a file and uploads it to
+            // the gateway session over the loopback WebSocket.
             IconButton(
-                onClick = {
-                    Toast.makeText(context, comingSoonToast, Toast.LENGTH_SHORT).show()
-                },
+                onClick = { if (!isAttaching) filePicker.launch("*/*") },
+                enabled = !isAttaching,
                 modifier = Modifier.size(48.dp),
             ) {
-                Icon(
-                    Icons.Default.AttachFile,
-                    contentDescription = t("Attach", "پیوست"),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (isAttaching) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = t("Attach", "پیوست"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             OutlinedTextField(
                 value = text,
