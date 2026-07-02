@@ -129,8 +129,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.component.ContentBlock
+import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.PendingAttachment
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1054,19 +1060,7 @@ private fun ShimmerSkeleton() {
 
 private val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 
-// ── Image markdown helpers ────────────────────────────────────────────────
-
-private val imageMarkdownRegex = Regex("""!\[([^\]]*)\]\(([^)]+)\)""")
-
-/** Extract (alt, url) pairs from markdown text. */
-private fun extractImages(text: String): List<Pair<String, String>> =
-    imageMarkdownRegex.findAll(text).map { it.groupValues[1] to it.groupValues[2] }.toList()
-
-/** Remove `![alt](url)` patterns so HermesMarkdown doesn't double-render them. */
-private fun stripImages(text: String): String =
-    imageMarkdownRegex.replace(text, "").trimEnd()
-
-/** Save a remote image URL to the Downloads/Hermes folder via DownloadManager. */
+/** Save a remote file URL to the Downloads/Hermes folder via DownloadManager. */
 private fun saveImageToDownloads(context: Context, url: String, alt: String) {
     val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
         .ifBlank { "hermes_image.jpg" }
@@ -1079,6 +1073,204 @@ private fun saveImageToDownloads(context: Context, url: String, alt: String) {
         .setAllowedOverMetered(true)
     val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     dm.enqueue(request)
+}
+
+/** Open a URL in whatever external app handles it (browser, video player…). */
+private fun openUrlExternally(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: Exception) {
+        Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
+    }
+}
+
+// ── Content block renderers ──────────────────────────────────────────────
+
+@Composable
+private fun InlineImageBlock(
+    alt: String,
+    url: String,
+    onImageClick: (String) -> Unit,
+    onSave: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp)),
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = alt.ifBlank { "تصویر" },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onImageClick(url) },
+            contentScale = ContentScale.Fit,
+        )
+        IconButton(
+            onClick = onSave,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(36.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    CircleShape,
+                ),
+        ) {
+            Icon(
+                Icons.Default.Download,
+                contentDescription = t("Save image", "ذخیره تصویر"),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CodeBlockCard(
+    language: String,
+    code: String,
+    onCopyCode: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = language.ifBlank { "code" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = t("Copy code", "کپی کد"),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = code,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MermaidBlockCard(
+    code: String,
+    onCopyCode: (String) -> Unit,
+) {
+    // Rendered in a WebView with mermaid.js (CDN). Falls back visually to the
+    // code card header so the user can still copy the diagram source.
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "mermaid",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = t("Copy code", "کپی کد"),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            val html = remember(code) {
+                val escaped = code
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+                <style>body{margin:0;background:transparent;display:flex;justify-content:center}</style>
+                </head><body><pre class="mermaid">$escaped</pre>
+                <script>mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script>
+                </body></html>"""
+            }
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    }
+                },
+                update = { webView ->
+                    webView.loadDataWithBaseURL("https://localhost/", html, "text/html", "utf-8", null)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtifactCard(
+    emoji: String,
+    name: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+    onDownload: (() -> Unit)?,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = emoji, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onAction) { Text(actionLabel) }
+            if (onDownload != null) {
+                IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = t("Download", "دانلود"),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -1200,11 +1392,6 @@ private fun MessageBubble(
 
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
-            // Local Termux paths are unreadable from this app's sandbox; map
-            // them through the gateway's HTTP download endpoint (loopback).
-            val inlineImages = remember(message.text) {
-                extractImages(message.text).map { (alt, url) -> alt to resolveUrl(url) }
-            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1283,55 +1470,64 @@ private fun MessageBubble(
                                 } else {
                                     message.text
                                 }
-                                // Strip image syntax so HermesMarkdown won't double-render
-                                val displayMdNoImages = remember(displayMd, inlineImages) {
-                                    if (inlineImages.isEmpty()) displayMd else stripImages(displayMd)
-                                }
-                                if (displayMdNoImages.isNotBlank()) {
-                                    SelectionContainer {
-                                        HermesMarkdown(markdown = displayMdNoImages)
+                                // Multi-format agent output: split into typed
+                                // blocks (text/image/code/mermaid/html/video/
+                                // file) and give each its own native renderer.
+                                // Gateway-local paths are mapped through the
+                                // loopback download endpoint at parse time.
+                                val blocks = remember(displayMd) {
+                                    parseContentBlocks(displayMd).map { block ->
+                                        when (block) {
+                                            is ContentBlock.Image -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.Video -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.Html -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.FileRef -> block.copy(url = resolveUrl(block.url))
+                                            else -> block
+                                        }
                                     }
                                 }
-                                // Render images as interactive AsyncImage composables
-                                if (inlineImages.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        inlineImages.forEach { (alt, url) ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(8.dp))
-                                            ) {
-                                                AsyncImage(
-                                                    model = url,
-                                                    contentDescription = alt.ifBlank { "تصویر" },
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .heightIn(max = 280.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .clickable { onImageClick(url) },
-                                                    contentScale = ContentScale.Fit,
-                                                )
-                                                // Save button
-                                                IconButton(
-                                                    onClick = { saveImageToDownloads(assistantContext, url, alt) },
-                                                    modifier = Modifier
-                                                        .align(Alignment.BottomEnd)
-                                                        .padding(4.dp)
-                                                        .size(36.dp)
-                                                        .background(
-                                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                                            CircleShape,
-                                                        ),
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.Download,
-                                                        contentDescription = t("Save image", "ذخیره تصویر"),
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(18.dp),
-                                                    )
-                                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    blocks.forEach { block ->
+                                        when (block) {
+                                            is ContentBlock.Text -> SelectionContainer {
+                                                HermesMarkdown(markdown = block.markdown)
                                             }
+                                            is ContentBlock.Image -> InlineImageBlock(
+                                                alt = block.alt,
+                                                url = block.url,
+                                                onImageClick = onImageClick,
+                                                onSave = { saveImageToDownloads(assistantContext, block.url, block.alt) },
+                                            )
+                                            is ContentBlock.Code -> CodeBlockCard(
+                                                language = block.language,
+                                                code = block.code,
+                                                onCopyCode = onCopyCode,
+                                            )
+                                            is ContentBlock.Mermaid -> MermaidBlockCard(
+                                                code = block.code,
+                                                onCopyCode = onCopyCode,
+                                            )
+                                            is ContentBlock.Html -> ArtifactCard(
+                                                emoji = "🌐",
+                                                name = block.name,
+                                                actionLabel = t("Open", "باز کن"),
+                                                onAction = { openUrlExternally(assistantContext, block.url) },
+                                                onDownload = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                            )
+                                            is ContentBlock.Video -> ArtifactCard(
+                                                emoji = "🎬",
+                                                name = block.name,
+                                                actionLabel = t("Play", "پخش"),
+                                                onAction = { openUrlExternally(assistantContext, block.url) },
+                                                onDownload = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                            )
+                                            is ContentBlock.FileRef -> ArtifactCard(
+                                                emoji = "📄",
+                                                name = block.name,
+                                                actionLabel = t("Download", "دانلود"),
+                                                onAction = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                                onDownload = null,
+                                            )
                                         }
                                     }
                                 }
