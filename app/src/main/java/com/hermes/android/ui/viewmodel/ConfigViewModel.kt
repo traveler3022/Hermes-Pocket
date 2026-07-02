@@ -1,5 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
@@ -426,6 +427,395 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // ── Provider Management (matches Hermes Agent config.yaml) ──────────
+
+    fun loadProviders() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingProviders = true)
+            try {
+                // Read config.yaml directly as JSON via shell.exec — parsing
+                // config.show's human-formatted text was too fragile.
+                val out = execPython(
+                    """
+                    import json, yaml, pathlib
+                    home = pathlib.Path.home() / '.hermes'
+                    cp = home / 'config.yaml'
+                    cfg = (yaml.safe_load(cp.read_text()) if cp.exists() else {}) or {}
+                    provs = cfg.get('providers') or {}
+                    model = cfg.get('model')
+                    if not isinstance(model, dict): model = {'model': model or ''}
+                    print(json.dumps({
+                        'providers': {str(k): {
+                            'base_url': str((v or {}).get('base_url', '') if isinstance(v, dict) else ''),
+                            'default_model': str((v or {}).get('default_model', '') if isinstance(v, dict) else ''),
+                        } for k, v in provs.items()},
+                        'strategies': cfg.get('credential_pool_strategies') or {},
+                        'fallback': [str(x) for x in (cfg.get('fallback_providers') or []) if isinstance(x, (str, int))],
+                        'active_provider': str(model.get('provider') or ''),
+                    }))
+                    """.trimIndent()
+                )
+                val root = kotlinx.serialization.json.Json.parseToJsonElement(out) as JsonObject
+                val fallbackList = (root["fallback"] as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                val strategies = root["strategies"] as? JsonObject
+                val activeProv = (root["active_provider"] as? JsonPrimitive)?.content ?: ""
+                val providers = (root["providers"] as? JsonObject)?.map { (slug, v) ->
+                    val obj = v as? JsonObject
+                    HermesProviderConfig(
+                        slug = slug,
+                        baseUrl = (obj?.get("base_url") as? JsonPrimitive)?.content ?: "",
+                        defaultModel = (obj?.get("default_model") as? JsonPrimitive)?.content ?: "",
+                        strategy = (strategies?.get(slug) as? JsonPrimitive)?.content ?: "rotate",
+                        isPrimary = slug == activeProv,
+                        isFallback = slug in fallbackList,
+                        fallbackOrder = fallbackList.indexOf(slug),
+                    )
+                } ?: emptyList()
+
+                _uiState.value = _uiState.value.copy(
+                    providers = providers,
+                    fallbackProviders = fallbackList,
+                    isLoadingProviders = false,
+                )
+
+                // Load credential pool for each provider
+                providers.forEach { loadCredentialPool(it.slug) }
+
+                Timber.i("[Config] Providers loaded: ${providers.size}")
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load providers")
+                _uiState.value = _uiState.value.copy(isLoadingProviders = false)
+            }
+        }
+    }
+
+    private fun parseConfigSectionsMap(result: JsonElement): Map<String, List<String>> {
+        val sections = mutableMapOf<String, List<String>>()
+        try {
+            val obj = result as? JsonObject ?: return sections
+            // config.show returns {sections: {name: {rows: [...]}}}
+            val sectionsObj = obj["sections"] as? JsonObject
+            sectionsObj?.forEach { (name, section) ->
+                val sectionObj = section as? JsonObject
+                val rows = (sectionObj?.get("rows") as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                if (rows != null) sections[name] = rows
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "[Config] Failed to parse config sections")
+        }
+        return sections
+    }
+
+    private fun parseFallbackProviders(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        // Parse "[provider1, provider2]" or "fallback_providers: [provider1, provider2]"
+        val value = raw.substringAfter(":").trim().removeSurrounding("[", "]").trim()
+        if (value.isBlank()) return emptyList()
+        return value.split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
+    }
+
+    fun addProvider(slug: String, baseUrl: String, defaultModel: String, apiKey: String) {
+        viewModelScope.launch {
+            try {
+                // Sanitize the slug: it is interpolated into python/yaml.
+                val s = slug.trim().lowercase().filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                if (s.isEmpty()) throw IllegalArgumentException("Invalid provider name")
+                // The gateway's config.set RPC only accepts a whitelist of
+                // special keys and rejects everything else with "unknown
+                // config key" — writing providers.* through it can never
+                // work. Write config.yaml directly via shell.exec instead.
+                // Values travel base64-encoded so quoting can't break.
+                execPython(
+                    """
+                    import base64, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    provs = d.setdefault('providers', {})
+                    entry = provs.setdefault('$s', {})
+                    entry['base_url'] = base64.b64decode('${b64(baseUrl.trim())}').decode()
+                    dm = base64.b64decode('${b64(defaultModel.trim())}').decode()
+                    if dm: entry['default_model'] = dm
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                // Save API key to the credential pool
+                if (apiKey.isNotBlank()) addCredentialDirect(s, apiKey, "primary")
+                loadProviders()
+                loadModels()
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Provider \"$s\" added"
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to add provider")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to add provider: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun removeProvider(slug: String) {
+        viewModelScope.launch {
+            try {
+                // Use shell.exec to remove provider section from config.yaml
+                val script = """
+                    import yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) or {}
+                    d.get('providers', {}).pop('$slug', None)
+                    d.get('credential_pool_strategies', {}).pop('$slug', None)
+                    fb = d.get('fallback_providers') or []
+                    if '$slug' in fb: fb.remove('$slug')
+                    d['fallback_providers'] = fb
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                """.trimIndent()
+                execPython(script)
+                loadProviders()
+                loadModels()
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Provider \"$slug\" removed"
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to remove provider")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to remove provider: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun setFallbackProviders(providers: List<String>) {
+        viewModelScope.launch {
+            try {
+                // config.set rejects non-whitelisted keys — write the yaml list
+                // directly. The list travels as base64 JSON to avoid quoting.
+                val json = providers.joinToString(",", "[", "]") { "\"${it.trim()}\"" }
+                execPython(
+                    """
+                    import base64, json, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    d['fallback_providers'] = json.loads(base64.b64decode('${b64(json)}').decode())
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(fallbackProviders = providers)
+                loadProviders()
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Fallback providers updated"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set fallback: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun setProviderStrategy(slug: String, strategy: String) {
+        viewModelScope.launch {
+            try {
+                val s = slug.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                val strat = strategy.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                execPython(
+                    """
+                    import yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    d.setdefault('credential_pool_strategies', {})['$s'] = '$strat'
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                loadProviders()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set strategy: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun toggleProviderExpanded(slug: String) {
+        val current = _uiState.value.expandedProviderSlug
+        _uiState.value = _uiState.value.copy(
+            expandedProviderSlug = if (current == slug) null else slug
+        )
+    }
+
+    // ── Credential Pool ─────────────────────────────────────────────────
+
+    fun loadCredentialPool(slug: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingCredentials = true)
+            try {
+                val script = """
+                    import json, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'auth.json'
+                    d = json.loads(p.read_text()) if p.exists() else {}
+                    pool = d.get('credential_pool', {}).get('$slug', [])
+                    out = []
+                    for i, e in enumerate(pool, 1):
+                        tok = e.get('access_token', '')
+                        out.append({
+                            'index': i,
+                            'id': e.get('id'),
+                            'label': e.get('label', ''),
+                            'auth_type': e.get('auth_type', 'api_key'),
+                            'token_preview': tok[:8] + '...' + tok[-4:] if len(tok) > 12 else '***',
+                            'priority': e.get('priority', 0),
+                            'last_status': e.get('last_status'),
+                            'request_count': e.get('request_count', 0),
+                        })
+                    print(json.dumps(out))
+                """.trimIndent()
+                val output = execPython(script)
+                val entries = parseCredentialEntries(output.ifBlank { "[]" })
+                val currentPool = _uiState.value.credentialPool.toMutableMap()
+                currentPool[slug] = entries
+                _uiState.value = _uiState.value.copy(
+                    credentialPool = currentPool,
+                    isLoadingCredentials = false,
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load credential pool for $slug")
+                _uiState.value = _uiState.value.copy(isLoadingCredentials = false)
+            }
+        }
+    }
+
+    private fun parseCredentialEntries(json: String): List<CredentialEntry> {
+        return try {
+            val arr = kotlinx.serialization.json.Json.parseToJsonElement(json) as? JsonArray
+            arr?.mapNotNull { el ->
+                val obj = el as? JsonObject ?: return@mapNotNull null
+                CredentialEntry(
+                    index = (obj["index"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                    id = (obj["id"] as? JsonPrimitive)?.content,
+                    label = (obj["label"] as? JsonPrimitive)?.content,
+                    authType = (obj["auth_type"] as? JsonPrimitive)?.content,
+                    tokenPreview = (obj["token_preview"] as? JsonPrimitive)?.content ?: "***",
+                    priority = (obj["priority"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                    lastStatus = (obj["last_status"] as? JsonPrimitive)?.content,
+                    requestCount = (obj["request_count"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                )
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Timber.w(e, "[Config] Failed to parse credentials")
+            emptyList()
+        }
+    }
+
+    fun addCredential(slug: String, apiKey: String, label: String? = null) {
+        viewModelScope.launch {
+            try {
+                addCredentialDirect(slug, apiKey, label)
+                loadCredentialPool(slug)
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Key added to $slug"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to add key: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private suspend fun addCredentialDirect(slug: String, apiKey: String, label: String? = null) {
+        val lbl = label?.takeIf { it.isNotBlank() } ?: "key"
+        // Key and label travel base64-encoded — an API key containing a quote
+        // or backslash must never be able to break the embedded python.
+        execPython(
+            """
+            import base64, json, uuid, pathlib
+            p = pathlib.Path.home() / '.hermes' / 'auth.json'
+            d = json.loads(p.read_text()) if p.exists() else {}
+            pool = d.setdefault('credential_pool', {}).setdefault('$slug', [])
+            pool.append({
+                'id': uuid.uuid4().hex[:6],
+                'label': base64.b64decode('${b64(lbl)}').decode(),
+                'auth_type': 'api_key',
+                'priority': 0,
+                'source': 'manual',
+                'access_token': base64.b64decode('${b64(apiKey)}').decode(),
+            })
+            p.write_text(json.dumps(d, indent=2))
+            print('OK')
+            """.trimIndent()
+        )
+    }
+
+    fun removeCredential(slug: String, index: Int) {
+        viewModelScope.launch {
+            try {
+                val script = """
+                    import json, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'auth.json'
+                    d = json.loads(p.read_text()) if p.exists() else {}
+                    pool = d.get('credential_pool', {}).get('$slug', [])
+                    if 0 < ${index} <= len(pool):
+                        pool.pop(${index} - 1)
+                    p.write_text(json.dumps(d, indent=2))
+                    print('OK')
+                """.trimIndent()
+                execPython(script)
+                loadCredentialPool(slug)
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Key removed from $slug"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to remove key: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private suspend fun saveConfigSilent(key: String, value: String) {
+        val params = buildJsonObject {
+            put("key", key)
+            put("value", value)
+        }
+        gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
+    }
+
+    private fun shellQuote(s: String): String {
+        // Safe single-quote wrapping for shell
+        return "'" + s.replace("'", "'\\''") + "'"
+    }
+
+    /** Base64 (no-wrap) for smuggling arbitrary values into embedded python. */
+    private fun b64(s: String): String =
+        Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+
+    /**
+     * Run a python snippet in Termux via the gateway's shell.exec RPC and
+     * return its stdout. Throws with stderr when the script fails — callers
+     * surface that as the error message instead of silently "succeeding".
+     */
+    private suspend fun execPython(script: String): String {
+        val result = gatewayClient.request(GatewayMethods.SHELL_EXEC, buildJsonObject {
+            put("command", "python3 -c ${shellQuote(script)}")
+        }.toMap())
+        val obj = result as? JsonObject
+        val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: -1
+        val stdout = (obj?.get("stdout") as? JsonPrimitive)?.content ?: ""
+        if (code != 0) {
+            val stderr = (obj?.get("stderr") as? JsonPrimitive)?.content ?: "unknown error"
+            throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: stderr)
+        }
+        return stdout.trim()
+    }
+
     // ── UI actions ────────────────────────────────────────────────────────
 
     fun clearError() {
@@ -453,6 +843,13 @@ data class ConfigUiState(
     val memoryMd: String = "",
     val isLoadingMemory: Boolean = false,
     val errorMessage: String? = null,
+    // Provider management
+    val providers: List<HermesProviderConfig> = emptyList(),
+    val isLoadingProviders: Boolean = false,
+    val fallbackProviders: List<String> = emptyList(),
+    val credentialPool: Map<String, List<CredentialEntry>> = emptyMap(),
+    val isLoadingCredentials: Boolean = false,
+    val expandedProviderSlug: String? = null,
 )
 
 enum class ConfigTab(val label: String) {
@@ -475,4 +872,34 @@ data class ToolOption(
     val toolset: String?,
     val toolCount: Int = 0,
     val tools: List<String> = emptyList(),
+)
+
+// ── Provider / Credential Pool models ──────────────────────────────────
+// Maps 1:1 to Hermes Agent config.yaml structure:
+//   providers.<slug>.base_url
+//   providers.<slug>.default_model
+//   credential_pool_strategies.<slug>
+//   fallback_providers: []
+// Credentials live in auth.json → credential_pool.<slug>[]
+
+data class HermesProviderConfig(
+    val slug: String,
+    val baseUrl: String,
+    val defaultModel: String = "",
+    val strategy: String = "rotate",          // rotate | failover
+    val credentials: List<CredentialEntry> = emptyList(),
+    val isPrimary: Boolean = false,
+    val isFallback: Boolean = false,
+    val fallbackOrder: Int = -1,              // position in fallback_providers list
+)
+
+data class CredentialEntry(
+    val index: Int,                           // 1-based (matches REST API)
+    val id: String?,
+    val label: String?,
+    val authType: String?,                    // api_key | oauth
+    val tokenPreview: String,                 // redacted
+    val priority: Int,
+    val lastStatus: String?,                  // ok | fail | null
+    val requestCount: Int,
 )
