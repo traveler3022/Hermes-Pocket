@@ -147,10 +147,57 @@ class TermuxBridge @Inject constructor(
         return DetectionResult.Available(info)
     }
 
+    override suspend fun checkInstallPrerequisites(): PrerequisiteResult {
+        // 1. Termux must be installed at all.
+        val detection = detector.detect()
+        if (!detection.termuxInstalled) {
+            return PrerequisiteResult.Blocked(
+                title = "Install Termux first",
+                instructions = "Hermes runs inside Termux. Install Termux from F-Droid " +
+                    "(NOT the Play Store version — it's abandoned), then come back and tap Install.",
+                action = InstallAction.OpenStore(
+                    packageName = TermuxDetector.Package.TERMUX.packageName,
+                    fDroidUrl = TermuxDetector.Package.TERMUX.fDroidUrl,
+                ),
+            )
+        }
+        // 2. allow-external-apps must be on, or RUN_COMMAND is silently dropped
+        //    and the install would never actually start. Probe it up front.
+        if (!executor.isAllowExternalAppsEnabled()) {
+            return PrerequisiteResult.Blocked(
+                title = "Allow Hermes2 to control Termux",
+                instructions = executor.buildAllowExternalAppsInstructions(),
+                action = InstallAction.None,
+            )
+        }
+        // 3. Enough free space for the Python/Rust build (~500 MB headroom).
+        val freeMb = detection.diskFreeBytes / (1024 * 1024)
+        if (detection.diskFreeBytes in 1 until MIN_FREE_BYTES_FOR_INSTALL) {
+            return PrerequisiteResult.Blocked(
+                title = "Not enough free storage",
+                instructions = "The install needs about 500 MB free to build the agent. " +
+                    "You have ~$freeMb MB. Free up some space and try again.",
+                action = InstallAction.None,
+            )
+        }
+        return PrerequisiteResult.Ready
+    }
+
     override suspend fun install(progressEmitter: ProgressEmitter): InstallResult {
         val currentState = _state.value
         if (currentState !is RuntimeState.Detected) {
             return InstallResult.Failure("Runtime must be detected before install. Current state: $currentState")
+        }
+
+        // Preflight: never start an install that a missing prerequisite would
+        // doom halfway. Surface the fix instead of a corrupted partial install.
+        when (val prereq = checkInstallPrerequisites()) {
+            is PrerequisiteResult.Blocked -> {
+                val msg = "${prereq.title}\n\n${prereq.instructions}"
+                _state.value = RuntimeState.Error(msg)
+                return InstallResult.Failure(msg)
+            }
+            PrerequisiteResult.Ready -> Unit
         }
 
         _state.value = RuntimeState.Installing
@@ -714,6 +761,9 @@ class TermuxBridge @Inject constructor(
         // 8765 was a fabrication that doesn't exist anywhere in Hermes source.
         private const val DEFAULT_GATEWAY_PORT = 9119
         private const val DEFAULT_GATEWAY_HOST = "127.0.0.1"
+
+        // Preflight storage gate: the Rust/Python build needs headroom.
+        private const val MIN_FREE_BYTES_FOR_INSTALL = 500L * 1024 * 1024
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
         private val INSTALL_TIMEOUT = 30.minutes
         private val DOCTOR_COMMAND_TIMEOUT = 90.seconds
