@@ -1398,12 +1398,56 @@ private fun MessageBubble(
                             .padding(12.dp)
                             .animateContentSize(),
                     ) {
+                        // Attachments render as their own elements — an image
+                        // thumbnail or a file chip — never merged into the text.
+                        if (message.attachments.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                message.attachments.forEach { attachment ->
+                                    if (attachment.isImage && attachment.localUri != null) {
+                                        AsyncImage(
+                                            model = attachment.localUri,
+                                            contentDescription = attachment.name,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 200.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                    } else {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.AttachFile,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            Text(
+                                                text = attachment.name,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (message.text.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
                         val displayText = if (!isExpanded && isLongMessage) {
                             message.text.take(300) + "…"
                         } else {
                             message.text
                         }
-                        if (searchQuery.isNotBlank()) {
+                        if (message.text.isNotBlank()) if (searchQuery.isNotBlank()) {
                             Text(
                                 text = highlightText(displayText, searchQuery),
                                 style = MaterialTheme.typography.bodyMedium,

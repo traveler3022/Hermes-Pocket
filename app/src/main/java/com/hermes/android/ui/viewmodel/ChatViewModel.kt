@@ -332,17 +332,24 @@ class ChatViewModel @Inject constructor(
         // Feature #23: Clear draft when message is sent
         clearDraft()
 
-        // Non-image files are referenced by @file: tokens in the prompt text;
-        // images were already queued gateway-side and ride along automatically.
+        // Wire format vs UI: the gateway's file.attach protocol requires the
+        // @file: ref inside the submitted prompt text (that's how the agent
+        // learns about the file). That is a transport detail — the chat bubble
+        // shows ONLY what the user typed; attachments render as separate
+        // elements from ChatMessage.User.attachments. Images need no ref at
+        // all: they were queued gateway-side and ride along automatically.
         val refs = attachments.mapNotNull { it.refText }
-        val outgoing = (text + if (refs.isEmpty()) "" else "\n" + refs.joinToString("\n")).trim()
-        val bubbleText = text.ifEmpty { attachments.joinToString("\n") { "📎 ${it.name}" } }
+        val outgoing = when {
+            refs.isEmpty() -> text.ifEmpty { attachments.joinToString("\n") { "[User attached image: ${it.name}]" } }
+            else -> (text + "\n" + refs.joinToString("\n")).trim()
+        }
 
         // Add user message to UI immediately
         val userMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
-            text = bubbleText,
+            text = text,
+            attachments = attachments,
         )
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + userMsg,
@@ -399,7 +406,7 @@ class ChatViewModel @Inject constructor(
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
-                    PendingAttachment(name = name, isImage = true, gatewayPath = path)
+                    PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
@@ -409,7 +416,7 @@ class ChatViewModel @Inject constructor(
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
                     val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
                         ?: throw IllegalStateException("Gateway returned no file reference")
-                    PendingAttachment(name = name, isImage = false, refText = ref)
+                    PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
                 }
                 _uiState.value = _uiState.value.copy(
                     pendingAttachments = _uiState.value.pendingAttachments + attachment,

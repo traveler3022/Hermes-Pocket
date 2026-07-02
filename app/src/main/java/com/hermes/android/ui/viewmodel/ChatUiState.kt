@@ -17,11 +17,14 @@ sealed class ChatMessage {
     abstract val id: String
     abstract val timestamp: Long
 
-    /** User-sent message. */
+    /** User-sent message. [text] is exactly what the user typed; attached
+     *  files/images live in [attachments] and render as separate elements —
+     *  never merged into the text. */
     data class User(
         override val id: String,
         override val timestamp: Long,
         val text: String,
+        val attachments: List<PendingAttachment> = emptyList(),
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */
@@ -145,6 +148,8 @@ data class PendingAttachment(
     val isImage: Boolean,
     val gatewayPath: String? = null,
     val refText: String? = null,
+    /** content:// URI of the picked file, for thumbnail preview in the bubble. */
+    val localUri: String? = null,
 )
 
 enum class ChatConnectionState {
