@@ -89,6 +89,25 @@ fun interface ProgressEmitter {
 /**
  * Result of [HermesRuntime.install].
  */
+/**
+ * Result of [HermesRuntime.checkInstallPrerequisites] — the preflight gate that
+ * runs before an install so it can't fail halfway on a missing precondition.
+ */
+sealed class PrerequisiteResult {
+    /** Everything needed is in place; install may proceed. */
+    object Ready : PrerequisiteResult()
+
+    /**
+     * A prerequisite is missing. [title]/[instructions] explain how to fix it;
+     * [action] optionally drives a button (e.g. install Termux from F-Droid).
+     */
+    data class Blocked(
+        val title: String,
+        val instructions: String,
+        val action: InstallAction = InstallAction.None,
+    ) : PrerequisiteResult()
+}
+
 sealed class InstallResult {
     /** Installation succeeded. [info] reflects the post-install state. */
     data class Success(val info: RuntimeInfo) : InstallResult()
