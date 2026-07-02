@@ -14,6 +14,7 @@ import com.hermes.android.runtime.InstallAction
 import com.hermes.android.runtime.InstallInstructions
 import com.hermes.android.runtime.InstallProgress
 import com.hermes.android.runtime.InstallResult
+import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeInfo
 import com.hermes.android.runtime.RuntimeState
@@ -171,8 +172,10 @@ class TermuxBridge @Inject constructor(
             )
         }
         // 3. Enough free space for the Python/Rust build (~500 MB headroom).
-        val freeMb = detection.diskFreeBytes / (1024 * 1024)
-        if (detection.diskFreeBytes in 1 until MIN_FREE_BYTES_FOR_INSTALL) {
+        //    diskFreeBytes is nullable — only block when we actually know it's low.
+        val freeBytes = detection.diskFreeBytes
+        if (freeBytes != null && freeBytes < MIN_FREE_BYTES_FOR_INSTALL) {
+            val freeMb = freeBytes / (1024 * 1024)
             return PrerequisiteResult.Blocked(
                 title = "Not enough free storage",
                 instructions = "The install needs about 500 MB free to build the agent. " +
