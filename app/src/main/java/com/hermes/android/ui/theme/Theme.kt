@@ -27,7 +27,10 @@ enum class ThemeMode(val key: String) {
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
-    CLAUDE("claude", "Mocha", "موکا");
+    CLAUDE("claude", "Mocha", "موکا"),
+    MIDNIGHT("midnight", "Midnight", "میدنایت"),
+    INDIGO_PRO("indigo_pro", "Indigo Pro", "ایندیگو"),
+    CARBON("carbon", "Carbon", "کربن");
 
     companion object {
         fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: HERMES
@@ -170,6 +173,174 @@ private val BlueDarkColors = darkColorScheme(
     outlineVariant = blue_dark_outlineVariant,
 )
 
+// ── Midnight — ChatGPT-inspired: dark gray + emerald ──
+
+private val MidnightLightColors = lightColorScheme(
+    primary = midnight_light_primary,
+    onPrimary = midnight_light_onPrimary,
+    primaryContainer = midnight_light_primaryContainer,
+    onPrimaryContainer = midnight_light_onPrimaryContainer,
+    secondary = midnight_light_secondary,
+    onSecondary = midnight_light_onSecondary,
+    secondaryContainer = midnight_light_secondaryContainer,
+    onSecondaryContainer = midnight_light_onSecondaryContainer,
+    tertiary = midnight_light_tertiary,
+    onTertiary = midnight_light_onTertiary,
+    tertiaryContainer = midnight_light_tertiaryContainer,
+    onTertiaryContainer = midnight_light_onTertiaryContainer,
+    error = midnight_light_error,
+    onError = midnight_light_onError,
+    errorContainer = midnight_light_errorContainer,
+    onErrorContainer = midnight_light_onErrorContainer,
+    background = midnight_light_background,
+    onBackground = midnight_light_onBackground,
+    surface = midnight_light_surface,
+    onSurface = midnight_light_onSurface,
+    surfaceVariant = midnight_light_surfaceVariant,
+    onSurfaceVariant = midnight_light_onSurfaceVariant,
+    outline = midnight_light_outline,
+    outlineVariant = midnight_light_outlineVariant,
+)
+
+private val MidnightDarkColors = darkColorScheme(
+    primary = midnight_dark_primary,
+    onPrimary = midnight_dark_onPrimary,
+    primaryContainer = midnight_dark_primaryContainer,
+    onPrimaryContainer = midnight_dark_onPrimaryContainer,
+    secondary = midnight_dark_secondary,
+    onSecondary = midnight_dark_onSecondary,
+    secondaryContainer = midnight_dark_secondaryContainer,
+    onSecondaryContainer = midnight_dark_onSecondaryContainer,
+    tertiary = midnight_dark_tertiary,
+    onTertiary = midnight_dark_onTertiary,
+    tertiaryContainer = midnight_dark_tertiaryContainer,
+    onTertiaryContainer = midnight_dark_onTertiaryContainer,
+    error = midnight_dark_error,
+    onError = midnight_dark_onError,
+    errorContainer = midnight_dark_errorContainer,
+    onErrorContainer = midnight_dark_onErrorContainer,
+    background = midnight_dark_background,
+    onBackground = midnight_dark_onBackground,
+    surface = midnight_dark_surface,
+    onSurface = midnight_dark_onSurface,
+    surfaceVariant = midnight_dark_surfaceVariant,
+    onSurfaceVariant = midnight_dark_onSurfaceVariant,
+    outline = midnight_dark_outline,
+    outlineVariant = midnight_dark_outlineVariant,
+)
+
+// ── Indigo Pro — Linear-inspired: dark + indigo ──
+
+private val IndigoLightColors = lightColorScheme(
+    primary = indigo_light_primary,
+    onPrimary = indigo_light_onPrimary,
+    primaryContainer = indigo_light_primaryContainer,
+    onPrimaryContainer = indigo_light_onPrimaryContainer,
+    secondary = indigo_light_secondary,
+    onSecondary = indigo_light_onSecondary,
+    secondaryContainer = indigo_light_secondaryContainer,
+    onSecondaryContainer = indigo_light_onSecondaryContainer,
+    tertiary = indigo_light_tertiary,
+    onTertiary = indigo_light_onTertiary,
+    tertiaryContainer = indigo_light_tertiaryContainer,
+    onTertiaryContainer = indigo_light_onTertiaryContainer,
+    error = indigo_light_error,
+    onError = indigo_light_onError,
+    errorContainer = indigo_light_errorContainer,
+    onErrorContainer = indigo_light_onErrorContainer,
+    background = indigo_light_background,
+    onBackground = indigo_light_onBackground,
+    surface = indigo_light_surface,
+    onSurface = indigo_light_onSurface,
+    surfaceVariant = indigo_light_surfaceVariant,
+    onSurfaceVariant = indigo_light_onSurfaceVariant,
+    outline = indigo_light_outline,
+    outlineVariant = indigo_light_outlineVariant,
+)
+
+private val IndigoDarkColors = darkColorScheme(
+    primary = indigo_dark_primary,
+    onPrimary = indigo_dark_onPrimary,
+    primaryContainer = indigo_dark_primaryContainer,
+    onPrimaryContainer = indigo_dark_onPrimaryContainer,
+    secondary = indigo_dark_secondary,
+    onSecondary = indigo_dark_onSecondary,
+    secondaryContainer = indigo_dark_secondaryContainer,
+    onSecondaryContainer = indigo_dark_onSecondaryContainer,
+    tertiary = indigo_dark_tertiary,
+    onTertiary = indigo_dark_onTertiary,
+    tertiaryContainer = indigo_dark_tertiaryContainer,
+    onTertiaryContainer = indigo_dark_onTertiaryContainer,
+    error = indigo_dark_error,
+    onError = indigo_dark_onError,
+    errorContainer = indigo_dark_errorContainer,
+    onErrorContainer = indigo_dark_onErrorContainer,
+    background = indigo_dark_background,
+    onBackground = indigo_dark_onBackground,
+    surface = indigo_dark_surface,
+    onSurface = indigo_dark_onSurface,
+    surfaceVariant = indigo_dark_surfaceVariant,
+    onSurfaceVariant = indigo_dark_onSurfaceVariant,
+    outline = indigo_dark_outline,
+    outlineVariant = indigo_dark_outlineVariant,
+)
+
+// ── Carbon — Perplexity-inspired: near-black + teal ──
+
+private val CarbonLightColors = lightColorScheme(
+    primary = carbon_light_primary,
+    onPrimary = carbon_light_onPrimary,
+    primaryContainer = carbon_light_primaryContainer,
+    onPrimaryContainer = carbon_light_onPrimaryContainer,
+    secondary = carbon_light_secondary,
+    onSecondary = carbon_light_onSecondary,
+    secondaryContainer = carbon_light_secondaryContainer,
+    onSecondaryContainer = carbon_light_onSecondaryContainer,
+    tertiary = carbon_light_tertiary,
+    onTertiary = carbon_light_onTertiary,
+    tertiaryContainer = carbon_light_tertiaryContainer,
+    onTertiaryContainer = carbon_light_onTertiaryContainer,
+    error = carbon_light_error,
+    onError = carbon_light_onError,
+    errorContainer = carbon_light_errorContainer,
+    onErrorContainer = carbon_light_onErrorContainer,
+    background = carbon_light_background,
+    onBackground = carbon_light_onBackground,
+    surface = carbon_light_surface,
+    onSurface = carbon_light_onSurface,
+    surfaceVariant = carbon_light_surfaceVariant,
+    onSurfaceVariant = carbon_light_onSurfaceVariant,
+    outline = carbon_light_outline,
+    outlineVariant = carbon_light_outlineVariant,
+)
+
+private val CarbonDarkColors = darkColorScheme(
+    primary = carbon_dark_primary,
+    onPrimary = carbon_dark_onPrimary,
+    primaryContainer = carbon_dark_primaryContainer,
+    onPrimaryContainer = carbon_dark_onPrimaryContainer,
+    secondary = carbon_dark_secondary,
+    onSecondary = carbon_dark_onSecondary,
+    secondaryContainer = carbon_dark_secondaryContainer,
+    onSecondaryContainer = carbon_dark_onSecondaryContainer,
+    tertiary = carbon_dark_tertiary,
+    onTertiary = carbon_dark_onTertiary,
+    tertiaryContainer = carbon_dark_tertiaryContainer,
+    onTertiaryContainer = carbon_dark_onTertiaryContainer,
+    error = carbon_dark_error,
+    onError = carbon_dark_onError,
+    errorContainer = carbon_dark_errorContainer,
+    onErrorContainer = carbon_dark_onErrorContainer,
+    background = carbon_dark_background,
+    onBackground = carbon_dark_onBackground,
+    surface = carbon_dark_surface,
+    onSurface = carbon_dark_onSurface,
+    surfaceVariant = carbon_dark_surfaceVariant,
+    onSurfaceVariant = carbon_dark_onSurfaceVariant,
+    outline = carbon_dark_outline,
+    outlineVariant = carbon_dark_outlineVariant,
+)
+
 // ── Claude-style warm palette ──
 
 private val ClaudeLightColors = lightColorScheme(
@@ -249,6 +420,9 @@ fun Hermes2Theme(
             ColorTheme.HERMES -> if (useDark) DarkColors else LightColors
             ColorTheme.BLUE_EYE -> if (useDark) BlueDarkColors else BlueLightColors
             ColorTheme.CLAUDE -> if (useDark) ClaudeDarkColors else ClaudeLightColors
+            ColorTheme.MIDNIGHT -> if (useDark) MidnightDarkColors else MidnightLightColors
+            ColorTheme.INDIGO_PRO -> if (useDark) IndigoDarkColors else IndigoLightColors
+            ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
         }
     }
 

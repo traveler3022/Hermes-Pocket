@@ -124,7 +124,6 @@ fun ConfigScreen(
                 )
                 ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
                 ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
-                ConfigTab.MEMORY -> MemorySection(uiState, viewModel)
             }
         }
     }

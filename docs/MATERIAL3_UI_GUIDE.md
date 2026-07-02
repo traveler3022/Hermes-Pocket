@@ -13,7 +13,7 @@ calm • technical • readable • fast • trustworthy
 ## Design Goals
 
 1. **Show the active backend clearly**
-   - Users must always know whether Hermes is using MiMo, Gemini, OpenRouter, etc.
+   - Users must always know whether Hermes is using Gemini, Gemini, OpenRouter, etc.
 
 2. **Make runtime state obvious**
    - Termux missing
@@ -167,8 +167,8 @@ Current cards:
 
 ```text
 Active backend
-Provider: xiaomi
-Model: mimo-v2.5-free
+Provider: gemini
+Model: gemini-2.5-flash
 ```
 
 Tabs:
@@ -261,8 +261,8 @@ Use for active provider/model.
 ```text
 ┌──────────────────────────┐
 │ Active backend            │
-│ Provider: xiaomi          │
-│ Model: mimo-v2.5-free     │
+│ Provider: gemini          │
+│ Model: gemini-2.5-flash     │
 └──────────────────────────┘
 ```
 
@@ -316,7 +316,7 @@ Good:
 ```text
 Gateway is running
 Hermes install required
-MiMo backend active
+Gemini backend active
 Fetch logs
 ```
 
@@ -342,5 +342,5 @@ Developer details can go in expandable logs.
 - [ ] Provider icons / short labels
 - [ ] Log viewer with copy/share
 - [ ] Permission checklist cards
-- [ ] MiMo/Gemini quick backend switcher
+- [ ] Gemini/Gemini quick backend switcher
 - [ ] Tablet navigation rail

@@ -214,31 +214,20 @@ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 export CARGO_BUILD_JOBS=1
 ```
 
+Cold-start takes 30–90 s. Check logs: `cat ~/.hermes/logs/gateway_stdout.log`
+If Hermes is running but the app won't connect: force-stop and reopen Termux, then start the gateway again.
 </details>
 
 <details>
-<summary><b><code>hermes: command not found</code></b></summary>
+<summary><b>Disconnects when screen turns off</b></summary>
 
-<br>
-
-```bash
-cd ~/.hermes/hermes-agent
-ln -sf "$PWD/venv/bin/hermes" "$PREFIX/bin/hermes"
-which hermes
-```
-
+Set Hermes2 (and Termux) to **Unrestricted** battery: Settings → Apps → [app] → Battery → Unrestricted.
 </details>
 
 <details>
-<summary><b>Disconnects when the screen turns off</b></summary>
+<summary><b>What models are supported?</b></summary>
 
-<br>
-
-A foreground service keeps the gateway alive, but aggressive battery savers can still kill it:
-
-- **Settings → Apps → Hermes2 → Battery → Unrestricted**
-- Do the same for **Termux** if it persists.
-
+Any OpenAI-compatible provider: Gemini, OpenRouter, Claude, Mistral, Groq, Ollama, DeepSeek, and more.
 </details>
 
 More depth: **[Complete technical guide](docs/RUNNING_ON_ANDROID_TERMUX.md)**
@@ -275,17 +264,15 @@ bash ./gradlew :app:testDebugUnitTest    # unit tests
 
 ## 🤝 Contributing
 
-Issues and PRs welcome. This is an independent, community port — not an official Nous Research product. When reporting a bug, include your **Android version**, **phone model**, and the relevant lines from `~/.hermes/logs/gateway_stdout.log`.
+Issues and PRs welcome. This is an independent community port — not an official Nous Research product. When reporting bugs, include your **Android version**, **phone model**, and relevant lines from `~/.hermes/logs/gateway_stdout.log`.
 
 ## 📄 License
 
 **MIT** — see [LICENSE](LICENSE).
 
-<sub>Independent project · not affiliated with or endorsed by Nous Research. "Hermes Agent" belongs to its respective authors.</sub>
+<sub>Independent project · not affiliated with Nous Research · "Hermes Agent" belongs to its respective authors.</sub>
 
-<div align="center">
-<br>
-
-**⬡ Built for Android · Powered by Hermes Agent ⬡**
-
-</div>
+<p align="center">
+  <br>
+  <b>⬡ Built for Android · Powered by Hermes Agent ⬡</b>
+</p>
