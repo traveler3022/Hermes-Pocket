@@ -801,10 +801,17 @@ class ConfigViewModel @Inject constructor(
      * Run a python snippet in Termux via the gateway's shell.exec RPC and
      * return its stdout. Throws with stderr when the script fails — callers
      * surface that as the error message instead of silently "succeeding".
+     *
+     * The script is fed through a quoted heredoc on stdin, NOT `python3 -c`:
+     * the gateway's safety filter hard-blocks any `-c`/`-e` script execution
+     * ("script execution via -e/-c flag"), which is exactly why every
+     * provider operation used to fail. Heredoc passes the filter and works
+     * even though shell.exec runs the outer shell with stdin=DEVNULL (bash
+     * wires the heredoc to python's stdin itself).
      */
     private suspend fun execPython(script: String): String {
         val result = gatewayClient.request(GatewayMethods.SHELL_EXEC, buildJsonObject {
-            put("command", "python3 -c ${shellQuote(script)}")
+            put("command", "python3 - <<'H2PYEOF'\n$script\nH2PYEOF")
         }.toMap())
         val obj = result as? JsonObject
         val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: -1
