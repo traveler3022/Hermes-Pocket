@@ -69,9 +69,12 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
         val before = segment.substring(cursor, match.range.first)
         if (before.isNotBlank()) out.add(ContentBlock.Text(before.trim()))
         if (isMd) {
+            // Markdown image syntax is ALWAYS an image, even when the URL has
+            // no file extension (common for web images, e.g. picsum.photos/200
+            // or a query-only CDN link). Only bare paths are classified by ext.
             val alt = match.groupValues[1]
             val url = match.groupValues[2]
-            out.add(classifyUrl(url, alt))
+            out.add(ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url))
         } else {
             out.add(classifyUrl(match.value))
         }

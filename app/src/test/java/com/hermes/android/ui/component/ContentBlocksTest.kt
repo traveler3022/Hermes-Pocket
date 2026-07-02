@@ -24,6 +24,13 @@ class ContentBlocksTest {
     }
 
     @Test
+    fun `markdown image with extensionless web url is still an image`() {
+        val blocks = parseContentBlocks("![random](https://picsum.photos/400)")
+        val img = blocks.filterIsInstance<ContentBlock.Image>().single()
+        assertEquals("https://picsum.photos/400", img.url)
+    }
+
+    @Test
     fun `bare image path becomes an image block`() {
         val blocks = parseContentBlocks("Saved the plot to ~/.hermes/images/plot_1.png for you.")
         assertTrue(blocks.any { it is ContentBlock.Image && it.url == "~/.hermes/images/plot_1.png" })

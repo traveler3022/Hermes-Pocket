@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
@@ -1234,6 +1235,68 @@ private fun MermaidBlockCard(
 }
 
 @Composable
+private fun HtmlBlockCard(
+    url: String,
+    name: String,
+    onOpenExternal: () -> Unit,
+) {
+    // HTML is renderable in-app: show it inline in a WebView, with a button to
+    // pop out to a full browser for interaction-heavy pages.
+    var expanded by remember { mutableStateOf(true) }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🌐", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = t("Toggle preview", "نمایش/بستن"),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                IconButton(onClick = onOpenExternal, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.OpenInNew,
+                        contentDescription = t("Open in browser", "باز کردن در مرورگر"),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        }
+                    },
+                    update = { it.loadUrl(url) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ArtifactCard(
     emoji: String,
     name: String,
@@ -1507,12 +1570,10 @@ private fun MessageBubble(
                                                 code = block.code,
                                                 onCopyCode = onCopyCode,
                                             )
-                                            is ContentBlock.Html -> ArtifactCard(
-                                                emoji = "🌐",
+                                            is ContentBlock.Html -> HtmlBlockCard(
+                                                url = block.url,
                                                 name = block.name,
-                                                actionLabel = t("Open", "باز کن"),
-                                                onAction = { openUrlExternally(assistantContext, block.url) },
-                                                onDownload = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                                onOpenExternal = { openUrlExternally(assistantContext, block.url) },
                                             )
                                             is ContentBlock.Video -> ArtifactCard(
                                                 emoji = "🎬",
