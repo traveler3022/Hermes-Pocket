@@ -166,7 +166,7 @@ class TermuxBridge @Inject constructor(
         //    and the install would never actually start. Probe it up front.
         if (!executor.isAllowExternalAppsEnabled()) {
             return PrerequisiteResult.Blocked(
-                title = "Allow Hermes2 to control Termux",
+                title = "Allow Hermes2 to control Termux (allow-external-apps)",
                 instructions = executor.buildAllowExternalAppsInstructions(),
                 action = InstallAction.None,
             )
