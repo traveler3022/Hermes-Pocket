@@ -2,224 +2,137 @@
 
 # ⬡ Hermes2
 
-### Native Android companion for **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**
+### Your own AI agent — living on your Android phone 🤖📱
 
-*A focused Android control room for your own AI agent — running entirely on your phone.*
+**Hermes2 is an Android app** that turns your phone into a home for [Hermes Agent](https://github.com/NousResearch/hermes-agent):
+an open-source AI that doesn't just chat — it *does things*. It writes code, runs commands,
+manages files and searches the web, right on your device.
 
 <br>
 
-![Material 3](https://img.shields.io/badge/Material_3-6750A4?style=for-the-badge&logo=materialdesign&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
-![Jetpack Compose](https://img.shields.io/badge/Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
+[![Download APK](https://img.shields.io/badge/⬇_Download_APK-Install_now-6750A4?style=for-the-badge&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes2/releases/tag/debug-latest)
 
 [![Build](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml)
-[![Download APK](https://img.shields.io/badge/⬇_Download-APK-6750A4?style=flat-square&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes2/releases/tag/debug-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square)](LICENSE)
+![Material 3](https://img.shields.io/badge/Material_3-6750A4?style=flat-square&logo=materialdesign&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 
-<br>
-
-`calm` · `technical` · `readable` · `fast` · `trustworthy`
-
-</div>
-
----
-
-<div align="center">
-
-```
-╭──────────────────────────────────────────────╮
-│   Hermes2 App  ◄──── ws://127.0.0.1 ────►  Hermes Agent   │
-│   (Material 3 UI)      loopback only        (Termux)      │
-╰──────────────────────────────────────────────╯
-```
-
-**No cloud middleman · No account · No telemetry**
+**No cloud middleman · No account · No telemetry · Your API key never leaves your phone**
 
 </div>
 
 ---
 
-## ⬡ Contents
+## 🤔 What is this, in plain words?
 
-<table>
-<tr>
-<td>
+You know ChatGPT? Now imagine instead of a chat that only *talks*, you have an **agent** that can
+*act*: run a script, organize files, search the web and report back, schedule tasks — and it runs
+**on your own phone**, not on someone's server.
 
-- [What is this?](#-what-is-this)
-- [How it works](#-how-it-works)
-- [Privacy & Security](#-privacy--security--read-first)
-- [Download](#-download)
+That's what this gives you. Two pieces work together:
 
-</td>
-<td>
+| Piece | What it is | Where it runs |
+|---|---|---|
+| **Hermes Agent** 🧠 | The AI agent itself (open-source, by [Nous Research](https://nousresearch.com)) | Inside [Termux](https://f-droid.org/en/packages/com.termux/) — a Linux terminal app for Android |
+| **Hermes2** 📱 *(this app)* | A beautiful Material 3 chat interface that installs, starts, and talks to the agent for you | A normal Android app |
 
-- [Installation](#-installation)
-- [Model Setup](#-model-setup)
-- [Controlling Costs](#-controlling-costs)
-- [Troubleshooting](#-troubleshooting)
-
-</td>
-<td>
-
-- [Architecture](#-architecture)
-- [Build from Source](#-build-from-source)
-- [Contributing](#-contributing)
-- [License](#-license)
-
-</td>
-</tr>
-</table>
-
----
-
-## ⬡ What is this?
-
-> **Hermes Agent** is a powerful open-source AI agent from [Nous Research](https://github.com/NousResearch/hermes-agent). It normally runs on a desktop.
->
-> **Hermes2** is the first native **Android** port — bringing the same agent to your phone with a proper Material 3 interface, instead of typing commands into a terminal.
-
-The agent does the work — chatting, running tools, writing code. This app gives it a comfortable home on Android: a real chat screen, config, sessions, skills, and tool-approval notifications.
+The only thing that leaves your phone is the request to the AI model you choose (Gemini, MiMo, OpenRouter…) — exactly like any AI app. Everything else — your sessions, your files, your API key — stays local.
 
 > [!IMPORTANT]
-> **This is a power-user tool, not a casual chat app.** Hermes Agent can run real commands on your device (inside Termux). If you only want to chat with an AI, a normal chat app fits better. If you want a real agent that can *do things* on your phone — this is for you. **Please read [Privacy & Security](#-privacy--security--read-first) before installing.**
+> **This is a power-user tool, not a casual chat app.** The agent can run real commands (safely sandboxed inside Termux, with an Approve/Deny prompt before anything risky). If you just want to chat with an AI, a normal chat app fits better. If you want an AI that can *do things* — welcome. 🚀
 
 ---
 
-## ⬡ How it works
+## ✨ What can it do?
 
-```
-┌─────────────────────────┐
-│   Hermes2 Android App   │   Material 3 UI
-└────────────┬────────────┘
-             │  WebSocket · ws://127.0.0.1:9119/api/ws
-             │  loopback — never leaves your phone
-┌────────────▼────────────┐
-│   Hermes Agent (Python) │   running inside Termux
-└────────────┬────────────┘
-             │  HTTPS
-┌────────────▼────────────┐
-│   Your model provider   │   MiMo · Gemini · OpenRouter · …
-└─────────────────────────┘
-```
-
-The app talks to Hermes Agent over a **local** WebSocket on `127.0.0.1` — that link stays entirely on your device. Hermes runs the AI logic; the Android app is the native front-end.
+- 💬 **Live chat** with streaming answers, visible reasoning, and tool-call cards
+- 🛠️ **Real actions** — the agent runs commands, edits files, executes code in its sandbox
+- 📎 **Send files & images** to the agent straight from your phone; view images it sends back
+- ✅ **Tool approval as notifications** — nothing risky runs without your Approve
+- 🗂️ **Sessions** — search, pin, rename, and resume any past conversation
+- 🎨 **6 color themes**, light/dark, full Material 3 design · 🌐 English + فارسی
+- 🔋 **Keeps working with the screen off** (foreground service)
 
 ---
 
-## ⬡ Privacy & Security — read first
+## ⚡ Start: Auto Install
+
+**The app installs the agent for you.** You do 4 small things once (~2 minutes of typing);
+the app does the heavy lifting (~10–15 minutes of automatic installing). Total: one coffee ☕.
+
+### Step 1 — Install Termux (the agent's home)
+
+Download **Termux from F-Droid**: **[f-droid.org/packages/com.termux](https://f-droid.org/en/packages/com.termux/)**
 
 > [!WARNING]
-> This section matters. Please read it fully before installing.
+> Only the **F-Droid** version works. The Play Store version is abandoned — do not use it.
+
+### Step 2 — Let this app talk to Termux
+
+Open Termux once and paste this single command (this is the **only** command you'll ever type):
+
+```bash
+mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties
+```
+
+Then **close Termux completely** (Settings → Apps → Termux → Force stop).
+This is a one-time Android security switch — without it, no app is allowed to send commands to Termux.
+
+### Step 3 — Install this app
+
+Grab the APK: **[⬇ Download latest](https://github.com/traveler3022/Hermes2/releases/tag/debug-latest)** → open it → allow "install from unknown sources" → install.
+
+### Step 4 — Tap Install and watch it go 🍿
+
+1. Open **Hermes2** → follow the onboarding to **Runtime Setup**
+2. Tap **Install Hermes Agent**
+3. Android asks you to allow the `RUN_COMMAND` permission → **Allow**
+4. That's it. Sit back — the app now does **everything** automatically:
+
+```
+What the app does for you, stage by stage (live progress bar):
+  ✓ downloads the official Hermes installer
+  ✓ installs system packages (Python, compilers, …)
+  ✓ builds and installs the agent (5–15 min — keep the screen on!)
+  ✓ recovers automatically from common install failures
+  ✓ writes a full log to ~/.hermes/logs/install.log — nothing is hidden
+```
+
+### Step 5 — Add your AI key & go
+
+1. In the app: **Start Agent Gateway** → wait up to 30–90 s on first boot → **● Connected**
+2. Set your model key (see [Model Setup](#-model-setup) below — Gemini has a free tier)
+3. Say hi. 👋
+
+> [!TIP]
+> First connection stuck? Force-stop Termux once, reopen Hermes2, tap **Start Agent Gateway** again.
+> The very first handshake sometimes needs a second try — after that it connects automatically every time you open the app.
+
+---
+
+## 🛡️ Privacy & Security — read this once
 
 #### 🟢 Stays on your phone
-
-| | |
-|---|---|
-| **Your API key** | Stored in Hermes' own config (`~/.hermes/.env`) inside Termux, on your device. This app sends your key to **no** server of ours. No account, no backend, no telemetry. |
-| **App ↔ agent link** | Runs over `127.0.0.1` (loopback). Never leaves the device. |
+- **Your API key** — stored in Hermes' config inside Termux. We have no server, no account, no telemetry.
+- **App ↔ agent link** — runs over `127.0.0.1` (loopback). It physically cannot leave the device.
 
 #### 🟠 Leaves your phone
+- **Your messages to the AI** — they go to the model provider *you* chose (pick Gemini → Google sees them). That's how every AI API works. Don't send anything you wouldn't want the provider to read.
 
-| | |
-|---|---|
-| **Your messages to the AI** | Go to the **model provider you chose** — that's how any AI API works. Pick MiMo → Xiaomi sees it; pick Gemini → Google sees it. |
-| **Rule of thumb** | Don't send anything you wouldn't want the provider to see. Be mindful of providers whose data laws you're unsure about. |
-
-#### 🛡️ What the agent can do on your device
-
-Hermes can run shell commands inside Termux. Thanks to Android's app sandbox, on a **non-rooted** phone this is confined to Termux's own storage — the agent **cannot** reach other apps' data or system files. This is real, built-in protection.
+#### 🛡️ What the agent can touch
+The agent runs commands **inside Termux's sandbox only**. On a non-rooted phone it *cannot* reach your photos, other apps' data, or system files. Sending a file to the agent is explicit: you pick it, the app uploads that one file over loopback.
 
 > [!CAUTION]
-> **Do not root your phone to run this.** Rooting removes the sandbox that keeps the agent contained.
-
-#### ✅ Tool approval — keep it on
-
-Hermes asks before running commands it considers dangerous. Prompts appear as Android notifications with **Approve / Deny** buttons. **Leave approval enabled**, especially while you're new — it's the line of defense that stops a destructive command before it runs. When in doubt, **Deny**, then ask the agent what it was trying to do.
-
-> [!NOTE]
-> This app is provided **as-is** under the MIT license. You are responsible for the keys you use, the provider you choose, and the commands you approve.
+> **Don't root your phone for this** (rooting removes the sandbox), and **keep tool approval on** — when unsure, hit Deny and ask the agent what it was trying to do.
 
 ---
 
-## ⬡ Download
-
-<div align="center">
-
-### [⬇ Download the latest APK](https://github.com/traveler3022/Hermes2/releases/download/debug-latest/app-debug.apk)
-
-*Always-fresh debug build — rebuilt automatically on every push.*
-
-</div>
-
-> [!NOTE]
-> This is a **debug** build (unsigned, for testing). Install only if you trust the source and understand the security notes above.
-
----
-
-## ⬡ Installation
-
-You need two pieces: **Termux** (runs the agent) and the **Hermes2 app** (the interface). Set up Termux first.
-
-### ① Install Termux
-
-Install **Termux** from F-Droid → **[f-droid.org/packages/com.termux](https://f-droid.org/en/packages/com.termux/)**
-
-> [!WARNING]
-> Do **not** install Termux from the Play Store — that version is abandoned and won't work.
-
-### ② Allow external apps in Termux
-
-Lets Hermes2 start commands in Termux:
-
-```bash
-mkdir -p ~/.termux
-echo 'allow-external-apps=true' >> ~/.termux/termux.properties
-```
-
-Then **force-stop and reopen Termux** to apply it.
-
-### ③ Install Hermes Agent
-
-Run the official installer in Termux:
-
-```bash
-pkg update -y && pkg install -y curl
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-```
-
-> ⏱️ First install takes **5–15 min** (compiles Rust crates for ARM). Keep the screen on.
-
-Verify:
-
-```bash
-hermes --version
-hermes doctor
-```
-
-### ④ Install the App
-
-1. Download the APK from the link above.
-2. Enable **"Install from unknown sources"** in Android settings.
-3. Open the APK and install.
-
-### ⑤ Connect
-
-1. Open **Hermes2**
-2. Tap **Runtime Setup**
-3. Tap **Start Gateway**
-4. Wait **30–90 s** on first launch *(Python boot + plugin scan — only slow once)*
-5. Status shows **● Connected** → start chatting
-
-> Later launches reconnect automatically. No need to repeat setup.
-
----
-
-## ⬡ Model Setup
+## 🧠 Model Setup
 
 Set the key once, inside Termux. Two low-cost options that work well on a phone:
 
 <details open>
-<summary><b>Option A — Xiaomi MiMo</b> · recommended, low-cost & fast</summary>
+<summary><b>Option A — Xiaomi MiMo</b> · low-cost & fast</summary>
 
 <br>
 
@@ -243,11 +156,11 @@ Model names to try in order if one is unavailable:
 </details>
 
 <details>
-<summary><b>Option B — Google Gemini</b></summary>
+<summary><b>Option B — Google Gemini</b> · free tier available</summary>
 
 <br>
 
-In Termux: `nano ~/.hermes/.env` and add:
+Get a free key at [aistudio.google.com](https://aistudio.google.com), then in Termux: `nano ~/.hermes/.env` and add:
 
 ```env
 GEMINI_API_KEY=your_key_here
@@ -265,19 +178,11 @@ hermes config set model.default gemini-2.5-flash
 > [!CAUTION]
 > **Keep your key private.** Anyone with your key can spend your credits. Never paste it into screenshots, chats, or public issues. If it leaks → revoke it in the provider dashboard and generate a new one.
 
----
-
-## ⬡ Controlling Costs
-
-Most providers bill per token. To avoid surprises:
-
-- 💳 **Set a spending limit** in your provider's dashboard *(MiMo, Google, OpenRouter all support this)* — your single best protection.
-- 🆓 Start with a **free / cheap model** like `mimo-v2.5-free` while learning the agent's behavior.
-- 👀 Watch the first few sessions to feel how many tokens a task uses.
+**💸 Controlling costs:** set a spending limit in your provider's dashboard (your best protection), start with a free/cheap model, and watch your first few sessions to get a feel for token usage.
 
 ---
 
-## ⬡ Troubleshooting
+## 🔧 Troubleshooting
 
 <details>
 <summary><b>App stuck on "Connecting…" forever</b></summary>
@@ -295,11 +200,11 @@ If Termux says Hermes is running but the app won't connect: force-stop & reopen 
 </details>
 
 <details>
-<summary><b><code>jiter</code> / <code>pydantic-core</code> build fails during install</b></summary>
+<summary><b>Install fails (<code>jiter</code> / <code>pydantic-core</code> build error)</b></summary>
 
 <br>
 
-Set these in Termux **before** running the installer, then retry:
+Set these in Termux **before** retrying the install, then tap Install again:
 
 ```bash
 export CARGO_HOME="$HOME/.hermes/cargo"
@@ -336,9 +241,11 @@ A foreground service keeps the gateway alive, but aggressive battery savers can 
 
 </details>
 
+More depth: **[Complete technical guide](docs/RUNNING_ON_ANDROID_TERMUX.md)**
+
 ---
 
-## ⬡ Architecture
+## 🏗️ Architecture
 
 ```
 UI (Compose) ─► ViewModel ─► HermesRuntime  (interface)
@@ -351,38 +258,26 @@ UI (Compose) ─► ViewModel ─► HermesRuntime  (interface)
                          Hermes Agent in Termux
 ```
 
-All UI and ViewModel code depends only on **interfaces**. Swapping the Termux runtime for an embedded Python runtime *(ADR-009)* requires changing only the DI module — no UI or ViewModel changes. The agent link is JSON-RPC over a local WebSocket.
+All UI and ViewModel code depends only on **interfaces** — swapping the Termux runtime for an embedded Python runtime *(ADR-009)* only touches the DI module. The agent link is JSON-RPC over a local WebSocket. Design docs: [`docs/`](docs/)
 
-📂 Design docs in [`docs/`](docs/):
-[`RUNNING_ON_ANDROID_TERMUX.md`](docs/RUNNING_ON_ANDROID_TERMUX.md) · [`MATERIAL3_UI_GUIDE.md`](docs/MATERIAL3_UI_GUIDE.md)
-
----
-
-## ⬡ Build from Source
+### Build from source
 
 ```bash
 git clone https://github.com/traveler3022/Hermes2.git
 cd Hermes2
-
-# Debug APK
-bash ./gradlew :app:assembleDebug
-
-# Unit tests
-bash ./gradlew :app:testDebugUnitTest
+bash ./gradlew :app:assembleDebug        # APK → app/build/outputs/apk/debug/
+bash ./gradlew :app:testDebugUnitTest    # unit tests
 ```
 
 **Requires:** JDK 17 · Android SDK 35 · Android Studio Ladybug+
-**Output:** `app/build/outputs/apk/debug/`
 
 ---
 
-## ⬡ Contributing
+## 🤝 Contributing
 
 Issues and PRs welcome. This is an independent, community port — not an official Nous Research product. When reporting a bug, include your **Android version**, **phone model**, and the relevant lines from `~/.hermes/logs/gateway_stdout.log`.
 
----
-
-## ⬡ License
+## 📄 License
 
 **MIT** — see [LICENSE](LICENSE).
 
