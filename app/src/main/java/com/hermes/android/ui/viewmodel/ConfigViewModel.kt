@@ -558,7 +558,8 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun removeProvider(slug: String) {
+    fun removeProvider(rawSlug: String) {
+        val slug = safeSlug(rawSlug)
         viewModelScope.launch {
             try {
                 // Use shell.exec to remove provider section from config.yaml
@@ -653,7 +654,8 @@ class ConfigViewModel @Inject constructor(
 
     // ── Credential Pool ─────────────────────────────────────────────────
 
-    fun loadCredentialPool(slug: String) {
+    fun loadCredentialPool(rawSlug: String) {
+        val slug = safeSlug(rawSlug)
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingCredentials = true)
             try {
@@ -730,7 +732,8 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    private suspend fun addCredentialDirect(slug: String, apiKey: String, label: String? = null) {
+    private suspend fun addCredentialDirect(rawSlug: String, apiKey: String, label: String? = null) {
+        val slug = safeSlug(rawSlug)
         val lbl = label?.takeIf { it.isNotBlank() } ?: "key"
         // Key and label travel base64-encoded — an API key containing a quote
         // or backslash must never be able to break the embedded python.
@@ -754,7 +757,8 @@ class ConfigViewModel @Inject constructor(
         )
     }
 
-    fun removeCredential(slug: String, index: Int) {
+    fun removeCredential(rawSlug: String, index: Int) {
+        val slug = safeSlug(rawSlug)
         viewModelScope.launch {
             try {
                 val script = """
@@ -796,6 +800,15 @@ class ConfigViewModel @Inject constructor(
     /** Base64 (no-wrap) for smuggling arbitrary values into embedded python. */
     private fun b64(s: String): String =
         Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+
+    /**
+     * Slugs are interpolated straight into the python source, so they must
+     * never carry a quote, newline or shell metacharacter. Provider slugs are
+     * always `[a-z0-9._-]` in practice; strip anything else as defense-in-depth
+     * (the value may originate from a hand-edited config.yaml).
+     */
+    private fun safeSlug(s: String): String =
+        s.filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
 
     /**
      * Run a python snippet in Termux via the gateway's shell.exec RPC and
