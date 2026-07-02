@@ -1,26 +1,57 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -40,11 +71,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
+import com.hermes.android.ui.viewmodel.CredentialEntry
+import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 import com.hermes.android.ui.i18n.AppLanguage
@@ -375,13 +409,41 @@ private fun GeneralTab(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ModelsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
 ) {
-    if (state.isLoadingModels) {
-        LoadingIndicator("Loading models…")
+    // Load providers on first composition
+    val providersLoaded = remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!providersLoaded.value) {
+            viewModel.loadProviders()
+            providersLoaded.value = true
+        }
+    }
+
+    var showAddProviderDialog by remember { mutableStateOf(false) }
+
+    if (state.isLoadingModels && state.isLoadingProviders) {
+        LoadingIndicator(t("Loading models...", "در حال بارگذاری مدلها..."))
         return
+    }
+
+    val grouped = remember(state.availableModels) {
+        state.availableModels.groupBy { it.provider }
+    }
+    val modelProviders = remember(grouped) { grouped.keys.sorted() }
+
+    // Track selected provider — default to activeProvider or first available
+    var selectedProvider by remember(modelProviders, state.activeProvider) {
+        mutableStateOf(
+            state.activeProvider?.takeIf { it in modelProviders } ?: modelProviders.firstOrNull()
+        )
+    }
+
+    val filteredModels = remember(selectedProvider, grouped) {
+        grouped[selectedProvider].orEmpty()
     }
 
     LazyColumn(
@@ -389,17 +451,97 @@ private fun ModelsTab(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ── Quick model switch (manual input) ──
         item(key = "__quick_model_switch") {
             QuickModelSwitch(state, viewModel)
         }
-        item(key = "__refresh_header") {
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Provider Management Section ──
+        // ══════════════════════════════════════════════════════════════
+        item(key = "__provider_header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = t("Available Models", "مدل‌های موجود"),
+                    text = t("API Providers", "پرووایدرهای API"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { viewModel.loadProviders() }) {
+                        Text(t("Refresh", "بارگذاری مجدد"))
+                    }
+                    FilledTonalButton(onClick = { showAddProviderDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(t("Add", "افزودن"))
+                    }
+                }
+            }
+        }
+
+        if (state.isLoadingProviders) {
+            item(key = "__providers_loading") {
+                CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+            }
+        } else if (state.providers.isEmpty()) {
+            item(key = "__providers_empty") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Text(
+                        modifier = Modifier.padding(16.dp),
+                        text = t(
+                            "No providers configured yet.",
+                            "هنوز پرووایدری تنظیم نشده.",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            // ── Fallback chain visualization ──
+            if (state.fallbackProviders.isNotEmpty()) {
+                item(key = "__fallback_chain") {
+                    FallbackChainBar(state.fallbackProviders)
+                }
+            }
+
+            // ── Provider cards ──
+            items(
+                items = state.providers,
+                key = { it.slug },
+            ) { provider ->
+                ProviderCard(
+                    provider = provider,
+                    credentials = state.credentialPool[provider.slug].orEmpty(),
+                    isExpanded = state.expandedProviderSlug == provider.slug,
+                    onToggleExpand = { viewModel.toggleProviderExpanded(provider.slug) },
+                    onRemove = { viewModel.removeProvider(provider.slug) },
+                    onAddCredential = { key, label -> viewModel.addCredential(provider.slug, key, label) },
+                    onRemoveCredential = { index -> viewModel.removeCredential(provider.slug, index) },
+                    onSetStrategy = { strategy -> viewModel.setProviderStrategy(provider.slug, strategy) },
+                )
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Model Selection Section ──
+        // ══════════════════════════════════════════════════════════════
+        item(key = "__model_header") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = t("Select Model", "انتخاب مدل"),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 TextButton(onClick = { viewModel.loadModels() }) {
@@ -407,7 +549,8 @@ private fun ModelsTab(
                 }
             }
         }
-        if (state.availableModels.isEmpty()) {
+
+        if (grouped.isEmpty()) {
             item(key = "__empty_models") {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -415,28 +558,331 @@ private fun ModelsTab(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     ),
                 ) {
-                    Column(
+                    Text(
                         modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = t(
-                                "No models loaded. Make sure Hermes gateway is running, then tap Refresh.",
-                                "مدلی بارگذاری نشد. مطمئن شو gateway هرمس روشنه، بعد بزن بارگذاری مجدد.",
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = t(
+                            "No models loaded. Make sure Hermes gateway is running, then tap Refresh.",
+                            "مدلی بارگذاری نشد. مطمئن شو gateway هرمس روشنه، بعد بزن بارگذاری مجدد.",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            return@LazyColumn
+        }
+
+        // ── API Provider dropdown ──
+        item(key = "__provider_dropdown") {
+            ProviderDropdown(
+                providers = modelProviders,
+                selected = selectedProvider,
+                onSelect = { selectedProvider = it },
+            )
+        }
+
+        // ── Model dropdown (filtered by provider) ──
+        item(key = "__model_dropdown") {
+            ModelDropdown(
+                models = filteredModels,
+                selected = filteredModels.firstOrNull {
+                    it.provider == state.activeProvider && it.modelId == state.activeModel
+                },
+                onSelect = { viewModel.selectModel(it) },
+            )
+        }
+
+        // ── Endpoint info ──
+        selectedProvider?.let { provider ->
+            item(key = "__endpoint") {
+                EndpointCard(provider = provider)
+            }
+        }
+
+        // ── API Key for this provider ──
+        selectedProvider?.let { provider ->
+            val needsKey = filteredModels.any { it.requiresApiKey }
+            if (needsKey) {
+                item(key = "__apikey") {
+                    ApiKeyRow(
+                        provider = provider,
+                        onSaveKey = { slug, key -> viewModel.saveApiKey(slug, key) },
+                    )
+                }
+            }
+        }
+    }
+
+    // ── Add Provider Dialog ──
+    if (showAddProviderDialog) {
+        AddProviderDialog(
+            onDismiss = { showAddProviderDialog = false },
+            onAdd = { slug, baseUrl, model, key ->
+                viewModel.addProvider(slug, baseUrl, model, key)
+                showAddProviderDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ProviderDropdown(
+    providers: List<String>,
+    selected: String?,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text(
+            text = t("API Provider", "پرووایدر API"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Box {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = selected ?: t("Select provider...", "پرووایدر رو انتخاب کن..."),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
+                        color = if (selected != null)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Icon(
+                        imageVector = if (expanded)
+                            Icons.Default.ExpandLess
+                        else
+                            Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    providers.forEach { provider ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = provider,
+                                    fontWeight = if (provider == selected)
+                                        FontWeight.Medium
+                                    else
+                                        FontWeight.Normal,
+                                )
+                            },
+                            onClick = {
+                                onSelect(provider)
+                                expanded = false
+                            },
                         )
                     }
                 }
             }
         }
-        items(state.availableModels, key = { "${it.provider}/${it.modelId}" }) { model ->
-            ModelCard(
-                model = model,
-                viewModel = viewModel,
-                isActive = model.provider == state.activeProvider && model.modelId == state.activeModel,
+    }
+}
+
+@Composable
+private fun ModelDropdown(
+    models: List<ModelOption>,
+    selected: ModelOption?,
+    onSelect: (ModelOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Text(
+            text = t("Model", "مدل"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Box {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = selected?.modelId
+                                ?: t("Select model...", "مدل رو انتخاب کن..."),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
+                            color = if (selected != null)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (selected != null) {
+                            Text(
+                                text = "✓ " + t("Active", "فعال"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (expanded)
+                            Icons.Default.ExpandLess
+                        else
+                            Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    models.forEach { model ->
+                        val isActive = model.provider == selected?.provider &&
+                            model.modelId == selected?.modelId
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(
+                                        text = model.modelId,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isActive)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    if (isActive) {
+                                        Text(
+                                            text = "✓",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                onSelect(model)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EndpointCard(provider: String) {
+    val endpoint = remember(provider) {
+        knownEndpoints[provider.lowercase()] ?: provider
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Language,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = endpoint,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private val knownEndpoints = mapOf(
+    "openrouter" to "https://openrouter.ai/api/v1",
+    "anthropic" to "https://api.anthropic.com",
+    "openai" to "https://api.openai.com/v1",
+    "google" to "https://generativelanguage.googleapis.com",
+    "mistral" to "https://api.mistral.ai/v1",
+    "groq" to "https://api.groq.com/openai/v1",
+    "deepseek" to "https://api.deepseek.com",
+    "together" to "https://api.together.xyz/v1",
+    "fireworks" to "https://api.fireworks.ai/inference/v1",
+    "cohere" to "https://api.cohere.ai/v1",
+    "replicate" to "https://api.replicate.com/v1",
+    "perplexity" to "https://api.perplexity.ai",
+    "xai" to "https://api.x.ai/v1",
+    "ollama" to "http://localhost:11434",
+    "lmstudio" to "http://localhost:1234/v1",
+)
+
+@Composable
+private fun ApiKeyRow(
+    provider: String,
+    onSaveKey: (String, String) -> Unit,
+) {
+    var apiKey by remember { mutableStateOf("") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = { Text(t("API Key", "کلید API")) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            TextButton(onClick = { onSaveKey(provider, apiKey) }) {
+                Text(t("Save", "ذخیره"))
+            }
         }
     }
 }
@@ -509,61 +955,6 @@ private fun QuickModelSwitch(
     }
 }
 
-@Composable
-private fun ModelCard(model: ModelOption, viewModel: ConfigViewModel, isActive: Boolean) {
-    var apiKey by remember { mutableStateOf("") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = model.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Text(
-                text = "${model.provider} / ${model.modelId}",
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            if (isActive) {
-                Text(
-                    text = "Active backend",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            } else {
-                androidx.compose.material3.TextButton(
-                    onClick = { viewModel.selectModel(model) },
-                ) {
-                    Text("Use this model")
-                }
-            }
-            if (model.requiresApiKey) {
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text("API Key") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                androidx.compose.material3.TextButton(
-                    onClick = { viewModel.saveApiKey(model.provider, apiKey) },
-                ) {
-                    Text("Save Key")
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun ToolsTab(
@@ -713,6 +1104,518 @@ private fun MemoryFileCard(
             )
         }
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── Provider Management Composables ──
+// ══════════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FallbackChainBar(fallbackProviders: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = t("Fallback Chain", "زنجیره جایگزین"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.height(6.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                fallbackProviders.forEachIndexed { index, slug ->
+                    if (index > 0) {
+                        Text(
+                            text = "→",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                        )
+                    }
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(slug, style = MaterialTheme.typography.labelSmall) },
+                        leadingIcon = {
+                            Text(
+                                text = "${index + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProviderCard(
+    provider: HermesProviderConfig,
+    credentials: List<CredentialEntry>,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onRemove: () -> Unit,
+    onAddCredential: (String, String?) -> Unit,
+    onRemoveCredential: (Int) -> Unit,
+    onSetStrategy: (String) -> Unit,
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showAddKeyDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (provider.isPrimary)
+                MaterialTheme.colorScheme.primaryContainer
+            else
+                MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column {
+            // ── Header row ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() }
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = null,
+                        tint = if (provider.isPrimary)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = provider.slug,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (provider.isPrimary) {
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text(t("Primary", "اصلی"), style = MaterialTheme.typography.labelSmall) },
+                                    leadingIcon = { Icon(Icons.Default.Star, null, Modifier.size(14.dp)) },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        labelColor = MaterialTheme.colorScheme.onPrimary,
+                                        leadingIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                                    ),
+                                    border = null,
+                                )
+                            }
+                            if (provider.isFallback) {
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text(t("Fallback", "جایگزین"), style = MaterialTheme.typography.labelSmall) },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.tertiary,
+                                        labelColor = MaterialTheme.colorScheme.onTertiary,
+                                    ),
+                                    border = null,
+                                )
+                            }
+                        }
+                        if (provider.baseUrl.isNotBlank()) {
+                            Text(
+                                text = provider.baseUrl,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Credential count badge
+                    if (credentials.isNotEmpty()) {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = "${credentials.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(start = 2.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = t("Delete", "حذف"),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                    )
+                }
+            }
+
+            // ── Expanded content ──
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(),
+                exit = shrinkVertically(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Details
+                    DetailRow(t("Base URL", "آدرس"), provider.baseUrl)
+                    if (provider.defaultModel.isNotBlank()) {
+                        DetailRow(t("Default Model", "مدل پیشفرض"), provider.defaultModel)
+                    }
+
+                    // Strategy selector
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = t("Strategy", "استراتژی"),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("rotate", "failover").forEach { strategy ->
+                                FilterChip(
+                                    selected = provider.strategy == strategy,
+                                    onClick = { onSetStrategy(strategy) },
+                                    label = {
+                                        Text(
+                                            if (strategy == "rotate") t("Rotate", "چرخشی") else t("Failover", "جایگزین"),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    },
+                                    leadingIcon = if (provider.strategy == strategy) {
+                                        { Icon(Icons.Default.SwapHoriz, null, Modifier.size(14.dp)) }
+                                    } else null,
+                                )
+                            }
+                        }
+                    }
+
+                    // Credential pool
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = t("Keys (${credentials.size})", "کلیدها (${credentials.size})"),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        TextButton(onClick = { showAddKeyDialog = true }) {
+                            Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(t("Add Key", "افزودن کلید"), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    if (credentials.isEmpty()) {
+                        Text(
+                            text = t("No keys configured", "کلیدی تنظیم نشده"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        credentials.forEach { cred ->
+                            CredentialRow(
+                                credential = cred,
+                                onRemove = { onRemoveCredential(cred.index) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Delete confirmation ──
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(t("Delete Provider?", "پرووایدر حذف شود؟")) },
+            text = {
+                Text(
+                    t(
+                        "This will remove \"${provider.slug}\" from config.yaml and credential pool.",
+                        "\"${provider.slug}\" از config.yaml و credential pool حذف میشه.",
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemove()
+                    showDeleteConfirm = false
+                }) {
+                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(t("Cancel", "لغو"))
+                }
+            },
+        )
+    }
+
+    // ── Add key dialog ──
+    if (showAddKeyDialog) {
+        AddKeyDialog(
+            providerSlug = provider.slug,
+            onDismiss = { showAddKeyDialog = false },
+            onAdd = { key, label ->
+                onAddCredential(key, label)
+                showAddKeyDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+}
+
+@Composable
+private fun CredentialRow(
+    credential: CredentialEntry,
+    onRemove: () -> Unit,
+) {
+    var showConfirm by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Key,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = when (credential.lastStatus) {
+                    "ok" -> MaterialTheme.colorScheme.primary
+                    "fail" -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Column {
+                Text(
+                    text = credential.label ?: "key #${credential.index}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = credential.tokenPreview,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (credential.requestCount > 0) {
+                Text(
+                    text = "${credential.requestCount} req",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            IconButton(
+                onClick = { showConfirm = true },
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = t("Remove", "حذف"),
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text(t("Remove Key?", "کلید حذف شود؟")) },
+            text = { Text(t("This key will be removed from the credential pool.", "این کلید از credential pool حذف میشه.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemove()
+                    showConfirm = false
+                }) { Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) { Text(t("Cancel", "لغو")) }
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddProviderDialog(
+    onDismiss: () -> Unit,
+    onAdd: (slug: String, baseUrl: String, defaultModel: String, apiKey: String) -> Unit,
+) {
+    var slug by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("") }
+    var defaultModel by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Add Provider", "افزودن پرووایدر")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = slug,
+                    onValueChange = { slug = it.lowercase().replace(" ", "_") },
+                    label = { Text(t("Provider Name (slug)", "نام پرووایدر")) },
+                    placeholder = { Text("openai, anthropic, xai...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    label = { Text(t("Base URL", "آدرس سرور")) },
+                    placeholder = { Text("https://api.openai.com/v1") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Link, null) },
+                )
+                OutlinedTextField(
+                    value = defaultModel,
+                    onValueChange = { defaultModel = it },
+                    label = { Text(t("Default Model", "مدل پیشفرض")) },
+                    placeholder = { Text("gpt-4o, claude-sonnet-4-20250514...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Psychology, null) },
+                )
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text(t("API Key", "کلید API")) },
+                    placeholder = { Text("sk-...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Security, null) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onAdd(slug, baseUrl, defaultModel, apiKey) },
+                enabled = slug.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank(),
+            ) {
+                Text(t("Add", "افزودن"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+        },
+    )
+}
+
+@Composable
+private fun AddKeyDialog(
+    providerSlug: String,
+    onDismiss: () -> Unit,
+    onAdd: (key: String, label: String?) -> Unit,
+) {
+    var key by remember { mutableStateOf("") }
+    var label by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Add Key to $providerSlug", "افزودن کلید به $providerSlug")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text(t("API Key", "کلید API")) },
+                    placeholder = { Text("sk-...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Security, null) },
+                )
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text(t("Label (optional)", "برچسب (اختیاری)")) },
+                    placeholder = { Text("primary, backup, team...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onAdd(key, label.ifBlank { null }) },
+                enabled = key.isNotBlank(),
+            ) { Text(t("Add", "افزودن")) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+        },
+    )
 }
 
 @Composable
