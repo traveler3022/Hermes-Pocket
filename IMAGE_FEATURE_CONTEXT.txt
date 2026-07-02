@@ -1,0 +1,304 @@
+================================================================================
+HERMES2 IMAGE/FILE FEATURE - FULL CONTEXT & HISTORY
+================================================================================
+Date: 2026-07-02
+Session: claude/image-feature branch
+Status: Ready for implementation (Dialog fix already applied)
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Hermes2 is a native Android Material 3 app that provides a UI for Hermes Agent
+(Python AI agent running in Termux) via local WebSocket (ws://127.0.0.1:9119).
+
+- Language: Kotlin 2.0.21
+- Framework: Jetpack Compose (Material 3)
+- Target Android SDK: 35
+- Min Android SDK: 29
+- DI: Hilt 2.53.1
+- Network: OkHttp (WebSocket)
+- JSON: kotlinx.serialization
+
+v0.1.0 RELEASED: Signed APK published to GitHub Releases
+- https://github.com/traveler3022/Hermes2/releases/download/v0.1.0/app-release.apk
+
+================================================================================
+2. IMAGE/FILE FEATURE - REQUIREMENTS & PROBLEMS
+================================================================================
+
+FEATURE GOALS:
+1. Allow users to view images in chat (receive from agent)
+2. Allow users to send files/images to agent
+3. Allow users to download files from agent
+4. Images should be separate from text (not embedded in markdown)
+
+PROBLEMS IDENTIFIED:
+
+F-P1: Dialog in LazyColumn crashes with BadTokenException
+  - Cause: Dialog lifecycle doesn't work inside LazyColumn's item composition
+  - Location: ChatScreen.kt - full-screen image viewer dialog
+  - Status: FIXED on this branch (commit 4685cab)
+  - Fix approach: Lift fullscreenImageUrl state to ChatScreen level (outside LazyColumn)
+
+F-P2: File sending not implemented
+  - Current: "Coming soon" button in ChatScreen (line ~850)
+  - Need: Open file picker → send file to agent via RPC
+  - Gateway RPC: NOT YET DEFINED in Hermes (needs research)
+  - UI: File picker dialog + upload progress indicator
+
+F-P3: File download location uncertain
+  - Current: No download implementation
+  - Requirement: Save to public Downloads folder via MediaStore
+  - Android 10+: MediaStore required (not direct file write)
+  - User expectation: Files appear in Downloads, readable by other apps
+
+F-P4: Image feature was removed, then reverted
+  - Removed in main due to instability (Dialog crash)
+  - Reverted on this branch (commit 7bdb4ed) because fix is now in place
+  - Current state: Image viewer is back, Dialog crash is fixed
+
+================================================================================
+3. CURRENT CODE STATE
+================================================================================
+
+BRANCH: claude/image-feature (based on claude/v1-fixes)
+  Commits ahead of main:
+    - 4685cab: Fix image fullscreen crash: lift Dialog out of LazyColumn
+    - 7bdb4ed: Revert "Remove unstable image viewer from chat"
+
+KEY FILES:
+
+ChatScreen.kt (~1200 lines):
+  - Line ~520-600: Message bubbles with image rendering
+  - Line ~750-850: Full-screen image dialog (Dialog outside LazyColumn ✅)
+  - Line ~850-900: File sending button ("Coming soon")
+  - Line ~1100-1200: Message input area
+
+ChatViewModel.kt (~950 lines):
+  - Manages chat state, streaming text, tool calls, messages
+  - Line ~450-500: submitMessage() RPC handler
+  - Line ~700-800: Event collection from gateway
+
+GatewayClient.kt (interface):
+  - Abstract WebSocket client
+  - Methods: connect, disconnect, request, notify
+  - No file send methods yet
+
+OkHttpGatewayClient.kt (implementation):
+  - OkHttp WebSocket client
+  - Handles JSON-RPC requests/responses
+  - No file multipart support yet
+
+UI Components:
+  - HermesMarkdown.kt: Markdown renderer (uses compose-markdown 0.7.x)
+  - Markdown with images already works (Coil 3 built-in)
+
+================================================================================
+4. ARCHITECTURE & CONSTRAINTS
+================================================================================
+
+STRICT LAYER DEPENDENCY:
+  UI Screen → ViewModel → Domain Interface → Implementation (DI-injected)
+  - UI must NOT import concrete classes (TermuxBridge, OkHttpGatewayClient)
+  - Only ViewModels know about DI
+
+STATE MANAGEMENT:
+  - Dialog state MUST be at ChatScreen level (composable scope)
+  - Message list in ChatViewModel (StateFlow<List<ChatMessage>>)
+  - Streaming text buffered in ChatViewModel.streamingBuffer
+
+IMAGE/FILE FLOW:
+  - Images arrive as part of message.delta events (markdown with ![alt](url))
+  - URLs are local: file://... or content://... (Termux/app local storage)
+  - Files should arrive separately (new RPC event type, needs research)
+
+WEBSOCKET PROTOCOL:
+  - JSON-RPC 2.0 over ws://127.0.0.1:9119/api/ws?token=<session_token>
+  - Methods: session.create, prompt.submit, session.interrupt, etc.
+  - Events: message.delta, tool.start, tool.output, etc.
+  - No file/image methods yet defined in Hermes Agent
+
+================================================================================
+5. IMPLEMENTATION ROADMAP
+================================================================================
+
+PHASE 1: Merge image viewer fix to main (ready now)
+  - cherry-pick commit 4685cab (Dialog fix)
+  - cherry-pick commit 7bdb4ed (image viewer revert)
+  - Result: Image viewing works, no crash
+  - Effort: 5 minutes
+  - Risk: Low (Dialog fix already tested)
+
+PHASE 2: File sending implementation (next, requires Hermes RPC research)
+  [NOT STARTED - blocked on Hermes Agent API research]
+
+  2a. Research Hermes Agent source:
+    - How does agent expect file/image uploads?
+    - WebSocket multipart or separate endpoint?
+    - Check: https://github.com/NousResearch/hermes-agent
+
+  2b. Add GatewayClient.sendFile() method
+    - File picker integration (Android intent)
+    - Multipart or streaming protocol
+    - Progress callback for UI
+
+  2c. Update ChatViewModel.onFileSend()
+    - Replace "Coming soon" logic
+    - Call gatewayClient.sendFile()
+    - Show upload progress
+
+  2d. Update ChatScreen file button
+    - File picker dialog
+    - Upload progress indicator
+    - Success/error handling
+
+PHASE 3: File download implementation (requires Hermes RPC research)
+  [NOT STARTED - blocked on agent file serving capability]
+
+  3a. Research:
+    - Does agent send file metadata in events?
+    - Can user request file download via RPC?
+
+  3b. Add download UI (link in message, download button)
+
+  3c. Implement MediaStore save (Android 10+)
+    - ContentResolver API
+    - File saved to Downloads
+    - Notification when complete
+
+================================================================================
+6. TESTING CHECKLIST
+================================================================================
+
+When implemented, test:
+
+[ ] Image viewing:
+    - Receive image in markdown: ![alt](file://...)
+    - Tap to open full-screen
+    - Dialog appears, can dismiss
+    - No BadTokenException
+
+[ ] File sending:
+    - Tap "Send File" button
+    - File picker opens
+    - Select image/document
+    - Upload progress shows
+    - Agent receives file correctly
+    - Message confirms completion
+
+[ ] File download:
+    - Agent sends file in response
+    - File link/button appears in message
+    - Tap download
+    - File appears in Downloads folder
+    - Can open with other apps
+
+[ ] Edge cases:
+    - Send large file (>100MB) → progress doesn't stall
+    - Network interruption during upload → graceful error
+    - Image fails to load → show error placeholder
+    - Download to Download folder when it doesn't exist → create it
+
+================================================================================
+7. KNOWN ISSUES & DECISIONS
+================================================================================
+
+ISSUE: compose-markdown 0.7.x uses Coil 3 internally
+  - App uses Coil 2 elsewhere
+  - Solution: Don't add custom Coil 2 ImageLoader to MarkdownText
+  - Result: Uses library's built-in Coil 3 loader (works fine)
+  - Lesson: Trust the library's image loading
+
+ISSUE: LazyColumn + Dialog = BadTokenException
+  - Dialog needs composable scope outside the item composition
+  - Solution: Lift state (fullscreenImageUrl) to ChatScreen level
+  - Result: Dialog can be placed at top-level, recompose safely
+  - Already fixed in commit 4685cab
+
+DECISION: Images stay separate from file downloads
+  - Images: view in-line or full-screen
+  - Files: download to Downloads folder
+  - Rationale: Images are transient (agent response), files are artifacts
+
+DECISION: No image upload to chat input yet
+  - Future feature: select image from gallery/camera before sending message
+  - Current: Only file send (documents, images as files)
+  - Reason: Complexity (image processing, threading)
+
+================================================================================
+8. HERMES AGENT API RESEARCH NEEDED
+================================================================================
+
+To complete implementation, research in https://github.com/NousResearch/hermes-agent:
+
+1. File upload mechanism:
+   - WebSocket multipart support?
+   - Or separate /upload endpoint?
+   - Expected request format?
+   - File size limits?
+
+2. File download mechanism:
+   - Does agent attach files to messages?
+   - How are they referenced? (URL, ID, content?)
+   - Can user request download via RPC?
+
+3. Image handling:
+   - Are images already working? (seem to be via markdown)
+   - Are they base64-encoded or file:// URLs?
+   - Temporary storage location in Termux?
+
+4. Events:
+   - Any new event types for file transfer progress?
+   - File completion event format?
+
+================================================================================
+9. COMMIT HISTORY & CHANGES
+================================================================================
+
+Main branch (v0.1.0 release):
+  - Material 3 themes (MIDNIGHT, INDIGO_PRO, CARBON) ✅
+  - Chat UI with basic message rendering ✅
+  - WebSocket gateway connection ✅
+  - Session management ✅
+  - Runtime setup (Termux detection, install, verify) ✅
+  - Image viewing removed (was crashing)
+  - File sending: "Coming soon" placeholder
+
+claude/image-feature branch (current):
+  - Re-enabled image viewer
+  - Fixed Dialog crash (state lifted to ChatScreen)
+  - Ready to implement file operations
+
+================================================================================
+10. FOR NEXT SESSION - START HERE
+================================================================================
+
+1. Read this file (you're here ✓)
+
+2. Checkout claude/image-feature branch:
+   git checkout claude/image-feature
+
+3. Review the Dialog fix:
+   git show 4685cab
+
+4. Research Hermes Agent source:
+   - Clone: https://github.com/NousResearch/hermes-agent
+   - Find: File upload/download handling
+   - Find: RPC methods for file operations
+   - Find: Event types for file progress
+
+5. Start PHASE 2: Implement file sending
+   - Add GatewayClient.sendFile()
+   - Update ChatViewModel
+   - Update ChatScreen UI
+
+6. Test image viewing (should just work)
+
+7. Implement PHASE 3: File download
+
+8. Merge to main when complete
+
+================================================================================
+END OF CONTEXT
+================================================================================
