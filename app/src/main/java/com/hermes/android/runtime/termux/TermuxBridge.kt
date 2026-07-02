@@ -133,6 +133,17 @@ class TermuxBridge @Inject constructor(
 
         Timber.i("Termux detected: ${info.version}, free=${info.diskFreeBytes} bytes, installed=$previouslyInstalled")
         _state.value = if (previouslyInstalled) RuntimeState.Installed(info) else RuntimeState.Detected(info)
+
+        // Crash recovery: if a previous install was running when the app died,
+        // its state survives in ~/.hermes/install.state. Ask Termux to
+        // re-broadcast it so the UI restores progress / offers Resume.
+        try {
+            registerProgressReceiver()
+            executor.executeBackgroundScript(installer.generateStateResyncScript())
+        } catch (e: Exception) {
+            Timber.w(e, "[Install] State resync dispatch failed (ignored)")
+        }
+
         return DetectionResult.Available(info)
     }
 
