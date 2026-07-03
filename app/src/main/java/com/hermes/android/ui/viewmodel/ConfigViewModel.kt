@@ -538,6 +538,9 @@ class ConfigViewModel @Inject constructor(
                     entry['base_url'] = base64.b64decode('${b64(baseUrl.trim())}').decode()
                     dm = base64.b64decode('${b64(defaultModel.trim())}').decode()
                     if dm: entry['default_model'] = dm
+                    # Let Hermes auto-list the provider's models on the next
+                    # model.options call, so the model dropdown fills itself.
+                    entry['discover_models'] = True
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
                     print('OK')
                     """.trimIndent()
@@ -641,6 +644,93 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to set strategy: ${e.message}"
                 )
+            }
+        }
+    }
+
+    /**
+     * Make this provider the active/primary one. Uses the same Hermes-native
+     * model switch as [selectModel]: sets config `model` to the provider's
+     * default model (or a discovered one), so both the live agent and future
+     * sessions use it.
+     */
+    fun setPrimaryProvider(provider: HermesProviderConfig) {
+        viewModelScope.launch {
+            try {
+                val model = provider.defaultModel.ifBlank {
+                    _uiState.value.availableModels.firstOrNull { it.provider == provider.slug }?.modelId
+                }
+                if (model.isNullOrBlank()) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Set a default model for \"${provider.slug}\" first"
+                    )
+                    return@launch
+                }
+                val error = applyHermesModelSwitch(provider.slug, model)
+                if (error != null) {
+                    _uiState.value = _uiState.value.copy(errorMessage = error)
+                    return@launch
+                }
+                _uiState.value = _uiState.value.copy(
+                    activeProvider = provider.slug,
+                    activeModel = model,
+                    errorMessage = "\"${provider.slug}\" is now primary ($model)",
+                )
+                loadProviders()
+                loadModels()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Add or remove a provider from the capacity-aware fallback chain. */
+    fun toggleFallback(slug: String) {
+        val current = _uiState.value.fallbackProviders
+        val next = if (slug in current) current - slug else current + slug
+        setFallbackProviders(next)
+    }
+
+    /** Move a provider up/down in the fallback chain (order = try order). */
+    fun moveFallback(slug: String, up: Boolean) {
+        val list = _uiState.value.fallbackProviders.toMutableList()
+        val i = list.indexOf(slug)
+        if (i < 0) return
+        val j = if (up) i - 1 else i + 1
+        if (j < 0 || j >= list.size) return
+        list[i] = list[j].also { list[j] = list[i] }
+        setFallbackProviders(list)
+    }
+
+    /**
+     * Reorder a key within a provider's pool. Order IS priority for the
+     * fill_first strategy, and the pool list order is what Hermes iterates.
+     */
+    fun moveCredential(rawSlug: String, index: Int, up: Boolean) {
+        val slug = safeSlug(rawSlug)
+        viewModelScope.launch {
+            try {
+                val delta = if (up) -1 else 1
+                execPython(
+                    """
+                    import json, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'auth.json'
+                    d = json.loads(p.read_text()) if p.exists() else {}
+                    pool = d.get('credential_pool', {}).get('$slug', [])
+                    i = ${index} - 1
+                    j = i + (${delta})
+                    if 0 <= i < len(pool) and 0 <= j < len(pool):
+                        pool[i], pool[j] = pool[j], pool[i]
+                        # keep an explicit priority field in sync with order
+                        for n, e in enumerate(pool):
+                            e['priority'] = n
+                    p.write_text(json.dumps(d, indent=2))
+                    print('OK')
+                    """.trimIndent()
+                )
+                loadCredentialPool(slug)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to reorder key: ${e.message}")
             }
         }
     }
