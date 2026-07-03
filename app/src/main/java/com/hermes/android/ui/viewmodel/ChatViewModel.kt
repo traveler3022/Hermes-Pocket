@@ -562,6 +562,35 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fork the current conversation into a new session and switch to it.
+     * Triggered by long-pressing a message → "Branch conversation".
+     * Backed by Hermes' `session.branch` (copies the current history into a
+     * fresh session; returns the new session_id).
+     */
+    fun branchSession() {
+        val sid = _uiState.value.activeSessionId ?: return
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SESSION_BRANCH,
+                    jsonToElementMap(buildJsonObject { put("session_id", sid) }),
+                )
+                val newId = ((result as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
+                loadSessionList()
+                if (newId != null) {
+                    resumeSession(newId)
+                    _uiState.value = _uiState.value.copy(errorMessage = "Branched into a new conversation")
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] session.branch failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Branch failed: ${e.message}",
+                )
+            }
+        }
+    }
+
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
         // Make the UI stop spinning immediately. The backend interrupt is

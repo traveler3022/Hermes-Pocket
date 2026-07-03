@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
@@ -472,6 +473,11 @@ private fun ModelsTab(
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { viewModel.loadCredits() }) {
+                        Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(t("Credits", "اعتبار"))
+                    }
                     TextButton(onClick = { viewModel.loadProviders() }) {
                         Text(t("Refresh", "بارگذاری مجدد"))
                     }
@@ -626,6 +632,24 @@ private fun ModelsTab(
             onAdd = { slug, baseUrl, model, key ->
                 viewModel.addProvider(slug, baseUrl, model, key)
                 showAddProviderDialog = false
+            },
+        )
+    }
+
+    // ── Credits dialog ──
+    if (state.creditsText != null || state.isLoadingCredits) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCredits() },
+            title = { Text(t("Credits", "اعتبار")) },
+            text = {
+                if (state.isLoadingCredits) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Text(state.creditsText.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissCredits() }) { Text(t("Close", "بستن")) }
             },
         )
     }

@@ -735,6 +735,35 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    /** Load the Nous credits/balance view (credits.view RPC). */
+    fun loadCredits() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingCredits = true, creditsText = null)
+            try {
+                val r = gatewayClient.request(GatewayMethods.CREDITS_VIEW)
+                val obj = r as? JsonObject
+                val loggedIn = (obj?.get("logged_in") as? JsonPrimitive)?.content == "true"
+                val text = if (!loggedIn) {
+                    "No Nous account logged in.\nSign in from Termux: hermes login"
+                } else {
+                    val lines = (obj?.get("balance_lines") as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                    lines.joinToString("\n").ifBlank { "No balance information." }
+                }
+                _uiState.value = _uiState.value.copy(creditsText = text, isLoadingCredits = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    creditsText = "Could not load credits: ${e.message}",
+                    isLoadingCredits = false,
+                )
+            }
+        }
+    }
+
+    fun dismissCredits() {
+        _uiState.value = _uiState.value.copy(creditsText = null)
+    }
+
     fun toggleProviderExpanded(slug: String) {
         val current = _uiState.value.expandedProviderSlug
         _uiState.value = _uiState.value.copy(
@@ -960,6 +989,9 @@ data class ConfigUiState(
     val credentialPool: Map<String, List<CredentialEntry>> = emptyMap(),
     val isLoadingCredentials: Boolean = false,
     val expandedProviderSlug: String? = null,
+    // Nous credits/balance panel (opened from the Models tab)
+    val creditsText: String? = null,
+    val isLoadingCredits: Boolean = false,
 )
 
 enum class ConfigTab(val label: String) {

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.OpenInNew
@@ -665,6 +666,7 @@ fun ChatScreen(
                                 onRespondToSecret = viewModel::respondToSecret,
                                 onImageClick = { url -> fullscreenImageUrl = url },
                                 resolveUrl = viewModel::resolveMediaUrl,
+                                onBranch = { viewModel.branchSession() },
                             )
                         }
                     }
@@ -1371,6 +1373,7 @@ private fun MessageBubble(
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
     onImageClick: (String) -> Unit = {},
     resolveUrl: (String) -> String = { it },
+    onBranch: () -> Unit = {},
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -1706,6 +1709,16 @@ private fun MessageBubble(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Share, contentDescription = null)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Branch conversation", "شاخه‌زدن گفتگو")) },
+                                onClick = {
+                                    onBranch()
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.CallSplit, contentDescription = null)
                                 },
                             )
                         }
