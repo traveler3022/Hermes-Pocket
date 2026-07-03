@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -642,13 +643,20 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
-                        items(filteredMessages, key = { it.id }) { message ->
+                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
                                     filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                            // Grouped == previous message is from the same side
+                            // (user vs agent). Used to show the agent avatar only
+                            // once per run and tighten consecutive bubbles.
+                            val prev = filteredMessages.getOrNull(index - 1)
+                            val grouped = prev != null &&
+                                    (prev is ChatMessage.User) == (message is ChatMessage.User)
 
                             MessageBubble(
                                 message = message,
+                                grouped = grouped,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
@@ -1466,6 +1474,7 @@ private fun ThinkingBlock(
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
+    grouped: Boolean = false,
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,
@@ -1600,22 +1609,27 @@ private fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
-                // Agent avatar (Telegram-style: identity marker next to the bubble).
-                Box(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "⚕",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                // Agent avatar (Telegram-style): shown once per group. Grouped
+                // messages reserve the same width so bubbles stay aligned.
+                if (grouped) {
+                    Spacer(modifier = Modifier.width(34.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "⚕",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
-                Spacer(modifier = Modifier.width(6.dp))
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
                     Box {
                         Card(
