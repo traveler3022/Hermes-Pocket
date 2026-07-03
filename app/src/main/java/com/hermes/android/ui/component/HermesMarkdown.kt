@@ -203,7 +203,7 @@ private fun parseMarkdownBlocks(md: String): List<MdBlock> {
     return out
 }
 
-/** Inline markdown → AnnotatedString: `code`, **bold**, *italic*/_italic_, [text](url). */
+// Inline markdown -> AnnotatedString: code spans, bold, italic (* or _), and links.
 private fun inline(text: String, linkColor: Color, codeBg: Color): AnnotatedString =
     buildAnnotatedString {
         var i = 0
