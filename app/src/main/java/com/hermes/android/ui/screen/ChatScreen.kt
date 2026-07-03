@@ -1359,6 +1359,94 @@ private fun extractCodeBlocks(text: String): List<String> {
 // ── Message Bubble ───────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
+/**
+ * Agent "thinking" indicator.
+ *
+ * UX (per design): a pulsing vertical bar next to the label conveys "the agent
+ * is working", a live one-line preview of the latest reasoning fades in and out
+ * while streaming, and tapping expands the full reasoning with a fade/expand.
+ * No shimmer — a moving highlight over the whole text gets tiring on long runs.
+ */
+@Composable
+private fun ThinkingBlock(
+    reasoning: String,
+    isStreaming: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val barColor = MaterialTheme.colorScheme.primary
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val barAlpha = if (isStreaming) pulse else 0.4f
+
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(barColor.copy(alpha = barAlpha)),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isStreaming) t("Thinking…", "در حال فکر…") else t("Thoughts", "افکار"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+
+        // Live preview: latest reasoning line, fading with the pulse, while collapsed.
+        if (isStreaming && !expanded) {
+            val preview = remember(reasoning) {
+                reasoning.trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
+            }
+            if (preview.isNotEmpty()) {
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.8f),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 11.dp, bottom = 2.dp),
+                )
+            }
+        }
+
+        // Full reasoning: fades/expands in when opened (the "fade from bottom").
+        AnimatedVisibility(visible = expanded) {
+            HermesMarkdown(
+                markdown = reasoning,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 11.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
@@ -1488,17 +1576,6 @@ private fun MessageBubble(
             var isThinkingExpanded by remember { mutableStateOf(false) }
             var showContextMenu by remember { mutableStateOf(false) }
             val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
-            val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\\([^()]{1,12}\\)") }
-            val emotions = remember(message.reasoning) {
-                message.reasoning?.let { text ->
-                    emotionRegex.findAll(text).map { m -> m.value }.filter { v ->
-                        v.length == 1 || v.any { c -> !c.isLetterOrDigit() && c != '(' && c != ')' && c != ' ' }
-                    }.toList()
-                } ?: emptyList()
-            }
-
-            // Feature 7.1: animated dots only while streaming with reasoning
-            val dotStr = if (message.isStreaming && hasThinking) thinkingDotStr() else ""
 
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
@@ -1526,47 +1603,12 @@ private fun MessageBubble(
                                 .animateContentSize(),
                         ) {
                             if (hasThinking) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { isThinkingExpanded = !isThinkingExpanded }
-                                        .padding(bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(
-                                        text = "💭",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    if (emotions.isNotEmpty() && !isThinkingExpanded) {
-                                        Text(
-                                            text = emotions.distinct().take(5).joinToString(" "),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                    Text(
-                                        text = when {
-                                            message.isStreaming && hasThinking && !isThinkingExpanded ->
-                                                "💭$dotStr"
-                                            isThinkingExpanded -> t("Thinking ▲", "فکر کردن ▲")
-                                            else -> t("Thinking ▼", "فکر کردن ▼")
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    )
-                                }
-                                AnimatedVisibility(visible = isThinkingExpanded) {
-                                    // Feature 7.2: HermesMarkdown for reasoning
-                                    HermesMarkdown(
-                                        markdown = message.reasoning ?: "",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 8.dp),
-                                    )
-                                }
+                                ThinkingBlock(
+                                    reasoning = message.reasoning ?: "",
+                                    isStreaming = message.isStreaming,
+                                    expanded = isThinkingExpanded,
+                                    onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                                )
                             }
                             if (message.text.isEmpty()) {
                                 Text(
