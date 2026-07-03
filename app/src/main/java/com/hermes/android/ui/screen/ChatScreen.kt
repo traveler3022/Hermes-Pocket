@@ -643,6 +643,31 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
+                        if (filteredMessages.isEmpty() &&
+                            uiState.connectionState == ChatConnectionState.Connected
+                        ) {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillParentMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Text(
+                                            text = "⚕",
+                                            style = MaterialTheme.typography.displayLarge,
+                                        )
+                                        Text(
+                                            text = t("Ask Hermes anything", "هر چیزی از هرمس بپرس"),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
@@ -1107,15 +1132,15 @@ private fun InlineImageBlock(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(14.dp)),
     ) {
         AsyncImage(
             model = url,
             contentDescription = alt.ifBlank { "تصویر" },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 280.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .heightIn(max = 320.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .clickable { onImageClick(url) },
             contentScale = ContentScale.Fit,
         )
