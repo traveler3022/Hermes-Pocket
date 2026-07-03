@@ -1600,6 +1600,22 @@ private fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
+                // Agent avatar (Telegram-style: identity marker next to the bubble).
+                Box(
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "⚕",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
                     Box {
                         Card(
