@@ -17,11 +17,14 @@ sealed class ChatMessage {
     abstract val id: String
     abstract val timestamp: Long
 
-    /** User-sent message. */
+    /** User-sent message. [text] is exactly what the user typed; attached
+     *  files/images live in [attachments] and render as separate elements —
+     *  never merged into the text. */
     data class User(
         override val id: String,
         override val timestamp: Long,
         val text: String,
+        val attachments: List<PendingAttachment> = emptyList(),
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */
@@ -126,6 +129,27 @@ data class ChatUiState(
     val drawerDeleteTarget: String? = null,
     // Triggers scroll-to-bottom on session load (changes value each time)
     val sessionLoadedAt: Long = 0L,
+    // Files/images staged on the gateway, waiting to go with the next prompt
+    val pendingAttachments: List<PendingAttachment> = emptyList(),
+    val isAttaching: Boolean = false,
+)
+
+/**
+ * A file or image already uploaded to the gateway (over the loopback
+ * WebSocket), queued to be referenced by the next prompt.
+ *
+ * Images are queued gateway-side by `image.attach_bytes` and consumed
+ * automatically by the next `prompt.submit`; [gatewayPath] lets us
+ * `image.detach` them. Non-image files come back from `file.attach` with a
+ * [refText] (`@file:...`) that must be appended to the prompt text.
+ */
+data class PendingAttachment(
+    val name: String,
+    val isImage: Boolean,
+    val gatewayPath: String? = null,
+    val refText: String? = null,
+    /** content:// URI of the picked file, for thumbnail preview in the bubble. */
+    val localUri: String? = null,
 )
 
 enum class ChatConnectionState {

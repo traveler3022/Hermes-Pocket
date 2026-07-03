@@ -6,6 +6,7 @@ import androidx.core.content.ContextCompat
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
 import com.hermes.android.runtime.InstallResult
+import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -142,6 +143,19 @@ class RuntimeViewModel @Inject constructor(
     fun startInstall() {
         viewModelScope.launch {
             _errorMessage.value = null
+
+            // Preflight gate: verify every prerequisite (Termux installed,
+            // allow-external-apps enabled, enough storage) BEFORE starting, so
+            // the install can't die halfway on a missing precondition. Show the
+            // fix instead of a corrupted partial install.
+            when (val prereq = runtimeManager.runtime.checkInstallPrerequisites()) {
+                is PrerequisiteResult.Blocked -> {
+                    _errorMessage.value = "${prereq.title}\n\n${prereq.instructions}"
+                    return@launch
+                }
+                PrerequisiteResult.Ready -> Unit
+            }
+
             _installing.value = true
 
             val emitter = ProgressEmitter { progress ->

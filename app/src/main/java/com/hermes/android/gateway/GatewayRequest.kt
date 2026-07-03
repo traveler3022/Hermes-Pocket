@@ -79,4 +79,7 @@ object GatewayMethods {
 
     const val SHELL_EXEC = "shell.exec"
     const val PROCESS_STOP = "process.stop"
+
+    const val SESSION_BRANCH = "session.branch"
+    const val CREDITS_VIEW = "credits.view"
 }

@@ -58,6 +58,17 @@ interface HermesRuntime {
     suspend fun detect(): DetectionResult
 
     /**
+     * Preflight check run BEFORE [install] to make sure every hard prerequisite
+     * is in place, so the installer never starts and then dies halfway on a
+     * missing precondition. The UI gates the Install button on this and shows
+     * [PrerequisiteResult.Blocked.instructions] when something is missing.
+     *
+     * Default: [PrerequisiteResult.Ready] (runtimes with no external
+     * prerequisites, e.g. embedded Python).
+     */
+    suspend fun checkInstallPrerequisites(): PrerequisiteResult = PrerequisiteResult.Ready
+
+    /**
      * Install / initialize the runtime.
      *
      * For the migration adapter: triggers the install script in the external
