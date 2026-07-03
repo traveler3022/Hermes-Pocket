@@ -132,7 +132,14 @@ data class ChatUiState(
     // Files/images staged on the gateway, waiting to go with the next prompt
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
+    // Session power tools: a read-only result panel + which text-input tool is open
+    val toolInfoTitle: String? = null,
+    val toolInfoBody: String? = null,
+    val toolInputPrompt: SessionToolInput? = null,
 )
+
+/** Which text-input session tool dialog is open (steer / set working dir). */
+enum class SessionToolInput { STEER, SET_CWD }
 
 /**
  * A file or image already uploaded to the gateway (over the loopback

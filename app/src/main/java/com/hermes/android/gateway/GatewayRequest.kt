@@ -79,4 +79,18 @@ object GatewayMethods {
 
     const val SHELL_EXEC = "shell.exec"
     const val PROCESS_STOP = "process.stop"
+
+    // ── Session power tools (surfaced in the chat overflow menu) ──
+    const val SESSION_UNDO = "session.undo"
+    const val SESSION_COMPRESS = "session.compress"
+    const val SESSION_BRANCH = "session.branch"
+    const val SESSION_CONTEXT_BREAKDOWN = "session.context_breakdown"
+    const val SESSION_STEER = "session.steer"
+    const val SESSION_CWD_SET = "session.cwd.set"
+    const val PROCESS_LIST = "process.list"
+    const val PROCESS_KILL = "process.kill"
+    const val ROLLBACK_LIST = "rollback.list"
+    const val ROLLBACK_RESTORE = "rollback.restore"
+    const val VOICE_TTS = "voice.tts"
+    const val CREDITS_VIEW = "credits.view"
 }

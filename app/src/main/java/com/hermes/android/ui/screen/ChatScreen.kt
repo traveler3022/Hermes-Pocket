@@ -46,6 +46,16 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.CallSplit
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -532,6 +542,7 @@ fun ChatScreen(
                                     contentDescription = t("Search", "جستجو"),
                                 )
                             }
+                            SessionToolsMenu(viewModel)
                         },
                     )
                     // Feature #16: Search bar (below TopAppBar)
@@ -742,6 +753,83 @@ fun ChatScreen(
                     )
                 }
             }
+        }
+    }
+
+    // ── Session-tools result panel ──
+    if (uiState.toolInfoTitle != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissToolInfo() },
+            title = { Text(uiState.toolInfoTitle!!) },
+            text = {
+                Text(
+                    uiState.toolInfoBody.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissToolInfo() }) { Text(t("Close", "بستن")) }
+            },
+        )
+    }
+
+    // ── Session-tools text input (steer / set working dir) ──
+    uiState.toolInputPrompt?.let { kind ->
+        var text by remember(kind) { mutableStateOf("") }
+        val isSteer = kind == com.hermes.android.ui.viewmodel.SessionToolInput.STEER
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissToolInput() },
+            title = { Text(if (isSteer) t("Steer the agent", "هدایت ایجنت") else t("Set working directory", "تنظیم پوشه کاری")) },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = {
+                        Text(if (isSteer) t("Guidance for the running agent…", "راهنمایی برای ایجنت در حال اجرا…") else "~/project")
+                    },
+                    singleLine = !isSteer,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (isSteer) viewModel.steerAgent(text) else viewModel.setWorkingDir(text)
+                    viewModel.dismissToolInput()
+                }) { Text(t("Send", "ارسال")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissToolInput() }) { Text(t("Cancel", "لغو")) }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SessionToolsMenu(viewModel: ChatViewModel) {
+    var open by remember { mutableStateOf(false) }
+    IconButton(onClick = { open = true }) {
+        Icon(Icons.Default.MoreVert, contentDescription = t("Session tools", "ابزارهای گفتگو"))
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        data class Item(val en: String, val fa: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val action: () -> Unit)
+        val items = listOf(
+            Item("Undo last turn", "واگرد آخرین پیام", Icons.Default.Undo) { viewModel.undoLastTurn() },
+            Item("Compress context", "فشرده‌سازی متن", Icons.Default.Compress) { viewModel.compressContext() },
+            Item("Branch conversation", "شاخه‌زدن گفتگو", Icons.Default.CallSplit) { viewModel.branchSession() },
+            Item("Context usage", "مصرف متن", Icons.Default.DataUsage) { viewModel.showContextBreakdown() },
+            Item("Steer agent", "هدایت ایجنت", Icons.Default.Navigation) { viewModel.openToolInput(com.hermes.android.ui.viewmodel.SessionToolInput.STEER) },
+            Item("Set working dir", "تنظیم پوشه کاری", Icons.Default.Folder) { viewModel.openToolInput(com.hermes.android.ui.viewmodel.SessionToolInput.SET_CWD) },
+            Item("Background processes", "پردازش‌های پس‌زمینه", Icons.Default.Memory) { viewModel.showBackgroundProcesses() },
+            Item("File checkpoints", "نقاط بازگردانی فایل", Icons.Default.History) { viewModel.showRollbackCheckpoints() },
+            Item("Speak last reply", "خواندن پاسخ", Icons.Default.VolumeUp) { viewModel.speakLastResponse() },
+            Item("Credits", "اعتبار", Icons.Default.AccountBalanceWallet) { viewModel.showCredits() },
+        )
+        items.forEach { item ->
+            DropdownMenuItem(
+                text = { Text(t(item.en, item.fa)) },
+                leadingIcon = { Icon(item.icon, contentDescription = null) },
+                onClick = { open = false; item.action() },
+            )
         }
     }
 }
