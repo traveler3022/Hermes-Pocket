@@ -1384,6 +1384,11 @@ private fun ThinkingBlock(
     )
     val barAlpha = if (isStreaming) pulse else 0.4f
 
+    // Emotive markers the model emits inside its reasoning (😌 🤔 😅 …) become
+    // a big "sticker" beside the thinking state — the agent's mood, live.
+    val emojiRe = remember { Regex("[\\uD83C-\\uDBFF][\\uDC00-\\uDFFF]|[\\u2600-\\u27BF\\u2B00-\\u2BFF]") }
+    val sticker = remember(reasoning) { emojiRe.findAll(reasoning).map { it.value }.lastOrNull() }
+
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Row(
             modifier = Modifier
@@ -1411,6 +1416,16 @@ private fun ThinkingBlock(
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+
+        // Mood sticker: the latest emotive emoji from the reasoning, shown big,
+        // popping in when it changes.
+        AnimatedVisibility(visible = sticker != null) {
+            Text(
+                text = sticker ?: "",
+                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 4.dp),
             )
         }
 
