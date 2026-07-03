@@ -563,15 +563,34 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * The gateway session that actually holds the live agent + history is not
+     * always [ChatUiState.activeSessionId] (that comes from session.create and
+     * can diverge from the running session). Session-scoped RPCs must target
+     * the session `session.most_recent` reports, falling back to the local id.
+     */
+    private suspend fun resolveLiveSessionId(): String? {
+        return try {
+            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+            ((mr as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
+        } catch (e: Exception) {
+            null
+        } ?: _uiState.value.activeSessionId
+    }
+
+    /**
      * Fork the current conversation into a new session and switch to it.
      * Triggered by long-pressing a message → "Branch conversation".
      * Backed by Hermes' `session.branch` (copies the current history into a
      * fresh session; returns the new session_id).
      */
     fun branchSession() {
-        val sid = _uiState.value.activeSessionId ?: return
         viewModelScope.launch {
             try {
+                val sid = resolveLiveSessionId()
+                if (sid == null) {
+                    _uiState.value = _uiState.value.copy(errorMessage = "No active conversation to branch")
+                    return@launch
+                }
                 val result = gatewayClient.request(
                     GatewayMethods.SESSION_BRANCH,
                     jsonToElementMap(buildJsonObject { put("session_id", sid) }),
@@ -584,8 +603,11 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] session.branch failed")
+                val m = e.message.orEmpty()
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Branch failed: ${e.message}",
+                    errorMessage = if (m.contains("4008") || m.contains("nothing to branch"))
+                        "Send at least one message before branching"
+                    else "Branch failed: $m",
                 )
             }
         }
