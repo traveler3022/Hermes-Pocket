@@ -70,11 +70,25 @@ class TermuxBridgeTest {
         )
     }
 
+    /** All install-preflight prerequisites satisfied (Termux present, external
+     *  apps allowed, plenty of disk) so install() proceeds to dispatch. */
+    private fun stubHealthyPrerequisites() {
+        every { detector.detect() } returns TermuxDetector.Detection(
+            termuxInstalled = true,
+            termuxVersion = "1.0.0",
+            termuxApiInstalled = false,
+            termuxBootInstalled = false,
+            diskFreeBytes = 5_000L * 1024 * 1024,
+        )
+        every { executor.isAllowExternalAppsEnabled() } returns true
+    }
+
     @Test
     fun `install dispatches script via executor not via copy-paste`() = runTest {
         // Given: Termux is detected and executor accepts the script
         val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")
         bridgeTest_setState(RuntimeState.Detected(runtimeInfo))
+        stubHealthyPrerequisites()
         every { installer.generateInstallScript() } returns "echo install"
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.Accepted
@@ -100,6 +114,7 @@ class TermuxBridgeTest {
     fun `install returns Failure when executor reports TermuxMissing`() = runTest {
         val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")
         bridgeTest_setState(RuntimeState.Detected(runtimeInfo))
+        stubHealthyPrerequisites()
         every { installer.generateInstallScript() } returns "echo install"
         every { executor.executeBackgroundScript(any(), any()) } returns
             TermuxCommandExecutor.Result.TermuxMissing("Termux is not installed. Cannot send RUN_COMMAND intent.")
@@ -117,9 +132,16 @@ class TermuxBridgeTest {
     fun `install returns Failure with allow-external-apps guidance when policy blocks`() = runTest {
         val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")
         bridgeTest_setState(RuntimeState.Detected(runtimeInfo))
-        every { installer.generateInstallScript() } returns "echo install"
-        every { executor.executeBackgroundScript(any(), any()) } returns
-            TermuxCommandExecutor.Result.AllowExternalAppsDisabled("policy violated")
+        // Termux present, but external apps are NOT allowed — the preflight
+        // must block here before dispatching anything.
+        every { detector.detect() } returns TermuxDetector.Detection(
+            termuxInstalled = true,
+            termuxVersion = "1.0.0",
+            termuxApiInstalled = false,
+            termuxBootInstalled = false,
+            diskFreeBytes = 5_000L * 1024 * 1024,
+        )
+        every { executor.isAllowExternalAppsEnabled() } returns false
         every { executor.buildAllowExternalAppsInstructions() } returns "Setup instructions here"
 
         val result = bridge.install(ProgressEmitter { })

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -41,8 +42,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
@@ -111,14 +114,35 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material3.TextField
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.component.ContentBlock
+import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
+import com.hermes.android.ui.viewmodel.PendingAttachment
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 
 /**
@@ -167,6 +191,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -639,6 +664,9 @@ fun ChatScreen(
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
+                                onImageClick = { url -> fullscreenImageUrl = url },
+                                resolveUrl = viewModel::resolveMediaUrl,
+                                onBranch = { viewModel.branchSession() },
                             )
                         }
                     }
@@ -657,11 +685,64 @@ fun ChatScreen(
                 InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
+                    isAttaching = uiState.isAttaching,
+                    pendingAttachments = uiState.pendingAttachments,
                     slashCommands = slashCommands,
                     onTextChange = viewModel::updateInputText,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
+                    onAttachFile = viewModel::attachFromUri,
+                    onRemoveAttachment = viewModel::removeAttachment,
                 )
+            }
+        }
+    }
+
+    // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
+    fullscreenImageUrl?.let { imageUrl ->
+        Dialog(
+            onDismissRequest = { fullscreenImageUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f))
+                    .clickable { fullscreenImageUrl = null },
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                )
+                IconButton(
+                    onClick = { fullscreenImageUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = t("Close", "بستن"),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+                IconButton(
+                    onClick = { saveImageToDownloads(context, imageUrl, "") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
+                ) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = t("Save image", "ذخیره تصویر"),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
             }
         }
     }
@@ -982,6 +1063,281 @@ private fun ShimmerSkeleton() {
 
 private val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 
+/** Save a remote file URL to the Downloads/Hermes folder via DownloadManager. */
+private fun saveImageToDownloads(context: Context, url: String, alt: String) {
+    val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
+        .ifBlank { "hermes_image.jpg" }
+        .let { if (!it.contains('.')) "$it.jpg" else it }
+    val request = DownloadManager.Request(Uri.parse(url))
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Hermes/$filename")
+        .setTitle(filename)
+        .setDescription("در حال دانلود از هرمس")
+        .setAllowedOverMetered(true)
+    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    dm.enqueue(request)
+}
+
+/** Open a URL in whatever external app handles it (browser, video player…). */
+private fun openUrlExternally(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: Exception) {
+        Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
+    }
+}
+
+// ── Content block renderers ──────────────────────────────────────────────
+
+@Composable
+private fun InlineImageBlock(
+    alt: String,
+    url: String,
+    onImageClick: (String) -> Unit,
+    onSave: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp)),
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = alt.ifBlank { "تصویر" },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onImageClick(url) },
+            contentScale = ContentScale.Fit,
+        )
+        IconButton(
+            onClick = onSave,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(36.dp)
+                .background(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    CircleShape,
+                ),
+        ) {
+            Icon(
+                Icons.Default.Download,
+                contentDescription = t("Save image", "ذخیره تصویر"),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CodeBlockCard(
+    language: String,
+    code: String,
+    onCopyCode: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = language.ifBlank { "code" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = t("Copy code", "کپی کد"),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = code,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MermaidBlockCard(
+    code: String,
+    onCopyCode: (String) -> Unit,
+) {
+    // Rendered in a WebView with mermaid.js (CDN). Falls back visually to the
+    // code card header so the user can still copy the diagram source.
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "mermaid",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = t("Copy code", "کپی کد"),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            val html = remember(code) {
+                val escaped = code
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+                <style>body{margin:0;background:transparent;display:flex;justify-content:center}</style>
+                </head><body><pre class="mermaid">$escaped</pre>
+                <script>mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script>
+                </body></html>"""
+            }
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    }
+                },
+                update = { webView ->
+                    webView.loadDataWithBaseURL("https://localhost/", html, "text/html", "utf-8", null)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HtmlBlockCard(
+    url: String,
+    name: String,
+    onOpenExternal: () -> Unit,
+) {
+    // HTML is renderable in-app: show it inline in a WebView, with a button to
+    // pop out to a full browser for interaction-heavy pages.
+    var expanded by remember { mutableStateOf(true) }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🌐", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = t("Toggle preview", "نمایش/بستن"),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                IconButton(onClick = onOpenExternal, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.OpenInNew,
+                        contentDescription = t("Open in browser", "باز کردن در مرورگر"),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        }
+                    },
+                    update = { it.loadUrl(url) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtifactCard(
+    emoji: String,
+    name: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+    onDownload: (() -> Unit)?,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = emoji, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onAction) { Text(actionLabel) }
+            if (onDownload != null) {
+                IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = t("Download", "دانلود"),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * Extract all code block contents from a markdown text.
  */
@@ -1015,6 +1371,9 @@ private fun MessageBubble(
     onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
+    onImageClick: (String) -> Unit = {},
+    resolveUrl: (String) -> String = { it },
+    onBranch: () -> Unit = {},
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -1042,12 +1401,56 @@ private fun MessageBubble(
                             .padding(12.dp)
                             .animateContentSize(),
                     ) {
+                        // Attachments render as their own elements — an image
+                        // thumbnail or a file chip — never merged into the text.
+                        if (message.attachments.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                message.attachments.forEach { attachment ->
+                                    if (attachment.isImage && attachment.localUri != null) {
+                                        AsyncImage(
+                                            model = attachment.localUri,
+                                            contentDescription = attachment.name,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 200.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                    } else {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.AttachFile,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            Text(
+                                                text = attachment.name,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (message.text.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
                         val displayText = if (!isExpanded && isLongMessage) {
                             message.text.take(300) + "…"
                         } else {
                             message.text
                         }
-                        if (searchQuery.isNotBlank()) {
+                        if (message.text.isNotBlank()) if (searchQuery.isNotBlank()) {
                             Text(
                                 text = highlightText(displayText, searchQuery),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1177,9 +1580,63 @@ private fun MessageBubble(
                                 } else {
                                     message.text
                                 }
-                                if (displayMd.isNotBlank()) {
-                                    SelectionContainer {
-                                        HermesMarkdown(markdown = displayMd)
+                                // Multi-format agent output: split into typed
+                                // blocks (text/image/code/mermaid/html/video/
+                                // file) and give each its own native renderer.
+                                // Gateway-local paths are mapped through the
+                                // loopback download endpoint at parse time.
+                                val blocks = remember(displayMd) {
+                                    parseContentBlocks(displayMd).map { block ->
+                                        when (block) {
+                                            is ContentBlock.Image -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.Video -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.Html -> block.copy(url = resolveUrl(block.url))
+                                            is ContentBlock.FileRef -> block.copy(url = resolveUrl(block.url))
+                                            else -> block
+                                        }
+                                    }
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    blocks.forEach { block ->
+                                        when (block) {
+                                            is ContentBlock.Text -> SelectionContainer {
+                                                HermesMarkdown(markdown = block.markdown)
+                                            }
+                                            is ContentBlock.Image -> InlineImageBlock(
+                                                alt = block.alt,
+                                                url = block.url,
+                                                onImageClick = onImageClick,
+                                                onSave = { saveImageToDownloads(assistantContext, block.url, block.alt) },
+                                            )
+                                            is ContentBlock.Code -> CodeBlockCard(
+                                                language = block.language,
+                                                code = block.code,
+                                                onCopyCode = onCopyCode,
+                                            )
+                                            is ContentBlock.Mermaid -> MermaidBlockCard(
+                                                code = block.code,
+                                                onCopyCode = onCopyCode,
+                                            )
+                                            is ContentBlock.Html -> HtmlBlockCard(
+                                                url = block.url,
+                                                name = block.name,
+                                                onOpenExternal = { openUrlExternally(assistantContext, block.url) },
+                                            )
+                                            is ContentBlock.Video -> ArtifactCard(
+                                                emoji = "🎬",
+                                                name = block.name,
+                                                actionLabel = t("Play", "پخش"),
+                                                onAction = { openUrlExternally(assistantContext, block.url) },
+                                                onDownload = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                            )
+                                            is ContentBlock.FileRef -> ArtifactCard(
+                                                emoji = "📄",
+                                                name = block.name,
+                                                actionLabel = t("Download", "دانلود"),
+                                                onAction = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                                onDownload = null,
+                                            )
+                                        }
                                     }
                                 }
                                 if (isLongResponse) {
@@ -1252,6 +1709,16 @@ private fun MessageBubble(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Share, contentDescription = null)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Branch conversation", "شاخه‌زدن گفتگو")) },
+                                onClick = {
+                                    onBranch()
+                                    showContextMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.CallSplit, contentDescription = null)
                                 },
                             )
                         }
@@ -1633,14 +2100,18 @@ private fun thinkingDotStr(): String {
 private fun InputBar(
     text: String,
     isSending: Boolean,
+    isAttaching: Boolean = false,
+    pendingAttachments: List<PendingAttachment> = emptyList(),
     slashCommands: List<SlashCommandSuggestion>,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onAttachFile: (Uri) -> Unit = {},
+    onRemoveAttachment: (PendingAttachment) -> Unit = {},
 ) {
-    val context = LocalContext.current
-    // t() is @Composable — hoist out of the onClick lambda below.
-    val comingSoonToast = t("Coming soon", "به زودی")
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri -> uri?.let(onAttachFile) }
     // Feature 5.2: slash command suggestions — from the gateway catalog
     // (commands.catalog); falls back to a minimal built-in list if empty.
     val fallbackCommands = remember {
@@ -1675,6 +2146,30 @@ private fun InputBar(
                 }
             }
         }
+        // Staged attachments — already uploaded to the gateway, sent with the
+        // next prompt. Tap a chip to remove it.
+        if (pendingAttachments.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(pendingAttachments) { attachment ->
+                    SuggestionChip(
+                        onClick = { onRemoveAttachment(attachment) },
+                        icon = {
+                            Icon(
+                                Icons.Default.AttachFile,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        },
+                        label = { Text("${attachment.name}  ✕", maxLines = 1) },
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1682,18 +2177,22 @@ private fun InputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Feature 5.1: attachment button
+            // Feature 5.1: attachment button — picks a file and uploads it to
+            // the gateway session over the loopback WebSocket.
             IconButton(
-                onClick = {
-                    Toast.makeText(context, comingSoonToast, Toast.LENGTH_SHORT).show()
-                },
+                onClick = { if (!isAttaching) filePicker.launch("*/*") },
+                enabled = !isAttaching,
                 modifier = Modifier.size(48.dp),
             ) {
-                Icon(
-                    Icons.Default.AttachFile,
-                    contentDescription = t("Attach", "پیوست"),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (isAttaching) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = t("Attach", "پیوست"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             OutlinedTextField(
                 value = text,
