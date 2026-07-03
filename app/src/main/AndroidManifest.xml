@@ -6,9 +6,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Termux RUN_COMMAND permission (CRITICAL: Required to communicate with RunCommandService) -->
-    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
-
     <!-- Foreground Service — keeps Hermes gateway alive (ADR-004) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -28,23 +25,6 @@
 
     <!-- Vibrate — notification feedback for tool approvals -->
     <uses-permission android:name="android.permission.VIBRATE" />
-
-    <!--
-        Android 11+ (API 30+) package visibility: apps cannot see other installed
-        packages unless they are declared in a <queries> block. Termux must be
-        visible so that:
-        - TermuxDetector.canQueryPackage() returns true
-        - Context.startService(RUN_COMMAND intent) reaches RunCommandService
-          instead of returning null silently.
-
-        Reference: ADR-001 (Termux migration), ADR-007 (reuse install.sh),
-        TermuxCommandExecutor.kt.
-    -->
-    <queries>
-        <package android:name="com.termux" />
-        <package android:name="com.termux.api" />
-        <package android:name="com.termux.boot" />
-    </queries>
 
     <application
         android:name=".HermesApplication"

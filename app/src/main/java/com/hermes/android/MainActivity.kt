@@ -42,9 +42,6 @@ class MainActivity : ComponentActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val permissionsToRequest = mutableListOf<String>()
-            if (checkSelfPermission("com.termux.permission.RUN_COMMAND") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add("com.termux.permission.RUN_COMMAND")
-            }
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add("android.permission.POST_NOTIFICATIONS")
             }
