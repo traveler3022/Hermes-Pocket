@@ -679,6 +679,7 @@ fun ChatScreen(
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
 
+                            Box(modifier = Modifier.animateItem()) {
                             MessageBubble(
                                 message = message,
                                 grouped = grouped,
@@ -701,6 +702,7 @@ fun ChatScreen(
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
                             )
+                            }
                         }
                     }
                 }
