@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -40,12 +41,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -82,6 +88,8 @@ fun RuntimeSetupScreen(
     val installing by viewModel.installing.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val serverConfig by viewModel.serverConfig.collectAsStateWithLifecycle()
+    val isRemote = viewModel.isRemoteRuntime
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -109,7 +117,7 @@ fun RuntimeSetupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Termux & Agent Setup") },
+                title = { Text(if (isRemote) "Server Connection" else "Termux & Agent Setup") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -134,33 +142,66 @@ fun RuntimeSetupScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Termux & Hermes Agent Gateway Connection",
+                text = if (isRemote) {
+                    "Connect to your Hermes server"
+                } else {
+                    "Termux & Hermes Agent Gateway Connection"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (isRemote) {
+                ServerConfigCard(
+                    initialUrl = serverConfig.serverUrl,
+                    initialToken = serverConfig.token,
+                    onSaveAndConnect = { url, token ->
+                        viewModel.saveServerConfigAndConnect(url, token)
+                    },
+                )
+            }
+
             when (val state = uiState) {
                 is RuntimeUiState.NotDetected -> {
-                    Text("Detecting runtime...", style = MaterialTheme.typography.bodyLarge)
-                    CircularProgressIndicator()
+                    if (isRemote) {
+                        Text(
+                            text = "Enter your server address and token above, then tap Save & Connect.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text("Detecting runtime...", style = MaterialTheme.typography.bodyLarge)
+                        CircularProgressIndicator()
+                    }
                 }
 
                 is RuntimeUiState.Detecting -> {
-                    Text("Detecting runtime...", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (isRemote) "Checking server connection..." else "Detecting runtime...",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
                     CircularProgressIndicator()
                 }
 
                 is RuntimeUiState.Detected -> {
-                    DetectedContent(
-                        version = state.version,
-                        diskFreeBytes = state.diskFreeBytes,
-                        onShowInstallInstructions = { viewModel.prepareInstallInstructions() },
-                        onStartInstall = { viewModel.startInstall() },
-                        onLaunchHostApp = { viewModel.launchHostApp() },
-                        onStartGateway = { viewModel.startGateway() },
-                    )
+                    if (isRemote) {
+                        RemoteConfiguredContent(
+                            serverUrl = serverConfig.serverUrl,
+                            onConnect = { viewModel.startGateway() },
+                        )
+                    } else {
+                        DetectedContent(
+                            version = state.version,
+                            diskFreeBytes = state.diskFreeBytes,
+                            onShowInstallInstructions = { viewModel.prepareInstallInstructions() },
+                            onStartInstall = { viewModel.startInstall() },
+                            onLaunchHostApp = { viewModel.launchHostApp() },
+                            onStartGateway = { viewModel.startGateway() },
+                        )
+                    }
                 }
 
                 is RuntimeUiState.Installing -> {
@@ -170,10 +211,17 @@ fun RuntimeSetupScreen(
                 }
 
                 is RuntimeUiState.Installed -> {
-                    InstalledContent(
-                        hermesVersion = state.hermesVersion,
-                        onStartGateway = { viewModel.startGateway() },
-                    )
+                    if (isRemote) {
+                        RemoteConfiguredContent(
+                            serverUrl = serverConfig.serverUrl,
+                            onConnect = { viewModel.startGateway() },
+                        )
+                    } else {
+                        InstalledContent(
+                            hermesVersion = state.hermesVersion,
+                            onStartGateway = { viewModel.startGateway() },
+                        )
+                    }
                 }
 
                 is RuntimeUiState.Running -> {
@@ -188,9 +236,14 @@ fun RuntimeSetupScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text("Gateway is running 🎉", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(
-                                text = state.webSocketUrl,
+                                if (isRemote) "Connected to server 🎉" else "Gateway is running 🎉",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                // Never render the token on screen.
+                                text = state.webSocketUrl.substringBefore("?token="),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -200,7 +253,7 @@ fun RuntimeSetupScreen(
                                 onClick = { viewModel.startGateway() },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Restart Agent Gateway")
+                                Text(if (isRemote) "Reconnect" else "Restart Agent Gateway")
                             }
                         }
                     }
@@ -215,13 +268,15 @@ fun RuntimeSetupScreen(
                 }
             }
 
-            Button(
-                onClick = { viewModel.fetchLogs() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.Description, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Fetch & View Logs")
+            if (!isRemote) {
+                Button(
+                    onClick = { viewModel.fetchLogs() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Fetch & View Logs")
+                }
             }
 
             OutlinedButton(
@@ -230,7 +285,7 @@ fun RuntimeSetupScreen(
             ) {
                 Icon(Icons.Default.Description, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Run diagnostics (hermes doctor)")
+                Text(if (isRemote) "Test connection" else "Run diagnostics (hermes doctor)")
             }
 
             AnimatedVisibility(visible = logs != null) {
@@ -302,6 +357,118 @@ fun RuntimeSetupScreen(
 
             if (installing) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/**
+ * Server address + token input for the remote runtime.
+ *
+ * The token is rendered masked (password field) with a show/hide toggle,
+ * and is never echoed anywhere else in the UI.
+ */
+@Composable
+private fun ServerConfigCard(
+    initialUrl: String,
+    initialToken: String,
+    onSaveAndConnect: (url: String, token: String) -> Unit,
+) {
+    var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
+    var token by rememberSaveable(initialToken) { mutableStateOf(initialToken) }
+    var showToken by rememberSaveable { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Hermes Server",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text("Server address") },
+                placeholder = { Text("wss://example.com:2083") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = token,
+                onValueChange = { token = it },
+                label = { Text("Session token") },
+                singleLine = true,
+                visualTransformation = if (showToken) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(onClick = { showToken = !showToken }) {
+                        Icon(
+                            Icons.Default.Description,
+                            contentDescription = if (showToken) "Hide token" else "Show token",
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = { onSaveAndConnect(url, token) },
+                enabled = url.isNotBlank() && token.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Save & Connect")
+            }
+        }
+    }
+}
+
+/** Shown when the remote server is configured but not yet connected. */
+@Composable
+private fun RemoteConfiguredContent(
+    serverUrl: String,
+    onConnect: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Server configured ✓",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                text = serverUrl,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(
+                onClick = onConnect,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Connect")
             }
         }
     }

@@ -3,9 +3,9 @@ package com.hermes.android.di
 import android.content.Context
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
+import com.hermes.android.runtime.remote.RemoteRuntime
 import com.hermes.android.runtime.termux.InstallCompletionFlow
 import com.hermes.android.runtime.termux.InstallProgressFlow
-import com.hermes.android.runtime.termux.TermuxBridge
 import com.hermes.android.runtime.termux.TermuxInstallProgressReceiver
 import dagger.Module
 import dagger.Provides
@@ -20,25 +20,26 @@ import javax.inject.Singleton
  *
  * ## Swap point
  *
- * Today this binds [TermuxBridge] (migration phase, ADR-001).
- * When the Embedded Python runtime is ready (ADR-009), this is the ONLY
- * file that needs to change — replace `TermuxBridge::class` with
- * `EmbeddedPythonRuntime::class` and the rest of the app keeps working.
+ * Today this binds [RemoteRuntime] — Hermes runs on the user's server and
+ * the app connects over `wss://`. The Termux migration adapter
+ * ([com.hermes.android.runtime.termux.TermuxBridge]) is superseded and
+ * scheduled for removal.
  *
- * Reference: ADR-001 (Termux migration), ADR-009 (production embedded Python)
+ * Per the swap contract this is the ONLY file that changes when the
+ * runtime implementation is replaced; the rest of the app keeps working.
+ *
+ * Reference: ADR-009 (production must not require Termux)
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object RuntimeModule {
 
     /**
-     * Bind [HermesRuntime] to [TermuxBridge].
-     *
-     * TODO (future): swap to EmbeddedPythonRuntime when ready.
+     * Bind [HermesRuntime] to [RemoteRuntime].
      */
     @Provides
     @Singleton
-    fun provideHermesRuntime(bridge: TermuxBridge): HermesRuntime = bridge
+    fun provideHermesRuntime(runtime: RemoteRuntime): HermesRuntime = runtime
 
     /**
      * Shared state flow for install progress. Bridged between

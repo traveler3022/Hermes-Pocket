@@ -9,6 +9,9 @@ import com.hermes.android.runtime.InstallResult
 import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
+import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.remote.RemoteServerConfig
+import com.hermes.android.runtime.remote.RemoteServerSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -44,8 +47,40 @@ sealed interface RuntimeEffect {
 @HiltViewModel
 class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
+    private val remoteServerSettings: RemoteServerSettings,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
+
+    /** True when the bound runtime is the remote-server runtime. */
+    val isRemoteRuntime: Boolean get() = runtimeManager.runtimeType == RuntimeType.REMOTE
+
+    /** Current remote-server connection settings (URL + token). */
+    val serverConfig: kotlinx.coroutines.flow.StateFlow<RemoteServerConfig> =
+        remoteServerSettings.config
+
+    /**
+     * Persist the server address + token, then immediately re-detect and
+     * connect. This is the "Save & Connect" action in the setup screen.
+     */
+    fun saveServerConfigAndConnect(serverUrl: String, token: String) {
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                remoteServerSettings.save(serverUrl, token)
+                val result = runtimeManager.runtime.detect()
+                if (result is DetectionResult.Available) {
+                    val handle = runtimeManager.runtime.startGateway()
+                    Timber.i("[Runtime] Connected to remote server: ${handle.webSocketUrl}")
+                    _effects.emit(RuntimeEffect.StartForegroundService)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Failed to connect to remote server")
+                _errorMessage.value = e.message ?: "Failed to connect to the server"
+            }
+        }
+    }
 
     /**
      * UI-facing state — converted from the runtime's RuntimeState.

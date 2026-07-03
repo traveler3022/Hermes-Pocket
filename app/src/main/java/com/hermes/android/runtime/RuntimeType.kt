@@ -18,6 +18,13 @@ package com.hermes.android.runtime
  * but [TERMUX] is the migration adapter for now.
  */
 enum class RuntimeType {
+    /**
+     * Remote server runtime — Hermes runs on a VPS/server and the app
+     * connects over `wss://` through a TLS reverse proxy. No on-device
+     * agent, no Termux. This is the production runtime.
+     */
+    REMOTE,
+
     /** Migration adapter — runs Hermes inside Termux (ADR-001, ADR-007). */
     TERMUX,
 
