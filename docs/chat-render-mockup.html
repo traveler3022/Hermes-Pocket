@@ -1,0 +1,269 @@
+<style>
+  :root{
+    --page-bg:#eef0f6; --page-fg:#171a23; --page-sub:#5b5f70; --card:#fff; --edge:#d7dae6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --page-bg:#0d0e14; --page-fg:#e7e8f0; --page-sub:#9aa0b4; --card:#171922; --edge:#262a38; }
+  }
+  :root[data-theme="dark"]{ --page-bg:#0d0e14; --page-fg:#e7e8f0; --page-sub:#9aa0b4; --card:#171922; --edge:#262a38; }
+  :root[data-theme="light"]{ --page-bg:#eef0f6; --page-fg:#171a23; --page-sub:#5b5f70; --card:#fff; --edge:#d7dae6; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-fg);
+    font-family:"Vazirmatn","Segoe UI",Roboto,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:28px 16px 60px}
+  .head{max-width:900px;margin:0 auto 22px;text-align:center}
+  .head h1{font-size:22px;margin:0 0 6px;font-weight:700}
+  .head p{margin:0;color:var(--page-sub);font-size:14px}
+  .frames{display:flex;gap:26px;justify-content:center;flex-wrap:wrap;max-width:900px;margin:0 auto}
+  .label{text-align:center;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--page-sub);margin-bottom:10px}
+
+  /* phone – palette hard-set per scheme so both are always visible */
+  .phone{width:360px;border-radius:38px;padding:10px;background:var(--edge);
+    box-shadow:0 24px 60px rgba(20,16,60,.22);}
+  .screen{border-radius:30px;overflow:hidden;height:720px;display:flex;flex-direction:column;
+    direction:rtl;font-size:14.5px;background:var(--bg);color:var(--fg)}
+
+  .p-light{
+    --bg:#f8faff;--fg:#171a23;--sub:#5b5f70;--surf:#fff;--surfv:#e2e5f2;--onsurfv:#444754;
+    --pri:#5b4bdb;--usr:#e5deff;--onusr:#17005c;--sec:#006a78;--secc:#c9f3fb;--onsecc:#00363f;
+    --line:#e6e8f2;--out:#8a8d9c;--codebg:#eef0fb;--ok:#2e7d52;
+  }
+  .p-dark{
+    --bg:#101119;--fg:#e7e8f0;--sub:#9aa0b4;--surf:#1b1d27;--surfv:#2a2d3a;--onsurfv:#c4c6d4;
+    --pri:#9b8cff;--usr:#3f2cb5;--onusr:#e8ddff;--sec:#67d9f2;--secc:#0c3a44;--onsecc:#aef0ff;
+    --line:#242736;--out:#767a8c;--codebg:#12131d;--ok:#7edd9f;
+  }
+
+  /* header */
+  .top{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;background:var(--surf);
+    border-bottom:1px solid var(--line)}
+  .av{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:17px;
+    background:linear-gradient(140deg,var(--pri),var(--sec));color:#fff;flex:none}
+  .top .nm{font-weight:700;font-size:15px;line-height:1.1}
+  .top .st{font-size:11.5px;color:var(--ok);display:flex;align-items:center;gap:4px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+  .top .sp{flex:1}
+  .ic{width:20px;height:20px;color:var(--sub);opacity:.8}
+
+  /* transcript */
+  .body{flex:1;overflow:hidden;padding:14px 12px;display:flex;flex-direction:column;gap:12px;
+    background:
+      radial-gradient(120% 60% at 100% 0,color-mix(in srgb,var(--pri) 6%,transparent),transparent 60%),
+      var(--bg)}
+  .day{align-self:center;font-size:11px;color:var(--sub);background:var(--surfv);
+    padding:3px 12px;border-radius:20px}
+
+  .row{display:flex;gap:8px;max-width:100%}
+  .row.me{flex-direction:row-reverse}
+  .bavatar{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;font-size:13px;
+    background:linear-gradient(140deg,var(--pri),var(--sec));color:#fff;flex:none;align-self:flex-end}
+  .bubble{padding:9px 12px;border-radius:16px;line-height:1.6;max-width:250px;word-break:break-word}
+  .me .bubble{background:var(--usr);color:var(--onusr);border-bottom-right-radius:5px}
+  .bot .bubble{background:var(--surfv);color:var(--fg);border-bottom-left-radius:5px}
+  .time{font-size:10px;color:var(--sub);margin:3px 4px 0}
+  .me .time{text-align:left}
+
+  /* breakout: long agent content leaves the bubble, full width, readable */
+  .breakout{align-self:stretch;margin-inline-start:34px}
+  .code{background:var(--codebg);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .code .cbar{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);
+    font-size:11px;color:var(--sub);direction:ltr}
+  .code .cbar b{color:var(--pri);font-weight:600}
+  .code .cbar .grow{flex:1}
+  .code pre{margin:0;padding:12px;overflow-x:auto;direction:ltr;font-size:12.5px;line-height:1.55;
+    font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;color:var(--fg)}
+  .k{color:var(--pri)} .s{color:var(--sec)} .c{color:var(--sub)}
+
+  .tool{display:flex;align-items:center;gap:9px;background:var(--surf);border:1px solid var(--line);
+    border-radius:13px;padding:9px 12px;font-size:12.5px}
+  .tool .tik{width:20px;height:20px;border-radius:7px;display:grid;place-items:center;font-size:12px;
+    background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok);flex:none}
+  .tool .tn{font-weight:600} .tool .tp{color:var(--sub)} .tool .grow{flex:1}
+  .tool .dur{color:var(--out);direction:ltr;font-size:11px}
+
+  /* typing */
+  .typing{display:flex;gap:4px;padding:12px 14px;background:var(--surfv);border-radius:16px;
+    border-bottom-left-radius:5px;width:fit-content}
+  .typing i{width:7px;height:7px;border-radius:50%;background:var(--out);animation:bl 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  @media (prefers-reduced-motion:reduce){.typing i{animation:none;opacity:.6}}
+
+  /* input */
+  .input{display:flex;align-items:center;gap:9px;padding:11px 12px;background:var(--surf);
+    border-top:1px solid var(--line)}
+  .input .att{width:22px;height:22px;color:var(--sub);flex:none}
+  .field{flex:1;background:var(--surfv);border-radius:22px;padding:10px 15px;color:var(--sub);font-size:13.5px}
+  .send{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:var(--pri);color:#fff;box-shadow:0 6px 16px color-mix(in srgb,var(--pri) 45%,transparent)}
+  .send svg{width:20px;height:20px}
+
+  .note{max-width:640px;margin:30px auto 0;color:var(--page-sub);font-size:13px;line-height:1.8;
+    background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:16px 18px}
+  .note b{color:var(--page-fg)}
+</style>
+
+<div class="head">
+  <h1>Hermes2 — رندر جدید چت</h1>
+  <p>سبک پیام‌رسان مدرن · حباب کاربر راست، agent چپ · محتوای بلند/کد از حباب می‌زند بیرون</p>
+</div>
+
+<div class="frames">
+  <div>
+    <div class="label">Light</div>
+    <div class="phone">
+      <div class="screen p-light">
+        <!-- header -->
+        <div class="top">
+          <div class="av">⚕</div>
+          <div>
+            <div class="nm">Hermes</div>
+            <div class="st"><span class="dot"></span> متصل</div>
+          </div>
+          <div class="sp"></div>
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        </div>
+        <!-- transcript -->
+        <div class="body">
+          <div class="day">امروز</div>
+
+          <div class="row me">
+            <div>
+              <div class="bubble">سلام، یه اسکریپت پایتون بنویس که فایل‌های تکراری رو پیدا کنه</div>
+              <div class="time">۱۴:۳۲</div>
+            </div>
+          </div>
+
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div>
+              <div class="bubble">حتماً. با هش MD5 تکراری‌ها رو پیدا می‌کنم:</div>
+              <div class="time">۱۴:۳۲</div>
+            </div>
+          </div>
+
+          <div class="breakout">
+            <div class="code">
+              <div class="cbar"><b>python</b><span class="grow"></span>⧉ کپی</div>
+<pre><span class="k">import</span> hashlib, os
+<span class="k">def</span> <span class="s">find_dupes</span>(root):
+    seen = {}
+    <span class="k">for</span> d,_,fs <span class="k">in</span> os.walk(root):
+        <span class="k">for</span> f <span class="k">in</span> fs:
+            p = os.path.join(d,f)
+            h = hashlib.md5(<span class="k">open</span>(p,<span class="s">"rb"</span>).read()).hexdigest()
+            seen.setdefault(h,[]).append(p)
+    <span class="k">return</span> [v <span class="k">for</span> v <span class="k">in</span> seen.values() <span class="k">if</span> <span class="k">len</span>(v)>1]</pre>
+            </div>
+          </div>
+
+          <div class="breakout">
+            <div class="tool">
+              <div class="tik">✓</div>
+              <span class="tn">write_file</span><span class="tp">· dedupe.py</span>
+              <span class="grow"></span><span class="dur">0.4s</span>
+            </div>
+          </div>
+
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div>
+              <div class="bubble">فایل ساخته شد. برای اجرا: <code style="direction:ltr;font-family:monospace">python dedupe.py ~/Downloads</code></div>
+              <div class="time">۱۴:۳۳</div>
+            </div>
+          </div>
+
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div class="typing"><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <!-- input -->
+        <div class="input">
+          <svg class="att" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5 12.5 21a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.9 18.6a1.7 1.7 0 0 1-2.3-2.3l7.8-7.8"/></svg>
+          <div class="field">پیام بنویس…</div>
+          <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="label">Dark</div>
+    <div class="phone">
+      <div class="screen p-dark">
+        <div class="top">
+          <div class="av">⚕</div>
+          <div>
+            <div class="nm">Hermes</div>
+            <div class="st"><span class="dot"></span> متصل</div>
+          </div>
+          <div class="sp"></div>
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        </div>
+        <div class="body">
+          <div class="day">امروز</div>
+          <div class="row me">
+            <div>
+              <div class="bubble">سلام، یه اسکریپت پایتون بنویس که فایل‌های تکراری رو پیدا کنه</div>
+              <div class="time">۱۴:۳۲</div>
+            </div>
+          </div>
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div>
+              <div class="bubble">حتماً. با هش MD5 تکراری‌ها رو پیدا می‌کنم:</div>
+              <div class="time">۱۴:۳۲</div>
+            </div>
+          </div>
+          <div class="breakout">
+            <div class="code">
+              <div class="cbar"><b>python</b><span class="grow"></span>⧉ کپی</div>
+<pre><span class="k">import</span> hashlib, os
+<span class="k">def</span> <span class="s">find_dupes</span>(root):
+    seen = {}
+    <span class="k">for</span> d,_,fs <span class="k">in</span> os.walk(root):
+        <span class="k">for</span> f <span class="k">in</span> fs:
+            p = os.path.join(d,f)
+            h = hashlib.md5(<span class="k">open</span>(p,<span class="s">"rb"</span>).read()).hexdigest()
+            seen.setdefault(h,[]).append(p)
+    <span class="k">return</span> [v <span class="k">for</span> v <span class="k">in</span> seen.values() <span class="k">if</span> <span class="k">len</span>(v)>1]</pre>
+            </div>
+          </div>
+          <div class="breakout">
+            <div class="tool">
+              <div class="tik">✓</div>
+              <span class="tn">write_file</span><span class="tp">· dedupe.py</span>
+              <span class="grow"></span><span class="dur">0.4s</span>
+            </div>
+          </div>
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div>
+              <div class="bubble">فایل ساخته شد. برای اجرا: <code style="direction:ltr;font-family:monospace">python dedupe.py ~/Downloads</code></div>
+              <div class="time">۱۴:۳۳</div>
+            </div>
+          </div>
+          <div class="row bot">
+            <div class="bavatar">⚕</div>
+            <div class="typing"><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="input">
+          <svg class="att" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5 12.5 21a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.9 18.6a1.7 1.7 0 0 1-2.3-2.3l7.8-7.8"/></svg>
+          <div class="field">پیام بنویس…</div>
+          <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>ایده‌ی کلیدی:</b> پیام کوتاه = حباب پیام‌رسان (کاربر راست بنفش، agent چپ خاکستری با آواتار ⚕).
+  اما وقتی agent <b>کد یا tool call</b> می‌دهد، از حباب می‌زند بیرون و تمام‌عرض می‌شود تا خوانا بماند —
+  چیزی که یک چت تلگرام‌مانند خالص در آن شکست می‌خورد.
+  رنگ‌ها دقیقاً از پالت فعلی خودت (<b>#5B4BDB</b> بنفش، <b>#006A78</b> فیروزه‌ای).
+  رندر واقعی از همین رنگ‌ها + فونت Vazirmatn استفاده می‌کند.
+</div>
