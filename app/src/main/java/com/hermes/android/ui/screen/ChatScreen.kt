@@ -1462,6 +1462,7 @@ private fun ThinkingBlock(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
