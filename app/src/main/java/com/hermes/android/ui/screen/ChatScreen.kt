@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -642,13 +643,46 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
-                        items(filteredMessages, key = { it.id }) { message ->
+                        if (filteredMessages.isEmpty() &&
+                            uiState.connectionState == ChatConnectionState.Connected
+                        ) {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillParentMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Text(
+                                            text = "⚕",
+                                            style = MaterialTheme.typography.displayLarge,
+                                        )
+                                        Text(
+                                            text = t("Ask Hermes anything", "هر چیزی از هرمس بپرس"),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
                                     filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                            // Grouped == previous message is from the same side
+                            // (user vs agent). Used to show the agent avatar only
+                            // once per run and tighten consecutive bubbles.
+                            val prev = filteredMessages.getOrNull(index - 1)
+                            val grouped = prev != null &&
+                                    (prev is ChatMessage.User) == (message is ChatMessage.User)
 
+                            Box(modifier = Modifier.animateItem()) {
                             MessageBubble(
                                 message = message,
+                                grouped = grouped,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
@@ -668,6 +702,7 @@ fun ChatScreen(
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
                             )
+                            }
                         }
                     }
                 }
@@ -1099,15 +1134,15 @@ private fun InlineImageBlock(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(14.dp)),
     ) {
         AsyncImage(
             model = url,
             contentDescription = alt.ifBlank { "تصویر" },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 280.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .heightIn(max = 320.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .clickable { onImageClick(url) },
             contentScale = ContentScale.Fit,
         )
@@ -1359,9 +1394,114 @@ private fun extractCodeBlocks(text: String): List<String> {
 // ── Message Bubble ───────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
+/**
+ * Agent "thinking" indicator.
+ *
+ * UX (per design): a pulsing vertical bar next to the label conveys "the agent
+ * is working", a live one-line preview of the latest reasoning fades in and out
+ * while streaming, and tapping expands the full reasoning with a fade/expand.
+ * No shimmer — a moving highlight over the whole text gets tiring on long runs.
+ */
+@Composable
+private fun ThinkingBlock(
+    reasoning: String,
+    isStreaming: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val barColor = MaterialTheme.colorScheme.primary
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val barAlpha = if (isStreaming) pulse else 0.4f
+
+    // Emotive markers the model emits inside its reasoning (😌 🤔 😅 …) become
+    // a big "sticker" beside the thinking state — the agent's mood, live.
+    val emojiRe = remember { Regex("[\\uD83C-\\uDBFF][\\uDC00-\\uDFFF]|[\\u2600-\\u27BF\\u2B00-\\u2BFF]") }
+    val sticker = remember(reasoning) { emojiRe.findAll(reasoning).map { it.value }.lastOrNull() }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(barColor.copy(alpha = barAlpha)),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isStreaming) t("Thinking…", "در حال فکر…") else t("Thoughts", "افکار"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+
+        // Mood sticker: the latest emotive emoji from the reasoning, shown big,
+        // popping in when it changes.
+        AnimatedVisibility(visible = sticker != null) {
+            Text(
+                text = sticker ?: "",
+                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 4.dp),
+            )
+        }
+
+        // Live preview: latest reasoning line, fading with the pulse, while collapsed.
+        if (isStreaming && !expanded) {
+            val preview = remember(reasoning) {
+                reasoning.trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
+            }
+            if (preview.isNotEmpty()) {
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.8f),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 11.dp, bottom = 2.dp),
+                )
+            }
+        }
+
+        // Full reasoning: fades/expands in when opened (the "fade from bottom").
+        AnimatedVisibility(visible = expanded) {
+            HermesMarkdown(
+                markdown = reasoning,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 11.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
+    grouped: Boolean = false,
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,
@@ -1488,17 +1628,6 @@ private fun MessageBubble(
             var isThinkingExpanded by remember { mutableStateOf(false) }
             var showContextMenu by remember { mutableStateOf(false) }
             val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
-            val emotionRegex = remember { Regex("[\\p{So}\\p{Sk}]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\\([^()]{1,12}\\)") }
-            val emotions = remember(message.reasoning) {
-                message.reasoning?.let { text ->
-                    emotionRegex.findAll(text).map { m -> m.value }.filter { v ->
-                        v.length == 1 || v.any { c -> !c.isLetterOrDigit() && c != '(' && c != ')' && c != ' ' }
-                    }.toList()
-                } ?: emptyList()
-            }
-
-            // Feature 7.1: animated dots only while streaming with reasoning
-            val dotStr = if (message.isStreaming && hasThinking) thinkingDotStr() else ""
 
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
@@ -1507,6 +1636,27 @@ private fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
+                // Agent avatar (Telegram-style): shown once per group. Grouped
+                // messages reserve the same width so bubbles stay aligned.
+                if (grouped) {
+                    Spacer(modifier = Modifier.width(34.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "⚕",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
                 Column(modifier = Modifier.widthIn(max = 420.dp)) {
                     Box {
                         Card(
@@ -1526,47 +1676,12 @@ private fun MessageBubble(
                                 .animateContentSize(),
                         ) {
                             if (hasThinking) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { isThinkingExpanded = !isThinkingExpanded }
-                                        .padding(bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(
-                                        text = "💭",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    if (emotions.isNotEmpty() && !isThinkingExpanded) {
-                                        Text(
-                                            text = emotions.distinct().take(5).joinToString(" "),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                    Text(
-                                        text = when {
-                                            message.isStreaming && hasThinking && !isThinkingExpanded ->
-                                                "💭$dotStr"
-                                            isThinkingExpanded -> t("Thinking ▲", "فکر کردن ▲")
-                                            else -> t("Thinking ▼", "فکر کردن ▼")
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    )
-                                }
-                                AnimatedVisibility(visible = isThinkingExpanded) {
-                                    // Feature 7.2: HermesMarkdown for reasoning
-                                    HermesMarkdown(
-                                        markdown = message.reasoning ?: "",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 8.dp),
-                                    )
-                                }
+                                ThinkingBlock(
+                                    reasoning = message.reasoning ?: "",
+                                    isStreaming = message.isStreaming,
+                                    expanded = isThinkingExpanded,
+                                    onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                                )
                             }
                             if (message.text.isEmpty()) {
                                 Text(
