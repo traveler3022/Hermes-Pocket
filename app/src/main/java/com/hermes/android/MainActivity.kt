@@ -28,6 +28,7 @@ import com.hermes.android.ui.screen.ConfigScreen
 import com.hermes.android.ui.screen.CronScreen
 import com.hermes.android.ui.screen.OnboardingScreen
 import com.hermes.android.ui.screen.PlatformsScreen
+import com.hermes.android.ui.screen.PluginsScreen
 import com.hermes.android.ui.screen.SessionsScreen
 import com.hermes.android.ui.screen.SkillsScreen
 import com.hermes.android.ui.theme.Hermes2Theme
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { CHAT, CONFIG, PLATFORMS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
+private enum class Screen { CHAT, CONFIG, PLATFORMS, PLUGINS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
 
 @Composable
 private fun AppRoot(
@@ -143,6 +144,7 @@ private fun AppRoot(
         Screen.CONFIG -> ConfigScreen(
             onNavigateBack = { screen = Screen.CHAT },
             onNavigateToPlatforms = { screen = Screen.PLATFORMS },
+            onNavigateToPlugins = { screen = Screen.PLUGINS },
             onNavigateToSkills = { screen = Screen.SKILLS },
             onNavigateToCron = { screen = Screen.CRON },
             onNavigateToRuntime = { screen = Screen.RUNTIME },
@@ -150,6 +152,9 @@ private fun AppRoot(
             appLanguageState = appLanguageState,
         )
         Screen.PLATFORMS -> PlatformsScreen(
+            onNavigateBack = { screen = Screen.CONFIG },
+        )
+        Screen.PLUGINS -> PluginsScreen(
             onNavigateBack = { screen = Screen.CONFIG },
         )
         Screen.SESSIONS -> SessionsScreen(
