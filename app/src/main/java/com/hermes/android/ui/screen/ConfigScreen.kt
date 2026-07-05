@@ -547,7 +547,7 @@ private fun GeneralTab(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
-                    TextField(
+                    OutlinedTextField(
                         value = state.skin,
                         onValueChange = { viewModel.setSkin(it) },
                         modifier = Modifier
@@ -571,7 +571,7 @@ private fun GeneralTab(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
-                    TextField(
+                    OutlinedTextField(
                         value = state.prompt,
                         onValueChange = { viewModel.setPrompt(it) },
                         modifier = Modifier
