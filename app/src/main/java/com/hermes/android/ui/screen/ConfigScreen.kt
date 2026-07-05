@@ -499,6 +499,91 @@ private fun GeneralTab(
             }
         }
 
+        // -- Personality & Appearance --
+        Text(
+            text = t("Personality & Appearance", "شخصیت و ظاهر"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Personality text field
+                Column {
+                    Text(
+                        text = t("Personality", "شخصیت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Agent personality style", "سبک شخصیت عامل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    OutlinedTextField(
+                        value = state.personality,
+                        onValueChange = { viewModel.setPersonality(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter personality", "شخصیت را وارد کنید")) },
+                        singleLine = true,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Skin text field
+                Column {
+                    Text(
+                        text = t("Skin", "پوسته"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("UI theme/appearance", "تم ظاهری رابط"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    TextField(
+                        value = state.skin,
+                        onValueChange = { viewModel.setSkin(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter skin name", "نام پوسته را وارد کنید")) },
+                        singleLine = true,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Prompt text field
+                Column {
+                    Text(
+                        text = t("System Prompt", "دستور سیستم"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Initial instructions for agent", "دستورات اولیه برای عامل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    TextField(
+                        value = state.prompt,
+                        onValueChange = { viewModel.setPrompt(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter system prompt", "دستور سیستم را وارد کنید")) },
+                        minLines = 3,
+                    )
+                }
+            }
+        }
+
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
             onClick = onNavigateToRuntime,

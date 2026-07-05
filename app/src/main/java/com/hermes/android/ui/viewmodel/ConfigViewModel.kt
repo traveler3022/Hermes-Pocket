@@ -264,6 +264,42 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    fun setPersonality(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("personality", value)
+                _uiState.value = _uiState.value.copy(personality = value)
+                Timber.i("[Config] Personality set to $value")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set personality")
+            }
+        }
+    }
+
+    fun setSkin(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("skin", value)
+                _uiState.value = _uiState.value.copy(skin = value)
+                Timber.i("[Config] Skin set to $value")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set skin")
+            }
+        }
+    }
+
+    fun setPrompt(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("prompt", value)
+                _uiState.value = _uiState.value.copy(prompt = value)
+                Timber.i("[Config] Prompt set")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set prompt")
+            }
+        }
+    }
+
     // ── Models ────────────────────────────────────────────────────────────
 
     fun loadModels() {
@@ -1148,6 +1184,10 @@ data class ConfigUiState(
     val statusbar: Boolean = true,
     val mouse: Boolean = false,
     val indicator: Boolean = true,
+    // Text config values
+    val personality: String = "",
+    val skin: String = "",
+    val prompt: String = "",
 )
 
 enum class ConfigTab(val label: String) {
