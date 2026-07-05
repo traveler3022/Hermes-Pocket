@@ -67,8 +67,8 @@ can be ported 1:1 instead of rediscovered.
 
 ### Not done / next candidates (in rough priority order)
 
-1. **Verify build via CI** — no Android SDK in the dev container; the
-   `build-apk.yml` workflow is the build check for this branch's commits.
+1. ~~**Verify build via CI**~~ ✅ done — run #42 (`build-apk.yml`) green on
+   `395d96c`, so all of the above compiles and the debug APK builds.
 2. `session.steer` — redirect the agent mid-turn (upstream has it, big UX win).
 3. `session.undo` / `session.compress` / `session.save` — session hygiene.
 4. `prompt.background` + `background.complete` UI — long tasks without
