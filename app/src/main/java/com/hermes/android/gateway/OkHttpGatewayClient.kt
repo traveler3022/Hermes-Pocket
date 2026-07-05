@@ -482,6 +482,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["name"]?.jsonPrimitive?.content,
                 p["args_text"]?.jsonPrimitive?.content,
                 p["context"]?.jsonPrimitive?.content,
+                todos = p["todos"]?.let { parseTodos(it) },
             )
             "tool.complete" -> GatewayEvent.ToolComplete(
                 sid,
@@ -492,6 +493,8 @@ class OkHttpGatewayClient @Inject constructor(
                 p["summary"]?.jsonPrimitive?.content,
                 p["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull(),
                 p["inline_diff"]?.jsonPrimitive?.content,
+                error = p["error"]?.jsonPrimitive?.content,
+                todos = p["todos"]?.let { parseTodos(it) },
             )
             "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"]?.jsonPrimitive?.content)
             "tool.progress" -> GatewayEvent.ToolProgress(
@@ -504,6 +507,8 @@ class OkHttpGatewayClient @Inject constructor(
                 p["command"]?.jsonPrimitive?.content ?: "",
                 p["description"]?.jsonPrimitive?.content ?: "",
                 p["pattern_keys"]?.let { parseStringList(it) } ?: emptyList(),
+                // Absent means unrestricted — only an explicit false hides "always allow"
+                allowPermanent = p["allow_permanent"]?.jsonPrimitive?.content != "false",
             )
             "clarify.request" -> GatewayEvent.ClarifyRequest(
                 sid,
@@ -573,6 +578,25 @@ class OkHttpGatewayClient @Inject constructor(
             element.jsonObject.toMap().mapValues { it.value.jsonPrimitive.content }
         } catch (e: Exception) {
             emptyMap()
+        }
+    }
+
+    /**
+     * Mirrors `parseTodos` in `ui-tui/src/app/turnController.ts`: drop items
+     * without a known status or with empty id/content instead of failing the
+     * whole event.
+     */
+    private fun parseTodos(element: JsonElement): List<GatewayEvent.TodoItem>? {
+        val array = element as? kotlinx.serialization.json.JsonArray ?: return null
+        val validStatuses = setOf("pending", "in_progress", "completed", "cancelled")
+        return array.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
+            val status = obj["status"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            if (status !in validStatuses) return@mapNotNull null
+            val id = obj["id"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val content = obj["content"]?.jsonPrimitive?.content?.trim().orEmpty()
+            if (id.isEmpty() || content.isEmpty()) return@mapNotNull null
+            GatewayEvent.TodoItem(id = id, content = content, status = status)
         }
     }
 

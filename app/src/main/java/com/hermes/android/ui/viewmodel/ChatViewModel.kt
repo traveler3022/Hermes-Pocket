@@ -374,6 +374,9 @@ class ChatViewModel @Inject constructor(
             inputText = "",
             isSending = true,
             pendingAttachments = emptyList(),
+            // New turn — drop the previous turn's task list (matches
+            // upstream turnController, whose turn state resets per turn)
+            activeTodos = emptyList(),
         )
 
         // Check for slash commands
@@ -813,6 +816,7 @@ class ChatViewModel @Inject constructor(
                 )
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + toolMsg,
+                    activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
                 )
             }
 
@@ -822,12 +826,13 @@ class ChatViewModel @Inject constructor(
                         if (msg is ChatMessage.ToolCall && msg.id == event.toolId) {
                             msg.copy(
                                 resultText = event.resultText ?: event.result,
-                                error = null,
+                                error = event.error,
                                 isRunning = false,
                                 durationS = event.durationS,
                             )
                         } else msg
-                    }
+                    },
+                    activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
                 )
             }
 
@@ -880,6 +885,7 @@ class ChatViewModel @Inject constructor(
                     toolName = "terminal",
                     command = event.command,
                     description = event.description,
+                    allowPermanent = event.allowPermanent,
                 )
                 val statusMsg = ChatMessage.Status(
                     id = requestId,
@@ -1313,6 +1319,20 @@ class ChatViewModel @Inject constructor(
 
     private fun jsonToElementMap(obj: kotlinx.serialization.json.JsonObject):
         Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
+
+    private fun List<GatewayEvent.TodoItem>.toUiTodos(): List<TodoItemUi> =
+        map { todo ->
+            TodoItemUi(
+                id = todo.id,
+                content = todo.content,
+                status = when (todo.status) {
+                    "in_progress" -> TodoStatus.IN_PROGRESS
+                    "completed" -> TodoStatus.COMPLETED
+                    "cancelled" -> TodoStatus.CANCELLED
+                    else -> TodoStatus.PENDING
+                },
+            )
+        }
 
     private companion object {
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
