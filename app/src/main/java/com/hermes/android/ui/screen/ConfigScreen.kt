@@ -103,6 +103,7 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
@@ -153,6 +154,7 @@ fun ConfigScreen(
                     state = uiState,
                     viewModel = viewModel,
                     onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToRuntime = onNavigateToRuntime,
@@ -171,6 +173,7 @@ private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
@@ -353,6 +356,14 @@ private fun GeneralTab(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
+        }
+
+        // Link to Plugins Manager
+        androidx.compose.material3.OutlinedButton(
+            onClick = onNavigateToPlugins,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(t("Plugins Manager", "مدیر افزونه‌ها"))
         }
 
         // Link to Skills
