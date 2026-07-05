@@ -84,6 +84,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,6 +144,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.webkit.WebView
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
+import com.hermes.android.ui.viewmodel.TodoItemUi
+import com.hermes.android.ui.viewmodel.TodoStatus
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
@@ -707,6 +711,12 @@ fun ChatScreen(
                     }
                 }
 
+                // Agent's live task list for the current turn (todos from
+                // tool.start / tool.complete), pinned above the input bar
+                if (uiState.activeTodos.isNotEmpty()) {
+                    AgentTodoCard(todos = uiState.activeTodos)
+                }
+
                 // Sending progress bar
                 if (uiState.isSending) {
                     LinearProgressIndicator(
@@ -956,6 +966,88 @@ private fun ConnectionIndicator(state: ChatConnectionState) {
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
+    }
+}
+
+// ── Agent task list (todos from tool.start / tool.complete) ──────────────
+
+@Composable
+private fun AgentTodoCard(todos: List<TodoItemUi>) {
+    var expanded by remember { mutableStateOf(false) }
+    val done = todos.count { it.status == TodoStatus.COMPLETED }
+    val current = todos.firstOrNull { it.status == TodoStatus.IN_PROGRESS }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clickable { expanded = !expanded },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Tasks", "کارها") + " $done/${todos.size}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (!expanded && current != null) {
+                    Text(
+                        text = current.content,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(6.dp))
+                todos.forEach { todo ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = when (todo.status) {
+                                TodoStatus.COMPLETED -> "✓"
+                                TodoStatus.IN_PROGRESS -> "▸"
+                                TodoStatus.CANCELLED -> "✕"
+                                TodoStatus.PENDING -> "○"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when (todo.status) {
+                                TodoStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primary
+                                TodoStatus.CANCELLED -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        Text(
+                            text = todo.content,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (todo.status == TodoStatus.COMPLETED ||
+                                todo.status == TodoStatus.CANCELLED
+                            ) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            textDecoration = if (todo.status == TodoStatus.COMPLETED) {
+                                TextDecoration.LineThrough
+                            } else null,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
