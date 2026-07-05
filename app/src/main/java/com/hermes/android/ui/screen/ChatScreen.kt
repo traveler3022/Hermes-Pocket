@@ -2423,7 +2423,11 @@ private fun InputBar(
             } else {
                 IconButton(
                     onClick = onSend,
-                    enabled = text.isNotBlank(),
+                    // An attachment-only message (no typed text) is valid —
+                    // sendMessage() already handles it — so the button must
+                    // not be gated on text alone, or a picked file/image can
+                    // never actually be sent.
+                    enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
                     modifier = Modifier.size(48.dp),
                 ) {
                     Icon(

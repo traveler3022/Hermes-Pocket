@@ -1123,7 +1123,7 @@ class ChatViewModel @Inject constructor(
                     found = true
                     msg.copy(
                         isStreaming = false,
-                        text = if (msg.text.isBlank()) marker else "$msg.text\n\n$marker",
+                        text = if (msg.text.isBlank()) marker else "${msg.text}\n\n$marker",
                     )
                 } else msg
             },

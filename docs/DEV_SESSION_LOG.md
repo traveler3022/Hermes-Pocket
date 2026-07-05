@@ -6,6 +6,63 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-05 (2) — Two user-reported bugs: file sending, disconnect garbage
+
+**Branch:** `claude/dev-session-log-review-lmpwa7` (continued after PR #3 merged)
+
+User report (paraphrased): "the app doesn't send files now" and "when it
+disconnects, chat here fills up and there [the agent] stops."
+
+### Found and fixed (commit `1e8e078`)
+
+1. **Send button disabled for attachment-only messages** — `ChatScreen.kt`
+   `InputBar`'s Send button was `enabled = text.isNotBlank()`. `sendMessage()`
+   already supports sending a picked file/image with no typed text, but the
+   button could never be pressed in that case — a picked attachment could
+   never actually be sent. Fixed: `enabled = text.isNotBlank() ||
+   pendingAttachments.isNotEmpty()`. This is almost certainly the "doesn't
+   send files" report.
+2. **Disconnect marker corrupted the chat message** —
+   `finalizeOrphanedStreamingMessage()` in `ChatViewModel.kt` had
+   `"$msg.text\n\n$marker"`. Classic Kotlin string-template trap: `$msg`
+   interpolates the *whole* `ChatMessage.Assistant.toString()` (every field:
+   id, timestamp, text, isStreaming, reasoning), then appends the literal
+   text `.text` — the intended `msg.text` property access never happens.
+   So on every disconnect, the chat message got replaced with an object-dump
+   wall of text instead of a clean "(connection lost)" continuation. This is
+   almost certainly the "chat fills up with garbage" report. Fixed to
+   `"${msg.text}\n\n$marker"`.
+
+### Investigated but NOT changed — documented risk, not a confirmed bug
+
+Suspected a second cause: `OkHttpGatewayClient`'s internal auto-`resumeSession()`
+(fired on reconnect, using its own `lastSessionId`) resolves a session id that
+`ChatViewModel.activeSessionId` never learns about, so a later `prompt.submit`
+could target a stale id. Traced through the upstream `session.resume` handler
+(`docs/upstream-reference` doesn't include `server.py`'s handler, but the
+fetched copy in scratch showed it): there's a **fast path** —
+`_find_live_session_by_key` — that reuses the *same* session id whenever the
+gateway process is still alive (true for the common case: the socket dropped
+but Termux/the gateway process kept running). A *new* id is only minted on a
+**cold** resume (gateway process itself restarted/session evicted). So this
+gap is real but narrow — likely not what the user is hitting day-to-day.
+**Not fixed this session** — fixing it well means either (a) propagating the
+resumed session id back through `ConnectionState`/a new event and having
+`ChatViewModel` adopt it, or (b) having the low-level client stop
+auto-resuming and let `ChatViewModel`'s own (already correct, transcript-aware)
+`resumeSession()` own reconnection entirely. Both are real behavior changes to
+the reconnect path with regression risk — worth a dedicated session rather
+than a rushed bolt-on. **Next time this comes up**: check
+`OkHttpGatewayClient.resumeSession()` and `ChatViewModel`'s connection-state
+collector (`connectAndCollect()`) together.
+
+### CI
+
+Pushed as `1e8e078`; build-apk.yml run #46 triggered, verify before closing
+out (see whichever run is latest on this branch if picking this up later).
+
+---
+
 ## 2026-07-05 — Stop the whack-a-mole: port from reference, not from scratch
 
 **Branch:** `claude/dev-session-log-review-lmpwa7`
