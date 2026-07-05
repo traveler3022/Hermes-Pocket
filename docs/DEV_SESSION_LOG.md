@@ -6,6 +6,49 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-05 (6) — Complete config coverage: final 3 config keys (personality, skin, prompt)
+
+Completed the config settings implementation by adding UI controls for the
+last three missing `config.set` keys. Previous session reached 12/15 keys;
+this closes the gap to **100% coverage (15/15 keys now have UI controls)**.
+
+### Done this session (commits: `f23ee26`, `24e64cd`)
+
+1. **Added final 3 config settings to UI** (f23ee26)
+   - Extended `ConfigUiState` with `personality`, `skin`, `prompt` string fields
+   - Added ViewModel methods: `setPersonality()`, `setSkin()`, `setPrompt()`
+   - New "Personality & Appearance" card in GeneralTab with 3 text input fields:
+     - **Personality**: agent personality style (OutlinedTextField, single line)
+     - **Skin**: UI theme/appearance (OutlinedTextField, single line)
+     - **Prompt**: initial system instructions (OutlinedTextField, 3 lines)
+   - All three use `config.set` RPC, same infrastructure as previous keys
+
+2. **Fixed compilation errors** (24e64cd)
+   - Replaced remaining `TextField` with `OutlinedTextField` imports
+   - CI build #65 verified green — app compiles successfully
+
+### Status
+
+**Completed:**
+- ✅ Config settings: **15 of 15 keys now have UI** (was 12/15)
+- ✅ Audit gap closed: ConfigScreen now surfaces all `config.set` parameters
+- ✅ Build verified: CI #65 passed with all changes
+
+**Recap: two sessions, three priorities from audit**
+1. ✅ Session 5: Plugins Manager screen + initial Model Behavior controls (3 keys)
+2. ✅ Session 6: Personality/Skin/Prompt text controls (final 3 keys)
+3. Remaining items blocked on upstream (session.steer, session.undo/compress/save, prompt.background)
+
+### Next candidates
+
+With config fully wired:
+- Implement a feature from upstream that doesn't exist yet (check desktop client)
+- Improve UX on existing screens (e.g., better session list, error handling)
+- Polish: edge cases, performance, accessibility
+- Monitor for user feedback on the newly-wired features
+
+---
+
 ## 2026-07-05 (5) — Closing audit gaps: plugins screen + model behavior config
 
 Immediate follow-up to session 4's audit findings. Implemented the two
