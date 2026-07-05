@@ -109,6 +109,16 @@ sealed class GatewayEvent {
 
     // ── Tools ─────────────────────────────────────────────────────────────
 
+    /**
+     * One entry of the agent's task list, carried on tool.start/tool.complete.
+     * Reference: `ui-tui/src/app/turnController.ts` (`parseTodos`).
+     */
+    data class TodoItem(
+        val id: String,
+        val content: String,
+        val status: String, // "pending" | "in_progress" | "completed" | "cancelled"
+    )
+
     /** Tool execution started. */
     data class ToolStart(
         override val sessionId: String?,
@@ -116,6 +126,7 @@ sealed class GatewayEvent {
         val name: String?,
         val argsText: String?,
         val context: String?,
+        val todos: List<TodoItem>? = null,
     ) : GatewayEvent()
 
     /** Tool execution finished. */
@@ -128,6 +139,8 @@ sealed class GatewayEvent {
         val summary: String?,
         val durationS: Double?,
         val inlineDiff: String?,
+        val error: String? = null,
+        val todos: List<TodoItem>? = null,
     ) : GatewayEvent()
 
     /** Tool is generating. */
@@ -145,12 +158,19 @@ sealed class GatewayEvent {
 
     // ── Interactive requests (require user response) ──────────────────────
 
-    /** Tool needs approval. Step 7 — Android notification with Approve/Deny. */
+    /**
+     * Tool needs approval. Step 7 — Android notification with Approve/Deny.
+     *
+     * [allowPermanent] mirrors upstream `allow_permanent`: when false the UI
+     * must not offer the "always allow" choice (e.g. security-reviewed
+     * commands are capped at session scope).
+     */
     data class ApprovalRequest(
         override val sessionId: String?,
         val command: String,
         val description: String,
         val patternKeys: List<String>,
+        val allowPermanent: Boolean = true,
     ) : GatewayEvent()
 
     /** Agent asks a clarifying question. */

@@ -79,6 +79,19 @@ sealed class ChatMessage {
 
 enum class InteractiveKind { CLARIFY, SUDO, SECRET }
 
+/**
+ * One entry of the agent's live task list (from tool.start/tool.complete
+ * `todos` payload). UI-facing mirror of the gateway model — ui.screen must
+ * not import from the gateway package (Phase 1.5 Rule 1).
+ */
+data class TodoItemUi(
+    val id: String,
+    val content: String,
+    val status: TodoStatus,
+)
+
+enum class TodoStatus { PENDING, IN_PROGRESS, COMPLETED, CANCELLED }
+
 data class NotificationUi(
     val key: String?,
     val kind: String?,
@@ -132,6 +145,8 @@ data class ChatUiState(
     // Files/images staged on the gateway, waiting to go with the next prompt
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
+    // Agent's live task list for the current turn (empty = no plan to show)
+    val activeTodos: List<TodoItemUi> = emptyList(),
 )
 
 /**
