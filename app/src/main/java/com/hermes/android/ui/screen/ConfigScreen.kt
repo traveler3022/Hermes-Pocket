@@ -451,6 +451,51 @@ private fun GeneralTab(
                         onCheckedChange = { viewModel.setThinkingMode(it) },
                     )
                 }
+
+                HorizontalDivider()
+
+                // Fast mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Fast Mode", "حالت سریع"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Faster responses", "پاسخ‌های سریع‌تر"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.fast, onCheckedChange = { viewModel.setFast(it) })
+                }
+
+                HorizontalDivider()
+
+                // Verbose mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Verbose", "فروند"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Detailed output", "خروجی تفصیلی"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.verbose, onCheckedChange = { viewModel.setVerbose(it) })
+                }
+
+                HorizontalDivider()
+
+                // Compact mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Compact", "متراکم"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Compact layout", "صفحه متراکم"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.compact, onCheckedChange = { viewModel.setCompact(it) })
+                }
             }
         }
 

@@ -168,6 +168,102 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    fun setFast(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("fast", enabled.toString())
+                _uiState.value = _uiState.value.copy(fast = enabled)
+                Timber.i("[Config] Fast mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set fast mode")
+            }
+        }
+    }
+
+    fun setBusy(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("busy", enabled.toString())
+                _uiState.value = _uiState.value.copy(busy = enabled)
+                Timber.i("[Config] Busy mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set busy mode")
+            }
+        }
+    }
+
+    fun setVerbose(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("verbose", enabled.toString())
+                _uiState.value = _uiState.value.copy(verbose = enabled)
+                Timber.i("[Config] Verbose mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set verbose mode")
+            }
+        }
+    }
+
+    fun setDetailsMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("details_mode", enabled.toString())
+                _uiState.value = _uiState.value.copy(detailsMode = enabled)
+                Timber.i("[Config] Details mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set details mode")
+            }
+        }
+    }
+
+    fun setCompact(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("compact", enabled.toString())
+                _uiState.value = _uiState.value.copy(compact = enabled)
+                Timber.i("[Config] Compact mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set compact mode")
+            }
+        }
+    }
+
+    fun setStatusbar(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("statusbar", enabled.toString())
+                _uiState.value = _uiState.value.copy(statusbar = enabled)
+                Timber.i("[Config] Statusbar set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set statusbar")
+            }
+        }
+    }
+
+    fun setMouse(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("mouse", enabled.toString())
+                _uiState.value = _uiState.value.copy(mouse = enabled)
+                Timber.i("[Config] Mouse mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set mouse mode")
+            }
+        }
+    }
+
+    fun setIndicator(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("indicator", enabled.toString())
+                _uiState.value = _uiState.value.copy(indicator = enabled)
+                Timber.i("[Config] Indicator set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set indicator")
+            }
+        }
+    }
+
     // ── Models ────────────────────────────────────────────────────────────
 
     fun loadModels() {
@@ -1043,6 +1139,15 @@ data class ConfigUiState(
     val yolo: Boolean = false,
     val reasoning: String = "standard",
     val thinkingMode: Boolean = true,
+    // Additional behavior config
+    val fast: Boolean = false,
+    val busy: Boolean = false,
+    val verbose: Boolean = false,
+    val detailsMode: Boolean = false,
+    val compact: Boolean = false,
+    val statusbar: Boolean = true,
+    val mouse: Boolean = false,
+    val indicator: Boolean = true,
 )
 
 enum class ConfigTab(val label: String) {
