@@ -6,6 +6,45 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-05 (5) — Closing audit gaps: plugins screen + model behavior config
+
+Immediate follow-up to session 4's audit findings. Implemented the two
+highest-priority real gaps in the app (plugins absent, settings half-wired).
+
+### Done this session (commits: `fd1439a`, `9071079`)
+
+1. **Plugins Manager screen + ViewModel** (fd1439a)
+   - Built from scratch following SkillsScreen pattern
+   - PluginsViewModel calls `plugins.manage {action: "list"}` RPC
+   - PluginsScreen displays plugin list with enabled/disabled status
+   - Wired navigation: ConfigScreen → "Plugins Manager" button → PLUGINS screen
+   - This surfaces the full plugin management surface (was 0 call sites before)
+
+2. **Model Behavior Config controls** (9071079)
+   - Extended ConfigUiState with `yolo`, `reasoning`, `thinkingMode` fields
+   - Added ViewModel methods: `setYolo()`, `setReasoning()`, `setThinkingMode()`
+   - New "Model Behavior" card in GeneralTab with 3 controls:
+     - **Yolo toggle**: auto-approve without prompts (boolean)
+     - **Reasoning dropdown**: model effort level (none/brief/standard/extended)
+     - **Show Thinking toggle**: display model reasoning process (boolean)
+   - All three use `config.set` RPC, same infrastructure as model switching
+   - Remaining 11 of 15 config keys (fast, busy, verbose, etc.) still unmapped
+     but the pattern is established for future expansion
+
+### Status
+
+Both priorities from session 4 audit are now done. CI will verify the build
+against the Android SDK. Next in priority order (from session 4):
+
+1. ~~Plugins screen~~ ✅ Done
+2. ~~Expand ConfigScreen to yolo/reasoning/thinking_mode~~ ✅ Done
+3. **`session.steer` — redirect agent mid-turn** (upstream has it, big UX win)
+4. **Artifacts/session gallery** — paginated view of files agent produced
+5. **Session hygiene RPCs** — `session.undo`, `session.compress`, `session.save`
+6. **`prompt.background` UI** — long tasks without blocking chat
+
+---
+
 ## 2026-07-05 (4) — Reality check: what's actually wired vs. just defined
 
 User pushback (correct): the previous session's survey was about *extra*
