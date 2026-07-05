@@ -6,6 +6,70 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-05 (3) — Desktop feature survey: what to port, what to skip
+
+Research only, no code changes. User asked what else from the official
+desktop client (`apps/desktop/`, Electron+React, same protocol) is worth
+porting to Android — explicitly wants to avoid dragging over desktop-only
+cruft. Surveyed `apps/desktop/src/app/*` (feature-module folders) and
+`apps/desktop/src/components/*`, cross-checked against what this app already
+has (Chat/Sessions/Skills/Cron/Config/Platforms/RuntimeSetup/Onboarding
+screens + the model picker already in `ConfigScreen.kt`).
+
+### Worth porting (highest value first)
+
+1. **`session.steer`** (already top of the backlog from the previous
+   session) — redirect the agent mid-turn without interrupting it. Biggest
+   UX gap, protocol method already exists server-side, nothing UI-side yet.
+2. **Artifacts/session gallery** — `apps/desktop/src/app/artifacts/index.tsx`
+   (673 lines) scans a session's messages for images/files/links the agent
+   produced and shows them as a paginated gallery (zoomable images, copy,
+   download). We already built the hard part of this
+   (`ChatViewModel.resolveMediaUrl` → gateway `/api/files/download`) for
+   inline chat images; this would reuse that to add a dedicated "Files" tab
+   per session instead of only seeing media inline in the transcript.
+3. **`session.undo` / `session.compress` / `session.save`** — session
+   hygiene RPCs the desktop exposes that we don't call at all yet.
+4. **`prompt.background` + `background.complete` UI** — we parse
+   `background.complete` as an event already (`GatewayEvent.BackgroundComplete`)
+   but there's no way to actually kick off a background task from the UI.
+
+### Deliberately skip (desktop-only or low value on a phone)
+
+- **`starmap`** — a force-directed canvas graph with its own physics/geometry
+  engine (`simulation.ts`, `render.ts`, `geometry.ts`...). Desktop screen
+  real estate only; not a mobile pattern at all.
+- **`pet.*` RPC family** (`pet.hatch/gallery/generate/rename/scale/...`) — a
+  full virtual-pet subsystem. Fun but a large, separate feature surface;
+  not a gap, a whole new product area. Revisit only if explicitly requested.
+- **`messaging` / `command-center`** — multi-platform bridge management
+  (Telegram/Discord/Slack bot start/stop). Irrelevant: this app *is* the
+  client, not a bridge manager.
+- **`command-palette`** — keyboard-driven desktop pattern, no mobile
+  equivalent worth building.
+- **`shell` (raw terminal view)** — we already surface tool execution as
+  tool-call cards; a raw terminal pane doesn't fit the mobile chat UX.
+- **`profiles` (multi-home CRUD)** — desktop power-user feature for managing
+  multiple `~/.hermes`-style profiles. Skip until someone actually asks for
+  multi-account support.
+- **`agents` panel** (`apps/desktop/src/app/agents/index.tsx`, richer
+  subagent tree with pause/interrupt) — we already show a basic
+  `ChatMessage.SubagentCard` per `GatewayEvent.SubagentEvent`. The desktop
+  version is nicer (tree view, elapsed timers, stream log) but this is
+  polish on an existing feature, not a functional gap — low priority.
+- **`learning/archive-skill-confirm-dialog.tsx`** — trivial, one dialog;
+  fold into `SkillsScreen.kt` later if it comes up, not worth a dedicated pass.
+- **Model picker** — already have an equivalent (`ConfigScreen.kt` model
+  selection UI), nothing to port here.
+
+### Next pick, in order
+
+`session.steer` → artifacts/session gallery → `session.undo`/`compress`/`save`
+→ `prompt.background` UI. Everything in "deliberately skip" should NOT be
+revisited without an explicit ask — don't rediscover this list from scratch.
+
+---
+
 ## 2026-07-05 (2) — Two user-reported bugs: file sending, disconnect garbage
 
 **Branch:** `claude/dev-session-log-review-lmpwa7` (continued after PR #3 merged)
