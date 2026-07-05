@@ -6,6 +6,67 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-05 (4) — Reality check: what's actually wired vs. just defined
+
+User pushback (correct): the previous session's survey was about *extra*
+desktop features to consider — it missed that big chunks of THIS app's own
+protocol surface are unwired. Did a hard audit instead of a wishlist: grepped
+every `GatewayMethods` constant for real call sites in `ui/viewmodel/*` and
+`service/*` (excluding the definition file itself).
+
+### Confirmed: zero wiring
+
+- **Plugins — completely absent.** `PLUGINS_LIST` / `PLUGINS_MANAGE` are
+  defined in `GatewayRequest.kt` and never called anywhere. No screen, no
+  ViewModel, nothing. `PlatformsScreen.kt` (similar name) is unrelated — it's
+  messaging-platform bridges (Telegram/Discord), not plugins. This isn't a
+  half-feature, it's a zero-feature: needs a screen + ViewModel from scratch,
+  same shape as `SkillsScreen`/`SkillsViewModel` (which IS properly wired —
+  use it as the template).
+- Other dead constants (defined, 0 call sites): `SESSION_STATUS`,
+  `SESSION_ACTIVE_LIST`, `TOOLS_SHOW`, `TOOLSETS_LIST`, `MODEL_DISCONNECT`,
+  `CONFIG_GET`, `COMPLETE_SLASH`, `TERMINAL_RESIZE`.
+
+### Confirmed: "Settings" is really just "Model settings"
+
+Upstream's single `config.set` RPC accepts 15 distinct keys (grepped the
+`@method("config.set")` handler body in `tui_gateway/server.py`): `model`,
+`fast`, `busy`, `verbose`, `yolo`, `reasoning`, `details_mode`,
+`thinking_mode`, `compact`, `statusbar`, `mouse`, `indicator`, `prompt`,
+`personality`, `skin`.
+
+`ConfigViewModel.kt` only ever sends `key = "model"`. `ConfigScreen.kt` is
+almost entirely `QuickModelSwitch` + per-provider fallback toggles — there is
+no UI for yolo (auto-approve mode), reasoning effort, agent personality,
+thinking-mode display, compact/statusbar layout, etc. 14 of 15 config keys
+have no UI path at all.
+
+### Revised priority (supersedes the desktop-survey list where they conflict)
+
+These are real gaps in THIS app, not desktop nice-to-haves — rank above the
+artifacts gallery from the previous entry:
+
+1. **Plugins screen + ViewModel** — build from scratch, mirror
+   `SkillsScreen.kt`/`SkillsViewModel.kt` structure (`skills.manage` →
+   `plugins.manage`, `skills.reload` → same pattern). Needs its own nav entry.
+2. **Expand ConfigScreen to the other 14 `config.set` keys** — at minimum
+   surface `yolo` (auto-approve toggle — directly affects the approval-prompt
+   UX from the 2026-07-05(2) session) and `reasoning`/`thinking_mode` (model
+   behavior users actually care about). `personality`/`skin`/`compact` are
+   lower-stakes cosmetic ones, can come later.
+3. Then continue with `session.steer` / artifacts gallery / session hygiene
+   RPCs from the previous entry.
+
+### Method for next time
+
+Don't trust the existence of a `GatewayMethods` constant as evidence a
+feature works. Grep `GatewayMethods\.<NAME>\b` across `ui/` and `service/`
+excluding `GatewayRequest.kt` itself — zero hits means it's dead. Re-run this
+sweep after adding new constants so half-wired features get caught immediately
+instead of surfacing as a user complaint.
+
+---
+
 ## 2026-07-05 (3) — Desktop feature survey: what to port, what to skip
 
 Research only, no code changes. User asked what else from the official
