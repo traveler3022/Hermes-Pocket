@@ -34,14 +34,36 @@ highest-priority real gaps in the app (plugins absent, settings half-wired).
 ### Status
 
 Both priorities from session 4 audit are now done. CI will verify the build
-against the Android SDK. Next in priority order (from session 4):
+against the Android SDK. Checked remaining priorities:
 
-1. ~~Plugins screen~~ ✅ Done
-2. ~~Expand ConfigScreen to yolo/reasoning/thinking_mode~~ ✅ Done
-3. **`session.steer` — redirect agent mid-turn** (upstream has it, big UX win)
-4. **Artifacts/session gallery** — paginated view of files agent produced
-5. **Session hygiene RPCs** — `session.undo`, `session.compress`, `session.save`
-6. **`prompt.background` UI** — long tasks without blocking chat
+**Completed:**
+1. ✅ Plugins screen — fully wired, was 0 call sites → functional
+2. ✅ Expand ConfigScreen to yolo/reasoning/thinking_mode — 3 of 14 missing keys now have UI
+
+**Blocked on upstream RPC definitions:**
+3. 🚫 `session.steer` — referenced in desktop survey but **not defined in upstream** 
+   (checked `ws.py` and all vendored protocol files; no drift means this feature
+   doesn't exist yet upstream). Would need upstream to define it first.
+4. 🚫 `session.undo`, `session.compress`, `session.save` — **not defined as RPC 
+   constants**. All other session.* methods are wired; these three don't have 
+   GatewayMethods entries. Likely not implemented upstream yet.
+5. 🚫 `prompt.background` RPC — **method doesn't exist**. We parse 
+   `GatewayEvent.BackgroundComplete` but have no way to launch tasks 
+   (`PROMPT_BACKGROUND` constant is missing).
+
+**Already implemented (not a gap):**
+6. ✅ Interactive request handling — clarify/sudo/secret already have in-chat 
+   buttons + answers. Not display-only.
+
+### Next candidates
+
+Implementable options:
+- **Artifacts/session gallery** — complex but feasible. Would need to scan chat
+  history for images/files/links and display in a new dedicated view. Hard part
+  (media download via `ChatViewModel.resolveMediaUrl` → gateway `/api/files/download`)
+  already exists.
+- **Wait for upstream** to define the missing RPC methods, then port them.
+- **Polish pass** on existing features (UX improvements, small bugs, etc.).
 
 ---
 
