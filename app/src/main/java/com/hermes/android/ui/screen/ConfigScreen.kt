@@ -342,6 +342,118 @@ private fun GeneralTab(
             }
         }
 
+        // -- Model Behavior Config --
+        Text(
+            text = t("Model Behavior", "رفتار مدل"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Auto-approve (yolo) toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = t("Auto-Approve (Yolo)", "تایید خودکار"),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = t("Automatically approve tool calls", "تایید خودکار فراخوانی ابزارها"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    Switch(
+                        checked = state.yolo,
+                        onCheckedChange = { viewModel.setYolo(it) },
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Reasoning effort level
+                Column {
+                    Text(
+                        text = t("Reasoning", "استدلال"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Model effort level", "سطح تلاش مدل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    var reasoningExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { reasoningExpanded = true },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(
+                                text = state.reasoning,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = reasoningExpanded,
+                            onDismissRequest = { reasoningExpanded = false },
+                        ) {
+                            listOf("none", "brief", "standard", "extended").forEach { level ->
+                                DropdownMenuItem(
+                                    text = { Text(level) },
+                                    onClick = {
+                                        viewModel.setReasoning(level)
+                                        reasoningExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Thinking mode toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = t("Show Thinking", "نمایش تفکر"),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = t("Display model reasoning process", "نمایش فرآیند استدلال مدل"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    Switch(
+                        checked = state.thinkingMode,
+                        onCheckedChange = { viewModel.setThinkingMode(it) },
+                    )
+                }
+            }
+        }
+
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
             onClick = onNavigateToRuntime,

@@ -121,6 +121,53 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // ── Model Behavior Config ──────────────────────────────────────────────
+
+    fun setYolo(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("yolo", enabled.toString())
+                _uiState.value = _uiState.value.copy(yolo = enabled)
+                Timber.i("[Config] Yolo set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set yolo")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set yolo: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun setReasoning(level: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("reasoning", level)
+                _uiState.value = _uiState.value.copy(reasoning = level)
+                Timber.i("[Config] Reasoning set to $level")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set reasoning")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set reasoning: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun setThinkingMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("thinking_mode", enabled.toString())
+                _uiState.value = _uiState.value.copy(thinkingMode = enabled)
+                Timber.i("[Config] Thinking mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set thinking mode")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set thinking mode: ${e.message}",
+                )
+            }
+        }
+    }
+
     // ── Models ────────────────────────────────────────────────────────────
 
     fun loadModels() {
@@ -992,6 +1039,10 @@ data class ConfigUiState(
     // Nous credits/balance panel (opened from the Models tab)
     val creditsText: String? = null,
     val isLoadingCredits: Boolean = false,
+    // Model behavior config
+    val yolo: Boolean = false,
+    val reasoning: String = "standard",
+    val thinkingMode: Boolean = true,
 )
 
 enum class ConfigTab(val label: String) {
