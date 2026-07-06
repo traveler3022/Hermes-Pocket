@@ -6,6 +6,69 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-06 (7) — Real control gaps: slash output + session.steer
+
+User (tired, frustrated): "even the Telegram bot has more control over the app
+than the app itself — bring whatever core capability is still missing from the
+desktop version." Did a proper capability audit instead of guessing, comparing
+the desktop client's protocol surface (`gatewayTypes.ts`,
+`createGatewayEventHandler.ts`) against what the Android app actually wires.
+
+### Key finding: the app was ~protocol-complete, but two real control gaps
+
+The app already parses almost every server event and already has a slash-command
+input backed by `commands.catalog`. The "less control than Telegram" feeling
+traced to two concrete things:
+
+1. **Slash command output was discarded** (commit `97ff621`)
+   - `handleSlashCommand` dispatched `command.dispatch` but threw the response
+     away (old line 556: `// result may contain output` — then ignored it).
+   - So `/help`, `/cost`, `/undo`, `/compress`, `/save`, etc. ran but showed
+     NOTHING — on Telegram/desktop you see the command's reply.
+   - Fix: `extractCommandOutput()` pulls text from the response
+     (`output`/`text`/`message`/`markdown`/`result`/`detail` or a `lines`
+     array) and renders it as a `ChatMessage.Status`. This unlocks visible
+     feedback for the WHOLE slash-command catalog at once.
+
+2. **`session.steer` was completely absent** (commit `7032e38`)
+   - The #1 desktop UX control: redirect the agent mid-turn WITHOUT
+     interrupting. Earlier sessions (4/5) wrongly concluded it "doesn't exist
+     upstream" — it's defined in the vendored `gatewayTypes.ts` as
+     `SessionSteerResponse {status: "queued"|"rejected", text?}`. They checked
+     `ws.py` (transport) instead of the type surface.
+   - Ported: `GatewayMethods.SESSION_STEER`; `ChatViewModel.steerAgent()`
+     (targets the live session via `resolveLiveSessionId`, echoes the steer
+     with a `↳` prefix, handles queued/rejected); and an InputBar steer button
+     (`SubdirectoryArrowRight`) shown mid-turn when the composer has text, next
+     to Stop. Previously the only mid-turn option was a full Stop/interrupt.
+
+### Corrected the record
+
+- `image.attach` is NOT a missing event — it's an outbound client→server method
+  the app already uses via its attachment flow (`image.detach` at
+  ChatViewModel:470). Not a gap.
+- `session.steer` IS real (see above) — supersedes the "blocked on upstream"
+  note in sessions 4/5.
+
+### CI
+
+- `97ff621` (slash output) → run #67 **green**.
+- `7032e38` (steer) → building at time of writing; verify latest run.
+
+### Still genuinely missing (need the desktop feature source to port properly)
+
+The vendored reference is protocol plumbing only (transport/events/types), not
+the desktop's feature modules — so these can't be 1:1 ported without vendoring
+`apps/desktop/src/app/*`:
+- **Artifacts/session gallery** (session 3's 673-line module) — scan a session's
+  media/files into a dedicated view. Hard part (media download) already exists.
+- **`prompt.background`** — no method found in the reference; may be a slash
+  command (now visible thanks to fix #1) or genuinely unimplemented. Verify.
+- `session.undo`/`compress`/`save` — likely slash commands; now that slash
+  output shows, check whether they already work end-to-end before building UI.
+
+---
+
 ## 2026-07-05 (6) — Complete config coverage: final 3 config keys (personality, skin, prompt)
 
 Completed the config settings implementation by adding UI controls for the
