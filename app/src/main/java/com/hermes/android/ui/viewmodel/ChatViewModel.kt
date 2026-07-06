@@ -590,7 +590,25 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun handleSlashCommand(text: String, sessionId: String) {
+    /**
+     * Fix: command.dispatch's response is a discriminated union on `type`
+     * (gatewayTypes.ts `CommandDispatchResponse`) — exec/plugin/alias/skill/
+     * send/prefill — and this only ever handled the exec/plugin shape
+     * (generic key-matching over output/text/message/...). For commands that
+     * come back as `alias` (re-route to another command), `send` (the
+     * expansion must actually be SUBMITTED as a new prompt), or `prefill`
+     * (the expansion belongs in the composer for the user to edit/send, not
+     * displayed as inert text), the old code just printed a static status
+     * line — which does nothing from the agent's point of view. That's almost
+     * certainly why commands "didn't work": the app showed *something* but
+     * never actually dispatched the resulting action.
+     */
+    private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
+        if (depth > 5) {
+            // Guard against a misbehaving/looping alias chain.
+            _uiState.value = _uiState.value.copy(errorMessage = "Command alias loop", isSending = false)
+            return
+        }
         viewModelScope.launch {
             try {
                 // Fix S4F04: command.dispatch expects {name, arg, session_id}
@@ -608,11 +626,39 @@ class ChatViewModel @Inject constructor(
                     method = GatewayMethods.COMMAND_DISPATCH,
                     params = jsonToElementMap(params),
                 )
-                // The gateway returns the command's output in the RPC response.
-                // Surface it in-chat as a Status line so slash commands (/help,
-                // /cost, /undo, /compress, ...) give visible feedback instead of
-                // silently doing nothing — matching the desktop/telegram clients,
-                // which is why those felt like they had "more control".
+                val obj = result as? JsonObject
+                when ((obj?.get("type") as? JsonPrimitive)?.content) {
+                    "alias" -> {
+                        // Re-route to the target command, preserving the arg.
+                        val target = (obj["target"] as? JsonPrimitive)?.content
+                        if (!target.isNullOrBlank()) {
+                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
+                            handleSlashCommand(nextText, sessionId, depth + 1)
+                            return@launch
+                        }
+                    }
+                    "send" -> {
+                        // The command expanded into prompt text that must
+                        // actually be submitted to the agent, not just shown.
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        if (!message.isNullOrBlank()) {
+                            sendPrompt(message, sessionId)
+                            return@launch
+                        }
+                    }
+                    "prefill" -> {
+                        // The expansion goes in the composer for the user to
+                        // review/edit before sending — not auto-sent.
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        _uiState.value = _uiState.value.copy(
+                            inputText = message ?: _uiState.value.inputText,
+                            isSending = false,
+                        )
+                        return@launch
+                    }
+                }
+                // exec/plugin/skill (or an unrecognized/forward-compat shape):
+                // surface whatever textual output the response carries.
                 val output = extractCommandOutput(result)
                 val newMessages = if (!output.isNullOrBlank()) {
                     _uiState.value.messages + ChatMessage.Status(

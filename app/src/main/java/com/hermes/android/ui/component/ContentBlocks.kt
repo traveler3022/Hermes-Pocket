@@ -32,14 +32,26 @@ private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
 
 // Bare path/URL to a media artifact the agent wrote or linked, e.g.
 // "Saved to ~/.hermes/images/plot.png" or "file:///.../page.html".
-// Requires a known extension so ordinary prose doesn't false-positive.
+// Fix: this used to require the extension to be in a small hardcoded
+// whitelist (png/jpg/pdf/zip/...), so anything else (docx, tar.gz, apk,
+// heic, mp3, ...) was left as plain text with no download card at all.
+// Now any plausible extension (1-10 word chars) matches "universally";
+// the small denylist below excludes bare domain-like endings (a URL with
+// no path, e.g. "https://example.com") that would otherwise false-positive
+// as a "file" named "com". Unrecognized (non-image/video/html) extensions
+// still get a generic download card via classifyUrl's `else` branch.
 private val bareMediaRegex = Regex(
-    """(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.(?:png|jpe?g|gif|webp|bmp|mp4|webm|mov|m4v|html?|pdf|zip|csv|json|mmd)\b""",
-    RegexOption.IGNORE_CASE,
+    """(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.[A-Za-z0-9]{1,10}\b""",
 )
 
-private val imageExts = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp")
-private val videoExts = setOf("mp4", "webm", "mov", "m4v")
+private val nonFileExtensions = setOf(
+    "com", "org", "net", "io", "dev", "app", "co", "gov", "edu", "info", "biz", "me", "ai",
+)
+
+private val imageExts = setOf(
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "heif", "tiff", "ico",
+)
+private val videoExts = setOf("mp4", "webm", "mov", "m4v", "mkv", "avi", "3gp")
 private val htmlExts = setOf("html", "htm")
 
 private fun classifyUrl(url: String, alt: String = ""): ContentBlock {
@@ -59,7 +71,9 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
     // bare-path matches that fall inside them (the md url IS a bare path).
     val mdMatches = mdImageRegex.findAll(segment).toList()
     val bareMatches = bareMediaRegex.findAll(segment).filter { bare ->
-        mdMatches.none { md -> bare.range.first >= md.range.first && bare.range.last <= md.range.last }
+        val ext = bare.value.substringAfterLast('.', "").lowercase()
+        ext !in nonFileExtensions &&
+            mdMatches.none { md -> bare.range.first >= md.range.first && bare.range.last <= md.range.last }
     }
     val all = (mdMatches.map { it to true } + bareMatches.map { it to false })
         .sortedBy { it.first.range.first }
