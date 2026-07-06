@@ -61,7 +61,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -453,9 +452,14 @@ private fun GeneralTab(
             }
         }
 
-        // -- Model Behavior Config --
+        // -- Agent Behavior --
+        // Only settings that actually affect the agent (and therefore this
+        // app) live here. The old screen also exposed a pile of server-TUI
+        // cosmetics (skin/compact/fast/verbose/...) — some sent config keys
+        // that don't exist in Hermes at all, and the rest only restyle the
+        // terminal UI on the server, which an Android client never sees.
         Text(
-            text = t("Model Behavior", "رفتار مدل"),
+            text = t("Agent Behavior", "رفتار ایجنت"),
             style = MaterialTheme.typography.titleMedium,
         )
         Card(
@@ -466,40 +470,75 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Auto-approve (yolo) toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = t("Auto-Approve (Yolo)", "تایید خودکار"),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            text = t("Automatically approve tool calls", "تایید خودکار فراخوانی ابزارها"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    Switch(
-                        checked = state.yolo,
-                        onCheckedChange = { viewModel.setYolo(it) },
+                // Command approval mode (approvals.mode) — "off" is the
+                // persistent equivalent of --yolo.
+                Column {
+                    Text(
+                        text = t("Command Approval", "تأیید دستورات"),
+                        style = MaterialTheme.typography.titleSmall,
                     )
+                    Text(
+                        text = t(
+                            "How dangerous commands get approved",
+                            "دستورات خطرناک چطور تأیید بشن",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    var approvalExpanded by remember { mutableStateOf(false) }
+                    val approvalLabel = when (state.approvalMode) {
+                        "manual" -> t("Manual — always ask me", "دستی — همیشه از من بپرس")
+                        "smart" -> t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار")
+                        "off" -> t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)")
+                        else -> state.approvalMode
+                    }
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { approvalExpanded = true },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(
+                                text = approvalLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = approvalExpanded,
+                            onDismissRequest = { approvalExpanded = false },
+                        ) {
+                            listOf(
+                                "manual" to t("Manual — always ask me", "دستی — همیشه از من بپرس"),
+                                "smart" to t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار"),
+                                "off" to t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)"),
+                            ).forEach { (mode, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setApprovalMode(mode)
+                                        approvalExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
 
                 HorizontalDivider()
 
-                // Reasoning effort level
+                // Reasoning effort level (agent.reasoning_effort)
                 Column {
                     Text(
-                        text = t("Reasoning", "استدلال"),
+                        text = t("Reasoning Effort", "سطح استدلال"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("Model effort level", "سطح تلاش مدل"),
+                        text = t("How hard the model thinks", "مدل چقدر عمیق فکر کنه"),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -524,7 +563,9 @@ private fun GeneralTab(
                             expanded = reasoningExpanded,
                             onDismissRequest = { reasoningExpanded = false },
                         ) {
-                            listOf("none", "brief", "standard", "extended").forEach { level ->
+                            // Real agent.reasoning_effort values — the old
+                            // list (brief/standard/extended) was fictional.
+                            listOf("none", "minimal", "low", "medium", "high", "xhigh").forEach { level ->
                                 DropdownMenuItem(
                                     text = { Text(level) },
                                     onClick = {
@@ -536,83 +577,12 @@ private fun GeneralTab(
                         }
                     }
                 }
-
-                HorizontalDivider()
-
-                // Thinking mode toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = t("Show Thinking", "نمایش تفکر"),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            text = t("Display model reasoning process", "نمایش فرآیند استدلال مدل"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    Switch(
-                        checked = state.thinkingMode,
-                        onCheckedChange = { viewModel.setThinkingMode(it) },
-                    )
-                }
-
-                HorizontalDivider()
-
-                // Fast mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Fast Mode", "حالت سریع"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Faster responses", "پاسخ‌های سریع‌تر"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.fast, onCheckedChange = { viewModel.setFast(it) })
-                }
-
-                HorizontalDivider()
-
-                // Verbose mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Verbose", "فروند"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Detailed output", "خروجی تفصیلی"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.verbose, onCheckedChange = { viewModel.setVerbose(it) })
-                }
-
-                HorizontalDivider()
-
-                // Compact mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Compact", "متراکم"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Compact layout", "صفحه متراکم"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.compact, onCheckedChange = { viewModel.setCompact(it) })
-                }
             }
         }
 
-        // -- Personality & Appearance --
+        // -- Personality & Identity --
         Text(
-            text = t("Personality & Appearance", "شخصیت و ظاهر"),
+            text = t("Personality & Identity", "شخصیت و هویت"),
             style = MaterialTheme.typography.titleMedium,
         )
         Card(
@@ -623,74 +593,81 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Personality text field
+                // Personality preset name (display.personality). Saved on
+                // button press — the old field fired a server write on every
+                // keystroke.
                 Column {
                     Text(
                         text = t("Personality", "شخصیت"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("Agent personality style", "سبک شخصیت عامل"),
+                        text = t(
+                            "Preset name, e.g. helpful / kawaii / pirate",
+                            "اسم یک پریست، مثل helpful / kawaii / pirate",
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
+                    var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
                     OutlinedTextField(
-                        value = state.personality,
-                        onValueChange = { viewModel.setPersonality(it) },
+                        value = personalityText,
+                        onValueChange = { personalityText = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter personality", "شخصیت را وارد کنید")) },
+                        placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
                         singleLine = true,
                     )
+                    if (personalityText != state.personality) {
+                        TextButton(
+                            onClick = { viewModel.setPersonality(personalityText) },
+                            modifier = Modifier.align(Alignment.End),
+                        ) { Text(t("Save", "ذخیره")) }
+                    }
                 }
 
                 HorizontalDivider()
 
-                // Skin text field
+                // SOUL.md — the agent's persistent identity (first slot of
+                // the system prompt). This replaces the old "System Prompt"
+                // free-text field, whose config key never existed in Hermes.
                 Column {
                     Text(
-                        text = t("Skin", "پوسته"),
+                        text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("UI theme/appearance", "تم ظاهری رابط"),
+                        text = t(
+                            "The agent's persistent voice & identity — first part of its system prompt",
+                            "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
-                    OutlinedTextField(
-                        value = state.skin,
-                        onValueChange = { viewModel.setSkin(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter skin name", "نام پوسته را وارد کنید")) },
-                        singleLine = true,
-                    )
-                }
-
-                HorizontalDivider()
-
-                // Prompt text field
-                Column {
-                    Text(
-                        text = t("System Prompt", "دستور سیستم"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t("Initial instructions for agent", "دستورات اولیه برای عامل"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    OutlinedTextField(
-                        value = state.prompt,
-                        onValueChange = { viewModel.setPrompt(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter system prompt", "دستور سیستم را وارد کنید")) },
-                        minLines = 3,
-                    )
+                    if (state.isLoadingSoul) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(12.dp).size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                        OutlinedTextField(
+                            value = soulText,
+                            onValueChange = { soulText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                            minLines = 4,
+                        )
+                        if (soulText != state.soulMd) {
+                            TextButton(
+                                onClick = { viewModel.saveSoul(soulText) },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        }
+                    }
                 }
             }
         }
