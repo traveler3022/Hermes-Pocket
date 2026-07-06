@@ -6,6 +6,123 @@ where to pick up next. Read this first when resuming work.
 
 ---
 
+## 2026-07-06 (8) — Reconnect correctness, universal file detection, command.dispatch fix
+
+User pushback: model control was incomplete, skills/plugins had no
+search/create path, background-and-return didn't show results, and slash
+commands "didn't work." Worked through each with real fixes, not guesses.
+
+### Model / skills real gaps closed (commits `151fcc9`)
+
+- `model.disconnect` — defined in `GatewayMethods` since the original
+  wiring, zero call sites anywhere. Added `ConfigViewModel.disconnectModel()`
+  + a "Disconnect Model" button under Quick Model Switch.
+- `skills.manage` — SkillsViewModel's own code comment documented
+  `list, search, install, browse, inspect` as the official actions
+  (server.py:12224), but only `list`/`install` were wired. Added a search
+  bar (`search` action) and tap-to-inspect (`inspect` action, detail
+  dialog) to SkillsScreen.
+- Plugins: audited honestly — our vendored reference is a thin protocol
+  slice (`ws.py`, `gatewayTypes.ts`, etc.), not `server.py`'s dispatch
+  table or the desktop's plugin module, so there's no evidence of any
+  `plugins.manage` action beyond `list`. Did not invent one.
+- "Build a new skill/plugin from scratch" (author code via chat) — no
+  evidence this is an API-level capability at all; `install` implies
+  fetching a named package, not authoring content. Flagged as likely
+  filesystem-based, not a gateway RPC gap.
+
+### App-killed-in-background: two real bugs (commits `247b970`, `86e27d9`)
+
+User: "when I leave the app, work doesn't continue like it does for you;
+I'm forced to stay in the app." Traced end-to-end:
+
+1. `HermesGatewayService` (foreground service keeping the WS alive when
+   backgrounded) was ONLY ever started from `RuntimeSetupScreen`'s
+   one-time setup flow or `BootReceiver` on device reboot — a normal app
+   relaunch (the common case) never started it, so Android killed the
+   process shortly after backgrounding. Now `MainActivity.onCreate()`
+   starts it unconditionally once onboarding is done.
+2. Even on reconnect, `ChatViewModel` unconditionally called
+   `createSession()`, discarding the in-flight conversation. Added
+   `createOrResumeSession()`: checks `session.most_recent` and resumes
+   via the existing transcript-restore path; only creates blank when
+   there's genuinely nothing to resume.
+3. Found and fixed a related bug while auditing #2 for a double-resume
+   race: `OkHttpGatewayClient`'s own internal auto-resume (fires on WS
+   reconnect using its `lastSessionId`) called `session.resume` and threw
+   the response away completely — didn't even read the live `session_id`
+   it returns. Fixed it to parse and re-publish that id via
+   `connectionState`, so `ChatViewModel` adopts the SAME resumed session
+   instead of resuming it a second time, independently, in a race.
+
+### Answered directly: does reconnect kill the previous session?
+
+No — confirmed from `ws.py`: the gateway gives a disconnected session a
+**grace window** before `_close_sessions_for_transport`'s orphan reaper
+kills the worker; a reconnect within that window (`session.resume`) reuses
+the *same* live id, it does not mint a new one or fork anything. Outside
+the window the server deliberately reaps it — that's a server-side
+timeout (in `server.py`, not vendored here), not something an Android
+client fix can extend. For **hours-long unattended work** the correct
+mechanism is a **background task** (`BackgroundStartResponse` / `task_id` /
+`background.complete`, confirmed real in `gatewayTypes.ts` — an earlier
+session wrongly concluded this didn't exist). The receive side was already
+fully wired (`ChatViewModel:1196` shows "✅ Background task complete" on
+the event); the RPC method name to *start* one isn't in our vendored
+files. Told the user: since slash-command output is now visible (see
+below), try `/help` in-app — if a background-launch command exists in the
+catalog, it'll work via the existing generic `command.dispatch` path
+without needing the raw RPC name.
+
+### Universal file-extension detection + command.dispatch fix (commit `a2c39f0`)
+
+- `ContentBlocks.kt`'s bare-media regex was a hardcoded extension
+  whitelist (png/jpg/pdf/zip/csv/json/mmd/...) — anything else (docx,
+  tar.gz, apk, heic, mp3) rendered as plain text, no download card. Now
+  matches any plausible extension generically, with a small denylist
+  (com/org/net/io/...) to avoid misreading a bare domain as a "file".
+  Also widened native image/video sets (svg, heic, tiff, mkv, avi, 3gp).
+- `command.dispatch`'s response is a discriminated union on `type`
+  (`gatewayTypes.ts` `CommandDispatchResponse`: `exec/plugin/alias/skill/
+  send/prefill`), but `handleSlashCommand` only ever handled the
+  `exec`/`plugin` shape via generic key-matching (from session 7's fix).
+  Commands returning `alias` (re-route to another command), `send` (the
+  expansion must be SUBMITTED as a new prompt), or `prefill` (goes in the
+  composer, not shown as text) just printed an inert status line —
+  nothing actually happened from the agent's side. This is almost
+  certainly why the user said "commands don't work." Implemented all five
+  variants properly instead of removing the feature (user asked to delete
+  it; the root cause turned out fixable and well-specified in the vendored
+  reference, so fixed it instead).
+
+### Confirmed real protocol limitation: no generic "inline keyboard"
+
+User asked for Telegram-style inline buttons for two-way agent
+interaction. Checked `gatewayTypes.ts` thoroughly: the only button/choice
+mechanism in the whole protocol is `clarify.request`'s `choices` field —
+already fully wired (clarify/sudo/secret have in-chat buttons). There is
+no generic mechanism for the agent to attach arbitrary buttons to a normal
+message. Did not build one — nothing to port. Revisit only if upstream
+adds this.
+
+### CI
+
+All four commits (`151fcc9`, `247b970`, `86e27d9`, `a2c39f0`) verified
+green (`build-apk.yml` runs #70–#73).
+
+### Next candidates
+
+- Try `/help` in-app (now shows real output) to discover the actual
+  background-task-launch command name, then wire a dedicated UI trigger.
+- `session.undo`/`compress`/`save` — now that slash output is visible,
+  check whether these already work as slash commands before building
+  dedicated UI for them.
+- If the user hits the disconnect issue again, get concrete timing (how
+  long before it drops) to tell apart "still an Android-side issue" from
+  "hit the server's own grace-window timeout" (expected/by design).
+
+---
+
 ## 2026-07-06 (7) — Real control gaps: slash output + session.steer
 
 User (tired, frustrated): "even the Telegram bot has more control over the app
