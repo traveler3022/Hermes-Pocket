@@ -553,8 +553,26 @@ class ChatViewModel @Inject constructor(
                     method = GatewayMethods.COMMAND_DISPATCH,
                     params = jsonToElementMap(params),
                 )
-                // Slash command result may contain output to display
-                _uiState.value = _uiState.value.copy(isSending = false)
+                // The gateway returns the command's output in the RPC response.
+                // Surface it in-chat as a Status line so slash commands (/help,
+                // /cost, /undo, /compress, ...) give visible feedback instead of
+                // silently doing nothing — matching the desktop/telegram clients,
+                // which is why those felt like they had "more control".
+                val output = extractCommandOutput(result)
+                val newMessages = if (!output.isNullOrBlank()) {
+                    _uiState.value.messages + ChatMessage.Status(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        text = output.trim(),
+                        isError = false,
+                    )
+                } else {
+                    _uiState.value.messages
+                }
+                _uiState.value = _uiState.value.copy(
+                    messages = newMessages,
+                    isSending = false,
+                )
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Slash command failed")
                 _uiState.value = _uiState.value.copy(
@@ -563,6 +581,28 @@ class ChatViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Pull human-readable output from a `command.dispatch` response. Hermes
+     * commands return varying shapes — a bare string, or an object with one of
+     * `output`/`text`/`message`/`markdown`/`result`/`detail`, or a `lines`
+     * array. We check the common keys and return null when the response is just
+     * a status ack ({"status":"ok"}) with nothing worth showing.
+     */
+    private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
+        if (result == null) return null
+        (result as? JsonPrimitive)?.let { if (it.isString) return it.content }
+        val obj = result as? JsonObject ?: return null
+        for (key in listOf("output", "text", "message", "markdown", "result", "detail")) {
+            val v = obj[key]
+            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
+        }
+        (obj["lines"] as? JsonArray)?.let { arr ->
+            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.content }.joinToString("\n")
+            if (joined.isNotBlank()) return joined
+        }
+        return null
     }
 
     /**
