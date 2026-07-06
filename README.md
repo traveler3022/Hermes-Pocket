@@ -13,7 +13,7 @@ manages files and searches the web, right on your device.
 [![Download APK](https://img.shields.io/badge/⬇_Download_APK-Install_now-6750A4?style=for-the-badge&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes2/releases/tag/debug-latest)
 
 [![Build](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-00BCD4?style=flat-square)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square)](LICENSE)
 ![Material 3](https://img.shields.io/badge/Material_3-6750A4?style=flat-square&logo=materialdesign&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 
@@ -268,7 +268,7 @@ Issues and PRs welcome. This is an independent community port — not an officia
 
 ## 📄 License
 
-**Apache License 2.0** — see [LICENSE](LICENSE).
+**MIT** — see [LICENSE](LICENSE).
 
 <sub>Independent project · not affiliated with Nous Research · "Hermes Agent" belongs to its respective authors.</sub>
 
