@@ -146,9 +146,34 @@ class ChatViewModel @Inject constructor(
                         )
                     }
 
-                    // When connected, create or resume a session
-                    if (state is ConnectionState.Connected && _uiState.value.activeSessionId == null) {
-                        createOrResumeSession()
+                    // When connected, create or resume a session.
+                    //
+                    // OkHttpGatewayClient runs its OWN low-level auto-resume on
+                    // reconnect (using its internally-tracked lastSessionId) and,
+                    // once fixed, re-publishes the resulting live session id via
+                    // this same connectionState — so if that already resolved a
+                    // live id, adopt it directly (just fetch its transcript) rather
+                    // than issuing a second, redundant session.resume RPC.
+                    if (state is ConnectionState.Connected) {
+                        val liveId = state.sessionId
+                        if (liveId != null && liveId != _uiState.value.activeSessionId) {
+                            _uiState.value = _uiState.value.copy(activeSessionId = liveId)
+                            launch { loadSessionHistory(liveId) }
+                        } else if (liveId == null && _uiState.value.activeSessionId == null) {
+                            // No id yet from the low-level client (either a brand
+                            // new process with nothing to resume, or its resume is
+                            // still in flight and hasn't re-published yet). Do our
+                            // own most_recent-based resume as the safety net for
+                            // the case nothing else will — e.g. the Activity/
+                            // ChatViewModel was recreated while the WebSocket
+                            // itself never actually dropped, so no low-level
+                            // reconnect-resume ever fires. session.resume's fast
+                            // path reuses the same live id when the worker is
+                            // still alive, so overlapping with an in-flight
+                            // low-level resume here is a redundant round-trip at
+                            // worst, not destructive.
+                            createOrResumeSession()
+                        }
                     }
                 }
             }
