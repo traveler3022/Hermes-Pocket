@@ -54,6 +54,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -134,6 +135,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -162,15 +164,62 @@ internal fun InlineImageBlock(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp)),
     ) {
-        AsyncImage(
+        // SubcomposeAsyncImage (not AsyncImage) so a load that never resolves —
+        // e.g. the server screenshot download endpoint being unreachable — shows
+        // a spinner then a visible error placeholder, instead of silently
+        // collapsing to nothing (which read as "the image didn't send").
+        SubcomposeAsyncImage(
             model = url,
             contentDescription = alt.ifBlank { "تصویر" },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 320.dp)
+                .heightIn(min = 120.dp, max = 320.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .clickable { onImageClick(url) },
             contentScale = ContentScale.Fit,
+            loading = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            },
+            error = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { onImageClick(url) }
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.Default.BrokenImage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(30.dp),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = t(
+                            "Image couldn't load — tap Save to download it",
+                            "تصویر لود نشد — «ذخیره» رو بزن تا دانلود شه",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                    )
+                }
+            },
         )
         IconButton(
             onClick = onSave,
