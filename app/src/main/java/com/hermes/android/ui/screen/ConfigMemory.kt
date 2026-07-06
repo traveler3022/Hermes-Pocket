@@ -90,7 +90,6 @@ import com.hermes.android.ui.viewmodel.ConfigUiState
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
-import com.hermes.android.ui.viewmodel.MemoryFile
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
