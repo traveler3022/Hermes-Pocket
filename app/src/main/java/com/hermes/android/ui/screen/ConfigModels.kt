@@ -171,6 +171,28 @@ internal fun ModelsTab(
             }
         }
 
+        // ── One-tap auto-failover: chain every provider so Hermes switches
+        //    automatically when one fails (error / quota / billing). ──
+        item(key = "__auto_failover") {
+            OutlinedButton(
+                onClick = { viewModel.enableAutoFailoverAllProviders() },
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) {
+                Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (state.fallbackProviders.isEmpty()) {
+                        t("Auto-switch between all providers", "جابه‌جایی خودکار بین همه پرووایدرها")
+                    } else {
+                        t(
+                            "Auto-switch on: ${state.fallbackProviders.size} providers",
+                            "خودکار روی ${state.fallbackProviders.size} پرووایدر",
+                        )
+                    }
+                )
+            }
+        }
+
         if (state.isLoadingProviders) {
             item(key = "__providers_loading") {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))

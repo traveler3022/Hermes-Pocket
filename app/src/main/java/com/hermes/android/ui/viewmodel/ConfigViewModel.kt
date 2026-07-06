@@ -727,43 +727,130 @@ class ConfigViewModel @Inject constructor(
                 // Sanitize the slug: it is interpolated into python/yaml.
                 val s = slug.trim().lowercase().filter { it.isLetterOrDigit() || it == '-' || it == '_' }
                 if (s.isEmpty()) throw IllegalArgumentException("Invalid provider name")
+                _uiState.value = _uiState.value.copy(isLoadingModels = true)
                 // The gateway's config.set RPC only accepts a whitelist of
                 // special keys and rejects everything else with "unknown
                 // config key" — writing providers.* through it can never
                 // work. Write config.yaml directly via shell.exec instead.
                 // Values travel base64-encoded so quoting can't break.
-                execPython(
+                //
+                // Beyond just writing the entry, ask the provider's own
+                // OpenAI-compatible /models endpoint for its model list,
+                // running server-side where the provider is reachable. This
+                // auto-detects models from just base_url + key and picks a
+                // default_model — without it, a custom provider sat selected
+                // but never actually connected. Try both {base}/models and
+                // {base}/v1/models so it works whether the base URL already
+                // includes /v1 or not, and surface the real failure reason
+                // (HTTP error / "no models") instead of failing silently.
+                val out = execPython(
                     """
-                    import base64, yaml, pathlib
+                    import base64, json, yaml, pathlib, urllib.request
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
                     d = yaml.safe_load(p.read_text()) if p.exists() else {}
                     d = d or {}
+                    base = base64.b64decode('${b64(baseUrl.trim())}').decode().strip()
+                    key = base64.b64decode('${b64(apiKey.trim())}').decode().strip()
+                    hint = base64.b64decode('${b64(defaultModel.trim())}').decode().strip()
                     provs = d.setdefault('providers', {})
                     entry = provs.setdefault('$s', {})
-                    entry['base_url'] = base64.b64decode('${b64(baseUrl.trim())}').decode()
-                    dm = base64.b64decode('${b64(defaultModel.trim())}').decode()
-                    if dm: entry['default_model'] = dm
-                    # Let Hermes auto-list the provider's models on the next
-                    # model.options call, so the model dropdown fills itself.
-                    entry['discover_models'] = True
+                    if base: entry['base_url'] = base
+                    b = base.rstrip('/')
+                    cands = [b + '/models']
+                    if not b.endswith('/v1'):
+                        cands.insert(0, b + '/v1/models')
+                    ids = []
+                    err = ''
+                    for u in cands:
+                        try:
+                            hdr = {'Authorization': 'Bearer ' + key} if key else {}
+                            req = urllib.request.Request(u, headers=hdr)
+                            with urllib.request.urlopen(req, timeout=20) as r:
+                                body = r.read().decode('utf-8', 'replace')
+                            j = json.loads(body)
+                            rows = j.get('data') if isinstance(j, dict) else j
+                            if rows is None and isinstance(j, dict):
+                                rows = j.get('models') or []
+                            got = [ (m.get('id') or m.get('name')) for m in (rows or [])
+                                    if isinstance(m, dict) and (m.get('id') or m.get('name')) ]
+                            if got:
+                                ids = got; err = ''; break
+                            err = 'endpoint returned no models'
+                        except Exception as e:
+                            err = str(e)[:200]
+                    chosen = hint or (ids[0] if ids else '')
+                    if chosen: entry['default_model'] = chosen
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print('OK')
+                    print(json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands}))
                     """.trimIndent()
                 )
                 // Save API key to the credential pool
                 if (apiKey.isNotBlank()) addCredentialDirect(s, apiKey, "primary")
+
+                // Merge the detected models into the dropdown state directly, so
+                // it works even if Hermes' model.options doesn't surface them.
+                val detected = runCatching {
+                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
+                    val arr = obj?.get("models") as? JsonArray
+                    val chosen = (obj?.get("chosen") as? JsonPrimitive)?.content ?: ""
+                    val err = (obj?.get("error") as? JsonPrimitive)?.content ?: ""
+                    val ids = arr?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+                    Triple(ids, chosen, err)
+                }.getOrDefault(Triple(emptyList<String>(), "", ""))
+                val (modelIds, chosen, detectError) = detected
+                if (modelIds.isNotEmpty()) {
+                    val newModels = modelIds.map {
+                        ModelOption(provider = s, modelId = it, name = it, requiresApiKey = true)
+                    }
+                    val merged = _uiState.value.availableModels.filter { it.provider != s } + newModels
+                    _uiState.value = _uiState.value.copy(availableModels = merged)
+                }
+
                 loadProviders()
-                loadModels()
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Provider \"$s\" added"
-                )
+                // Actually connect: point the live agent at the detected model.
+                if (chosen.isNotBlank()) {
+                    val err = applyHermesModelSwitch(s, chosen)
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingModels = false,
+                        activeProvider = if (err == null) s else _uiState.value.activeProvider,
+                        activeModel = if (err == null) chosen else _uiState.value.activeModel,
+                        errorMessage = err
+                            ?: "Provider \"$s\" added — ${modelIds.size} models, using $chosen",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingModels = false,
+                        errorMessage = "Provider \"$s\" added, but couldn't auto-detect models" +
+                            (if (detectError.isNotBlank()) " ($detectError)" else "") +
+                            ". Check the base URL/key, or type a model name.",
+                    )
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to add provider")
                 _uiState.value = _uiState.value.copy(
+                    isLoadingModels = false,
                     errorMessage = "Failed to add provider: ${e.message}"
                 )
             }
         }
+    }
+
+    /**
+     * One-tap "auto-switch across all providers": put every configured provider
+     * into Hermes' `fallback_providers` chain so the agent automatically moves
+     * to the next provider when the current one fails (network error, auth,
+     * rate-limit / quota / billing). Hermes performs the actual switching — this
+     * just wires the chain so you stop doing it by hand.
+     */
+    fun enableAutoFailoverAllProviders() {
+        val all = _uiState.value.providers.map { it.slug }.filter { it.isNotBlank() }
+        if (all.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Add at least one provider first",
+            )
+            return
+        }
+        setFallbackProviders(all)
     }
 
     fun removeProvider(rawSlug: String) {
