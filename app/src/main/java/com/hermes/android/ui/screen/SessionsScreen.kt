@@ -610,16 +610,4 @@ private fun ActiveAgentsCard(agents: List<com.hermes.android.ui.viewmodel.AgentP
     }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-@Composable
-private fun LoadingIndicator(text: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator()
-        Text(text = text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-    }
-}
+// LoadingIndicator: internal fun in ConfigComponents.kt (same package, no import needed)

@@ -1086,7 +1086,7 @@ class ChatViewModel @Inject constructor(
                     }) { msg ->
                         (msg as ChatMessage.ToolCall).copy(isRunning = false, error = displayMsg)
                     },
-                    errorEvent = ErrorEvent.Warning(displayMsg),
+                    errorEvent = ErrorEvent.Warning(displayMsg ?: "Unknown error"),
                     isSending = false,
                 ) }
                 if (isRateLimit) {
