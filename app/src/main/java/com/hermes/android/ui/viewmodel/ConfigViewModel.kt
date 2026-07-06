@@ -405,6 +405,32 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reset the current model connection (`model.disconnect`). This RPC has
+     * been defined in GatewayMethods since the original protocol wiring but
+     * had zero call sites anywhere in the app — real users had no way to
+     * force-clear a stuck/authenticated model session (e.g. after rotating an
+     * API key or when a provider connection wedges) other than restarting the
+     * whole gateway. Re-loads models/providers afterward so the UI reflects
+     * the cleared state.
+     */
+    fun disconnectModel() {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(GatewayMethods.MODEL_DISCONNECT)
+                Timber.i("[Config] Model disconnected")
+                _uiState.value = _uiState.value.copy(errorMessage = "Model disconnected")
+                loadModels()
+                loadProviders()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] model.disconnect failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to disconnect model: ${e.message}",
+                )
+            }
+        }
+    }
+
     fun selectModel(model: ModelOption) {
         viewModelScope.launch {
             try {
