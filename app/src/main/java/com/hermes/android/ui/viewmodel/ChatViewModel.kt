@@ -698,6 +698,70 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Redirect the agent mid-turn WITHOUT interrupting it (`session.steer`).
+     *
+     * This is the desktop/TUI's primary "course-correct" control and the main
+     * thing the phone app was missing: while a turn is streaming, the only
+     * option here used to be Stop (a full interrupt). Steer instead injects a
+     * new instruction that the agent folds in at its next step, so you can nudge
+     * it ("actually use TypeScript", "skip the tests") without losing the turn.
+     *
+     * Response shape (gatewayTypes.ts `SessionSteerResponse`):
+     * `{status: "queued" | "rejected", text?: string}`.
+     */
+    fun steerAgent() {
+        val text = _uiState.value.inputText.trim()
+        if (text.isEmpty()) return
+        // Echo the steer inline (arrow-prefixed) and clear the composer now.
+        val steerMsg = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = "↳ $text",
+        )
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages + steerMsg,
+            inputText = "",
+        )
+        clearDraft()
+        viewModelScope.launch {
+            // Steer must target the live running session, not the local id.
+            val sessionId = resolveLiveSessionId()
+            if (sessionId == null) {
+                _uiState.value = _uiState.value.copy(errorMessage = "No active turn to steer")
+                return@launch
+            }
+            try {
+                val params = buildJsonObject {
+                    put("session_id", sessionId)
+                    put("text", text)
+                }
+                val result = gatewayClient.request(
+                    method = GatewayMethods.SESSION_STEER,
+                    params = jsonToElementMap(params),
+                )
+                val obj = result as? JsonObject
+                val status = (obj?.get("status") as? JsonPrimitive)?.content
+                if (status == "rejected") {
+                    val note = (obj?.get("text") as? JsonPrimitive)?.content
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages + ChatMessage.Status(
+                            id = UUID.randomUUID().toString(),
+                            timestamp = System.currentTimeMillis(),
+                            text = note ?: "Steer rejected — the agent isn't at a steerable point right now.",
+                            isError = true,
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] session.steer failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Steer failed: ${e.message}",
+                )
+            }
+        }
+    }
+
     // ── Feature #5: Retry / Regenerate ───────────────────────────────────
 
     fun retryLastMessage() {
