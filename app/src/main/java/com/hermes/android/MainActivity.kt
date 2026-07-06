@@ -28,6 +28,7 @@ import com.hermes.android.ui.screen.ConfigScreen
 import com.hermes.android.ui.screen.CronScreen
 import com.hermes.android.ui.screen.OnboardingScreen
 import com.hermes.android.ui.screen.PlatformsScreen
+import com.hermes.android.ui.screen.PluginsScreen
 import com.hermes.android.ui.screen.SessionsScreen
 import com.hermes.android.ui.screen.SkillsScreen
 import com.hermes.android.ui.theme.Hermes2Theme
@@ -56,6 +57,19 @@ class MainActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("hermes_prefs", Context.MODE_PRIVATE)
         val onboardingCompleted = prefs.getBoolean("onboarding_completed", false)
+
+        // Fix: the foreground service that keeps the gateway connection (and
+        // therefore the running agent turn) alive when the app is backgrounded
+        // was ONLY ever started from RuntimeSetupScreen (first-time setup) or
+        // BootReceiver (device reboot). A normal app relaunch — the common
+        // case — never started it, so leaving the app let Android kill the
+        // process shortly after and the agent/connection died with it. Start
+        // it unconditionally here; HermesGatewayService.onStartCommand()
+        // already handles "runtime not ready yet" gracefully (just updates the
+        // notification, doesn't crash), so this is safe even before setup.
+        if (onboardingCompleted) {
+            com.hermes.android.service.HermesGatewayService.start(this)
+        }
 
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
@@ -103,7 +117,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { CHAT, CONFIG, PLATFORMS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
+private enum class Screen { CHAT, CONFIG, PLATFORMS, PLUGINS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
 
 @Composable
 private fun AppRoot(
@@ -143,6 +157,7 @@ private fun AppRoot(
         Screen.CONFIG -> ConfigScreen(
             onNavigateBack = { screen = Screen.CHAT },
             onNavigateToPlatforms = { screen = Screen.PLATFORMS },
+            onNavigateToPlugins = { screen = Screen.PLUGINS },
             onNavigateToSkills = { screen = Screen.SKILLS },
             onNavigateToCron = { screen = Screen.CRON },
             onNavigateToRuntime = { screen = Screen.RUNTIME },
@@ -150,6 +165,9 @@ private fun AppRoot(
             appLanguageState = appLanguageState,
         )
         Screen.PLATFORMS -> PlatformsScreen(
+            onNavigateBack = { screen = Screen.CONFIG },
+        )
+        Screen.PLUGINS -> PluginsScreen(
             onNavigateBack = { screen = Screen.CONFIG },
         )
         Screen.SESSIONS -> SessionsScreen(

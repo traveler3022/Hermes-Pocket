@@ -736,6 +736,7 @@ fun ChatScreen(
                     onTextChange = viewModel::updateInputText,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
+                    onSteer = viewModel::steerAgent,
                     onAttachFile = viewModel::attachFromUri,
                     onRemoveAttachment = viewModel::removeAttachment,
                 )
@@ -2313,6 +2314,7 @@ private fun InputBar(
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onSteer: () -> Unit = {},
     onAttachFile: (Uri) -> Unit = {},
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
 ) {
@@ -2410,6 +2412,22 @@ private fun InputBar(
                 shape = RoundedCornerShape(24.dp),
             )
             if (isSending) {
+                // Mid-turn the agent is running. Typing a message and tapping
+                // the steer button redirects it without interrupting
+                // (session.steer) — the desktop/TUI "course-correct" control.
+                // Stop (full interrupt) stays available alongside it.
+                if (text.isNotBlank()) {
+                    IconButton(
+                        onClick = onSteer,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.CallSplit,
+                            contentDescription = t("Steer the agent", "هدایت عامل"),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 IconButton(
                     onClick = onStop,
                     modifier = Modifier.size(48.dp),

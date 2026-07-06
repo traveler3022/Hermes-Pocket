@@ -146,9 +146,34 @@ class ChatViewModel @Inject constructor(
                         )
                     }
 
-                    // When connected, create or resume a session
-                    if (state is ConnectionState.Connected && _uiState.value.activeSessionId == null) {
-                        createSession()
+                    // When connected, create or resume a session.
+                    //
+                    // OkHttpGatewayClient runs its OWN low-level auto-resume on
+                    // reconnect (using its internally-tracked lastSessionId) and,
+                    // once fixed, re-publishes the resulting live session id via
+                    // this same connectionState — so if that already resolved a
+                    // live id, adopt it directly (just fetch its transcript) rather
+                    // than issuing a second, redundant session.resume RPC.
+                    if (state is ConnectionState.Connected) {
+                        val liveId = state.sessionId
+                        if (liveId != null && liveId != _uiState.value.activeSessionId) {
+                            _uiState.value = _uiState.value.copy(activeSessionId = liveId)
+                            launch { loadSessionHistory(liveId) }
+                        } else if (liveId == null && _uiState.value.activeSessionId == null) {
+                            // No id yet from the low-level client (either a brand
+                            // new process with nothing to resume, or its resume is
+                            // still in flight and hasn't re-published yet). Do our
+                            // own most_recent-based resume as the safety net for
+                            // the case nothing else will — e.g. the Activity/
+                            // ChatViewModel was recreated while the WebSocket
+                            // itself never actually dropped, so no low-level
+                            // reconnect-resume ever fires. session.resume's fast
+                            // path reuses the same live id when the worker is
+                            // still alive, so overlapping with an in-flight
+                            // low-level resume here is a redundant round-trip at
+                            // worst, not destructive.
+                            createOrResumeSession()
+                        }
                     }
                 }
             }
@@ -178,6 +203,36 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Session management ────────────────────────────────────────────────
+
+    /**
+     * On a fresh ChatViewModel (cold app start, or process death + relaunch —
+     * the common case, not just first-ever launch), unconditionally calling
+     * createSession() meant every reconnect threw away whatever conversation
+     * was in flight and showed a blank chat. The gateway keeps a disconnected
+     * session alive for a grace window (see ws.py's `_close_sessions_for_transport`
+     * orphan reaper) specifically so a reconnecting client can pick the same
+     * conversation back up — but nothing here was actually trying that. Now,
+     * before creating a new session, check `session.most_recent` and resume
+     * it if one exists; only fall back to a genuinely blank session when there
+     * is nothing to resume (first-ever use). An explicit resumeSessionId from
+     * Sessions/share-intent (ChatScreen's LaunchedEffect) still runs after this
+     * and wins, since it always overwrites activeSessionId unconditionally.
+     */
+    private suspend fun createOrResumeSession() {
+        val mostRecentId = try {
+            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                ?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
+            null
+        }
+        if (mostRecentId != null) {
+            resumeSession(mostRecentId)
+        } else {
+            createSession()
+        }
+    }
 
     private suspend fun createSession() {
         try {
@@ -535,7 +590,25 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun handleSlashCommand(text: String, sessionId: String) {
+    /**
+     * Fix: command.dispatch's response is a discriminated union on `type`
+     * (gatewayTypes.ts `CommandDispatchResponse`) — exec/plugin/alias/skill/
+     * send/prefill — and this only ever handled the exec/plugin shape
+     * (generic key-matching over output/text/message/...). For commands that
+     * come back as `alias` (re-route to another command), `send` (the
+     * expansion must actually be SUBMITTED as a new prompt), or `prefill`
+     * (the expansion belongs in the composer for the user to edit/send, not
+     * displayed as inert text), the old code just printed a static status
+     * line — which does nothing from the agent's point of view. That's almost
+     * certainly why commands "didn't work": the app showed *something* but
+     * never actually dispatched the resulting action.
+     */
+    private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
+        if (depth > 5) {
+            // Guard against a misbehaving/looping alias chain.
+            _uiState.value = _uiState.value.copy(errorMessage = "Command alias loop", isSending = false)
+            return
+        }
         viewModelScope.launch {
             try {
                 // Fix S4F04: command.dispatch expects {name, arg, session_id}
@@ -553,8 +626,54 @@ class ChatViewModel @Inject constructor(
                     method = GatewayMethods.COMMAND_DISPATCH,
                     params = jsonToElementMap(params),
                 )
-                // Slash command result may contain output to display
-                _uiState.value = _uiState.value.copy(isSending = false)
+                val obj = result as? JsonObject
+                when ((obj?.get("type") as? JsonPrimitive)?.content) {
+                    "alias" -> {
+                        // Re-route to the target command, preserving the arg.
+                        val target = (obj["target"] as? JsonPrimitive)?.content
+                        if (!target.isNullOrBlank()) {
+                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
+                            handleSlashCommand(nextText, sessionId, depth + 1)
+                            return@launch
+                        }
+                    }
+                    "send" -> {
+                        // The command expanded into prompt text that must
+                        // actually be submitted to the agent, not just shown.
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        if (!message.isNullOrBlank()) {
+                            sendPrompt(message, sessionId)
+                            return@launch
+                        }
+                    }
+                    "prefill" -> {
+                        // The expansion goes in the composer for the user to
+                        // review/edit before sending — not auto-sent.
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        _uiState.value = _uiState.value.copy(
+                            inputText = message ?: _uiState.value.inputText,
+                            isSending = false,
+                        )
+                        return@launch
+                    }
+                }
+                // exec/plugin/skill (or an unrecognized/forward-compat shape):
+                // surface whatever textual output the response carries.
+                val output = extractCommandOutput(result)
+                val newMessages = if (!output.isNullOrBlank()) {
+                    _uiState.value.messages + ChatMessage.Status(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        text = output.trim(),
+                        isError = false,
+                    )
+                } else {
+                    _uiState.value.messages
+                }
+                _uiState.value = _uiState.value.copy(
+                    messages = newMessages,
+                    isSending = false,
+                )
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Slash command failed")
                 _uiState.value = _uiState.value.copy(
@@ -563,6 +682,28 @@ class ChatViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Pull human-readable output from a `command.dispatch` response. Hermes
+     * commands return varying shapes — a bare string, or an object with one of
+     * `output`/`text`/`message`/`markdown`/`result`/`detail`, or a `lines`
+     * array. We check the common keys and return null when the response is just
+     * a status ack ({"status":"ok"}) with nothing worth showing.
+     */
+    private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
+        if (result == null) return null
+        (result as? JsonPrimitive)?.let { if (it.isString) return it.content }
+        val obj = result as? JsonObject ?: return null
+        for (key in listOf("output", "text", "message", "markdown", "result", "detail")) {
+            val v = obj[key]
+            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
+        }
+        (obj["lines"] as? JsonArray)?.let { arr ->
+            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.content }.joinToString("\n")
+            if (joined.isNotBlank()) return joined
+        }
+        return null
     }
 
     /**
@@ -654,6 +795,70 @@ class ChatViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
+            }
+        }
+    }
+
+    /**
+     * Redirect the agent mid-turn WITHOUT interrupting it (`session.steer`).
+     *
+     * This is the desktop/TUI's primary "course-correct" control and the main
+     * thing the phone app was missing: while a turn is streaming, the only
+     * option here used to be Stop (a full interrupt). Steer instead injects a
+     * new instruction that the agent folds in at its next step, so you can nudge
+     * it ("actually use TypeScript", "skip the tests") without losing the turn.
+     *
+     * Response shape (gatewayTypes.ts `SessionSteerResponse`):
+     * `{status: "queued" | "rejected", text?: string}`.
+     */
+    fun steerAgent() {
+        val text = _uiState.value.inputText.trim()
+        if (text.isEmpty()) return
+        // Echo the steer inline (arrow-prefixed) and clear the composer now.
+        val steerMsg = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = "↳ $text",
+        )
+        _uiState.value = _uiState.value.copy(
+            messages = _uiState.value.messages + steerMsg,
+            inputText = "",
+        )
+        clearDraft()
+        viewModelScope.launch {
+            // Steer must target the live running session, not the local id.
+            val sessionId = resolveLiveSessionId()
+            if (sessionId == null) {
+                _uiState.value = _uiState.value.copy(errorMessage = "No active turn to steer")
+                return@launch
+            }
+            try {
+                val params = buildJsonObject {
+                    put("session_id", sessionId)
+                    put("text", text)
+                }
+                val result = gatewayClient.request(
+                    method = GatewayMethods.SESSION_STEER,
+                    params = jsonToElementMap(params),
+                )
+                val obj = result as? JsonObject
+                val status = (obj?.get("status") as? JsonPrimitive)?.content
+                if (status == "rejected") {
+                    val note = (obj?.get("text") as? JsonPrimitive)?.content
+                    _uiState.value = _uiState.value.copy(
+                        messages = _uiState.value.messages + ChatMessage.Status(
+                            id = UUID.randomUUID().toString(),
+                            timestamp = System.currentTimeMillis(),
+                            text = note ?: "Steer rejected — the agent isn't at a steerable point right now.",
+                            isError = true,
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] session.steer failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Steer failed: ${e.message}",
+                )
             }
         }
     }

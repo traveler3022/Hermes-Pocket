@@ -304,11 +304,27 @@ class OkHttpGatewayClient @Inject constructor(
 
     // ── Session resume ─────────────────────────────────────────────────────
 
+    /**
+     * Fix: this used to fire-and-forget — call session.resume and throw the
+     * response away without even reading the live session_id it returns
+     * (session.resume mints a NEW live id bound to the old transcript; the
+     * original id it was called with stops being valid for prompt.submit).
+     * ChatViewModel had no way to learn that id, so on reconnect it fell back
+     * to its own independent session.most_recent + resume call — a second,
+     * uncoordinated session.resume RPC racing this one on every reconnect.
+     * Now we parse the returned session_id, adopt it as lastSessionId, and
+     * re-publish it via connectionState so ChatViewModel can adopt the SAME
+     * resumed session instead of resuming it a second time itself.
+     */
     private suspend fun resumeSession(sessionId: String) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }
             val result = request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
-            Timber.i("[Gateway] session resumed: $sessionId")
+            val liveId = (result as? JsonObject)?.get("session_id")?.jsonPrimitive?.content
+                ?.takeIf { it.isNotBlank() } ?: sessionId
+            lastSessionId = liveId
+            Timber.i("[Gateway] session resumed: $sessionId -> live $liveId")
+            _connectionState.value = ConnectionState.Connected(liveId)
         } catch (e: Exception) {
             Timber.w("[Gateway] session resume failed, creating new: ${e.message}")
             lastSessionId = null

@@ -103,6 +103,7 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
@@ -153,6 +154,7 @@ fun ConfigScreen(
                     state = uiState,
                     viewModel = viewModel,
                     onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToRuntime = onNavigateToRuntime,
@@ -171,6 +173,7 @@ private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
@@ -339,6 +342,248 @@ private fun GeneralTab(
             }
         }
 
+        // -- Model Behavior Config --
+        Text(
+            text = t("Model Behavior", "رفتار مدل"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Auto-approve (yolo) toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = t("Auto-Approve (Yolo)", "تایید خودکار"),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = t("Automatically approve tool calls", "تایید خودکار فراخوانی ابزارها"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    Switch(
+                        checked = state.yolo,
+                        onCheckedChange = { viewModel.setYolo(it) },
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Reasoning effort level
+                Column {
+                    Text(
+                        text = t("Reasoning", "استدلال"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Model effort level", "سطح تلاش مدل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    var reasoningExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { reasoningExpanded = true },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(
+                                text = state.reasoning,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = reasoningExpanded,
+                            onDismissRequest = { reasoningExpanded = false },
+                        ) {
+                            listOf("none", "brief", "standard", "extended").forEach { level ->
+                                DropdownMenuItem(
+                                    text = { Text(level) },
+                                    onClick = {
+                                        viewModel.setReasoning(level)
+                                        reasoningExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Thinking mode toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = t("Show Thinking", "نمایش تفکر"),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = t("Display model reasoning process", "نمایش فرآیند استدلال مدل"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    Switch(
+                        checked = state.thinkingMode,
+                        onCheckedChange = { viewModel.setThinkingMode(it) },
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Fast mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Fast Mode", "حالت سریع"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Faster responses", "پاسخ‌های سریع‌تر"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.fast, onCheckedChange = { viewModel.setFast(it) })
+                }
+
+                HorizontalDivider()
+
+                // Verbose mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Verbose", "فروند"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Detailed output", "خروجی تفصیلی"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.verbose, onCheckedChange = { viewModel.setVerbose(it) })
+                }
+
+                HorizontalDivider()
+
+                // Compact mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(t("Compact", "متراکم"), style = MaterialTheme.typography.titleSmall)
+                        Text(t("Compact layout", "صفحه متراکم"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = state.compact, onCheckedChange = { viewModel.setCompact(it) })
+                }
+            }
+        }
+
+        // -- Personality & Appearance --
+        Text(
+            text = t("Personality & Appearance", "شخصیت و ظاهر"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Personality text field
+                Column {
+                    Text(
+                        text = t("Personality", "شخصیت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Agent personality style", "سبک شخصیت عامل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    OutlinedTextField(
+                        value = state.personality,
+                        onValueChange = { viewModel.setPersonality(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter personality", "شخصیت را وارد کنید")) },
+                        singleLine = true,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Skin text field
+                Column {
+                    Text(
+                        text = t("Skin", "پوسته"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("UI theme/appearance", "تم ظاهری رابط"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    OutlinedTextField(
+                        value = state.skin,
+                        onValueChange = { viewModel.setSkin(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter skin name", "نام پوسته را وارد کنید")) },
+                        singleLine = true,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Prompt text field
+                Column {
+                    Text(
+                        text = t("System Prompt", "دستور سیستم"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = t("Initial instructions for agent", "دستورات اولیه برای عامل"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    OutlinedTextField(
+                        value = state.prompt,
+                        onValueChange = { viewModel.setPrompt(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Enter system prompt", "دستور سیستم را وارد کنید")) },
+                        minLines = 3,
+                    )
+                }
+            }
+        }
+
         // Link to Runtime Setup / Termux Connection
         androidx.compose.material3.Button(
             onClick = onNavigateToRuntime,
@@ -353,6 +598,14 @@ private fun GeneralTab(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
+        }
+
+        // Link to Plugins Manager
+        androidx.compose.material3.OutlinedButton(
+            onClick = onNavigateToPlugins,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(t("Plugins Manager", "مدیر افزونه‌ها"))
         }
 
         // Link to Skills
@@ -980,6 +1233,12 @@ private fun QuickModelSwitch(
                 enabled = customProvider.isNotBlank() && customModel.isNotBlank(),
             ) {
                 Text(t("Switch Model", "تغییر مدل"))
+            }
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.disconnectModel() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(t("Disconnect Model", "قطع اتصال مدل"))
             }
         }
     }

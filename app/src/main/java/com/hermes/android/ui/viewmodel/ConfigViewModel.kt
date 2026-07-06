@@ -121,6 +121,185 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    // ── Model Behavior Config ──────────────────────────────────────────────
+
+    fun setYolo(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("yolo", enabled.toString())
+                _uiState.value = _uiState.value.copy(yolo = enabled)
+                Timber.i("[Config] Yolo set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set yolo")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set yolo: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun setReasoning(level: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("reasoning", level)
+                _uiState.value = _uiState.value.copy(reasoning = level)
+                Timber.i("[Config] Reasoning set to $level")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set reasoning")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set reasoning: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun setThinkingMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("thinking_mode", enabled.toString())
+                _uiState.value = _uiState.value.copy(thinkingMode = enabled)
+                Timber.i("[Config] Thinking mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set thinking mode")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set thinking mode: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun setFast(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("fast", enabled.toString())
+                _uiState.value = _uiState.value.copy(fast = enabled)
+                Timber.i("[Config] Fast mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set fast mode")
+            }
+        }
+    }
+
+    fun setBusy(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("busy", enabled.toString())
+                _uiState.value = _uiState.value.copy(busy = enabled)
+                Timber.i("[Config] Busy mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set busy mode")
+            }
+        }
+    }
+
+    fun setVerbose(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("verbose", enabled.toString())
+                _uiState.value = _uiState.value.copy(verbose = enabled)
+                Timber.i("[Config] Verbose mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set verbose mode")
+            }
+        }
+    }
+
+    fun setDetailsMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("details_mode", enabled.toString())
+                _uiState.value = _uiState.value.copy(detailsMode = enabled)
+                Timber.i("[Config] Details mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set details mode")
+            }
+        }
+    }
+
+    fun setCompact(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("compact", enabled.toString())
+                _uiState.value = _uiState.value.copy(compact = enabled)
+                Timber.i("[Config] Compact mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set compact mode")
+            }
+        }
+    }
+
+    fun setStatusbar(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("statusbar", enabled.toString())
+                _uiState.value = _uiState.value.copy(statusbar = enabled)
+                Timber.i("[Config] Statusbar set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set statusbar")
+            }
+        }
+    }
+
+    fun setMouse(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("mouse", enabled.toString())
+                _uiState.value = _uiState.value.copy(mouse = enabled)
+                Timber.i("[Config] Mouse mode set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set mouse mode")
+            }
+        }
+    }
+
+    fun setIndicator(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("indicator", enabled.toString())
+                _uiState.value = _uiState.value.copy(indicator = enabled)
+                Timber.i("[Config] Indicator set to $enabled")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set indicator")
+            }
+        }
+    }
+
+    fun setPersonality(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("personality", value)
+                _uiState.value = _uiState.value.copy(personality = value)
+                Timber.i("[Config] Personality set to $value")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set personality")
+            }
+        }
+    }
+
+    fun setSkin(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("skin", value)
+                _uiState.value = _uiState.value.copy(skin = value)
+                Timber.i("[Config] Skin set to $value")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set skin")
+            }
+        }
+    }
+
+    fun setPrompt(value: String) {
+        viewModelScope.launch {
+            try {
+                saveConfigSilent("prompt", value)
+                _uiState.value = _uiState.value.copy(prompt = value)
+                Timber.i("[Config] Prompt set")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set prompt")
+            }
+        }
+    }
+
     // ── Models ────────────────────────────────────────────────────────────
 
     fun loadModels() {
@@ -221,6 +400,32 @@ class ConfigViewModel @Inject constructor(
                 Timber.w(e, "[Config] API key validation failed for $provider")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "API key may be invalid (could not verify)",
+                )
+            }
+        }
+    }
+
+    /**
+     * Reset the current model connection (`model.disconnect`). This RPC has
+     * been defined in GatewayMethods since the original protocol wiring but
+     * had zero call sites anywhere in the app — real users had no way to
+     * force-clear a stuck/authenticated model session (e.g. after rotating an
+     * API key or when a provider connection wedges) other than restarting the
+     * whole gateway. Re-loads models/providers afterward so the UI reflects
+     * the cleared state.
+     */
+    fun disconnectModel() {
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(GatewayMethods.MODEL_DISCONNECT)
+                Timber.i("[Config] Model disconnected")
+                _uiState.value = _uiState.value.copy(errorMessage = "Model disconnected")
+                loadModels()
+                loadProviders()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] model.disconnect failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to disconnect model: ${e.message}",
                 )
             }
         }
@@ -992,6 +1197,23 @@ data class ConfigUiState(
     // Nous credits/balance panel (opened from the Models tab)
     val creditsText: String? = null,
     val isLoadingCredits: Boolean = false,
+    // Model behavior config
+    val yolo: Boolean = false,
+    val reasoning: String = "standard",
+    val thinkingMode: Boolean = true,
+    // Additional behavior config
+    val fast: Boolean = false,
+    val busy: Boolean = false,
+    val verbose: Boolean = false,
+    val detailsMode: Boolean = false,
+    val compact: Boolean = false,
+    val statusbar: Boolean = true,
+    val mouse: Boolean = false,
+    val indicator: Boolean = true,
+    // Text config values
+    val personality: String = "",
+    val skin: String = "",
+    val prompt: String = "",
 )
 
 enum class ConfigTab(val label: String) {

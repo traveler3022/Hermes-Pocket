@@ -1,7 +1,16 @@
-```
 # Compressed archives
 *.tar.gz
 *.zip
 *.gz
 *.tar
-```
+
+# Build directories
+build/
+.gradle/
+
+# Local properties
+local.properties
+
+# IDE
+.idea/
+*.iml
