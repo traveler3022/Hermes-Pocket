@@ -40,8 +40,10 @@ interface GatewayClient {
 
     /**
      * Hot stream of events received from the gateway.
-     * Subscribers receive every event while subscribed; late subscribers
-     * do NOT receive past events (use a replay buffer in the UI if needed).
+     * replay=0: late subscribers do not receive past events. On reconnect,
+     * the gateway re-emits current state via gateway.ready and session
+     * events — no replay buffer needed, and it avoids re-delivering stale
+     * MessageDelta/ToolStart events to a freshly (re)subscribed collector.
      */
     val events: SharedFlow<GatewayEvent>
 

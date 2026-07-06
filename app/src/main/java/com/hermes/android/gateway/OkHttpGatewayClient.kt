@@ -61,8 +61,14 @@ class OkHttpGatewayClient @Inject constructor(
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+    // Fix: replay=5 could re-deliver stale MessageDelta/MessageComplete/ToolStart
+    // events to a freshly (re)subscribed collector (e.g. retryConnection()),
+    // potentially duplicating streamed text. finalizeOrphanedStreamingMessage()
+    // already resets isStreaming/activeAssistantMessageId before any retry can
+    // re-collect, so nothing actually needs the old events replayed — 0 removes
+    // the risk entirely instead of relying on that ordering.
     private val _events = MutableSharedFlow<GatewayEvent>(
-        replay = 5, // Fix S3F01: buffer last 5 events for reconnect replay
+        replay = 0,
         extraBufferCapacity = 256,
     )
     override val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()

@@ -129,7 +129,7 @@ data class ChatUiState(
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     val inputText: String = "",
     val isSending: Boolean = false,
-    val errorMessage: String? = null,
+    val errorEvent: ErrorEvent? = null,
     val showSessionDrawer: Boolean = false,
     // Feature #16: Search in current chat
     val searchQuery: String = "",
@@ -173,6 +173,23 @@ enum class ChatConnectionState {
     Connected,
     Reconnecting,
     Failed,
+}
+
+/**
+ * Typed error events with severity and auto-dismiss timing.
+ * Replaces the old string-only errorMessage for richer UX.
+ */
+sealed class ErrorEvent {
+    abstract val message: String
+    /** Duration in ms after which the UI should auto-dismiss. 0 = manual dismiss only. */
+    abstract val autoDismissMs: Long
+
+    /** Transient issue that self-resolves (reconnecting, rate-limit backoff). */
+    data class Warning(override val message: String, override val autoDismissMs: Long = 4000) : ErrorEvent()
+    /** Actionable error the user should see (send failed, attach failed). */
+    data class Error(override val message: String, override val autoDismissMs: Long = 6000) : ErrorEvent()
+    /** Critical — connection dead, gateway unreachable. Stays until resolved. */
+    data class Critical(override val message: String, override val autoDismissMs: Long = 0) : ErrorEvent()
 }
 
 /**
