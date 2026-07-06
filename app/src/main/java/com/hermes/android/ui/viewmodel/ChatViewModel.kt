@@ -179,6 +179,20 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            // Collect events. Must be attached BEFORE connect() is called, not
+            // after: events.replay is 0 (see OkHttpGatewayClient), so any
+            // message.start/delta/complete the gateway pushes right after the
+            // handshake — e.g. as part of a session resume — would otherwise
+            // race the collector attaching and be dropped forever, silently
+            // wiping the messages that should have shown up as chat history.
+            // UNDISPATCHED guarantees the collector is live before this
+            // coroutine yields to call connect() below.
+            eventCollectionJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                gatewayClient.events.collect { event ->
+                    handleEvent(event)
+                }
+            }
+
             // Connect to gateway
             try {
                 gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
@@ -188,13 +202,6 @@ class ChatViewModel @Inject constructor(
                     errorEvent = ErrorEvent.Critical("Cannot connect to Hermes gateway. Is it running?"),
                     connectionState = ChatConnectionState.Failed,
                 ) }
-            }
-
-            // Collect events
-            eventCollectionJob = launch {
-                gatewayClient.events.collect { event ->
-                    handleEvent(event)
-                }
             }
         }
     }
