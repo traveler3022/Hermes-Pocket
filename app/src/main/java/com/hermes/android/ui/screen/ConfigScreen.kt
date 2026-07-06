@@ -1234,6 +1234,12 @@ private fun QuickModelSwitch(
             ) {
                 Text(t("Switch Model", "تغییر مدل"))
             }
+            androidx.compose.material3.OutlinedButton(
+                onClick = { viewModel.disconnectModel() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(t("Disconnect Model", "قطع اتصال مدل"))
+            }
         }
     }
 }
