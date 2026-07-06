@@ -1166,15 +1166,11 @@ class ConfigViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
-    fun selectTab(tab: ConfigTab) {
-        _uiState.value = _uiState.value.copy(selectedTab = tab)
-    }
 }
 
 // ── UI State models ──────────────────────────────────────────────────────
 
 data class ConfigUiState(
-    val selectedTab: ConfigTab = ConfigTab.GENERAL,
     val configYaml: String = "",
     val isLoadingConfig: Boolean = false,
     val activeProvider: String? = null,
@@ -1215,12 +1211,6 @@ data class ConfigUiState(
     val skin: String = "",
     val prompt: String = "",
 )
-
-enum class ConfigTab(val label: String) {
-    GENERAL("General"),
-    MODELS("Models"),
-    TOOLS("Tools"),
-}
 
 data class ModelOption(
     val provider: String,

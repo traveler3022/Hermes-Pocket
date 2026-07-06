@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Delete
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -60,8 +62,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,12 +73,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -114,6 +114,11 @@ fun ConfigScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Nested navigation: null = the top-level category menu; a value = drilled
+    // into that category. The back arrow pops one level (category -> menu ->
+    // out of Settings), so Settings can grow deep without one giant scroll.
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -124,9 +129,11 @@ fun ConfigScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(t("Settings", "تنظیمات")) },
+                title = {
+                    Text(section?.let { t(it.titleEn, it.titleFa) } ?: t("Settings", "تنظیمات"))
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { if (section != null) section = null else onNavigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -134,37 +141,146 @@ fun ConfigScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            TabRow(selectedTabIndex = uiState.selectedTab.ordinal) {
-                ConfigTab.entries.forEach { tab ->
-                    Tab(
-                        selected = uiState.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.label) },
-                    )
-                }
-            }
-
-            when (uiState.selectedTab) {
-                ConfigTab.GENERAL -> GeneralTab(
-                    state = uiState,
-                    viewModel = viewModel,
+            when (section) {
+                null -> SettingsMenu(
+                    onOpen = { section = it },
+                    onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToPlatforms = onNavigateToPlatforms,
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
-                    onNavigateToRuntime = onNavigateToRuntime,
+                )
+                SettingsSection.GENERAL -> GeneralTab(
+                    state = uiState,
+                    viewModel = viewModel,
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
-                ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
+                SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
+                SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
             }
         }
+    }
+}
+
+/** Top-level Settings categories (drill-down targets). */
+private enum class SettingsSection(val titleEn: String, val titleFa: String) {
+    GENERAL("General", "عمومی"),
+    MEMORY("Memory", "حافظه"),
+    MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    TOOLS("Tools", "ابزارها"),
+}
+
+/**
+ * The Settings root: a scannable list of categories. In-app categories drill
+ * into a sub-page ([onOpen]); the rest jump to their own full screens.
+ */
+@Composable
+private fun SettingsMenu(
+    onOpen: (SettingsSection) -> Unit,
+    onNavigateToRuntime: () -> Unit,
+    onNavigateToPlatforms: () -> Unit,
+    onNavigateToPlugins: () -> Unit,
+    onNavigateToSkills: () -> Unit,
+    onNavigateToCron: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp),
+    ) {
+        SettingsMenuRow(
+            Icons.Default.Language,
+            t("General", "عمومی"),
+            t("Appearance, language, backend, raw config", "ظاهر، زبان، بک‌اند، پیکربندی خام"),
+        ) { onOpen(SettingsSection.GENERAL) }
+        SettingsMenuRow(
+            Icons.Default.Psychology,
+            t("Memory", "حافظه"),
+            t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
+        ) { onOpen(SettingsSection.MEMORY) }
+        SettingsMenuRow(
+            Icons.Default.SwapHoriz,
+            t("Models & Providers", "مدل‌ها و پرووایدرها"),
+            t("Model switch, API keys, credits", "تعویض مدل، کلید API، اعتبار"),
+        ) { onOpen(SettingsSection.MODELS) }
+        SettingsMenuRow(
+            Icons.Default.Security,
+            t("Tools", "ابزارها"),
+            t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها"),
+        ) { onOpen(SettingsSection.TOOLS) }
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+
+        SettingsMenuRow(
+            Icons.Default.Dns,
+            t("Server & Connection", "سرور و اتصال"),
+            t("Remote server address and token", "آدرس و توکن سرور"),
+        ) { onNavigateToRuntime() }
+        SettingsMenuRow(
+            Icons.Default.Link,
+            t("Messaging Platforms", "پیام‌رسان‌ها"),
+            t("Telegram, WhatsApp, …", "تلگرام، واتساپ، …"),
+        ) { onNavigateToPlatforms() }
+        SettingsMenuRow(
+            Icons.Default.AccountBalanceWallet,
+            t("Plugins Manager", "مدیر افزونه‌ها"),
+            t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+        ) { onNavigateToPlugins() }
+        SettingsMenuRow(
+            Icons.Default.Star,
+            t("Skills", "مهارت‌ها"),
+            t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
+        ) { onNavigateToSkills() }
+        SettingsMenuRow(
+            Icons.Default.Schedule,
+            t("Cron Scheduler", "زمان‌بندی"),
+            t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
+        ) { onNavigateToCron() }
+    }
+}
+
+@Composable
+private fun SettingsMenuRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+        )
     }
 }
 
@@ -172,11 +288,6 @@ fun ConfigScreen(
 private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
-    onNavigateToPlatforms: () -> Unit = {},
-    onNavigateToPlugins: () -> Unit = {},
-    onNavigateToSkills: () -> Unit = {},
-    onNavigateToCron: () -> Unit = {},
-    onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -584,38 +695,6 @@ private fun GeneralTab(
             }
         }
 
-        // Link to Runtime Setup / Termux Connection
-        androidx.compose.material3.Button(
-            onClick = onNavigateToRuntime,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Termux & Agent Connection", "اتصال ترموکس و عامل"))
-        }
-
-        // Link to Messaging Platforms
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlatforms,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
-        }
-
-        // Link to Plugins Manager
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlugins,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Plugins Manager", "مدیر افزونه‌ها"))
-        }
-
-        // Link to Skills
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToSkills,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Skills Browser", "مهارت‌ها"))
-        }
-
         // Reload config without restart (reload.mcp / reload.env)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -633,14 +712,6 @@ private fun GeneralTab(
             ) {
                 Text(t("Reload env", "بارگذاری env"))
             }
-        }
-
-        // Link to Cron Jobs
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToCron,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Cron Scheduler", "زمان‌بندی"))
         }
 
         Text(

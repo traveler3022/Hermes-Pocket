@@ -1051,6 +1051,13 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ToolStart -> {
+                // Defense in depth: id is server-assigned (event.toolId), not a
+                // locally generated UUID, so a duplicate delivery of the same
+                // event (e.g. a stray replay after a reconnect) would append a
+                // second message with an id already in the list. Compose's
+                // LazyColumn (keyed by message id) treats a repeated key as
+                // fatal and crashes the whole screen. Update in place instead
+                // of appending when the id already exists.
                 val toolMsg = ChatMessage.ToolCall(
                     id = event.toolId,
                     timestamp = System.currentTimeMillis(),
@@ -1061,10 +1068,17 @@ class ChatViewModel @Inject constructor(
                     isRunning = true,
                     durationS = null,
                 )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + toolMsg,
-                    activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
-                ) }
+                _uiState.update { state ->
+                    val exists = state.messages.any { it.id == event.toolId }
+                    state.copy(
+                        messages = if (exists) {
+                            state.messages.updateFirst({ it.id == event.toolId }) { toolMsg }
+                        } else {
+                            state.messages + toolMsg
+                        },
+                        activeTodos = event.todos?.toUiTodos() ?: state.activeTodos,
+                    )
+                }
             }
 
             is GatewayEvent.ToolComplete -> {

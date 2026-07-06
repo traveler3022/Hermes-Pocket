@@ -180,11 +180,20 @@ fun ChatScreen(
 
     // Feature #16: Filter messages based on search query
     val filteredMessages = remember(uiState.messages, uiState.searchQuery) {
+        // Last-resort safety net: the LazyColumn below is keyed by message id
+        // (required for correct animation/scroll behavior), and Compose treats
+        // a repeated key as fatal — it crashes the whole screen rather than
+        // just misrendering. A duplicate id should never reach here (event
+        // handlers update in place instead of appending when an id already
+        // exists), but distinctBy costs nothing on a chat-length list and
+        // means a future event-handling bug degrades to "a message is
+        // missing" instead of a hard crash.
+        val deduped = uiState.messages.distinctBy { it.id }
         if (uiState.searchQuery.isBlank()) {
-            uiState.messages
+            deduped
         } else {
             val query = uiState.searchQuery.lowercase()
-            uiState.messages.filter { msg ->
+            deduped.filter { msg ->
                 when (msg) {
                     is ChatMessage.User -> msg.text.lowercase().contains(query)
                     is ChatMessage.Assistant -> msg.text.lowercase().contains(query)
