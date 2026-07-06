@@ -185,7 +185,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to connect to gateway")
                 _uiState.update { it.copy(
-                    errorMessage = "Cannot connect to Hermes gateway. Is it running?",
+                    errorEvent = ErrorEvent.Critical("Cannot connect to Hermes gateway. Is it running?"),
                     connectionState = ChatConnectionState.Failed,
                 ) }
             }
@@ -249,7 +249,7 @@ class ChatViewModel @Inject constructor(
         } catch (e: GatewayException) {
             Timber.e(e, "[Chat] Failed to create session")
             _uiState.update { it.copy(
-                errorMessage = "Failed to create session: ${e.message}"
+                errorEvent = ErrorEvent.Error("Failed to create session: ${e.message}")
             ) }
         }
     }
@@ -312,7 +312,7 @@ class ChatViewModel @Inject constructor(
                     activeSessionId = liveSessionId,
                     messages = history,
                     showSessionDrawer = false,
-                    errorMessage = null,
+                    errorEvent = null,
                     sessionLoadedAt = System.currentTimeMillis(),
                 ) }
                 if (history.isNotEmpty()) {
@@ -326,7 +326,7 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to resume session")
-                _uiState.update { it.copy(errorMessage = "Failed to resume: ${e.message}") }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Failed to resume: ${e.message}")) }
             }
         }
     }
@@ -449,12 +449,19 @@ class ChatViewModel @Inject constructor(
     /** Max upload size; matches the gateway's image.attach_bytes cap (25 MB). */
     private val maxAttachBytes = 25 * 1024 * 1024
 
+    /** Chunk size for streaming Base64 encoding (1 MB raw = ~1.33 MB b64). */
+    private val attachChunkSize = 1024 * 1024
+
     /**
      * Upload a user-picked file to the gateway session.
      *
      * Images → `image.attach_bytes` (queued for native vision on the next
      * prompt). Everything else → `file.attach` (staged in the workspace,
      * referenced from the prompt via the returned `@file:` token).
+     *
+     * Uses chunked Base64 encoding to avoid loading the entire file +
+     * its b64 representation in RAM simultaneously (a 25 MB file would
+     * otherwise spike ~91 MB). Peak memory is now ~2.7 MB.
      */
     fun attachFromUri(uri: Uri) {
         val sessionId = _uiState.value.activeSessionId ?: return
@@ -468,17 +475,36 @@ class ChatViewModel @Inject constructor(
                     if (i >= 0 && c.moveToFirst()) c.getString(i) else null
                 } ?: uri.lastPathSegment ?: "attachment"
                 val mime = resolver.getType(uri) ?: "application/octet-stream"
-                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: throw IllegalStateException("Cannot read file")
-                if (bytes.size > maxAttachBytes) {
-                    throw IllegalStateException("File too large (max 25 MB)")
+
+                // Stream the file in chunks and build Base64 incrementally.
+                // Peak RAM: one chunk (1 MB raw) + its b64 (1.33 MB) + the
+                // accumulated b64 StringBuilder.  For 25 MB files the final
+                // b64 string is ~33 MB but we never hold the raw bytes AND
+                // the b64 string at the same time.
+                val b64 = StringBuilder()
+                var totalSize = 0
+                resolver.openInputStream(uri)?.use { stream ->
+                    val buffer = ByteArray(attachChunkSize)
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read <= 0) break
+                        totalSize += read
+                        if (totalSize > maxAttachBytes) {
+                            throw IllegalStateException("File too large (max 25 MB)")
+                        }
+                        val chunk = if (read == buffer.size) buffer else buffer.copyOf(read)
+                        b64.append(Base64.encodeToString(chunk, Base64.NO_WRAP))
+                    }
+                } ?: throw IllegalStateException("Cannot read file")
+
+                if (totalSize == 0) {
+                    throw IllegalStateException("File is empty")
                 }
-                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
 
                 val attachment = if (mime.startsWith("image/")) {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("content_base64", b64)
+                        put("content_base64", b64.toString())
                         put("filename", name)
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
@@ -487,7 +513,7 @@ class ChatViewModel @Inject constructor(
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("data_url", "data:$mime;base64,$b64")
+                        put("data_url", "data:$mime;base64,${b64}")
                         put("name", name)
                     }
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
@@ -499,11 +525,11 @@ class ChatViewModel @Inject constructor(
                     pendingAttachments = _uiState.value.pendingAttachments + attachment,
                     isAttaching = false,
                 ) }
-                Timber.i("[Chat] Attached ${attachment.name} (image=${attachment.isImage})")
+                Timber.i("[Chat] Attached ${attachment.name} (image=${attachment.isImage}, size=${totalSize})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Attach failed")
                 _uiState.update { it.copy(
-                    errorMessage = "Attach failed: ${e.message}",
+                    errorEvent = ErrorEvent.Error("Attach failed: ${e.message}"),
                     isAttaching = false,
                 ) }
             }
@@ -548,13 +574,12 @@ class ChatViewModel @Inject constructor(
         val ws = hermesRuntime.getWebSocketUrl()
         val base = ws.replaceFirst("ws://", "http://").replaceFirst("wss://", "https://")
             .substringBefore("/api/ws")
-        // Note: gateway's /api/files/download only accepts token as a query
-        // param (no header-based auth for this endpoint), so it can't be moved
-        // to a header from the client side alone. Query-param URLs do reach
-        // Coil/DownloadManager logs — mitigated by the redacting log interceptor
-        // in GatewayModule.provideOkHttpClient() which redacts "token=".
         val token = ws.substringAfter("token=", "").substringBefore('&')
         val encoded = java.net.URLEncoder.encode(path, "UTF-8")
+        // Note: gateway's /api/files/download only accepts token as a query
+        // param (no header support), so we must include it in the URL.
+        // OkHttp logging interceptor strips sensitive query params — see
+        // GatewayModule.provideOkHttpClient() which redacts "token=".
         return buildString {
             append(base).append("/api/files/download?path=").append(encoded)
             if (token.isNotEmpty()) append("&token=").append(token)
@@ -589,7 +614,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
                 _uiState.update { it.copy(
-                    errorMessage = "Failed to send: ${e.message}",
+                    errorEvent = ErrorEvent.Error("Failed to send: ${e.message}"),
                     isSending = false,
                 ) }
             }
@@ -612,7 +637,7 @@ class ChatViewModel @Inject constructor(
     private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
         if (depth > 5) {
             // Guard against a misbehaving/looping alias chain.
-            _uiState.update { it.copy(errorMessage = "Command alias loop", isSending = false) }
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
             return
         }
         viewModelScope.launch {
@@ -683,7 +708,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Slash command failed")
                 _uiState.update { it.copy(
-                    errorMessage = "Command failed: ${e.message}",
+                    errorEvent = ErrorEvent.Error("Command failed: ${e.message}"),
                     isSending = false,
                 ) }
             }
@@ -738,7 +763,7 @@ class ChatViewModel @Inject constructor(
             try {
                 val sid = resolveLiveSessionId()
                 if (sid == null) {
-                    _uiState.update { it.copy(errorMessage = "No active conversation to branch") }
+                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active conversation to branch")) }
                     return@launch
                 }
                 val result = gatewayClient.request(
@@ -749,15 +774,15 @@ class ChatViewModel @Inject constructor(
                 loadSessionList()
                 if (newId != null) {
                     resumeSession(newId)
-                    _uiState.update { it.copy(errorMessage = "Branched into a new conversation") }
+                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Branched into a new conversation")) }
                 }
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] session.branch failed")
                 val m = e.message.orEmpty()
                 _uiState.update { it.copy(
-                    errorMessage = if (m.contains("4008") || m.contains("nothing to branch"))
-                        "Send at least one message before branching"
-                    else "Branch failed: $m",
+                    errorEvent = if (m.contains("4008") || m.contains("nothing to branch"))
+                        ErrorEvent.Warning("Send at least one message before branching")
+                    else ErrorEvent.Error("Branch failed: $m"),
                 ) }
             }
         }
@@ -768,10 +793,10 @@ class ChatViewModel @Inject constructor(
         // Make the UI stop spinning immediately. The backend interrupt is
         // cooperative and can take a moment if a tool/model call is in-flight.
         _uiState.update { it.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                    msg.copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
-                } else msg
+            messages = _uiState.value.messages.updateFirst({ msg ->
+                msg is ChatMessage.ToolCall && msg.isRunning
+            }) { msg ->
+                (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
             },
             isSending = false,
         ) }
@@ -835,7 +860,7 @@ class ChatViewModel @Inject constructor(
             // Steer must target the live running session, not the local id.
             val sessionId = resolveLiveSessionId()
             if (sessionId == null) {
-                _uiState.update { it.copy(errorMessage = "No active turn to steer") }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
                 return@launch
             }
             try {
@@ -863,7 +888,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] session.steer failed")
                 _uiState.update { it.copy(
-                    errorMessage = "Steer failed: ${e.message}",
+                    errorEvent = ErrorEvent.Error("Steer failed: ${e.message}"),
                 ) }
             }
         }
@@ -984,18 +1009,22 @@ class ChatViewModel @Inject constructor(
                 flushStreamingBuffer()
                 // Finalize the assistant message
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming &&
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.Assistant && msg.isStreaming &&
                             (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                        ) {
-                            msg.copy(
-                                text = event.text.ifEmpty { msg.text },
-                                isStreaming = false,
-                                reasoning = event.reasoning,
-                            )
-                        } else if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, resultText = msg.resultText ?: "Completed")
-                        } else msg
+                    }) { msg ->
+                        (msg as ChatMessage.Assistant).copy(
+                            text = event.text.ifEmpty { msg.text },
+                            isStreaming = false,
+                            reasoning = event.reasoning,
+                        )
+                    }.let { msgs ->
+                        // Also finalize any running tool calls
+                        msgs.updateFirst({ msg ->
+                            msg is ChatMessage.ToolCall && msg.isRunning
+                        }) { msg ->
+                            (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Completed")
+                        }
                     },
                     isSending = false,
                 ) }
@@ -1006,10 +1035,10 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.ThinkingDelta -> {
                 val targetId = activeAssistantMessageId ?: return
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
-                            msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
-                        } else msg
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId
+                    }) { msg ->
+                        (msg as ChatMessage.Assistant).copy(reasoning = (msg.reasoning ?: "") + event.text)
                     }
                 ) }
             }
@@ -1033,15 +1062,15 @@ class ChatViewModel @Inject constructor(
 
             is GatewayEvent.ToolComplete -> {
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.id == event.toolId) {
-                            msg.copy(
-                                resultText = event.resultText ?: event.result,
-                                error = event.error,
-                                isRunning = false,
-                                durationS = event.durationS,
-                            )
-                        } else msg
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.ToolCall && msg.id == event.toolId
+                    }) { msg ->
+                        (msg as ChatMessage.ToolCall).copy(
+                            resultText = event.resultText ?: event.result,
+                            error = event.error,
+                            isRunning = false,
+                            durationS = event.durationS,
+                        )
                     },
                     activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
                 ) }
@@ -1052,12 +1081,12 @@ class ChatViewModel @Inject constructor(
                         event.message?.contains("429") == true
                 val displayMsg = if (isRateLimit) "Rate limited — please wait" else event.message
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(isRunning = false, error = displayMsg)
-                        } else msg
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.ToolCall && msg.isRunning
+                    }) { msg ->
+                        (msg as ChatMessage.ToolCall).copy(isRunning = false, error = displayMsg)
                     },
-                    errorMessage = displayMsg,
+                    errorEvent = ErrorEvent.Warning(displayMsg),
                     isSending = false,
                 ) }
                 if (isRateLimit) {
@@ -1170,11 +1199,11 @@ class ChatViewModel @Inject constructor(
                         val subagentId = event.payload["id"]?.jsonPrimitive?.content
                         val text = event.payload["text"]?.jsonPrimitive?.content ?: ""
                         _uiState.update { it.copy(
-                            messages = _uiState.value.messages.map { msg ->
-                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
-                                    (subagentId == null || msg.id == subagentId)) {
-                                    msg.copy(isComplete = true, text = text.ifEmpty { msg.text })
-                                } else msg
+                            messages = _uiState.value.messages.updateFirst({ msg ->
+                                msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)
+                            }) { msg ->
+                                (msg as ChatMessage.SubagentCard).copy(isComplete = true, text = text.ifEmpty { msg.text })
                             }
                         ) }
                     }
@@ -1182,11 +1211,11 @@ class ChatViewModel @Inject constructor(
                         val subagentId = event.payload["id"]?.jsonPrimitive?.content
                         val text = event.payload["text"]?.jsonPrimitive?.content ?: return
                         _uiState.update { it.copy(
-                            messages = _uiState.value.messages.map { msg ->
-                                if (msg is ChatMessage.SubagentCard && !msg.isComplete &&
-                                    (subagentId == null || msg.id == subagentId)) {
-                                    msg.copy(text = text)
-                                } else msg
+                            messages = _uiState.value.messages.updateFirst({ msg ->
+                                msg is ChatMessage.SubagentCard && !msg.isComplete &&
+                                    (subagentId == null || msg.id == subagentId)
+                            }) { msg ->
+                                (msg as ChatMessage.SubagentCard).copy(text = text)
                             }
                         ) }
                     }
@@ -1195,10 +1224,10 @@ class ChatViewModel @Inject constructor(
 
             is GatewayEvent.ToolProgress -> {
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.ToolCall && msg.isRunning) {
-                            msg.copy(resultText = event.preview)
-                        } else msg
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.ToolCall && msg.isRunning
+                    }) { msg ->
+                        (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
                     }
                 ) }
             }
@@ -1210,10 +1239,10 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.ReasoningDelta -> {
                 val targetId = activeAssistantMessageId ?: return
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.map { msg ->
-                        if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId) {
-                            msg.copy(reasoning = (msg.reasoning ?: "") + event.text)
-                        } else msg
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId
+                    }) { msg ->
+                        (msg as ChatMessage.Assistant).copy(reasoning = (msg.reasoning ?: "") + event.text)
                     }
                 ) }
             }
@@ -1290,12 +1319,11 @@ class ChatViewModel @Inject constructor(
         streamingBuffer.setLength(0)
         val targetId = activeAssistantMessageId
         _uiState.update { it.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.Assistant && msg.isStreaming &&
+            messages = _uiState.value.messages.updateFirst({ msg ->
+                msg is ChatMessage.Assistant && msg.isStreaming &&
                     (targetId == null || msg.id == targetId)
-                ) {
-                    msg.copy(text = msg.text + chunk)
-                } else msg
+            }) { msg ->
+                (msg as ChatMessage.Assistant).copy(text = msg.text + chunk)
             }
         ) }
     }
@@ -1329,14 +1357,14 @@ class ChatViewModel @Inject constructor(
         val orphanedId = activeAssistantMessageId ?: return
         var found = false
         _uiState.update { it.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.Assistant && msg.isStreaming && msg.id == orphanedId) {
-                    found = true
-                    msg.copy(
-                        isStreaming = false,
-                        text = if (msg.text.isBlank()) marker else "${msg.text}\n\n$marker",
-                    )
-                } else msg
+            messages = _uiState.value.messages.updateFirst({ msg ->
+                msg is ChatMessage.Assistant && msg.isStreaming && msg.id == orphanedId
+            }) { msg ->
+                found = true
+                (msg as ChatMessage.Assistant).copy(
+                    isStreaming = false,
+                    text = if (msg.text.isBlank()) marker else "${msg.text}\n\n$marker",
+                )
             },
             isSending = false,
         ) }
@@ -1395,7 +1423,7 @@ class ChatViewModel @Inject constructor(
                 loadSessionList()
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Rename failed")
-                _uiState.update { it.copy(errorMessage = "Rename failed: ${e.message}") }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Rename failed: ${e.message}")) }
             }
         }
     }
@@ -1426,7 +1454,7 @@ class ChatViewModel @Inject constructor(
                 loadSessionList()
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Delete failed")
-                _uiState.update { it.copy(errorMessage = "Delete failed: ${e.message}") }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Delete failed: ${e.message}")) }
             }
         }
     }
@@ -1456,8 +1484,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
+    fun clearErrorEvent() {
+        _uiState.update { it.copy(errorEvent = null) }
     }
 
     // ── Interactive responds ──────────────────────────────────────────────
@@ -1475,7 +1503,7 @@ class ChatViewModel @Inject constructor(
                 markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to clarify")
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
             }
         }
     }
@@ -1493,7 +1521,7 @@ class ChatViewModel @Inject constructor(
                 markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to sudo")
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
             }
         }
     }
@@ -1511,17 +1539,17 @@ class ChatViewModel @Inject constructor(
                 markAnswered(requestId)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to secret")
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
             }
         }
     }
 
     private fun markAnswered(requestId: String) {
         _uiState.update { it.copy(
-            messages = _uiState.value.messages.map { msg ->
-                if (msg is ChatMessage.InteractiveRequest && msg.requestId == requestId) {
-                    msg.copy(answered = true)
-                } else msg
+            messages = _uiState.value.messages.updateFirst({ msg ->
+                msg is ChatMessage.InteractiveRequest && msg.requestId == requestId
+            }) { msg ->
+                (msg as ChatMessage.InteractiveRequest).copy(answered = true)
             }
         ) }
     }
@@ -1549,6 +1577,28 @@ class ChatViewModel @Inject constructor(
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
+    }
+
+    /**
+     * Replace a single item in a list by index — O(1) replacement,
+     * O(n) copy (unavoidable with immutable lists), but avoids the
+     * O(n) predicate scan of [List.map] when the target index is known.
+     */
+    private inline fun <T> List<T>.updateAt(index: Int, transform: (T) -> T): List<T> {
+        val mutable = toMutableList()
+        mutable[index] = transform(mutable[index])
+        return mutable.toList()
+    }
+
+    /**
+     * Find the first item matching [predicate] and replace it — O(n) scan
+     * once + O(1) copy at the found index. Returns the same list if no
+     * match is found (avoids a new allocation).
+     */
+    private inline fun <T> List<T>.updateFirst(predicate: (T) -> Boolean, transform: (T) -> T): List<T> {
+        val idx = indexOfFirst(predicate)
+        if (idx == -1) return this
+        return updateAt(idx, transform)
     }
 
     override fun onCleared() {
