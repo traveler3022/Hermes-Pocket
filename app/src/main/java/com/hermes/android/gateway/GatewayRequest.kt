@@ -37,27 +37,21 @@ object GatewayMethods {
     const val SESSION_HISTORY = "session.history"
     const val SESSION_TITLE = "session.title"
     const val SESSION_USAGE = "session.usage"
-    const val SESSION_STATUS = "session.status"
-    const val SESSION_ACTIVE_LIST = "session.active_list"
 
     const val PROMPT_SUBMIT = "prompt.submit"
 
     const val TOOLS_LIST = "tools.list"
-    const val TOOLS_SHOW = "tools.show"
     const val TOOLS_CONFIGURE = "tools.configure"
-    const val TOOLSETS_LIST = "toolsets.list"
 
     const val MODEL_OPTIONS = "model.options"
     const val MODEL_SAVE_KEY = "model.save_key"
     const val MODEL_DISCONNECT = "model.disconnect"
 
-    const val CONFIG_GET = "config.get"
     const val CONFIG_SET = "config.set"
     const val CONFIG_SHOW = "config.show"
 
     const val COMMANDS_CATALOG = "commands.catalog"
     const val COMMAND_DISPATCH = "command.dispatch"
-    const val COMPLETE_SLASH = "complete.slash"
 
     const val SKILLS_MANAGE = "skills.manage"
     const val SKILLS_RELOAD = "skills.reload"
@@ -66,7 +60,6 @@ object GatewayMethods {
     const val CRON_MANAGE = "cron.manage"
     const val AGENTS_LIST = "agents.list"
 
-    const val TERMINAL_RESIZE = "terminal.resize"
     const val RELOAD_MCP = "reload.mcp"
     const val RELOAD_ENV = "reload.env"
 
