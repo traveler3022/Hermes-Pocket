@@ -2422,7 +2422,7 @@ private fun InputBar(
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
-                            Icons.Default.SubdirectoryArrowRight,
+                            Icons.Default.CallSplit,
                             contentDescription = t("Steer the agent", "هدایت عامل"),
                             tint = MaterialTheme.colorScheme.primary,
                         )
