@@ -15,22 +15,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
-import com.hermes.android.ui.screen.ChatScreen
-import com.hermes.android.ui.screen.ConfigScreen
-import com.hermes.android.ui.screen.CronScreen
-import com.hermes.android.ui.screen.OnboardingScreen
-import com.hermes.android.ui.screen.PlatformsScreen
-import com.hermes.android.ui.screen.PluginsScreen
-import com.hermes.android.ui.screen.SessionsScreen
-import com.hermes.android.ui.screen.SkillsScreen
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint
@@ -81,9 +73,9 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background,
                     ) {
-                        AppRoot(
+                        HermesNavHost(
+                            startDestination = if (onboardingCompleted) "chat" else "onboarding",
                             sharedText = sharedText,
-                            onboardingCompleted = onboardingCompleted,
                             onOnboardingComplete = {
                                 prefs.edit().putBoolean("onboarding_completed", true).apply()
                             },
@@ -117,74 +109,115 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { CHAT, CONFIG, PLATFORMS, PLUGINS, SESSIONS, SKILLS, CRON, RUNTIME, ONBOARDING }
-
+/**
+ * Navigation graph for the entire app.
+ *
+ * Routes:
+ * - `chat` — main chat screen
+ * - `onboarding` — first-time setup wizard
+ * - `config` — settings & configuration
+ * - `platforms` — platform credentials
+ * - `plugins` — plugin management
+ * - `sessions` — session list & switcher
+ * - `skills` — skill management
+ * - `cron` — cron job management
+ * - `runtime` — runtime setup & status
+ */
 @Composable
-private fun AppRoot(
+private fun HermesNavHost(
+    startDestination: String,
     sharedText: String? = null,
-    onboardingCompleted: Boolean = true,
     onOnboardingComplete: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
-    var screen by remember {
-        mutableStateOf(if (onboardingCompleted) Screen.CHAT else Screen.ONBOARDING)
-    }
+    val navController = rememberNavController()
 
-    var pendingSharedText by remember { mutableStateOf(sharedText) }
-    var pendingResumeSessionId by remember { mutableStateOf<String?>(null) }
-
-    when (screen) {
-        Screen.ONBOARDING -> OnboardingScreen(
-            onComplete = {
-                onOnboardingComplete()
-                screen = Screen.CHAT
-            },
-        )
-        Screen.CHAT -> {
-            ChatScreen(
-                onNavigateToSettings = { screen = Screen.CONFIG },
-                onNavigateToSessions = { screen = Screen.SESSIONS },
-                onNavigateToRuntime = { screen = Screen.RUNTIME },
-                sharedText = pendingSharedText,
-                resumeSessionId = pendingResumeSessionId,
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+    ) {
+        composable("onboarding") {
+            com.hermes.android.ui.screen.OnboardingScreen(
+                onComplete = {
+                    onOnboardingComplete()
+                    navController.navigate("chat") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                },
             )
-            LaunchedEffect(Unit) {
-                pendingSharedText = null
-                pendingResumeSessionId = null
-            }
         }
-        Screen.CONFIG -> ConfigScreen(
-            onNavigateBack = { screen = Screen.CHAT },
-            onNavigateToPlatforms = { screen = Screen.PLATFORMS },
-            onNavigateToPlugins = { screen = Screen.PLUGINS },
-            onNavigateToSkills = { screen = Screen.SKILLS },
-            onNavigateToCron = { screen = Screen.CRON },
-            onNavigateToRuntime = { screen = Screen.RUNTIME },
-            themeModeState = themeModeState,
-            appLanguageState = appLanguageState,
-        )
-        Screen.PLATFORMS -> PlatformsScreen(
-            onNavigateBack = { screen = Screen.CONFIG },
-        )
-        Screen.PLUGINS -> PluginsScreen(
-            onNavigateBack = { screen = Screen.CONFIG },
-        )
-        Screen.SESSIONS -> SessionsScreen(
-            onNavigateBack = { screen = Screen.CHAT },
-            onResumeSession = { sessionId ->
-                pendingResumeSessionId = sessionId
-                screen = Screen.CHAT
-            },
-        )
-        Screen.SKILLS -> SkillsScreen(
-            onNavigateBack = { screen = Screen.CONFIG },
-        )
-        Screen.CRON -> CronScreen(
-            onNavigateBack = { screen = Screen.CONFIG },
-        )
-        Screen.RUNTIME -> com.hermes.android.ui.screen.RuntimeSetupScreen(
-            onNavigateBack = { screen = Screen.CHAT },
-        )
+
+        composable(
+            route = "chat?sharedText={sharedText}&resumeSessionId={resumeSessionId}",
+            arguments = listOf(
+                navArgument("sharedText") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("resumeSessionId") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { backStackEntry ->
+            val shared = backStackEntry.arguments?.getString("sharedText") ?: sharedText
+            val resumeId = backStackEntry.arguments?.getString("resumeSessionId")
+            com.hermes.android.ui.screen.ChatScreen(
+                onNavigateToSettings = { navController.navigate("config") },
+                onNavigateToSessions = { navController.navigate("sessions") },
+                onNavigateToRuntime = { navController.navigate("runtime") },
+                sharedText = shared,
+                resumeSessionId = resumeId,
+            )
+        }
+
+        composable("config") {
+            com.hermes.android.ui.screen.ConfigScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPlatforms = { navController.navigate("platforms") },
+                onNavigateToPlugins = { navController.navigate("plugins") },
+                onNavigateToSkills = { navController.navigate("skills") },
+                onNavigateToCron = { navController.navigate("cron") },
+                onNavigateToRuntime = { navController.navigate("runtime") },
+                themeModeState = themeModeState,
+                appLanguageState = appLanguageState,
+            )
+        }
+
+        composable("platforms") {
+            com.hermes.android.ui.screen.PlatformsScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("plugins") {
+            com.hermes.android.ui.screen.PluginsScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("sessions") {
+            com.hermes.android.ui.screen.SessionsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onResumeSession = { sessionId ->
+                    navController.navigate("chat?resumeSessionId=$sessionId") {
+                        popUpTo("chat") { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable("skills") {
+            com.hermes.android.ui.screen.SkillsScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("cron") {
+            com.hermes.android.ui.screen.CronScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("runtime") {
+            com.hermes.android.ui.screen.RuntimeSetupScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
     }
 }
