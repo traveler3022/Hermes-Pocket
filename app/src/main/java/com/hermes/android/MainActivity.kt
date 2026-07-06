@@ -58,6 +58,19 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("hermes_prefs", Context.MODE_PRIVATE)
         val onboardingCompleted = prefs.getBoolean("onboarding_completed", false)
 
+        // Fix: the foreground service that keeps the gateway connection (and
+        // therefore the running agent turn) alive when the app is backgrounded
+        // was ONLY ever started from RuntimeSetupScreen (first-time setup) or
+        // BootReceiver (device reboot). A normal app relaunch — the common
+        // case — never started it, so leaving the app let Android kill the
+        // process shortly after and the agent/connection died with it. Start
+        // it unconditionally here; HermesGatewayService.onStartCommand()
+        // already handles "runtime not ready yet" gracefully (just updates the
+        // notification, doesn't crash), so this is safe even before setup.
+        if (onboardingCompleted) {
+            com.hermes.android.service.HermesGatewayService.start(this)
+        }
+
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
 

@@ -148,7 +148,7 @@ class ChatViewModel @Inject constructor(
 
                     // When connected, create or resume a session
                     if (state is ConnectionState.Connected && _uiState.value.activeSessionId == null) {
-                        createSession()
+                        createOrResumeSession()
                     }
                 }
             }
@@ -178,6 +178,36 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Session management ────────────────────────────────────────────────
+
+    /**
+     * On a fresh ChatViewModel (cold app start, or process death + relaunch —
+     * the common case, not just first-ever launch), unconditionally calling
+     * createSession() meant every reconnect threw away whatever conversation
+     * was in flight and showed a blank chat. The gateway keeps a disconnected
+     * session alive for a grace window (see ws.py's `_close_sessions_for_transport`
+     * orphan reaper) specifically so a reconnecting client can pick the same
+     * conversation back up — but nothing here was actually trying that. Now,
+     * before creating a new session, check `session.most_recent` and resume
+     * it if one exists; only fall back to a genuinely blank session when there
+     * is nothing to resume (first-ever use). An explicit resumeSessionId from
+     * Sessions/share-intent (ChatScreen's LaunchedEffect) still runs after this
+     * and wins, since it always overwrites activeSessionId unconditionally.
+     */
+    private suspend fun createOrResumeSession() {
+        val mostRecentId = try {
+            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                ?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
+            null
+        }
+        if (mostRecentId != null) {
+            resumeSession(mostRecentId)
+        } else {
+            createSession()
+        }
+    }
 
     private suspend fun createSession() {
         try {
