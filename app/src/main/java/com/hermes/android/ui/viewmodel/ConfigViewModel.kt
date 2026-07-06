@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -640,23 +641,43 @@ class ConfigViewModel @Inject constructor(
             try {
                 // Read config.yaml directly as JSON via shell.exec — parsing
                 // config.show's human-formatted text was too fragile.
+                //
+                // Fix: this used to read/write a `providers:` dict keyed by
+                // slug — a key Hermes' config loader does not recognize at
+                // all. The real schema (per Hermes' own docs) is a
+                // `custom_providers:` LIST of {name, base_url, ...}, and a
+                // custom provider is only "active" once `model.provider` is
+                // set to `custom:<name>`. Likewise `fallback_providers` is a
+                // list of {provider, model} pairs, not bare name strings.
+                // Both were silently no-ops against the real agent before —
+                // this is why "add provider"/"auto-failover" never actually
+                // connected anything.
                 val out = execPython(
                     """
                     import json, yaml, pathlib
                     home = pathlib.Path.home() / '.hermes'
                     cp = home / 'config.yaml'
                     cfg = (yaml.safe_load(cp.read_text()) if cp.exists() else {}) or {}
-                    provs = cfg.get('providers') or {}
+                    custom = cfg.get('custom_providers') or []
+                    if not isinstance(custom, list): custom = []
                     model = cfg.get('model')
-                    if not isinstance(model, dict): model = {'model': model or ''}
+                    if not isinstance(model, dict): model = {}
+                    active_raw = str(model.get('provider') or '')
+                    active = active_raw[len('custom:'):] if active_raw.startswith('custom:') else ''
+                    def fb_name(x):
+                        p = str((x or {}).get('provider', '')) if isinstance(x, dict) else str(x or '')
+                        return p[len('custom:'):] if p.startswith('custom:') else p
+                    fallback_names = [fb_name(x) for x in (cfg.get('fallback_providers') or [])]
+                    fallback_names = [n for n in fallback_names if n]
                     print(json.dumps({
-                        'providers': {str(k): {
-                            'base_url': str((v or {}).get('base_url', '') if isinstance(v, dict) else ''),
-                            'default_model': str((v or {}).get('default_model', '') if isinstance(v, dict) else ''),
-                        } for k, v in provs.items()},
+                        'providers': [{
+                            'name': str((c or {}).get('name', '')),
+                            'base_url': str((c or {}).get('base_url', '')),
+                            'default_model': str((c or {}).get('default_model', '')),
+                        } for c in custom if isinstance(c, dict) and c.get('name')],
                         'strategies': cfg.get('credential_pool_strategies') or {},
-                        'fallback': [str(x) for x in (cfg.get('fallback_providers') or []) if isinstance(x, (str, int))],
-                        'active_provider': str(model.get('provider') or ''),
+                        'fallback': fallback_names,
+                        'active_provider': active,
                     }))
                     """.trimIndent()
                 )
@@ -665,12 +686,13 @@ class ConfigViewModel @Inject constructor(
                     ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
                 val strategies = root["strategies"] as? JsonObject
                 val activeProv = (root["active_provider"] as? JsonPrimitive)?.content ?: ""
-                val providers = (root["providers"] as? JsonObject)?.map { (slug, v) ->
-                    val obj = v as? JsonObject
+                val providers = (root["providers"] as? JsonArray)?.mapNotNull { el ->
+                    val obj = el as? JsonObject ?: return@mapNotNull null
+                    val slug = (obj["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
                     HermesProviderConfig(
                         slug = slug,
-                        baseUrl = (obj?.get("base_url") as? JsonPrimitive)?.content ?: "",
-                        defaultModel = (obj?.get("default_model") as? JsonPrimitive)?.content ?: "",
+                        baseUrl = (obj["base_url"] as? JsonPrimitive)?.content ?: "",
+                        defaultModel = (obj["default_model"] as? JsonPrimitive)?.content ?: "",
                         strategy = (strategies?.get(slug) as? JsonPrimitive)?.content ?: "rotate",
                         isPrimary = slug == activeProv,
                         isFallback = slug in fallbackList,
@@ -713,14 +735,6 @@ class ConfigViewModel @Inject constructor(
         return sections
     }
 
-    private fun parseFallbackProviders(raw: String?): List<String> {
-        if (raw.isNullOrBlank()) return emptyList()
-        // Parse "[provider1, provider2]" or "fallback_providers: [provider1, provider2]"
-        val value = raw.substringAfter(":").trim().removeSurrounding("[", "]").trim()
-        if (value.isBlank()) return emptyList()
-        return value.split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
-    }
-
     fun addProvider(slug: String, baseUrl: String, defaultModel: String, apiKey: String) {
         viewModelScope.launch {
             try {
@@ -752,9 +766,19 @@ class ConfigViewModel @Inject constructor(
                     base = base64.b64decode('${b64(baseUrl.trim())}').decode().strip()
                     key = base64.b64decode('${b64(apiKey.trim())}').decode().strip()
                     hint = base64.b64decode('${b64(defaultModel.trim())}').decode().strip()
-                    provs = d.setdefault('providers', {})
-                    entry = provs.setdefault('$s', {})
+                    # custom_providers is a LIST of {name, base_url, ...} — the
+                    # `providers:` dict this used to write is not a key Hermes'
+                    # config loader recognizes at all.
+                    custom = d.setdefault('custom_providers', [])
+                    if not isinstance(custom, list): custom = d['custom_providers'] = []
+                    entry = next((c for c in custom if isinstance(c, dict) and c.get('name') == '$s'), None)
+                    if entry is None:
+                        entry = {'name': '$s'}
+                        custom.append(entry)
                     if base: entry['base_url'] = base
+                    # The API key itself goes through the existing, already-
+                    # correct credential_pool mechanism (~/.hermes/auth.json,
+                    # see addCredentialDirect below) — not duplicated here.
                     b = base.rstrip('/')
                     cands = [b + '/models']
                     if not b.endswith('/v1'):
@@ -808,8 +832,11 @@ class ConfigViewModel @Inject constructor(
 
                 loadProviders()
                 // Actually connect: point the live agent at the detected model.
+                // Hermes only resolves this provider via the "custom:<name>"
+                // address (matching custom_providers[].name above) — passing
+                // the bare slug would silently fail to activate it.
                 if (chosen.isNotBlank()) {
-                    val err = applyHermesModelSwitch(s, chosen)
+                    val err = applyHermesModelSwitch("custom:$s", chosen)
                     _uiState.value = _uiState.value.copy(
                         isLoadingModels = false,
                         activeProvider = if (err == null) s else _uiState.value.activeProvider,
@@ -857,16 +884,27 @@ class ConfigViewModel @Inject constructor(
         val slug = safeSlug(rawSlug)
         viewModelScope.launch {
             try {
-                // Use shell.exec to remove provider section from config.yaml
+                // Remove from config.yaml's custom_providers LIST (not a
+                // `providers:` dict — see loadProviders/addProvider), and
+                // drop any fallback_providers pair whose provider is this
+                // one (matched against both the bare name and "custom:name",
+                // since older-written entries may still use either form).
                 val script = """
                     import yaml, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
                     d = yaml.safe_load(p.read_text()) or {}
-                    d.get('providers', {}).pop('$slug', None)
-                    d.get('credential_pool_strategies', {}).pop('$slug', None)
+                    custom = d.get('custom_providers') or []
+                    d['custom_providers'] = [c for c in custom if not (isinstance(c, dict) and c.get('name') == '$slug')]
+                    strategies = d.get('credential_pool_strategies') or {}
+                    strategies.pop('$slug', None)
+                    d['credential_pool_strategies'] = strategies
+                    def fb_provider(x):
+                        return str((x or {}).get('provider', '')) if isinstance(x, dict) else str(x or '')
                     fb = d.get('fallback_providers') or []
-                    if '$slug' in fb: fb.remove('$slug')
-                    d['fallback_providers'] = fb
+                    d['fallback_providers'] = [x for x in fb if fb_provider(x) not in ('$slug', 'custom:$slug')]
+                    model = d.get('model')
+                    if isinstance(model, dict) and str(model.get('provider') or '') == 'custom:$slug':
+                        model['provider'] = ''
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
                     print('OK')
                 """.trimIndent()
@@ -889,8 +927,25 @@ class ConfigViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // config.set rejects non-whitelisted keys — write the yaml list
-                // directly. The list travels as base64 JSON to avoid quoting.
-                val json = providers.joinToString(",", "[", "]") { "\"${it.trim()}\"" }
+                // directly. fallback_providers is a list of {provider, model}
+                // pairs (not bare names) — Hermes needs to know which model to
+                // fail over to on each provider, and "provider" must use the
+                // "custom:<name>" address to resolve one of our own entries.
+                // Skip any provider with no default model set — Hermes has
+                // nothing to switch to for it.
+                val known = _uiState.value.providers.associateBy { it.slug }
+                val pairs = providers.mapNotNull { slug ->
+                    val model = known[slug]?.defaultModel?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    slug to model
+                }
+                val json = buildJsonArray {
+                    pairs.forEach { (slug, model) ->
+                        add(buildJsonObject {
+                            put("provider", "custom:$slug")
+                            put("model", model)
+                        })
+                    }
+                }.toString()
                 execPython(
                     """
                     import base64, json, yaml, pathlib
@@ -905,7 +960,11 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(fallbackProviders = providers)
                 loadProviders()
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Fallback providers updated"
+                    errorMessage = if (pairs.size < providers.size) {
+                        "Fallback providers updated (${providers.size - pairs.size} skipped — no default model set)"
+                    } else {
+                        "Fallback providers updated"
+                    }
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -958,7 +1017,10 @@ class ConfigViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                val error = applyHermesModelSwitch(provider.slug, model)
+                // provider.slug is one of our custom_providers entries — Hermes
+                // only resolves it via the "custom:<name>" address (see
+                // addProvider's comment for why the bare slug silently fails).
+                val error = applyHermesModelSwitch("custom:${provider.slug}", model)
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(errorMessage = error)
                     return@launch
