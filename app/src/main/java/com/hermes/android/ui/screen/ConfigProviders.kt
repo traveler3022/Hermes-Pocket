@@ -92,6 +92,27 @@ import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
+// Fix: lost during the ChatScreen/ConfigScreen file-split extraction —
+// EndpointCard uses this but it was never carried over to any of the
+// new files. Restored from the pre-split ConfigScreen.kt.
+private val knownEndpoints = mapOf(
+    "openrouter" to "https://openrouter.ai/api/v1",
+    "anthropic" to "https://api.anthropic.com",
+    "openai" to "https://api.openai.com/v1",
+    "google" to "https://generativelanguage.googleapis.com",
+    "mistral" to "https://api.mistral.ai/v1",
+    "groq" to "https://api.groq.com/openai/v1",
+    "deepseek" to "https://api.deepseek.com",
+    "together" to "https://api.together.xyz/v1",
+    "fireworks" to "https://api.fireworks.ai/inference/v1",
+    "cohere" to "https://api.cohere.ai/v1",
+    "replicate" to "https://api.replicate.com/v1",
+    "perplexity" to "https://api.perplexity.ai",
+    "xai" to "https://api.x.ai/v1",
+    "ollama" to "http://localhost:11434",
+    "lmstudio" to "http://localhost:1234/v1",
+)
+
 @Composable
 internal fun ProviderDropdown(
     providers: List<String>,
