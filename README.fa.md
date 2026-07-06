@@ -7,7 +7,7 @@
   <br><br>
   <a href="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml"><img src="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/traveler3022/Hermes2/releases/tag/debug-latest"><img src="https://img.shields.io/badge/⬇_Download-APK-6750A4?style=flat-square&logo=android&logoColor=white" alt="Download APK"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-00BCD4?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square" alt="License"></a>
   <br><br>
   <a href="README.md">English 🇬🇧</a> · <a href="README.fa.md">فارسی</a>
 </p>
@@ -130,7 +130,7 @@ issue و PR خوشآمدند. پورت مستقل جامعهمحور — نه م
 
 ## 📄 لایسنس
 
-**Apache License 2.0** — [LICENSE](LICENSE).
+**MIT** — [LICENSE](LICENSE).
 
 <sub>پروژهی مستقل · وابسته به Nous Research نیست · «Hermes Agent» متعلق به نویسندگان آن است.</sub>
 
