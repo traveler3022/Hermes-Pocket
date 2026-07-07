@@ -233,6 +233,20 @@ internal fun thinkingDotStr(): String {
 }
 
 
+/** Ordered list of real agent.reasoning_effort values (verified against Hermes docs). */
+internal val reasoningLevels = listOf("none", "minimal", "low", "medium", "high", "xhigh")
+
+@Composable
+internal fun reasoningLevelLabel(level: String): String = when (level) {
+    "none" -> t("Off", "خاموش")
+    "minimal" -> t("Minimal", "حداقلی")
+    "low" -> t("Low", "کم")
+    "medium" -> t("Medium", "متوسط")
+    "high" -> t("High", "زیاد")
+    "xhigh" -> t("Very High", "خیلی زیاد")
+    else -> level
+}
+
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 internal fun saveImageToDownloads(context: Context, url: String, alt: String) {
     val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }

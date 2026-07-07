@@ -85,7 +85,6 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
-import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -195,6 +194,16 @@ internal fun ModelDropdown(
     onSelect: (ModelOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Some providers expose hundreds of models (OpenRouter ~900) — an
+    // unsearchable dropdown is unusable at that size. Filter as you type,
+    // and cap the rendered rows (DropdownMenu is NOT lazy; rendering 900
+    // rows would jank hard).
+    var query by remember { mutableStateOf("") }
+    val maxShown = 50
+    val filtered = remember(models, query) {
+        if (query.isBlank()) models
+        else models.filter { it.modelId.contains(query, ignoreCase = true) }
+    }
 
     Column {
         Text(
@@ -213,7 +222,7 @@ internal fun ModelDropdown(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { expanded = true }
+                        .clickable { query = ""; expanded = true }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
@@ -251,7 +260,28 @@ internal fun ModelDropdown(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                 ) {
-                    models.forEach { model ->
+                    // Search box pinned at the top of the menu.
+                    if (models.size > 10) {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            placeholder = {
+                                Text(t("Search ${models.size} models…", "جستجو بین ${models.size} مدل…"))
+                            },
+                            singleLine = true,
+                        )
+                    }
+                    if (filtered.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text(t("No match", "چیزی پیدا نشد")) },
+                            onClick = {},
+                            enabled = false,
+                        )
+                    }
+                    filtered.take(maxShown).forEach { model ->
                         val isActive = model.provider == selected?.provider &&
                             model.modelId == selected?.modelId
                         DropdownMenuItem(
@@ -282,6 +312,22 @@ internal fun ModelDropdown(
                                 onSelect(model)
                                 expanded = false
                             },
+                        )
+                    }
+                    if (filtered.size > maxShown) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    t(
+                                        "…${filtered.size - maxShown} more — keep typing to narrow",
+                                        "…${filtered.size - maxShown} مدل دیگه — بیشتر تایپ کن",
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            },
+                            onClick = {},
+                            enabled = false,
                         )
                     }
                 }

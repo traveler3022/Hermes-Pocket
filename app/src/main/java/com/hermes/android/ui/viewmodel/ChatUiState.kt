@@ -147,6 +147,9 @@ data class ChatUiState(
     val isAttaching: Boolean = false,
     // Agent's live task list for the current turn (empty = no plan to show)
     val activeTodos: List<TodoItemUi> = emptyList(),
+    // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
+    // chat input bar, mirrors the same setting in Settings > General.
+    val reasoningLevel: String = "medium",
 )
 
 /**

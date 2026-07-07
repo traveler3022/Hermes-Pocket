@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Delete
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -59,9 +61,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,12 +72,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -114,6 +113,11 @@ fun ConfigScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Nested navigation: null = the top-level category menu; a value = drilled
+    // into that category. The back arrow pops one level (category -> menu ->
+    // out of Settings), so Settings can grow deep without one giant scroll.
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -124,9 +128,11 @@ fun ConfigScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(t("Settings", "تنظیمات")) },
+                title = {
+                    Text(section?.let { t(it.titleEn, it.titleFa) } ?: t("Settings", "تنظیمات"))
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { if (section != null) section = null else onNavigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -134,37 +140,146 @@ fun ConfigScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            TabRow(selectedTabIndex = uiState.selectedTab.ordinal) {
-                ConfigTab.entries.forEach { tab ->
-                    Tab(
-                        selected = uiState.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.label) },
-                    )
-                }
-            }
-
-            when (uiState.selectedTab) {
-                ConfigTab.GENERAL -> GeneralTab(
-                    state = uiState,
-                    viewModel = viewModel,
+            when (section) {
+                null -> SettingsMenu(
+                    onOpen = { section = it },
+                    onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToPlatforms = onNavigateToPlatforms,
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
-                    onNavigateToRuntime = onNavigateToRuntime,
+                )
+                SettingsSection.GENERAL -> GeneralTab(
+                    state = uiState,
+                    viewModel = viewModel,
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
-                ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
+                SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
+                SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
             }
         }
+    }
+}
+
+/** Top-level Settings categories (drill-down targets). */
+private enum class SettingsSection(val titleEn: String, val titleFa: String) {
+    GENERAL("General", "عمومی"),
+    MEMORY("Memory", "حافظه"),
+    MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    TOOLS("Tools", "ابزارها"),
+}
+
+/**
+ * The Settings root: a scannable list of categories. In-app categories drill
+ * into a sub-page ([onOpen]); the rest jump to their own full screens.
+ */
+@Composable
+private fun SettingsMenu(
+    onOpen: (SettingsSection) -> Unit,
+    onNavigateToRuntime: () -> Unit,
+    onNavigateToPlatforms: () -> Unit,
+    onNavigateToPlugins: () -> Unit,
+    onNavigateToSkills: () -> Unit,
+    onNavigateToCron: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp),
+    ) {
+        SettingsMenuRow(
+            Icons.Default.Language,
+            t("General", "عمومی"),
+            t("Appearance, language, backend, raw config", "ظاهر، زبان، بک‌اند، پیکربندی خام"),
+        ) { onOpen(SettingsSection.GENERAL) }
+        SettingsMenuRow(
+            Icons.Default.Psychology,
+            t("Memory", "حافظه"),
+            t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
+        ) { onOpen(SettingsSection.MEMORY) }
+        SettingsMenuRow(
+            Icons.Default.SwapHoriz,
+            t("Models & Providers", "مدل‌ها و پرووایدرها"),
+            t("Model switch, API keys, credits", "تعویض مدل، کلید API، اعتبار"),
+        ) { onOpen(SettingsSection.MODELS) }
+        SettingsMenuRow(
+            Icons.Default.Security,
+            t("Tools", "ابزارها"),
+            t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها"),
+        ) { onOpen(SettingsSection.TOOLS) }
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+
+        SettingsMenuRow(
+            Icons.Default.Dns,
+            t("Server & Connection", "سرور و اتصال"),
+            t("Remote server address and token", "آدرس و توکن سرور"),
+        ) { onNavigateToRuntime() }
+        SettingsMenuRow(
+            Icons.Default.Link,
+            t("Messaging Platforms", "پیام‌رسان‌ها"),
+            t("Telegram, WhatsApp, …", "تلگرام، واتساپ، …"),
+        ) { onNavigateToPlatforms() }
+        SettingsMenuRow(
+            Icons.Default.AccountBalanceWallet,
+            t("Plugins Manager", "مدیر افزونه‌ها"),
+            t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+        ) { onNavigateToPlugins() }
+        SettingsMenuRow(
+            Icons.Default.Star,
+            t("Skills", "مهارت‌ها"),
+            t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
+        ) { onNavigateToSkills() }
+        SettingsMenuRow(
+            Icons.Default.Schedule,
+            t("Cron Scheduler", "زمان‌بندی"),
+            t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
+        ) { onNavigateToCron() }
+    }
+}
+
+@Composable
+private fun SettingsMenuRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+        )
     }
 }
 
@@ -172,11 +287,6 @@ fun ConfigScreen(
 private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
-    onNavigateToPlatforms: () -> Unit = {},
-    onNavigateToPlugins: () -> Unit = {},
-    onNavigateToSkills: () -> Unit = {},
-    onNavigateToCron: () -> Unit = {},
-    onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -342,9 +452,14 @@ private fun GeneralTab(
             }
         }
 
-        // -- Model Behavior Config --
+        // -- Agent Behavior --
+        // Only settings that actually affect the agent (and therefore this
+        // app) live here. The old screen also exposed a pile of server-TUI
+        // cosmetics (skin/compact/fast/verbose/...) — some sent config keys
+        // that don't exist in Hermes at all, and the rest only restyle the
+        // terminal UI on the server, which an Android client never sees.
         Text(
-            text = t("Model Behavior", "رفتار مدل"),
+            text = t("Agent Behavior", "رفتار ایجنت"),
             style = MaterialTheme.typography.titleMedium,
         )
         Card(
@@ -355,40 +470,75 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Auto-approve (yolo) toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = t("Auto-Approve (Yolo)", "تایید خودکار"),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            text = t("Automatically approve tool calls", "تایید خودکار فراخوانی ابزارها"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    Switch(
-                        checked = state.yolo,
-                        onCheckedChange = { viewModel.setYolo(it) },
+                // Command approval mode (approvals.mode) — "off" is the
+                // persistent equivalent of --yolo.
+                Column {
+                    Text(
+                        text = t("Command Approval", "تأیید دستورات"),
+                        style = MaterialTheme.typography.titleSmall,
                     )
+                    Text(
+                        text = t(
+                            "How dangerous commands get approved",
+                            "دستورات خطرناک چطور تأیید بشن",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    var approvalExpanded by remember { mutableStateOf(false) }
+                    val approvalLabel = when (state.approvalMode) {
+                        "manual" -> t("Manual — always ask me", "دستی — همیشه از من بپرس")
+                        "smart" -> t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار")
+                        "off" -> t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)")
+                        else -> state.approvalMode
+                    }
+                    Box {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { approvalExpanded = true },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(
+                                text = approvalLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = approvalExpanded,
+                            onDismissRequest = { approvalExpanded = false },
+                        ) {
+                            listOf(
+                                "manual" to t("Manual — always ask me", "دستی — همیشه از من بپرس"),
+                                "smart" to t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار"),
+                                "off" to t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)"),
+                            ).forEach { (mode, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.setApprovalMode(mode)
+                                        approvalExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
 
                 HorizontalDivider()
 
-                // Reasoning effort level
+                // Reasoning effort level (agent.reasoning_effort)
                 Column {
                     Text(
-                        text = t("Reasoning", "استدلال"),
+                        text = t("Reasoning Effort", "سطح استدلال"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("Model effort level", "سطح تلاش مدل"),
+                        text = t("How hard the model thinks", "مدل چقدر عمیق فکر کنه"),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -404,7 +554,7 @@ private fun GeneralTab(
                             ),
                         ) {
                             Text(
-                                text = state.reasoning,
+                                text = reasoningLevelLabel(state.reasoning),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(12.dp),
                             )
@@ -413,9 +563,11 @@ private fun GeneralTab(
                             expanded = reasoningExpanded,
                             onDismissRequest = { reasoningExpanded = false },
                         ) {
-                            listOf("none", "brief", "standard", "extended").forEach { level ->
+                            // Real agent.reasoning_effort values — the old
+                            // list (brief/standard/extended) was fictional.
+                            reasoningLevels.forEach { level ->
                                 DropdownMenuItem(
-                                    text = { Text(level) },
+                                    text = { Text(reasoningLevelLabel(level)) },
                                     onClick = {
                                         viewModel.setReasoning(level)
                                         reasoningExpanded = false
@@ -425,83 +577,12 @@ private fun GeneralTab(
                         }
                     }
                 }
-
-                HorizontalDivider()
-
-                // Thinking mode toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = t("Show Thinking", "نمایش تفکر"),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            text = t("Display model reasoning process", "نمایش فرآیند استدلال مدل"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    Switch(
-                        checked = state.thinkingMode,
-                        onCheckedChange = { viewModel.setThinkingMode(it) },
-                    )
-                }
-
-                HorizontalDivider()
-
-                // Fast mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Fast Mode", "حالت سریع"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Faster responses", "پاسخ‌های سریع‌تر"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.fast, onCheckedChange = { viewModel.setFast(it) })
-                }
-
-                HorizontalDivider()
-
-                // Verbose mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Verbose", "فروند"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Detailed output", "خروجی تفصیلی"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.verbose, onCheckedChange = { viewModel.setVerbose(it) })
-                }
-
-                HorizontalDivider()
-
-                // Compact mode toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(t("Compact", "متراکم"), style = MaterialTheme.typography.titleSmall)
-                        Text(t("Compact layout", "صفحه متراکم"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = state.compact, onCheckedChange = { viewModel.setCompact(it) })
-                }
             }
         }
 
-        // -- Personality & Appearance --
+        // -- Personality & Identity --
         Text(
-            text = t("Personality & Appearance", "شخصیت و ظاهر"),
+            text = t("Personality & Identity", "شخصیت و هویت"),
             style = MaterialTheme.typography.titleMedium,
         )
         Card(
@@ -512,108 +593,83 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Personality text field
+                // Personality preset name (display.personality). Saved on
+                // button press — the old field fired a server write on every
+                // keystroke.
                 Column {
                     Text(
                         text = t("Personality", "شخصیت"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("Agent personality style", "سبک شخصیت عامل"),
+                        text = t(
+                            "Preset name, e.g. helpful / kawaii / pirate",
+                            "اسم یک پریست، مثل helpful / kawaii / pirate",
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
+                    var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
                     OutlinedTextField(
-                        value = state.personality,
-                        onValueChange = { viewModel.setPersonality(it) },
+                        value = personalityText,
+                        onValueChange = { personalityText = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter personality", "شخصیت را وارد کنید")) },
+                        placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
                         singleLine = true,
                     )
+                    if (personalityText != state.personality) {
+                        TextButton(
+                            onClick = { viewModel.setPersonality(personalityText) },
+                            modifier = Modifier.align(Alignment.End),
+                        ) { Text(t("Save", "ذخیره")) }
+                    }
                 }
 
                 HorizontalDivider()
 
-                // Skin text field
+                // SOUL.md — the agent's persistent identity (first slot of
+                // the system prompt). This replaces the old "System Prompt"
+                // free-text field, whose config key never existed in Hermes.
                 Column {
                     Text(
-                        text = t("Skin", "پوسته"),
+                        text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = t("UI theme/appearance", "تم ظاهری رابط"),
+                        text = t(
+                            "The agent's persistent voice & identity — first part of its system prompt",
+                            "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
-                    OutlinedTextField(
-                        value = state.skin,
-                        onValueChange = { viewModel.setSkin(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter skin name", "نام پوسته را وارد کنید")) },
-                        singleLine = true,
-                    )
-                }
-
-                HorizontalDivider()
-
-                // Prompt text field
-                Column {
-                    Text(
-                        text = t("System Prompt", "دستور سیستم"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t("Initial instructions for agent", "دستورات اولیه برای عامل"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    OutlinedTextField(
-                        value = state.prompt,
-                        onValueChange = { viewModel.setPrompt(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter system prompt", "دستور سیستم را وارد کنید")) },
-                        minLines = 3,
-                    )
+                    if (state.isLoadingSoul) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(12.dp).size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                        OutlinedTextField(
+                            value = soulText,
+                            onValueChange = { soulText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                            minLines = 4,
+                        )
+                        if (soulText != state.soulMd) {
+                            TextButton(
+                                onClick = { viewModel.saveSoul(soulText) },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        }
+                    }
                 }
             }
-        }
-
-        // Link to Runtime Setup / Termux Connection
-        androidx.compose.material3.Button(
-            onClick = onNavigateToRuntime,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Termux & Agent Connection", "اتصال ترموکس و عامل"))
-        }
-
-        // Link to Messaging Platforms
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlatforms,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
-        }
-
-        // Link to Plugins Manager
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlugins,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Plugins Manager", "مدیر افزونه‌ها"))
-        }
-
-        // Link to Skills
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToSkills,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Skills Browser", "مهارت‌ها"))
         }
 
         // Reload config without restart (reload.mcp / reload.env)
@@ -633,14 +689,6 @@ private fun GeneralTab(
             ) {
                 Text(t("Reload env", "بارگذاری env"))
             }
-        }
-
-        // Link to Cron Jobs
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToCron,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Cron Scheduler", "زمان‌بندی"))
         }
 
         Text(
