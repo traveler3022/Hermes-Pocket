@@ -11,6 +11,11 @@ build/
 # Local properties
 local.properties
 
+# Release signing — never commit the keystore or its credentials
+keystore.properties
+*.jks
+*.keystore
+
 # IDE
 .idea/
 *.iml
