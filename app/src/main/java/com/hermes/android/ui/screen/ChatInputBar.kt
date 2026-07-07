@@ -93,7 +93,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -103,6 +102,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -118,6 +118,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -230,12 +231,19 @@ internal fun InputBar(
                 }
             }
         }
+        // One continuous rounded pill holding every control — matches the
+        // reference (ChatGPT): icons and field share a single floating
+        // surface instead of a bordered field plus separately-floating
+        // buttons with no shared background.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // Declutter: attach + reasoning-effort used to be two separate
             // buttons next to the composer. Collapsed into one "+" so the
@@ -300,13 +308,20 @@ internal fun InputBar(
                     }
                 }
             }
-            OutlinedTextField(
+            TextField(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
                 placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
                 maxLines = 4,
-                shape = RoundedCornerShape(24.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                ),
             )
             if (isSending) {
                 // Mid-turn the agent is running. Two DIFFERENT things can be
