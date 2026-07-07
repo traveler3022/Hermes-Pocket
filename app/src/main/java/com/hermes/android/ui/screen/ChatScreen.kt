@@ -622,16 +622,11 @@ fun ChatScreen(
                     // Message list
                     val copiedToast = t("Copied", "کپی شد")
                     val codeCopiedToast = t("Code copied", "کد کپی شد")
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) {
-                    ChatWallpaper(Modifier.matchParentSize())
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .weight(1f)
+                            .fillMaxWidth()
                             .padding(horizontal = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
@@ -697,7 +692,6 @@ fun ChatScreen(
                             )
                             }
                         }
-                    }
                     }
                 }
 
