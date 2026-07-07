@@ -300,10 +300,24 @@ internal fun InputBar(
                 shape = RoundedCornerShape(24.dp),
             )
             if (isSending) {
-                // Mid-turn the agent is running. Typing a message and tapping
-                // the steer button redirects it without interrupting
-                // (session.steer) — the desktop/TUI "course-correct" control.
-                // Stop (full interrupt) stays available alongside it.
+                // Mid-turn the agent is running. Two DIFFERENT things can be
+                // meant by "send while it's replying", and neither replaces
+                // the other:
+                //  - Steer (session.steer): folds a note into the CURRENT
+                //    turn without interrupting it — but verified against
+                //    Hermes' own docs, the text only actually lands "after
+                //    the next tool call" (appended to a tool result). For a
+                //    turn with no tool calls (a plain text answer), it just
+                //    queues and never gets delivered — steer alone can look
+                //    completely broken for ordinary chatty replies.
+                //  - A normal Send: submits as a new prompt. The gateway's
+                //    prompt.submit handler explicitly does NOT reject this
+                //    mid-turn — it queues it and interrupts the live turn
+                //    (_handle_busy_submit), i.e. exactly "send a message
+                //    that cuts in", which is what most users expect from a
+                //    chat app. This used to be unreachable: the button was
+                //    swapped out entirely while isSending.
+                // Stop (full interrupt, no follow-up) stays available too.
                 if (text.isNotBlank()) {
                     IconButton(
                         onClick = onSteer,
@@ -312,6 +326,16 @@ internal fun InputBar(
                         Icon(
                             Icons.Default.CallSplit,
                             contentDescription = t("Steer the agent", "هدایت عامل"),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    IconButton(
+                        onClick = onSend,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
