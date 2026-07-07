@@ -653,34 +653,46 @@ fun ChatScreen(
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
-                                val starterPrompts = listOf(
-                                    t("What can you do for me?", "چی می‌تونی برام انجام بدی؟"),
-                                    t("Check my server status", "وضعیت سرورم رو چک کن"),
-                                    t("Summarize recent activity", "فعالیت‌های اخیر رو خلاصه کن"),
-                                )
                                 Box(
                                     modifier = Modifier.fillParentMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        modifier = Modifier.padding(horizontal = 24.dp),
-                                    ) {
+                                    if (uiState.searchQuery.isNotBlank()) {
+                                        // Search active with no matches — a plain
+                                        // no-results message, NOT the starter
+                                        // prompts (those auto-send on tap, which
+                                        // would fire an unintended message here).
                                         Text(
-                                            text = t("How can I help?", "چطور می‌تونم کمکت کنم؟"),
-                                            style = MaterialTheme.typography.titleMedium,
+                                            text = t("No matching messages", "پیامی پیدا نشد"),
+                                            style = MaterialTheme.typography.bodyLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            starterPrompts.forEach { prompt ->
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        viewModel.updateInputText(prompt)
-                                                        viewModel.sendMessage()
-                                                    },
-                                                ) {
-                                                    Text(prompt)
+                                    } else {
+                                        val starterPrompts = listOf(
+                                            t("What can you do for me?", "چی می‌تونی برام انجام بدی؟"),
+                                            t("Check my server status", "وضعیت سرورم رو چک کن"),
+                                            t("Summarize recent activity", "فعالیت‌های اخیر رو خلاصه کن"),
+                                        )
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                                            modifier = Modifier.padding(horizontal = 24.dp),
+                                        ) {
+                                            Text(
+                                                text = t("How can I help?", "چطور می‌تونم کمکت کنم؟"),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                starterPrompts.forEach { prompt ->
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            viewModel.updateInputText(prompt)
+                                                            viewModel.sendMessage()
+                                                        },
+                                                    ) {
+                                                        Text(prompt)
+                                                    }
                                                 }
                                             }
                                         }
