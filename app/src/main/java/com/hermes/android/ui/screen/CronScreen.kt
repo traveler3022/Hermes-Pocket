@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -122,9 +123,12 @@ fun CronScreen(
             }
         }
 
-        // Create dialog
+        // Create / edit dialog
         if (uiState.showCreateDialog) {
             CreateJobDialog(viewModel)
+        }
+        uiState.editingJob?.let { job ->
+            CreateJobDialog(viewModel, existingJob = job)
         }
     }
 }
@@ -200,27 +204,42 @@ private fun CronJobCard(job: CronJob, viewModel: CronViewModel) {
                     checked = job.enabled,
                     onCheckedChange = { viewModel.toggleJob(job.id, it) },
                 )
-                IconButton(onClick = { viewModel.deleteJob(job.id) }) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                    )
+                Row {
+                    IconButton(onClick = { viewModel.startEditJob(job) }) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { viewModel.deleteJob(job.id) }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/** Handles both create (existingJob = null) and edit (pre-filled, existing
+ *  job's fields locked into the update call on save) — cron.manage has no
+ *  dedicated edit RPC, so an edit is a remove+add under the hood
+ *  (CronViewModel.updateJob), but the user just sees one form either way. */
 @Composable
-private fun CreateJobDialog(viewModel: CronViewModel) {
-    var name by remember { mutableStateOf("") }
-    var schedule by remember { mutableStateOf("") }
-    var prompt by remember { mutableStateOf("") }
+private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = null) {
+    var name by remember(existingJob) { mutableStateOf(existingJob?.name ?: "") }
+    var schedule by remember(existingJob) { mutableStateOf(existingJob?.schedule ?: "") }
+    var prompt by remember(existingJob) { mutableStateOf(existingJob?.promptPreview ?: "") }
+    val isEdit = existingJob != null
+    val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog
 
     AlertDialog(
-        onDismissRequest = { viewModel.hideCreateDialog() },
-        title = { Text("Create Cron Job") },
+        onDismissRequest = onDismiss,
+        title = { Text(if (isEdit) "Edit Cron Job" else "Create Cron Job") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -248,13 +267,17 @@ private fun CreateJobDialog(viewModel: CronViewModel) {
             TextButton(
                 onClick = {
                     if (name.isNotBlank() && schedule.isNotBlank()) {
-                        viewModel.createJob(name, schedule, prompt)
+                        if (isEdit) {
+                            viewModel.updateJob(existingJob!!.id, name, schedule, prompt)
+                        } else {
+                            viewModel.createJob(name, schedule, prompt)
+                        }
                     }
                 },
-            ) { Text("Create") }
+            ) { Text(if (isEdit) "Save" else "Create") }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.hideCreateDialog() }) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
 }
