@@ -292,6 +292,7 @@ internal fun MessageBubble(
     message: ChatMessage,
     grouped: Boolean = false,
     isLastInGroup: Boolean = true,
+    avatarUri: String? = null,
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,
@@ -460,11 +461,20 @@ internal fun MessageBubble(
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "⚕",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
+                        if (avatarUri != null) {
+                            AsyncImage(
+                                model = avatarUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Text(
+                                text = "⚕",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                 }
