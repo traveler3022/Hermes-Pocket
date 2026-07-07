@@ -53,6 +53,12 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // Night/warm reading mode — shifts background/surface toward a soft
+    // amber tint (f.lux-style) to cut blue-light emission during long
+    // sessions, independent of which color theme is active.
+    var warmMode: Boolean by mutableStateOf(prefs.getBoolean("warm_mode", false))
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -61,6 +67,11 @@ class ThemeModeState(context: Context) {
     fun updateColorTheme(newTheme: ColorTheme) {
         colorTheme = newTheme
         prefs.edit().putString("color_theme", newTheme.key).apply()
+    }
+
+    fun updateWarmMode(enabled: Boolean) {
+        warmMode = enabled
+        prefs.edit().putBoolean("warm_mode", enabled).apply()
     }
 }
 
@@ -406,6 +417,7 @@ fun Hermes2Theme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorTheme: ColorTheme = ColorTheme.CARBON,
     dynamicColor: Boolean = false,
+    warmMode: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val useDark = when (themeMode) {
@@ -430,8 +442,26 @@ fun Hermes2Theme(
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
         typography = HermesTypography,
         content = content
+    )
+}
+
+/** Night/warm reading mode: nudges the large background/surface areas
+ *  toward a soft amber tint (f.lux-style), reducing blue-light emission
+ *  during long sessions. Text/icon colors are left untouched so the
+ *  contrast ratios verified elsewhere stay intact. */
+private fun androidx.compose.material3.ColorScheme.warmed(): androidx.compose.material3.ColorScheme {
+    val warmTint = androidx.compose.ui.graphics.Color(0xFFFFD9A0)
+    fun androidx.compose.ui.graphics.Color.warm(strength: Float) =
+        androidx.compose.ui.graphics.lerp(this, warmTint, strength)
+    return copy(
+        background = background.warm(0.10f),
+        surface = surface.warm(0.10f),
+        surfaceVariant = surfaceVariant.warm(0.10f),
+        primaryContainer = primaryContainer.warm(0.06f),
+        secondaryContainer = secondaryContainer.warm(0.06f),
+        tertiaryContainer = tertiaryContainer.warm(0.06f),
     )
 }
