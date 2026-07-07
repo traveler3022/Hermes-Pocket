@@ -1,5 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
@@ -189,6 +190,119 @@ class SkillsViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
+
+    // ── Manual skill add/edit/delete ────────────────────────────────────
+    //
+    // skills.manage only supports list/search/install/browse/inspect —
+    // "install" pulls a named skill from the remote skills hub, it can't
+    // create one from scratch. There's no dedicated create/edit/delete RPC,
+    // so this writes directly to ~/.hermes/skills/<name>.md (one skill per
+    // markdown file, the same convention SOUL.md uses elsewhere in Settings)
+    // and reloads via skills.reload afterward.
+
+    /** Open the editor for a brand-new skill. */
+    fun startNewSkill() {
+        _uiState.value = _uiState.value.copy(
+            editingSkillName = "",
+            editingSkillOriginalName = null,
+            editingSkillContent = "",
+        )
+    }
+
+    /** Open the editor pre-filled with an existing skill's file content. */
+    fun startEditSkill(name: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                editingSkillName = name,
+                editingSkillOriginalName = name,
+                isLoadingSkillContent = true,
+            )
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("cat ~/.hermes/skills/${safeSkillSlug(name)}.md 2>/dev/null || echo ''")),
+                )
+                val content = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                _uiState.value = _uiState.value.copy(editingSkillContent = content, isLoadingSkillContent = false)
+            } catch (e: Exception) {
+                Timber.w(e, "[Skills] Failed to load skill content")
+                _uiState.value = _uiState.value.copy(isLoadingSkillContent = false)
+            }
+        }
+    }
+
+    fun dismissSkillEditor() {
+        _uiState.value = _uiState.value.copy(
+            editingSkillName = null,
+            editingSkillOriginalName = null,
+            editingSkillContent = "",
+        )
+    }
+
+    fun saveSkill(name: String, content: String) {
+        val slug = safeSkillSlug(name)
+        if (slug.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Skill name can't be empty")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val originalSlug = _uiState.value.editingSkillOriginalName?.let { safeSkillSlug(it) }
+                val b64Content = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                val renameLine = if (originalSlug != null && originalSlug != slug) {
+                    "old = pathlib.Path.home() / '.hermes' / 'skills' / '$originalSlug.md'\nold.unlink(missing_ok=True)\n"
+                } else ""
+                gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf(
+                        "command" to JsonPrimitive(
+                            "python3 - <<'H2PYEOF'\n" +
+                                "import base64, pathlib\n" +
+                                "d = pathlib.Path.home() / '.hermes' / 'skills'\n" +
+                                "d.mkdir(parents=True, exist_ok=True)\n" +
+                                renameLine +
+                                "p = d / '$slug.md'\n" +
+                                "p.write_text(base64.b64decode('$b64Content').decode())\n" +
+                                "print('OK')\n" +
+                                "H2PYEOF"
+                        ),
+                    ),
+                )
+                Timber.i("[Skills] Saved: $slug")
+                dismissSkillEditor()
+                reloadSkills()
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Save failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to save skill: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteSkill(name: String) {
+        val slug = safeSkillSlug(name)
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf(
+                        "command" to JsonPrimitive(
+                            "rm -f ~/.hermes/skills/$slug.md ~/.hermes/skills/$slug.markdown 2>/dev/null; echo OK"
+                        ),
+                    ),
+                )
+                Timber.i("[Skills] Deleted: $slug")
+                reloadSkills()
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Delete failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to delete skill: ${e.message}")
+            }
+        }
+    }
+
+    /** Names are interpolated straight into a shell/python command — strip
+     *  anything that isn't a safe filename character. */
+    private fun safeSkillSlug(name: String): String =
+        name.trim().filter { it.isLetterOrDigit() || it == '-' || it == '_' }
 }
 
 data class SkillsUiState(
@@ -197,6 +311,12 @@ data class SkillsUiState(
     val errorMessage: String? = null,
     val inspectedSkillName: String? = null,
     val inspectedSkillDetail: String? = null,
+    // Manual add/edit — null = editor closed, "" = new skill (no name yet
+    // typed), non-null = editing that existing skill.
+    val editingSkillName: String? = null,
+    val editingSkillOriginalName: String? = null,
+    val editingSkillContent: String = "",
+    val isLoadingSkillContent: Boolean = false,
 )
 
 data class SkillItem(

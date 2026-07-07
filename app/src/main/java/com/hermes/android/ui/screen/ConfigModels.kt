@@ -23,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -135,11 +134,6 @@ internal fun ModelsTab(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // ── Quick model switch (manual input) ──
-        item(key = "__quick_model_switch") {
-            QuickModelSwitch(state, viewModel)
-        }
-
         // ══════════════════════════════════════════════════════════════
         // ── Provider Management Section ──
         // ══════════════════════════════════════════════════════════════
@@ -154,11 +148,6 @@ internal fun ModelsTab(
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { viewModel.loadCredits() }) {
-                        Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text(t("Credits", "اعتبار"))
-                    }
                     TextButton(onClick = { viewModel.loadProviders() }) {
                         Text(t("Refresh", "بارگذاری مجدد"))
                     }
@@ -339,98 +328,8 @@ internal fun ModelsTab(
         )
     }
 
-    // ── Credits dialog ──
-    if (state.creditsText != null || state.isLoadingCredits) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissCredits() },
-            title = { Text(t("Credits", "اعتبار")) },
-            text = {
-                if (state.isLoadingCredits) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Text(state.creditsText.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.dismissCredits() }) { Text(t("Close", "بستن")) }
-            },
-        )
-    }
 }
 
-@Composable
-internal fun QuickModelSwitch(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
-) {
-    var customProvider by remember { mutableStateOf("") }
-    var customModel by remember { mutableStateOf("") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = t("Quick Model Switch", "تغییر سریع مدل"),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = t(
-                    "Current: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
-                    "فعلی: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            OutlinedTextField(
-                value = customProvider,
-                onValueChange = { customProvider = it },
-                label = { Text(t("Provider (e.g. xiaomi, gemini, openai)", "پرووایدر")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = customModel,
-                onValueChange = { customModel = it },
-                label = { Text(t("Model ID (e.g. mimo-v2.5-free)", "شناسه مدل")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            androidx.compose.material3.Button(
-                onClick = {
-                    if (customProvider.isNotBlank() && customModel.isNotBlank()) {
-                        viewModel.selectModel(
-                            ModelOption(
-                                provider = customProvider.trim(),
-                                modelId = customModel.trim(),
-                                name = customModel.trim(),
-                                requiresApiKey = false,
-                            )
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = customProvider.isNotBlank() && customModel.isNotBlank(),
-            ) {
-                Text(t("Switch Model", "تغییر مدل"))
-            }
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.disconnectModel() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Disconnect Model", "قطع اتصال مدل"))
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
