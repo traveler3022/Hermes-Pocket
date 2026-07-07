@@ -81,6 +81,8 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadDraft()
+        loadAssistantName()
+        loadAssistantAvatar()
         connectAndCollect()
         loadCommandCatalog()
         loadReasoningLevel()
@@ -1033,6 +1035,31 @@ class ChatViewModel @Inject constructor(
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
+    // ── Client-side display name (top bar / drawer header) ───────────────
+
+    private fun loadAssistantName() {
+        val saved = prefs.getString(KEY_ASSISTANT_NAME, null)
+        if (!saved.isNullOrBlank()) {
+            _uiState.update { it.copy(assistantName = saved) }
+        }
+    }
+
+    fun setAssistantName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        prefs.edit().putString(KEY_ASSISTANT_NAME, trimmed).apply()
+        _uiState.update { it.copy(assistantName = trimmed) }
+    }
+
+    // Avatar is customized from Settings (ConfigViewModel writes the same
+    // prefs key) — re-read on every return to this screen so the change
+    // shows up without needing a shared reactive store between ViewModels.
+    fun loadAssistantAvatar() {
+        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
+        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
+        _uiState.update { it.copy(assistantAvatarPath = path) }
+    }
+
     // Model switching lives in the Settings screen (ConfigViewModel), not in
     // chat — it must go through `config.set` with key="model" against the
     // active session, which Settings owns.
@@ -1372,9 +1399,15 @@ class ChatViewModel @Inject constructor(
                 // actual current effort (session override included), so this
                 // is the authoritative source for what the chat's control
                 // should show, not our own optimistic local copy.
-                (event.info["reasoning_effort"] as? JsonPrimitive)?.content?.let { effort ->
-                    _uiState.update { it.copy(reasoningLevel = effort.ifBlank { "none" }) }
-                }
+                // Server distinguishes "" (unset/provider default) from the
+                // explicit "none" (reasoning disabled) — collapsing them
+                // would make the control lie about state right after a
+                // fresh session, before any override has been set. Only
+                // update on a concrete value; leave the existing display
+                // (config.yaml default) alone otherwise.
+                (event.info["reasoning_effort"] as? JsonPrimitive)?.content
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 
@@ -1665,6 +1698,8 @@ class ChatViewModel @Inject constructor(
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
+        private const val KEY_ASSISTANT_NAME = "assistant_display_name"
+        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
     }
 
     /**

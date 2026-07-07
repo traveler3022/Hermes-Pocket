@@ -13,6 +13,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateInt
 import androidx.compose.animation.core.infiniteRepeatable
@@ -38,6 +40,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -86,6 +89,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -103,6 +107,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -114,7 +119,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -246,11 +251,46 @@ internal fun ThinkingBlock(
     }
 }
 
+/** Bouncing three-dot "typing" indicator — replaces the generic circular
+ *  spinner while the agent is composing a reply, matching the familiar
+ *  chat-app convention (WhatsApp/iMessage) instead of a loading spinner. */
+@Composable
+private fun TypingDots(
+    modifier: Modifier = Modifier,
+    dotSize: androidx.compose.ui.unit.Dp = 6.dp,
+    color: Color = MaterialTheme.colorScheme.primary,
+) {
+    val transition = rememberInfiniteTransition(label = "typingDots")
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        repeat(3) { index ->
+            val bounce by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 600, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * 150, StartOffsetType.FastForward),
+                ),
+                label = "dot$index",
+            )
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .offset(y = (-bounce * 4).dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.4f + bounce * 0.6f)),
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MessageBubble(
     message: ChatMessage,
     grouped: Boolean = false,
+    isLastInGroup: Boolean = true,
+    avatarUri: String? = null,
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,
@@ -269,22 +309,39 @@ internal fun MessageBubble(
             val isLongMessage = message.text.length > 500
             var isExpanded by remember { mutableStateOf(!isLongMessage) }
 
+            // Every color theme in this app has a blue-ish primary, so a
+            // primary/tertiary gradient here was always "blue" regardless
+            // of which theme was picked. Matching ChatGPT's own pattern
+            // instead: a plain neutral surface for the user's pill, no
+            // color, no gradient — separation comes from shape/alignment,
+            // not from a loud fill. Real "tail" corner on the last message
+            // of a group (uniform rounding for the rest of the run).
+            val bubbleShape = if (isLastInGroup) {
+                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+            } else {
+                RoundedCornerShape(16.dp)
+            }
+            val bubbleColor = MaterialTheme.colorScheme.surfaceVariant
+            val bubbleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                Card(
+                Box(
                     modifier = Modifier
                         .widthIn(max = 420.dp)
+                        .clip(bubbleShape)
+                        .background(bubbleColor)
                         .combinedClickable(
                             onClick = { if (isLongMessage) isExpanded = !isExpanded },
                             onLongClick = { onCopyMessage(message.text) },
                         ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                    shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
                 ) {
+                    // Provide the bubble's text color ambiently so any
+                    // unstyled Text/Icon inside (e.g. the search-highlight
+                    // branch below) also reads against the gradient.
+                    CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                     Column(
                         modifier = Modifier
                             .padding(12.dp)
@@ -311,20 +368,20 @@ internal fun MessageBubble(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                .background(bubbleTextColor.copy(alpha = 0.15f))
                                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                                         ) {
                                             Icon(
                                                 Icons.Default.AttachFile,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                tint = bubbleTextColor,
                                             )
                                             Text(
                                                 text = attachment.name,
                                                 style = MaterialTheme.typography.labelMedium,
                                                 maxLines = 1,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                color = bubbleTextColor,
                                             )
                                         }
                                     }
@@ -348,7 +405,7 @@ internal fun MessageBubble(
                             Text(
                                 text = displayText,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = bubbleTextColor,
                             )
                         }
                         if (isLongMessage) {
@@ -362,10 +419,11 @@ internal fun MessageBubble(
                                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     contentDescription = if (isExpanded) "جمع کردن" else "باز کردن",
                                     modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                    tint = bubbleTextColor.copy(alpha = 0.6f),
                                 )
                             }
                         }
+                    }
                     }
                 }
             }
@@ -385,44 +443,53 @@ internal fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
-                // Agent avatar (Telegram-style): shown once per group. Grouped
-                // messages reserve the same width so bubbles stay aligned.
+                // Agent avatar: circular, shown once per group. Grouped
+                // messages reserve the same width so the text column stays
+                // aligned.
                 if (grouped) {
-                    Spacer(modifier = Modifier.width(34.dp))
+                    Spacer(modifier = Modifier.width(40.dp))
                 } else {
                     Box(
                         modifier = Modifier
                             .padding(top = 2.dp)
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .size(32.dp)
+                            .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "⚕",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
+                        if (avatarUri != null) {
+                            AsyncImage(
+                                model = avatarUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Text(
+                                text = "⚕",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Column(modifier = Modifier.widthIn(max = 420.dp)) {
+                Column(modifier = Modifier.widthIn(max = 460.dp)) {
                     Box {
-                        Card(
+                        // Document-style: no bubble/card behind the agent's
+                        // reply — a long-press area on plain background reads
+                        // like prose (code/images/etc. still get their own
+                        // card per block below), not a chat message. Long
+                        // responses and code breathe instead of being
+                        // squeezed into a fixed-width tinted box.
+                        Column(
                             modifier = Modifier
                                 .combinedClickable(
                                     onClick = {},
                                     onLongClick = { showContextMenu = true },
-                                ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
-                        ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .animateContentSize(),
+                                )
+                                .animateContentSize()
+                                .padding(vertical = 2.dp),
                         ) {
                             if (hasThinking) {
                                 ThinkingBlock(
@@ -433,11 +500,7 @@ internal fun MessageBubble(
                                 )
                             }
                             if (message.text.isEmpty()) {
-                                Text(
-                                    text = "...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
+                                TypingDots(modifier = Modifier.padding(vertical = 4.dp))
                             } else {
                                 val displayMd = if (!isResponseExpanded && isLongResponse) {
                                     message.text.take(800) + "\n\n…"
@@ -523,12 +586,8 @@ internal fun MessageBubble(
                             }
                             if (message.isStreaming) {
                                 Spacer(modifier = Modifier.height(4.dp))
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    strokeWidth = 2.dp,
-                                )
+                                TypingDots(dotSize = 4.dp)
                             }
-                        }
                         }
                         // Feature 9: long-press context menu
                         DropdownMenu(

@@ -1,5 +1,7 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,6 +9,7 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,13 +42,19 @@ import javax.inject.Inject
 @HiltViewModel
 class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ConfigUiState())
     val uiState: StateFlow<ConfigUiState> = _uiState.asStateFlow()
 
+    // Same prefs file as ChatViewModel's client-side appearance settings
+    // (assistant name/avatar) — both screens read/write it independently.
+    private val prefs = context.getSharedPreferences("hermes_chat_prefs", Context.MODE_PRIVATE)
+
     init {
         loadAll()
+        loadAvatarUri()
     }
 
     fun loadAll() {
@@ -263,6 +272,45 @@ class ConfigViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Client-side avatar image shown next to agent replies in chat. The
+     * picked image is copied into app-private storage (not just a
+     * content:// reference, which isn't guaranteed to survive a reboot
+     * without extra permission plumbing) and referenced by a stable file
+     * path saved to prefs — same file/key ChatViewModel reads, no gateway
+     * RPC involved.
+     */
+    fun loadAvatarUri() {
+        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
+        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
+        _uiState.value = _uiState.value.copy(avatarUri = path)
+    }
+
+    fun setAvatarUri(source: Uri) {
+        viewModelScope.launch {
+            try {
+                val dest = java.io.File(context.filesDir, "assistant_avatar.jpg")
+                context.contentResolver.openInputStream(source)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw java.io.IOException("Could not open picked image")
+                prefs.edit().putString(KEY_ASSISTANT_AVATAR, dest.absolutePath).apply()
+                _uiState.value = _uiState.value.copy(avatarUri = dest.absolutePath)
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to save avatar image")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to save avatar image: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun clearAvatarUri() {
+        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
+        if (!saved.isNullOrBlank()) java.io.File(saved).delete()
+        prefs.edit().remove(KEY_ASSISTANT_AVATAR).apply()
+        _uiState.value = _uiState.value.copy(avatarUri = null)
     }
 
     /**
@@ -1341,6 +1389,11 @@ class ConfigViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
+    private companion object {
+        // Same key ChatViewModel reads from the shared "hermes_chat_prefs"
+        // file — keep these in sync if either changes.
+        const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
+    }
 }
 
 // ── UI State models ──────────────────────────────────────────────────────
@@ -1376,13 +1429,15 @@ data class ConfigUiState(
     // they only restyle the terminal UI on the server, which an Android
     // client never sees.
     val approvalMode: String = "manual", // approvals.mode: manual | smart | off
-    val reasoning: String = "medium", // agent.reasoning_effort: none|minimal|low|medium|high|xhigh
+    val reasoning: String = "medium", // agent.reasoning_effort: none|minimal|low|medium|high|xhigh|max
     val personality: String = "", // display.personality — system-prompt overlay name
     // SOUL.md — the agent's persistent identity/voice (first slot in the
     // system prompt). Replaces the old free-text "prompt" field, which sent
     // a config.set key ("prompt") that doesn't exist anywhere in Hermes.
     val soulMd: String = "",
     val isLoadingSoul: Boolean = false,
+    // Client-side avatar image (local file path, null = default icon).
+    val avatarUri: String? = null,
 )
 
 data class ModelOption(

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طرح جدید صفحه چت هرمس</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#1a1c20; color:#e6e8ee;
+    font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
+    display:flex; flex-direction:column; align-items:center; gap:24px; padding:32px 16px;
+  }
+  h1 { font-size:18px; font-weight:600; color:#aeb4c2; }
+  .phone {
+    width:375px; height:760px; border-radius:36px; overflow:hidden;
+    background:#101216; border:6px solid #2a2d34;
+    display:flex; flex-direction:column;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);
+  }
+  /* top bar */
+  .topbar {
+    display:flex; align-items:center; gap:10px; padding:14px 16px;
+    background:#14171c; border-bottom:1px solid #22262e;
+  }
+  .topbar .menu { color:#8b93a5; font-size:20px; }
+  .topbar .title { font-weight:700; font-size:16px; flex:1; }
+  .status { display:flex; align-items:center; gap:6px; font-size:11px; color:#4ade80; }
+  .dot { width:7px; height:7px; border-radius:50%; background:#4ade80; box-shadow:0 0 6px #4ade80; }
+
+  /* message area — soft depth, not flat */
+  .messages {
+    flex:1; overflow:hidden; padding:16px 12px;
+    background:linear-gradient(180deg, #0f1115 0%, #12151b 100%);
+    display:flex; flex-direction:column; gap:18px; /* big gap = turn separation */
+  }
+  .turn { display:flex; flex-direction:column; gap:5px; } /* small gap inside a turn */
+
+  /* user bubble — brand color, right side, soft tail */
+  .user { align-self:flex-start; direction:rtl; max-width:78%; }
+  .user .bubble {
+    background:linear-gradient(135deg, #0e7490, #0891b2);
+    color:#f0fdff; padding:10px 14px; font-size:14.5px; line-height:1.7;
+    border-radius:20px 20px 6px 20px;
+    box-shadow:0 2px 8px rgba(8,145,178,.25);
+  }
+  .meta { font-size:10px; color:#5b6270; margin-top:3px; text-align:left; padding:0 4px; }
+
+  /* agent row — circular avatar + lighter bubble */
+  .agent { display:flex; gap:8px; align-items:flex-end; max-width:88%; align-self:flex-end; direction:ltr; }
+  .avatar {
+    width:30px; height:30px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,#22d3ee,#0891b2);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:800; font-size:14px;
+    box-shadow:0 0 0 2px #1c2027;
+  }
+  .agent .bubble {
+    background:#1e222a; border:1px solid #262b34;
+    color:#dde1ea; padding:11px 14px; font-size:14.5px; line-height:1.8;
+    border-radius:20px 20px 20px 6px; direction:rtl; text-align:right;
+  }
+  .agent .bubble code {
+    background:#12151b; border:1px solid #262b34; border-radius:6px;
+    padding:1px 6px; font-size:12.5px; color:#7dd3fc; direction:ltr; display:inline-block;
+  }
+  .thinking-label { font-size:11px; color:#67e8f9; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .thinking-bar { width:3px; height:12px; border-radius:2px; background:#22d3ee; animation:pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:1} }
+
+  /* typing dots */
+  .typing { display:flex; gap:5px; padding:13px 16px; }
+  .typing i {
+    width:7px; height:7px; border-radius:50%; background:#67e8f9; display:block;
+    animation:bounce 1.2s infinite;
+  }
+  .typing i:nth-child(2){ animation-delay:.15s } .typing i:nth-child(3){ animation-delay:.3s }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0); opacity:.4} 30%{transform:translateY(-4px); opacity:1} }
+
+  /* input bar — calm, uncluttered */
+  .inputbar {
+    display:flex; align-items:center; gap:8px; padding:10px 12px 14px;
+    background:#14171c; border-top:1px solid #22262e;
+  }
+  .icon-btn {
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    color:#8b93a5; font-size:18px; background:transparent;
+  }
+  .field {
+    flex:1; background:#1e222a; border:1px solid #262b34; border-radius:24px;
+    padding:11px 16px; font-size:14px; color:#5b6270;
+  }
+  .send {
+    width:44px; height:44px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,#22d3ee,#0891b2);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:18px; box-shadow:0 3px 10px rgba(8,145,178,.35);
+  }
+  .note { max-width:420px; font-size:13px; line-height:2; color:#8b93a5; }
+  .note b { color:#cbd2e0; }
+</style>
+</head>
+<body>
+  <h1>طرح پیشنهادی صفحه‌ی چت — نسخه ۲</h1>
+
+  <div class="phone">
+    <div class="topbar">
+      <span class="menu">☰</span>
+      <span class="title">هرمس</span>
+      <span class="status"><span class="dot"></span>متصل</span>
+    </div>
+
+    <div class="messages">
+      <div class="turn">
+        <div class="user"><div class="bubble">وضعیت سرور رو چک کن و بگو رم چقدر مصرف شده</div>
+        <div class="meta">۲۱:۴۸ ✓</div></div>
+      </div>
+
+      <div class="turn">
+        <div class="agent">
+          <div class="avatar">H</div>
+          <div class="bubble">
+            <div class="thinking-label"><span class="thinking-bar"></span>افکار</div>
+            سرورت رو بررسی کردم — همه‌چیز سالمه ✅<br>
+            مصرف رم: <code>1.0G / 1.9G</code><br>
+            پردازش هرمس فقط <code>108MB</code> گرفته و ۶ گیگ swap هم آزاده.
+          </div>
+        </div>
+        <div class="meta" style="text-align:right; padding-right:42px;">۲۱:۴۹</div>
+      </div>
+
+      <div class="turn">
+        <div class="user"><div class="bubble">مرسی 🙌 حالا لاگ‌های امروز رو خلاصه کن</div>
+        <div class="meta">۲۱:۵۰ ✓</div></div>
+      </div>
+
+      <div class="turn">
+        <div class="agent">
+          <div class="avatar">H</div>
+          <div class="bubble typing"><i></i><i></i><i></i></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="inputbar">
+      <span class="icon-btn">＋</span>
+      <span class="icon-btn">🧠</span>
+      <div class="field">پیام بنویس…</div>
+      <div class="send">➤</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>چی عوض شده:</b><br>
+    ۱. پس‌زمینه‌ی پیام‌ها گرادیان ملایم — عمق داره، تخت نیست<br>
+    ۲. حباب کاربر: رنگ برند (فیروزه‌ای) با گرادیان و سایه‌ی نرم — از حباب ایجنت کاملاً جداست<br>
+    ۳. حباب ایجنت: تیره با حاشیه‌ی ظریف، گوشه‌های ۲۰ با «دم» ۶ — نرم و مدرن<br>
+    ۴. آواتار دایره‌ای با گرادیان<br>
+    ۵. فاصله‌ی بین نوبت‌ها بزرگ، داخل نوبت کوچیک — چشم مرز سوال‌وجواب رو گم نمی‌کنه<br>
+    ۶. سه‌نقطه‌ی پرشی به‌جای اسپینر<br>
+    ۷. ساعت کوچیک و کم‌رنگ زیر هر پیام<br>
+    ۸. نوار ورودی: فیلد قرصی‌شکل + دکمه‌ی ارسال دایره‌ای برند — دکمه‌های فرعی جمع و آروم
+  </div>
+</body>
+</html>

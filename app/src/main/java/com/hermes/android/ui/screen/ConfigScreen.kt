@@ -1,8 +1,11 @@
 package com.hermes.android.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -72,12 +76,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -593,6 +600,58 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Avatar shown next to agent replies in chat — a real
+                // uploaded image, not an emoji picker. Client-side only
+                // (local prefs), no gateway RPC.
+                Column {
+                    Text(
+                        text = t("Avatar", "آواتار"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    val avatarPicker = rememberLauncherForActivityResult(
+                        ActivityResultContracts.GetContent(),
+                    ) { uri -> uri?.let { viewModel.setAvatarUri(it) } }
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { avatarPicker.launch("image/*") },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (state.avatarUri != null) {
+                                AsyncImage(
+                                    model = state.avatarUri,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                Text(
+                                    text = "⚕",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            }
+                        }
+                        OutlinedButton(onClick = { avatarPicker.launch("image/*") }) {
+                            Text(t("Upload image", "آپلود عکس"))
+                        }
+                        if (state.avatarUri != null) {
+                            TextButton(onClick = { viewModel.clearAvatarUri() }) {
+                                Text(t("Reset", "بازنشانی"))
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
                 // Personality preset name (display.personality). Saved on
                 // button press — the old field fired a server write on every
                 // keystroke.
