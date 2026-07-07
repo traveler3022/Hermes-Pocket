@@ -117,28 +117,26 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fix: this used to hand-edit config.yaml directly, which only affects
+     * future sessions. Verified against tui_gateway/server.py: config.set's
+     * key="reasoning" case, when given a session_id, sets
+     * session["create_reasoning_override"] and updates the live agent's
+     * reasoning_config in place — an immediate effect on the CURRENT chat.
+     * Passing our own activeSessionId is exactly that live-session path.
+     */
     fun setReasoningLevel(rawLevel: String) {
         val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
         viewModelScope.launch {
             try {
-                gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf(
-                        "command" to JsonPrimitive(
-                            "python3 - <<'H2PYEOF'\n" +
-                                "import yaml, pathlib\n" +
-                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
-                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
-                                "d = d or {}\n" +
-                                "d.setdefault('agent', {})['reasoning_effort'] = '$level'\n" +
-                                "p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))\n" +
-                                "print('OK')\n" +
-                                "H2PYEOF"
-                        ),
-                    ),
-                )
+                val params = buildJsonObject {
+                    put("key", "reasoning")
+                    put("value", level)
+                    _uiState.value.activeSessionId?.let { put("session_id", it) }
+                }
+                gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(params))
                 _uiState.update { it.copy(reasoningLevel = level) }
-                Timber.i("[Chat] agent.reasoning_effort set to $level")
+                Timber.i("[Chat] reasoning set to $level (session=${_uiState.value.activeSessionId})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to set reasoning level")
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Failed to set reasoning: ${e.message}")) }
@@ -1369,6 +1367,14 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.SessionInfo -> {
+                // Pushed after things like a session-scoped reasoning change
+                // (config.set key="reasoning") — reflects the LIVE agent's
+                // actual current effort (session override included), so this
+                // is the authoritative source for what the chat's control
+                // should show, not our own optimistic local copy.
+                (event.info["reasoning_effort"] as? JsonPrimitive)?.content?.let { effort ->
+                    _uiState.update { it.copy(reasoningLevel = effort.ifBlank { "none" }) }
+                }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 
