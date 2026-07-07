@@ -152,9 +152,11 @@ class OkHttpGatewayClient @Inject constructor(
                         if (!deferred.isCompleted) {
                             deferred.complete(_connectionState.value)
                         }
-                        // Session resume on reconnect
-                        if (lastSessionId != null) {
-                            scope.launch { resumeSession(lastSessionId!!) }
+                        // Session resume on reconnect. Capture into a local so
+                        // a concurrent write to lastSessionId can't null it out
+                        // between the check and the resume call.
+                        lastSessionId?.let { sid ->
+                            scope.launch { resumeSession(sid) }
                         }
                     }
                     is WsState.Closed -> {
