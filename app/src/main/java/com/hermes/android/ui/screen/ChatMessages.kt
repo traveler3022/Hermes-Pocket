@@ -385,8 +385,9 @@ internal fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
             ) {
-                // Agent avatar (Telegram-style): shown once per group. Grouped
-                // messages reserve the same width so bubbles stay aligned.
+                // Agent avatar: circular, shown once per group. Grouped
+                // messages reserve the same width so the text column stays
+                // aligned.
                 if (grouped) {
                     Spacer(modifier = Modifier.width(34.dp))
                 } else {
@@ -394,7 +395,7 @@ internal fun MessageBubble(
                         modifier = Modifier
                             .padding(top = 2.dp)
                             .size(28.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -404,25 +405,24 @@ internal fun MessageBubble(
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Column(modifier = Modifier.widthIn(max = 420.dp)) {
+                Column(modifier = Modifier.widthIn(max = 460.dp)) {
                     Box {
-                        Card(
+                        // Document-style: no bubble/card behind the agent's
+                        // reply — a long-press area on plain background reads
+                        // like prose (code/images/etc. still get their own
+                        // card per block below), not a chat message. Long
+                        // responses and code breathe instead of being
+                        // squeezed into a fixed-width tinted box.
+                        Column(
                             modifier = Modifier
                                 .combinedClickable(
                                     onClick = {},
                                     onLongClick = { showContextMenu = true },
-                                ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            ),
-                            shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
-                        ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .animateContentSize(),
+                                )
+                                .animateContentSize()
+                                .padding(vertical = 2.dp),
                         ) {
                             if (hasThinking) {
                                 ThinkingBlock(
@@ -528,7 +528,6 @@ internal fun MessageBubble(
                                     strokeWidth = 2.dp,
                                 )
                             }
-                        }
                         }
                         // Feature 9: long-press context menu
                         DropdownMenu(
