@@ -218,6 +218,13 @@ fun ChatScreen(
         if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
     }
 
+    // The avatar is customized from Settings (a separate ViewModel writing
+    // the same prefs key) — re-read it every time this screen re-enters
+    // composition so a change made there shows up on return.
+    LaunchedEffect(Unit) {
+        viewModel.loadAssistantAvatar()
+    }
+
     // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
@@ -709,6 +716,7 @@ fun ChatScreen(
                                 message = message,
                                 grouped = grouped,
                                 isLastInGroup = isLastInGroup,
+                                avatarUri = uiState.assistantAvatarPath,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,

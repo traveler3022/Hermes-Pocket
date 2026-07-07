@@ -154,6 +154,9 @@ data class ChatUiState(
     // cosmetic (local prefs) — does not affect the agent's actual identity
     // (SOUL.md / display.personality on the server).
     val assistantName: String = "Hermes",
+    // Client-side avatar image (local file path), customized from Settings.
+    // Null shows the default icon.
+    val assistantAvatarPath: String? = null,
 )
 
 /**

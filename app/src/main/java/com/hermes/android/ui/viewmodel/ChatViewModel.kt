@@ -82,6 +82,7 @@ class ChatViewModel @Inject constructor(
     init {
         loadDraft()
         loadAssistantName()
+        loadAssistantAvatar()
         connectAndCollect()
         loadCommandCatalog()
         loadReasoningLevel()
@@ -1050,6 +1051,15 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(assistantName = trimmed) }
     }
 
+    // Avatar is customized from Settings (ConfigViewModel writes the same
+    // prefs key) — re-read on every return to this screen so the change
+    // shows up without needing a shared reactive store between ViewModels.
+    fun loadAssistantAvatar() {
+        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
+        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
+        _uiState.update { it.copy(assistantAvatarPath = path) }
+    }
+
     // Model switching lives in the Settings screen (ConfigViewModel), not in
     // chat — it must go through `config.set` with key="model" against the
     // active session, which Settings owns.
@@ -1683,6 +1693,7 @@ class ChatViewModel @Inject constructor(
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
+        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
     }
 
     /**
