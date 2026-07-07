@@ -33,7 +33,10 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
-        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: HERMES
+        // Carbon (near-black + neutral grey, no purple) is the default —
+        // the original "Hermes" palette's primary is a vivid indigo/violet
+        // that bled into buttons, icons, and accents across the whole app.
+        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
     }
 }
 
@@ -46,7 +49,7 @@ class ThemeModeState(context: Context) {
         private set
 
     var colorTheme: ColorTheme by mutableStateOf(
-        ColorTheme.fromKey(prefs.getString("color_theme", "hermes") ?: "hermes")
+        ColorTheme.fromKey(prefs.getString("color_theme", "carbon") ?: "carbon")
     )
         private set
 
@@ -401,7 +404,7 @@ private val ClaudeDarkColors = darkColorScheme(
 fun Hermes2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    colorTheme: ColorTheme = ColorTheme.HERMES,
+    colorTheme: ColorTheme = ColorTheme.CARBON,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

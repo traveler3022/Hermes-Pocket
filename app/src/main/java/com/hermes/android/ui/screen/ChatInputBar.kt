@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -186,10 +185,14 @@ internal fun InputBar(
         else commandList.filter { it.command.startsWith(text) }
     }
 
+    // Scaffold's own content padding (in ChatScreen.kt) already reserves
+    // the navigation-bar inset — adding navigationBarsPadding() again here
+    // double-counted it, leaving a dead gap between the pill and the true
+    // bottom edge. imePadding() stays: that inset is NOT part of Scaffold's
+    // systemBars content window insets.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .imePadding(),
     ) {
         if (showSuggestions && suggestions.isNotEmpty()) {
