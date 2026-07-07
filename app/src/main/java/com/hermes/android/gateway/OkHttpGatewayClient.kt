@@ -355,16 +355,35 @@ class OkHttpGatewayClient @Inject constructor(
         private val onState: (WsState) -> Unit,
     ) : WebSocketListener() {
 
+        // doConnect() closes the previous socket before opening a new one
+        // (webSocket?.close(...) then webSocket = null then webSocket =
+        // newWebSocket(...)). OkHttp still delivers that old socket's
+        // onClosed/onFailure asynchronously, sometimes AFTER the new one is
+        // already assigned — a stale callback from a listener bound to a
+        // socket we've already abandoned. Without this guard it fires
+        // handleDisconnect() on the new, healthy connection: webSocket = null
+        // clobbers the live reference and a second reconnectJob spins up
+        // fighting the working one. On a real device this reproduced as "tap
+        // retry, nothing happens" — only a full app force-stop cleared the
+        // stuck coroutines. Each callback's own webSocket param always
+        // matches the exact socket THIS listener is attached to (OkHttp's
+        // 1:1 listener/socket contract), so comparing it against the
+        // currently-tracked field tells a stale callback from a live one.
+        private fun isCurrent(socket: WebSocket) = socket === webSocket
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (!isCurrent(webSocket)) return
             Timber.d("[Gateway] WebSocket open")
             onState(WsState.Opened)
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (!isCurrent(webSocket)) return
             handleMessage(text, onState)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            if (!isCurrent(webSocket)) return
             handleMessage(bytes.utf8(), onState)
         }
 
@@ -373,11 +392,19 @@ class OkHttpGatewayClient @Inject constructor(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isCurrent(webSocket)) {
+                Timber.d("[Gateway] Ignoring onClosed from a stale/replaced socket: $reason")
+                return
+            }
             Timber.w("[Gateway] WebSocket closed: $code $reason")
             onState(WsState.Closed(reason))
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (!isCurrent(webSocket)) {
+                Timber.d("[Gateway] Ignoring onFailure from a stale/replaced socket: ${t.message}")
+                return
+            }
             Timber.e(t, "[Gateway] WebSocket failure")
             onState(WsState.Failure(t))
         }

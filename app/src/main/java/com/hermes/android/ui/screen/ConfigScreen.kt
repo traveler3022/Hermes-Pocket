@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -535,55 +536,9 @@ private fun GeneralTab(
                         }
                     }
                 }
-
-                HorizontalDivider()
-
-                // Reasoning effort level (agent.reasoning_effort)
-                Column {
-                    Text(
-                        text = t("Reasoning Effort", "سطح استدلال"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t("How hard the model thinks", "مدل چقدر عمیق فکر کنه"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    var reasoningExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { reasoningExpanded = true },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                        ) {
-                            Text(
-                                text = reasoningLevelLabel(state.reasoning),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(12.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = reasoningExpanded,
-                            onDismissRequest = { reasoningExpanded = false },
-                        ) {
-                            // Real agent.reasoning_effort values — the old
-                            // list (brief/standard/extended) was fictional.
-                            reasoningLevels.forEach { level ->
-                                DropdownMenuItem(
-                                    text = { Text(reasoningLevelLabel(level)) },
-                                    onClick = {
-                                        viewModel.setReasoning(level)
-                                        reasoningExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                // Reasoning effort lives on the chat screen's quick-switcher
+                // (the "+" menu) — same setting, same RPC, no need for a
+                // second control here that just duplicates it.
             }
         }
 
@@ -731,22 +686,103 @@ private fun GeneralTab(
             }
         }
 
-        // Reload config without restart (reload.mcp / reload.env)
-        Row(
+        // ── Environment variables (~/.hermes/.env) — editable, not just a
+        //    reload-from-disk button that had nothing to actually change
+        //    what's on disk. ──
+        Text(
+            text = t("Environment Variables", "متغیرهای محیطی"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.reloadMcp() },
-                modifier = Modifier.weight(1f),
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(t("Reload MCP", "بارگذاری MCP"))
+                Text(
+                    text = t("~/.hermes/.env — API keys and other env vars", "~/.hermes/.env — کلیدهای API و سایر متغیرها"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                LaunchedEffect(Unit) { viewModel.loadEnvFile() }
+                if (state.isLoadingEnv) {
+                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    var envText by remember(state.envText) { mutableStateOf(state.envText) }
+                    OutlinedTextField(
+                        value = envText,
+                        onValueChange = { envText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        minLines = 4,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.reloadEnv() },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        if (envText != state.envText) {
+                            Button(
+                                onClick = { viewModel.saveEnvFile(envText) },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(t("Save", "ذخیره")) }
+                        }
+                    }
+                }
             }
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.reloadEnv() },
-                modifier = Modifier.weight(1f),
+        }
+
+        // ── MCP servers (config.yaml: mcp_servers) — same idea. ──
+        Text(
+            text = t("MCP Servers", "سرورهای MCP"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(t("Reload env", "بارگذاری env"))
+                Text(
+                    text = t("Raw JSON — config.yaml's mcp_servers section", "JSON خام — بخش mcp_servers فایل config.yaml"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                LaunchedEffect(Unit) { viewModel.loadMcpServers() }
+                if (state.isLoadingMcp) {
+                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    var mcpText by remember(state.mcpServersText) { mutableStateOf(state.mcpServersText) }
+                    OutlinedTextField(
+                        value = mcpText,
+                        onValueChange = { mcpText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        minLines = 4,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.reloadMcp() },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        if (mcpText != state.mcpServersText) {
+                            Button(
+                                onClick = { viewModel.saveMcpServers(mcpText) },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(t("Save", "ذخیره")) }
+                        }
+                    }
+                }
             }
         }
 

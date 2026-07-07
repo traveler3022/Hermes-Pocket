@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -57,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.service.HermesGatewayService
+import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
 import com.hermes.android.ui.viewmodel.InstallProgressUi
 import com.hermes.android.ui.viewmodel.RuntimeEffect
@@ -137,7 +141,7 @@ fun RuntimeSetupScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Hermes2",
+                text = "Hermes",
                 style = MaterialTheme.typography.displaySmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -389,21 +393,22 @@ private fun ServerConfigCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Hermes Server",
+                text = t("Hermes Server", "سرور هرمس"),
                 style = MaterialTheme.typography.titleMedium,
             )
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text("Server address") },
+                label = { Text(t("Server address", "آدرس سرور")) },
                 placeholder = { Text("wss://example.com:2083") },
+                leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
-                label = { Text("Session token") },
+                label = { Text(t("Session token", "توکن نشست")) },
                 singleLine = true,
                 visualTransformation = if (showToken) {
                     VisualTransformation.None
@@ -413,15 +418,18 @@ private fun ServerConfigCard(
                 trailingIcon = {
                     IconButton(onClick = { showToken = !showToken }) {
                         Icon(
-                            Icons.Default.Description,
-                            contentDescription = if (showToken) "Hide token" else "Show token",
+                            if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (showToken) t("Hide token", "پنهان کردن توکن") else t("Show token", "نمایش توکن"),
                         )
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
+                text = t(
+                    "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
+                    "توکن باید با HERMES_DASHBOARD_SESSION_TOKEN روی سرورت یکی باشه.",
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -430,7 +438,7 @@ private fun ServerConfigCard(
                 enabled = url.isNotBlank() && token.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Save & Connect")
+                Text(t("Save & Connect", "ذخیره و اتصال"))
             }
         }
     }

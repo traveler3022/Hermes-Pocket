@@ -29,7 +29,7 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
     CLAUDE("claude", "Mocha", "موکا"),
     MIDNIGHT("midnight", "Midnight", "میدنایت"),
-    INDIGO_PRO("indigo_pro", "Indigo Pro", "ایندیگو"),
+    INDIGO_PRO("indigo_pro", "Indigo", "ایندیگو"),
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {

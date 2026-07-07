@@ -110,6 +110,49 @@ class CronViewModel @Inject constructor(
         }
     }
 
+    /**
+     * cron.manage only exposes list/add/remove/pause/resume — there's no
+     * update/edit verb server-side (add maps to cronjob(action="create", ...),
+     * which doesn't overwrite an existing job by name). Editing is therefore
+     * remove-then-add: delete the old job, create a new one with the edited
+     * fields. Reload happens once, after both RPCs, so the list doesn't
+     * flash empty between them.
+     */
+    fun updateJob(oldJobId: String, name: String, schedule: String, prompt: String) {
+        viewModelScope.launch {
+            try {
+                val removeParams = buildJsonObject {
+                    put("action", "remove")
+                    put("name", oldJobId)
+                }
+                gatewayClient.request(GatewayMethods.CRON_MANAGE, removeParams.toMap())
+                val addParams = buildJsonObject {
+                    put("action", "add")
+                    put("name", name)
+                    put("schedule", schedule)
+                    put("prompt", prompt)
+                }
+                gatewayClient.request(GatewayMethods.CRON_MANAGE, addParams.toMap())
+                Timber.i("[Cron] Job updated: $oldJobId -> $name")
+                _uiState.value = _uiState.value.copy(editingJob = null)
+                loadJobs()
+            } catch (e: Exception) {
+                Timber.e(e, "[Cron] Update failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to update job: ${e.message}",
+                )
+            }
+        }
+    }
+
+    fun startEditJob(job: CronJob) {
+        _uiState.value = _uiState.value.copy(editingJob = job)
+    }
+
+    fun hideEditDialog() {
+        _uiState.value = _uiState.value.copy(editingJob = null)
+    }
+
     fun toggleJob(jobId: String, enabled: Boolean) {
         viewModelScope.launch {
             try {
@@ -167,6 +210,7 @@ data class CronUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val showCreateDialog: Boolean = false,
+    val editingJob: CronJob? = null,
 )
 
 data class CronJob(

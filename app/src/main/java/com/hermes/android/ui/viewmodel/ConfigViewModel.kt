@@ -715,6 +715,99 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    /** ~/.hermes/.env — raw edit, same pattern as SOUL.md. Reload buttons
+     *  only re-read the file into the running process; without this there
+     *  was no way to actually change what's in it from the app. */
+    fun loadEnvFile() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingEnv = true)
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("cat ~/.hermes/.env 2>/dev/null || echo ''")),
+                )
+                val env = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                _uiState.value = _uiState.value.copy(envText = env, isLoadingEnv = false)
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load .env")
+                _uiState.value = _uiState.value.copy(isLoadingEnv = false)
+            }
+        }
+    }
+
+    fun saveEnvFile(content: String) {
+        viewModelScope.launch {
+            try {
+                execPython(
+                    """
+                    import base64, pathlib
+                    p = pathlib.Path.home() / '.hermes' / '.env'
+                    p.write_text(base64.b64decode('${b64(content)}').decode())
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(envText = content)
+                Timber.i("[Config] .env saved")
+                reloadEnv()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to save .env")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to save .env: ${e.message}",
+                )
+            }
+        }
+    }
+
+    /** mcp_servers section of config.yaml, edited as its own JSON blob so
+     *  the rest of the config isn't at risk from a hand-typed mistake. */
+    fun loadMcpServers() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMcp = true)
+            try {
+                val out = execPython(
+                    """
+                    import json, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    print(json.dumps(d.get('mcp_servers') or {}, indent=2))
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(mcpServersText = out, isLoadingMcp = false)
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load mcp_servers")
+                _uiState.value = _uiState.value.copy(isLoadingMcp = false)
+            }
+        }
+    }
+
+    fun saveMcpServers(content: String) {
+        viewModelScope.launch {
+            try {
+                execPython(
+                    """
+                    import base64, json, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    parsed = json.loads(base64.b64decode('${b64(content)}').decode())
+                    d['mcp_servers'] = parsed
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(mcpServersText = content)
+                Timber.i("[Config] mcp_servers saved")
+                reloadMcp()
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to save mcp_servers")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to save MCP servers: ${e.message} — check it's valid JSON",
+                )
+            }
+        }
+    }
+
     // ── Provider Management (matches Hermes Agent config.yaml) ──────────
 
     fun loadProviders() {
@@ -1171,35 +1264,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    /** Load the Nous credits/balance view (credits.view RPC). */
-    fun loadCredits() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingCredits = true, creditsText = null)
-            try {
-                val r = gatewayClient.request(GatewayMethods.CREDITS_VIEW)
-                val obj = r as? JsonObject
-                val loggedIn = (obj?.get("logged_in") as? JsonPrimitive)?.content == "true"
-                val text = if (!loggedIn) {
-                    "No Nous account logged in.\nSign in from Termux: hermes login"
-                } else {
-                    val lines = (obj?.get("balance_lines") as? JsonArray)
-                        ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
-                    lines.joinToString("\n").ifBlank { "No balance information." }
-                }
-                _uiState.value = _uiState.value.copy(creditsText = text, isLoadingCredits = false)
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    creditsText = "Could not load credits: ${e.message}",
-                    isLoadingCredits = false,
-                )
-            }
-        }
-    }
-
-    fun dismissCredits() {
-        _uiState.value = _uiState.value.copy(creditsText = null)
-    }
-
     fun toggleProviderExpanded(slug: String) {
         val current = _uiState.value.expandedProviderSlug
         _uiState.value = _uiState.value.copy(
@@ -1418,9 +1482,6 @@ data class ConfigUiState(
     val credentialPool: Map<String, List<CredentialEntry>> = emptyMap(),
     val isLoadingCredentials: Boolean = false,
     val expandedProviderSlug: String? = null,
-    // Nous credits/balance panel (opened from the Models tab)
-    val creditsText: String? = null,
-    val isLoadingCredits: Boolean = false,
     // Agent behavior config — real Hermes config.yaml keys, verified against
     // the official docs (see setApprovalMode/setReasoning/etc. comments).
     // approvals.mode replaces the old fictional "yolo" boolean — "off" is
@@ -1436,6 +1497,12 @@ data class ConfigUiState(
     // a config.set key ("prompt") that doesn't exist anywhere in Hermes.
     val soulMd: String = "",
     val isLoadingSoul: Boolean = false,
+    // ~/.hermes/.env raw contents, editable.
+    val envText: String = "",
+    val isLoadingEnv: Boolean = false,
+    // mcp_servers section of config.yaml, as pretty-printed JSON, editable.
+    val mcpServersText: String = "",
+    val isLoadingMcp: Boolean = false,
     // Client-side avatar image (local file path, null = default icon).
     val avatarUri: String? = null,
 )
