@@ -1429,7 +1429,7 @@ data class ConfigUiState(
     // they only restyle the terminal UI on the server, which an Android
     // client never sees.
     val approvalMode: String = "manual", // approvals.mode: manual | smart | off
-    val reasoning: String = "medium", // agent.reasoning_effort: none|minimal|low|medium|high|xhigh
+    val reasoning: String = "medium", // agent.reasoning_effort: none|minimal|low|medium|high|xhigh|max
     val personality: String = "", // display.personality — system-prompt overlay name
     // SOUL.md — the agent's persistent identity/voice (first slot in the
     // system prompt). Replaces the old free-text "prompt" field, which sent

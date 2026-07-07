@@ -1399,9 +1399,15 @@ class ChatViewModel @Inject constructor(
                 // actual current effort (session override included), so this
                 // is the authoritative source for what the chat's control
                 // should show, not our own optimistic local copy.
-                (event.info["reasoning_effort"] as? JsonPrimitive)?.content?.let { effort ->
-                    _uiState.update { it.copy(reasoningLevel = effort.ifBlank { "none" }) }
-                }
+                // Server distinguishes "" (unset/provider default) from the
+                // explicit "none" (reasoning disabled) — collapsing them
+                // would make the control lie about state right after a
+                // fresh session, before any override has been set. Only
+                // update on a concrete value; leave the existing display
+                // (config.yaml default) alone otherwise.
+                (event.info["reasoning_effort"] as? JsonPrimitive)?.content
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 

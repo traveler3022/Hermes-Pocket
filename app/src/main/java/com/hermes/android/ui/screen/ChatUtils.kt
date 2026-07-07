@@ -233,8 +233,10 @@ internal fun thinkingDotStr(): String {
 }
 
 
-/** Ordered list of real agent.reasoning_effort values (verified against Hermes docs). */
-internal val reasoningLevels = listOf("none", "minimal", "low", "medium", "high", "xhigh")
+/** Ordered list of real agent.reasoning_effort values — verified against
+ *  hermes_constants.VALID_REASONING_EFFORTS in the actual gateway source
+ *  ("minimal","low","medium","high","xhigh","max"), plus "none" (disabled). */
+internal val reasoningLevels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 @Composable
 internal fun reasoningLevelLabel(level: String): String = when (level) {
@@ -244,6 +246,7 @@ internal fun reasoningLevelLabel(level: String): String = when (level) {
     "medium" -> t("Medium", "متوسط")
     "high" -> t("High", "زیاد")
     "xhigh" -> t("Very High", "خیلی زیاد")
+    "max" -> t("Max", "بیشینه")
     else -> level
 }
 
