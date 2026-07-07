@@ -47,6 +47,22 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/libs.versions.toml', 'gradle.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      # Every runner is a fresh VM, so with no cache here the Android Gradle
+      # Plugin auto-generates a brand-new ~/.android/debug.keystore (and thus
+      # a different signing certificate) on every single build. Android
+      # refuses to install an APK over an existing install when the
+      # signature changed (INSTALL_FAILED_UPDATE_INCOMPATIBLE) — silently, in
+      # most launchers — so testers who just tap "install" over the previous
+      # build keep running the stale APK with no error shown. Caching this
+      # file under a fixed key means it's created once and reused by every
+      # future run, so the debug signing key — and therefore installability
+      # over the previous build — stays stable.
+      - name: Cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
