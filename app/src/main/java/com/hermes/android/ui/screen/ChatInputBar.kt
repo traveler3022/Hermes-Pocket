@@ -285,7 +285,7 @@ internal fun InputBar(
                     Text(
                         text = t("Reasoning effort", "سطح استدلال"),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                     reasoningLevels.forEach { level ->

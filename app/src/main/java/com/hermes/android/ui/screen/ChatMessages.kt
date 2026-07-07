@@ -163,14 +163,38 @@ internal fun ThinkingBlock(
     onToggle: () -> Unit,
 ) {
     val barColor = MaterialTheme.colorScheme.primary
+    val reduceMotion = rememberReduceMotion()
+
+    // A full-amplitude, fast pulse sustained for the whole length of a long
+    // agent turn is fatiguing to stare at — ease to a slower, shallower
+    // pulse once thinking has been running a while instead of holding full
+    // intensity indefinitely.
+    var streamingSeconds by remember(isStreaming) { mutableStateOf(0) }
+    LaunchedEffect(isStreaming) {
+        if (isStreaming) {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                streamingSeconds++
+            }
+        }
+    }
+    val isLongTurn = streamingSeconds > 20
+
     val transition = rememberInfiniteTransition(label = "thinking")
     val pulse by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        initialValue = if (isLongTurn) 0.55f else 0.35f,
+        targetValue = if (isLongTurn) 0.85f else 1f,
+        animationSpec = infiniteRepeatable(
+            tween(if (isLongTurn) 1600 else 900),
+            RepeatMode.Reverse,
+        ),
         label = "pulse",
     )
-    val barAlpha = if (isStreaming) pulse else 0.4f
+    val barAlpha = when {
+        !isStreaming -> 0.4f
+        reduceMotion -> 0.7f
+        else -> pulse
+    }
 
     // Emotive markers the model emits inside its reasoning (😌 🤔 😅 …) become
     // a big "sticker" beside the thinking state — the agent's mood, live.
@@ -259,12 +283,13 @@ private fun TypingDots(
     dotSize: androidx.compose.ui.unit.Dp = 6.dp,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
+    val reduceMotion = rememberReduceMotion()
     val transition = rememberInfiniteTransition(label = "typingDots")
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         repeat(3) { index ->
             val bounce by transition.animateFloat(
                 initialValue = 0f,
-                targetValue = 1f,
+                targetValue = if (reduceMotion) 0f else 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(durationMillis = 600, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
@@ -277,7 +302,7 @@ private fun TypingDots(
                     .size(dotSize)
                     .offset(y = (-bounce * 4).dp)
                     .clip(CircleShape)
-                    .background(color.copy(alpha = 0.4f + bounce * 0.6f)),
+                    .background(color.copy(alpha = if (reduceMotion) 0.7f else 0.4f + bounce * 0.6f)),
             )
         }
     }
@@ -398,12 +423,12 @@ internal fun MessageBubble(
                         if (message.text.isNotBlank()) if (searchQuery.isNotBlank()) {
                             Text(
                                 text = highlightText(displayText, searchQuery),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                         } else {
                             Text(
                                 text = displayText,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = bubbleTextColor,
                             )
                         }
@@ -526,7 +551,12 @@ internal fun MessageBubble(
                                     blocks.forEach { block ->
                                         when (block) {
                                             is ContentBlock.Text -> SelectionContainer {
-                                                HermesMarkdown(markdown = block.markdown)
+                                                HermesMarkdown(
+                                                    markdown = block.markdown,
+                                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                    ),
+                                                )
                                             }
                                             is ContentBlock.Image -> InlineImageBlock(
                                                 alt = block.alt,
@@ -747,7 +777,7 @@ internal fun MessageBubble(
                             Text(
                                 text = "${"%.1f".format(it)}s",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -794,8 +824,7 @@ internal fun MessageBubble(
                         HermesMarkdown(
                             markdown = displayResult,
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = if (message.isRunning) MaterialTheme.colorScheme.outline
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
                         )
                         if (isLongResult) {
@@ -854,7 +883,7 @@ internal fun MessageBubble(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "❓ ${message.question}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -862,7 +891,7 @@ internal fun MessageBubble(
                         Text(
                             text = t("Answered", "پاسخ داده شد"),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else when (message.kind) {
                         InteractiveKind.CLARIFY -> if (message.choices != null) {

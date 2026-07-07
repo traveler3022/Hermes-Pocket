@@ -66,6 +66,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -362,6 +363,30 @@ private fun GeneralTab(
                                 label = { Text(label) },
                             )
                         }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = t("Warm / Night mode", "حالت گرم / شب"),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = t(
+                                    "Shifts screens toward a warm amber tint to reduce blue light for long sessions.",
+                                    "صفحات را به سمت رنگ کهربایی گرم متمایل می‌کند تا نور آبی در استفاده طولانی کمتر شود.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.warmMode,
+                            onCheckedChange = { themeModeState.updateWarmMode(it) },
+                        )
                     }
                 }
             }

@@ -156,7 +156,7 @@ internal fun ConnectionIndicator(state: ChatConnectionState) {
         ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
         ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting...", "◌ در حال اتصال...")
         ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to t("↻ Reconnecting...", "↻ اتصال دوباره...")
-        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.outline to t("○ Tap to Connect", "○ برای اتصال لمس کنید")
+        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to t("○ Tap to Connect", "○ برای اتصال لمس کنید")
         ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to t("✕ Termux Error", "✕ خطای ترموکس")
     }
     Card(
