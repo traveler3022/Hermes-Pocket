@@ -3,6 +3,8 @@ package com.hermes.android.ui.screen
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -69,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -684,17 +687,27 @@ fun ChatScreen(
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
                             val prev = filteredMessages.getOrNull(index - 1)
+                            val next = filteredMessages.getOrNull(index + 1)
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
+                            val isLastInGroup = next == null ||
+                                    (next is ChatMessage.User) != (message is ChatMessage.User)
 
                             Box(
                                 modifier = Modifier
-                                    .animateItem()
+                                    .animateItem(
+                                        fadeInSpec = tween(220),
+                                        placementSpec = spring(
+                                            stiffness = Spring.StiffnessMediumLow,
+                                            visibilityThreshold = IntOffset.VisibilityThreshold,
+                                        ),
+                                    )
                                     .padding(top = if (grouped) 0.dp else 10.dp),
                             ) {
                             MessageBubble(
                                 message = message,
                                 grouped = grouped,
+                                isLastInGroup = isLastInGroup,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
