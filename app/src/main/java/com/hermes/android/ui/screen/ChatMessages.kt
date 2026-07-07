@@ -118,9 +118,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -311,21 +309,20 @@ internal fun MessageBubble(
             val isLongMessage = message.text.length > 500
             var isExpanded by remember { mutableStateOf(!isLongMessage) }
 
-            // Brand-colored gradient instead of the generic Material
-            // primaryContainer, with a real "tail" corner on the last
-            // message of a group (uniform rounding for the rest of the run).
+            // Every color theme in this app has a blue-ish primary, so a
+            // primary/tertiary gradient here was always "blue" regardless
+            // of which theme was picked. Matching ChatGPT's own pattern
+            // instead: a plain neutral surface for the user's pill, no
+            // color, no gradient — separation comes from shape/alignment,
+            // not from a loud fill. Real "tail" corner on the last message
+            // of a group (uniform rounding for the rest of the run).
             val bubbleShape = if (isLastInGroup) {
                 RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
             } else {
                 RoundedCornerShape(16.dp)
             }
-            val bubbleBrush = Brush.linearGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.tertiary,
-                ),
-            )
-            val bubbleTextColor = MaterialTheme.colorScheme.onPrimary
+            val bubbleColor = MaterialTheme.colorScheme.surfaceVariant
+            val bubbleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -334,9 +331,8 @@ internal fun MessageBubble(
                 Box(
                     modifier = Modifier
                         .widthIn(max = 420.dp)
-                        .shadow(elevation = 3.dp, shape = bubbleShape, clip = false)
                         .clip(bubbleShape)
-                        .background(bubbleBrush)
+                        .background(bubbleColor)
                         .combinedClickable(
                             onClick = { if (isLongMessage) isExpanded = !isExpanded },
                             onLongClick = { onCopyMessage(message.text) },
