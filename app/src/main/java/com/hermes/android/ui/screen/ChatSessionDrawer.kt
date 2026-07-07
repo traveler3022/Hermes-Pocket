@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -115,6 +116,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -178,25 +180,39 @@ internal fun SessionDrawerRow(
     var showMenu by remember { mutableStateOf(false) }
 
     Box {
-        Card(
+        // Active state reads as a thin leading accent bar + a faint tint,
+        // not a full-color fill — quieter in a list where most rows are
+        // inactive, and the active one still doesn't fight for attention.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .padding(horizontal = 12.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    else Color.Transparent,
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = { showMenu = true },
                 ),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant,
-            ),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .padding(vertical = 8.dp)
+                        .width(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+            Column(modifier = Modifier.padding(start = 15.dp, top = 10.dp, end = 12.dp, bottom = 10.dp)) {
                 Text(
                     text = session.title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = subtitle,
