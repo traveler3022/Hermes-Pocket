@@ -53,6 +53,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
@@ -87,6 +88,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -235,29 +237,46 @@ internal fun InputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Reasoning-effort quick switch (agent.reasoning_effort) — same
-            // control ChatGPT/Gemini put next to the composer, instead of
-            // burying it in Settings only.
-            var reasoningMenuOpen by remember { mutableStateOf(false) }
+            // Declutter: attach + reasoning-effort used to be two separate
+            // buttons next to the composer. Collapsed into one "+" so the
+            // bar's default state is just "type and send" — the extras are
+            // one tap away instead of always competing for attention.
+            var extrasMenuOpen by remember { mutableStateOf(false) }
             Box {
                 IconButton(
-                    onClick = { reasoningMenuOpen = true },
+                    onClick = { if (!isAttaching) extrasMenuOpen = true },
+                    enabled = !isAttaching,
                     modifier = Modifier.size(48.dp),
                 ) {
-                    Icon(
-                        Icons.Default.Psychology,
-                        contentDescription = t("Reasoning effort", "سطح استدلال"),
-                        tint = if (reasoningLevel != "none" && reasoningLevel != "medium") {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
+                    if (isAttaching) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = t("More", "بیشتر"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 DropdownMenu(
-                    expanded = reasoningMenuOpen,
-                    onDismissRequest = { reasoningMenuOpen = false },
+                    expanded = extrasMenuOpen,
+                    onDismissRequest = { extrasMenuOpen = false },
                 ) {
+                    DropdownMenuItem(
+                        text = { Text(t("Attach file", "پیوست فایل")) },
+                        leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
+                        onClick = {
+                            extrasMenuOpen = false
+                            filePicker.launch("*/*")
+                        },
+                    )
+                    HorizontalDivider()
+                    Text(
+                        text = t("Reasoning effort", "سطح استدلال"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
                     reasoningLevels.forEach { level ->
                         DropdownMenuItem(
                             text = {
@@ -266,29 +285,19 @@ internal fun InputBar(
                                     fontWeight = if (level == reasoningLevel) FontWeight.Bold else FontWeight.Normal,
                                 )
                             },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Psychology,
+                                    contentDescription = null,
+                                    tint = if (level == reasoningLevel) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                )
+                            },
                             onClick = {
                                 onReasoningLevelChange(level)
-                                reasoningMenuOpen = false
+                                extrasMenuOpen = false
                             },
                         )
                     }
-                }
-            }
-            // Feature 5.1: attachment button — picks a file and uploads it to
-            // the gateway session over the loopback WebSocket.
-            IconButton(
-                onClick = { if (!isAttaching) filePicker.launch("*/*") },
-                enabled = !isAttaching,
-                modifier = Modifier.size(48.dp),
-            ) {
-                if (isAttaching) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        Icons.Default.AttachFile,
-                        contentDescription = t("Attach", "پیوست"),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
             OutlinedTextField(

@@ -94,6 +94,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -165,6 +166,7 @@ fun ChatScreen(
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
+    var showRenameAssistantDialog by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -278,10 +280,22 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = t("Hermes", "هرمس"),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.clickable { showRenameAssistantDialog = true },
+                    ) {
+                        Text(
+                            text = uiState.assistantName,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = t("Rename", "تغییر نام"),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = { scope.launch { drawerState.close() } }) {
                         Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
                     }
@@ -506,7 +520,7 @@ fun ChatScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.clickable { onNavigateToRuntime() }
                             ) {
-                                Text(t("Hermes", "هرمس"))
+                                Text(uiState.assistantName)
                                 ConnectionIndicator(uiState.connectionState)
                             }
                         },
@@ -628,30 +642,48 @@ fun ChatScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        // Tight gap by default; itemsIndexed adds extra top
+                        // padding when a message starts a new group (turn),
+                        // so the eye reads turn boundaries instead of a flat
+                        // evenly-spaced list.
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
                         if (filteredMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
+                                val starterPrompts = listOf(
+                                    t("What can you do for me?", "چی می‌تونی برام انجام بدی؟"),
+                                    t("Check my server status", "وضعیت سرورم رو چک کن"),
+                                    t("Summarize recent activity", "فعالیت‌های اخیر رو خلاصه کن"),
+                                )
                                 Box(
                                     modifier = Modifier.fillParentMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        modifier = Modifier.padding(horizontal = 24.dp),
                                     ) {
                                         Text(
-                                            text = "⚕",
-                                            style = MaterialTheme.typography.displayLarge,
-                                        )
-                                        Text(
-                                            text = t("Ask Hermes anything", "هر چیزی از هرمس بپرس"),
-                                            style = MaterialTheme.typography.bodyLarge,
+                                            text = t("How can I help?", "چطور می‌تونم کمکت کنم؟"),
+                                            style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            starterPrompts.forEach { prompt ->
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        viewModel.updateInputText(prompt)
+                                                        viewModel.sendMessage()
+                                                    },
+                                                ) {
+                                                    Text(prompt)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -667,7 +699,11 @@ fun ChatScreen(
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
 
-                            Box(modifier = Modifier.animateItem()) {
+                            Box(
+                                modifier = Modifier
+                                    .animateItem()
+                                    .padding(top = if (grouped) 0.dp else 10.dp),
+                            ) {
                             MessageBubble(
                                 message = message,
                                 grouped = grouped,
@@ -777,6 +813,36 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // Rename dialog — client-side display name only (top bar / drawer header).
+    if (showRenameAssistantDialog) {
+        var nameInput by remember(uiState.assistantName) { mutableStateOf(uiState.assistantName) }
+        AlertDialog(
+            onDismissRequest = { showRenameAssistantDialog = false },
+            title = { Text(t("Rename assistant", "تغییر نام دستیار")) },
+            text = {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it },
+                    singleLine = true,
+                    placeholder = { Text("Hermes") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setAssistantName(nameInput)
+                    showRenameAssistantDialog = false
+                }) {
+                    Text(t("Save", "ذخیره"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameAssistantDialog = false }) {
+                    Text(t("Cancel", "انصراف"))
+                }
+            },
+        )
     }
 }
 
