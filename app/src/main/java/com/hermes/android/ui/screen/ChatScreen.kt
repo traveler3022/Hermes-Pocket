@@ -723,6 +723,8 @@ fun ChatScreen(
                     onSteer = viewModel::steerAgent,
                     onAttachFile = viewModel::attachFromUri,
                     onRemoveAttachment = viewModel::removeAttachment,
+                    reasoningLevel = uiState.reasoningLevel,
+                    onReasoningLevelChange = viewModel::setReasoningLevel,
                 )
             }
         }

@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -163,6 +164,8 @@ internal fun InputBar(
     onSteer: () -> Unit = {},
     onAttachFile: (Uri) -> Unit = {},
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
+    reasoningLevel: String = "medium",
+    onReasoningLevelChange: (String) -> Unit = {},
 ) {
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -232,6 +235,45 @@ internal fun InputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Reasoning-effort quick switch (agent.reasoning_effort) — same
+            // control ChatGPT/Gemini put next to the composer, instead of
+            // burying it in Settings only.
+            var reasoningMenuOpen by remember { mutableStateOf(false) }
+            Box {
+                IconButton(
+                    onClick = { reasoningMenuOpen = true },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Psychology,
+                        contentDescription = t("Reasoning effort", "سطح استدلال"),
+                        tint = if (reasoningLevel != "none" && reasoningLevel != "medium") {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                DropdownMenu(
+                    expanded = reasoningMenuOpen,
+                    onDismissRequest = { reasoningMenuOpen = false },
+                ) {
+                    reasoningLevels.forEach { level ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    reasoningLevelLabel(level),
+                                    fontWeight = if (level == reasoningLevel) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            },
+                            onClick = {
+                                onReasoningLevelChange(level)
+                                reasoningMenuOpen = false
+                            },
+                        )
+                    }
+                }
+            }
             // Feature 5.1: attachment button — picks a file and uploads it to
             // the gateway session over the loopback WebSocket.
             IconButton(

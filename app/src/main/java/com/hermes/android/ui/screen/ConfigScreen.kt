@@ -554,7 +554,7 @@ private fun GeneralTab(
                             ),
                         ) {
                             Text(
-                                text = state.reasoning,
+                                text = reasoningLevelLabel(state.reasoning),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(12.dp),
                             )
@@ -565,9 +565,9 @@ private fun GeneralTab(
                         ) {
                             // Real agent.reasoning_effort values — the old
                             // list (brief/standard/extended) was fictional.
-                            listOf("none", "minimal", "low", "medium", "high", "xhigh").forEach { level ->
+                            reasoningLevels.forEach { level ->
                                 DropdownMenuItem(
-                                    text = { Text(level) },
+                                    text = { Text(reasoningLevelLabel(level)) },
                                     onClick = {
                                         viewModel.setReasoning(level)
                                         reasoningExpanded = false

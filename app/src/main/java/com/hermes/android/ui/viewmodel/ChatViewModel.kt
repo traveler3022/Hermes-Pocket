@@ -83,6 +83,67 @@ class ChatViewModel @Inject constructor(
         loadDraft()
         connectAndCollect()
         loadCommandCatalog()
+        loadReasoningLevel()
+    }
+
+    /**
+     * Reasoning effort (agent.reasoning_effort), quick-switchable from the
+     * input bar — mirrors ConfigViewModel's setting under Settings > General
+     * so both stay in sync (both read/write the same config.yaml key).
+     */
+    private fun loadReasoningLevel() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf(
+                        "command" to JsonPrimitive(
+                            "python3 - <<'H2PYEOF'\n" +
+                                "import yaml, pathlib\n" +
+                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
+                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
+                                "d = d or {}\n" +
+                                "print(str((d.get('agent') or {}).get('reasoning_effort', '') or 'medium'))\n" +
+                                "H2PYEOF"
+                        ),
+                    ),
+                )
+                val level = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content }
+                    ?.trim()?.takeIf { it.isNotBlank() } ?: "medium"
+                _uiState.update { it.copy(reasoningLevel = level) }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] Failed to load reasoning level")
+            }
+        }
+    }
+
+    fun setReasoningLevel(rawLevel: String) {
+        val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf(
+                        "command" to JsonPrimitive(
+                            "python3 - <<'H2PYEOF'\n" +
+                                "import yaml, pathlib\n" +
+                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
+                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
+                                "d = d or {}\n" +
+                                "d.setdefault('agent', {})['reasoning_effort'] = '$level'\n" +
+                                "p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))\n" +
+                                "print('OK')\n" +
+                                "H2PYEOF"
+                        ),
+                    ),
+                )
+                _uiState.update { it.copy(reasoningLevel = level) }
+                Timber.i("[Chat] agent.reasoning_effort set to $level")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to set reasoning level")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Failed to set reasoning: ${e.message}")) }
+            }
+        }
     }
 
     /**
