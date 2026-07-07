@@ -1032,7 +1032,10 @@ class ChatViewModel @Inject constructor(
         // Remove the last assistant response (and any tool calls / status after it)
         val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1)
+            // .toList() copies — subList returns a live view backed by the
+            // original list, and stashing that view in immutable state is a
+            // latent aliasing bug.
+            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
             _uiState.update { it.copy(
                 messages = trimmedMessages,
                 isSending = true,
