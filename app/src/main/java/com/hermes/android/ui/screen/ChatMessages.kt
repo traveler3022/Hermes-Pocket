@@ -26,6 +26,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -78,8 +79,6 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
@@ -702,12 +701,21 @@ internal fun MessageBubble(
         }
 
         is ChatMessage.ToolCall -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-                shape = RoundedCornerShape(12.dp),
+            // Tinted-outline instead of a solid fill: a faint background
+            // wash (5%) plus a slightly stronger border (20%) of the same
+            // accent — reads as "status" without competing with the plain
+            // document-style text around it.
+            val toolAccent = if (message.isRunning) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.outline
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(toolAccent.copy(alpha = 0.05f))
+                    .border(1.dp, toolAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -832,18 +840,22 @@ internal fun MessageBubble(
         }
 
         is ChatMessage.InteractiveRequest -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                ),
-                shape = RoundedCornerShape(12.dp),
+            // Needs the user's action, so a stronger tint than the passive
+            // ToolCall status card — but still tint+border, not a solid
+            // fill, to stay consistent with the rest of the document-style
+            // chat.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f))
+                    .border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "❓ ${message.question}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     if (message.answered) {
@@ -921,14 +933,14 @@ internal fun MessageBubble(
         is ChatMessage.SubagentCard -> {
             val isLongSubagent = message.text.length > 120
             var subagentExpanded by remember { mutableStateOf(false) }
-            Card(
+            val subagentAccent = MaterialTheme.colorScheme.secondary
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(subagentAccent.copy(alpha = 0.06f))
+                    .border(1.dp, subagentAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                     .clickable(enabled = isLongSubagent) { subagentExpanded = !subagentExpanded },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-                shape = RoundedCornerShape(12.dp),
             ) {
                 Row(
                     modifier = Modifier
@@ -946,7 +958,7 @@ internal fun MessageBubble(
                         Text(
                             text = t("🤖 Sub-agent", "🤖 زیر ایجنت"),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         val displayText = if (isLongSubagent && !subagentExpanded) {
                             message.text.take(120) + "…"
@@ -956,7 +968,7 @@ internal fun MessageBubble(
                         Text(
                             text = displayText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     if (isLongSubagent) {
@@ -964,7 +976,7 @@ internal fun MessageBubble(
                             imageVector = if (subagentExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
