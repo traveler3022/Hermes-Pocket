@@ -517,10 +517,18 @@ fun ChatScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.clickable { onNavigateToRuntime() }
                             ) {
-                                Text(uiState.assistantName)
-                                ConnectionIndicator(uiState.connectionState)
+                                // The name itself opens rename (matches the
+                                // drawer header affordance); the status dot
+                                // stays the entry point to Runtime, so both
+                                // remain reachable from the top bar.
+                                Text(
+                                    text = uiState.assistantName,
+                                    modifier = Modifier.clickable { showRenameAssistantDialog = true },
+                                )
+                                Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
+                                    ConnectionIndicator(uiState.connectionState)
+                                }
                             }
                         },
                         navigationIcon = {
