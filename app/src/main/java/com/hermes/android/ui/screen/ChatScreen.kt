@@ -94,7 +94,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -657,46 +656,15 @@ fun ChatScreen(
                                     modifier = Modifier.fillParentMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    if (uiState.searchQuery.isNotBlank()) {
-                                        // Search active with no matches — a plain
-                                        // no-results message, NOT the starter
-                                        // prompts (those auto-send on tap, which
-                                        // would fire an unintended message here).
-                                        Text(
-                                            text = t("No matching messages", "پیامی پیدا نشد"),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    } else {
-                                        val starterPrompts = listOf(
-                                            t("What can you do for me?", "چی می‌تونی برام انجام بدی؟"),
-                                            t("Check my server status", "وضعیت سرورم رو چک کن"),
-                                            t("Summarize recent activity", "فعالیت‌های اخیر رو خلاصه کن"),
-                                        )
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                                            modifier = Modifier.padding(horizontal = 24.dp),
-                                        ) {
-                                            Text(
-                                                text = t("How can I help?", "چطور می‌تونم کمکت کنم؟"),
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                starterPrompts.forEach { prompt ->
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            viewModel.updateInputText(prompt)
-                                                            viewModel.sendMessage()
-                                                        },
-                                                    ) {
-                                                        Text(prompt)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    Text(
+                                        text = if (uiState.searchQuery.isNotBlank()) {
+                                            t("No matching messages", "پیامی پیدا نشد")
+                                        } else {
+                                            t("Ask Hermes anything", "هر چیزی از هرمس بپرس")
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
                         }
