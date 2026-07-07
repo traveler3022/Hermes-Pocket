@@ -85,7 +85,6 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
-import com.hermes.android.ui.viewmodel.ConfigTab
 import com.hermes.android.ui.viewmodel.ConfigUiState
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
@@ -169,6 +168,28 @@ internal fun ModelsTab(
                         Text(t("Add", "افزودن"))
                     }
                 }
+            }
+        }
+
+        // ── One-tap auto-failover: chain every provider so Hermes switches
+        //    automatically when one fails (error / quota / billing). ──
+        item(key = "__auto_failover") {
+            OutlinedButton(
+                onClick = { viewModel.enableAutoFailoverAllProviders() },
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            ) {
+                Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (state.fallbackProviders.isEmpty()) {
+                        t("Auto-switch between all providers", "جابه‌جایی خودکار بین همه پرووایدرها")
+                    } else {
+                        t(
+                            "Auto-switch on: ${state.fallbackProviders.size} providers",
+                            "خودکار روی ${state.fallbackProviders.size} پرووایدر",
+                        )
+                    }
+                )
             }
         }
 

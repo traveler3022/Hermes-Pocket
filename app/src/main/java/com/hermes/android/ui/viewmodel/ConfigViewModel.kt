@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -49,9 +50,11 @@ class ConfigViewModel @Inject constructor(
 
     fun loadAll() {
         loadConfig()
+        loadBehaviorConfig()
         loadModels()
         loadTools()
         loadMemory()
+        loadSoul()
     }
 
     // ── Config ────────────────────────────────────────────────────────────
@@ -122,28 +125,111 @@ class ConfigViewModel @Inject constructor(
     }
 
     // ── Model Behavior Config ──────────────────────────────────────────────
+    //
+    // Fix: every one of these used to send a bare top-level config.set key
+    // (yolo, reasoning, thinking_mode, fast, busy, verbose, details_mode,
+    // statusbar, mouse, indicator, personality, skin, prompt) — verified
+    // against Hermes' own docs, none of those keys exist at that path (some,
+    // like fast/busy/statusbar, don't exist anywhere in Hermes at all). The
+    // writes were silently accepted and silently ignored. Real keys are
+    // nested under display./agent./approvals., and there was never any
+    // read-back, so toggles always reset to the Kotlin default on reload
+    // regardless of what was actually saved. loadBehaviorConfig() now reads
+    // the real values back; fast/busy/verbose/details_mode/statusbar/mouse/
+    // indicator are removed outright — they were never wired to any UI
+    // control anyway (dead code), and half of them have no real Hermes
+    // equivalent.
 
-    fun setYolo(enabled: Boolean) {
+    /** Read back the real current values so the controls reflect saved state. */
+    fun loadBehaviorConfig() {
         viewModelScope.launch {
             try {
-                saveConfigSilent("yolo", enabled.toString())
-                _uiState.value = _uiState.value.copy(yolo = enabled)
-                Timber.i("[Config] Yolo set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set yolo")
+                val out = execPython(
+                    """
+                    import json, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    approvals = d.get('approvals') or {}
+                    agent = d.get('agent') or {}
+                    display = d.get('display') or {}
+                    print(json.dumps({
+                        'approval_mode': str(approvals.get('mode', 'manual')),
+                        'reasoning': str(agent.get('reasoning_effort', '') or 'medium'),
+                        'personality': str(display.get('personality', '')),
+                    }))
+                    """.trimIndent()
+                )
+                val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to set yolo: ${e.message}",
+                    approvalMode = (obj?.get("approval_mode") as? JsonPrimitive)?.content ?: "manual",
+                    reasoning = (obj?.get("reasoning") as? JsonPrimitive)?.content ?: "medium",
+                    personality = (obj?.get("personality") as? JsonPrimitive)?.content ?: "",
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load behavior config")
+            }
+        }
+    }
+
+    /** approvals.mode: manual | smart | off ("off" = equivalent of --yolo). */
+    fun setApprovalMode(rawMode: String) {
+        viewModelScope.launch {
+            try {
+                // Value comes from a fixed dropdown (manual/smart/off), but
+                // sanitize anyway before interpolating into python source.
+                val mode = rawMode.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                execPython(
+                    """
+                    import yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    d.setdefault('approvals', {})['mode'] = '$mode'
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(approvalMode = mode)
+                Timber.i("[Config] approvals.mode set to $mode")
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to set approval mode")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to set approval mode: ${e.message}",
                 )
             }
         }
     }
 
-    fun setReasoning(level: String) {
+    /** agent.reasoning_effort: none | minimal | low | medium | high | xhigh. */
+    /**
+     * Fix: this used to write agent.reasoning_effort to config.yaml directly
+     * via shell.exec — that only takes effect for future sessions, never the
+     * one currently open. Verified against tui_gateway/server.py's
+     * config.set: it has a dedicated `key="reasoning"` case that, when given
+     * a session_id, sets session["create_reasoning_override"] AND updates
+     * the live agent's reasoning_config directly (immediate effect on the
+     * current chat), and only falls back to writing config.yaml when no
+     * session is passed. Use that RPC instead of hand-editing the file.
+     */
+    fun setReasoning(rawLevel: String) {
         viewModelScope.launch {
             try {
-                saveConfigSilent("reasoning", level)
+                val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+                val sid = try {
+                    val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                } catch (e: Exception) {
+                    null
+                }
+                val params = buildJsonObject {
+                    put("key", "reasoning")
+                    put("value", level)
+                    if (!sid.isNullOrBlank()) put("session_id", sid)
+                }
+                gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
                 _uiState.value = _uiState.value.copy(reasoning = level)
-                Timber.i("[Config] Reasoning set to $level")
+                Timber.i("[Config] reasoning set to $level (session=$sid)")
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to set reasoning")
                 _uiState.value = _uiState.value.copy(
@@ -153,149 +239,74 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun setThinkingMode(enabled: Boolean) {
+    /** display.personality — a name referencing agent.personalities (or a built-in). */
+    fun setPersonality(value: String) {
         viewModelScope.launch {
             try {
-                saveConfigSilent("thinking_mode", enabled.toString())
-                _uiState.value = _uiState.value.copy(thinkingMode = enabled)
-                Timber.i("[Config] Thinking mode set to $enabled")
+                execPython(
+                    """
+                    import base64, yaml, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
+                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
+                    d = d or {}
+                    d.setdefault('display', {})['personality'] = base64.b64decode('${b64(value)}').decode()
+                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(personality = value)
+                Timber.i("[Config] display.personality set to $value")
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set thinking mode")
+                Timber.e(e, "[Config] Failed to set personality")
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to set thinking mode: ${e.message}",
+                    errorMessage = "Failed to set personality: ${e.message}",
                 )
             }
         }
     }
 
-    fun setFast(enabled: Boolean) {
+    /**
+     * SOUL.md — the agent's persistent identity/voice, first slot in the
+     * system prompt (~/.hermes/SOUL.md, plain markdown, auto-created by
+     * Hermes if missing). Replaces the old free-text "System Prompt" field,
+     * which wrote a config.set "prompt" key that doesn't correspond to
+     * anything Hermes reads.
+     */
+    fun loadSoul() {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingSoul = true)
             try {
-                saveConfigSilent("fast", enabled.toString())
-                _uiState.value = _uiState.value.copy(fast = enabled)
-                Timber.i("[Config] Fast mode set to $enabled")
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive("cat ~/.hermes/SOUL.md 2>/dev/null || echo ''")),
+                )
+                val soul = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                _uiState.value = _uiState.value.copy(soulMd = soul, isLoadingSoul = false)
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set fast mode")
+                Timber.w(e, "[Config] Failed to load SOUL.md")
+                _uiState.value = _uiState.value.copy(isLoadingSoul = false)
             }
         }
     }
 
-    fun setBusy(enabled: Boolean) {
+    fun saveSoul(content: String) {
         viewModelScope.launch {
             try {
-                saveConfigSilent("busy", enabled.toString())
-                _uiState.value = _uiState.value.copy(busy = enabled)
-                Timber.i("[Config] Busy mode set to $enabled")
+                execPython(
+                    """
+                    import base64, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'SOUL.md'
+                    p.write_text(base64.b64decode('${b64(content)}').decode())
+                    print('OK')
+                    """.trimIndent()
+                )
+                _uiState.value = _uiState.value.copy(soulMd = content, errorMessage = "SOUL.md saved")
+                Timber.i("[Config] SOUL.md saved")
             } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set busy mode")
-            }
-        }
-    }
-
-    fun setVerbose(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("verbose", enabled.toString())
-                _uiState.value = _uiState.value.copy(verbose = enabled)
-                Timber.i("[Config] Verbose mode set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set verbose mode")
-            }
-        }
-    }
-
-    fun setDetailsMode(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("details_mode", enabled.toString())
-                _uiState.value = _uiState.value.copy(detailsMode = enabled)
-                Timber.i("[Config] Details mode set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set details mode")
-            }
-        }
-    }
-
-    fun setCompact(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("compact", enabled.toString())
-                _uiState.value = _uiState.value.copy(compact = enabled)
-                Timber.i("[Config] Compact mode set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set compact mode")
-            }
-        }
-    }
-
-    fun setStatusbar(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("statusbar", enabled.toString())
-                _uiState.value = _uiState.value.copy(statusbar = enabled)
-                Timber.i("[Config] Statusbar set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set statusbar")
-            }
-        }
-    }
-
-    fun setMouse(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("mouse", enabled.toString())
-                _uiState.value = _uiState.value.copy(mouse = enabled)
-                Timber.i("[Config] Mouse mode set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set mouse mode")
-            }
-        }
-    }
-
-    fun setIndicator(enabled: Boolean) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("indicator", enabled.toString())
-                _uiState.value = _uiState.value.copy(indicator = enabled)
-                Timber.i("[Config] Indicator set to $enabled")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set indicator")
-            }
-        }
-    }
-
-    fun setPersonality(value: String) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("personality", value)
-                _uiState.value = _uiState.value.copy(personality = value)
-                Timber.i("[Config] Personality set to $value")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set personality")
-            }
-        }
-    }
-
-    fun setSkin(value: String) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("skin", value)
-                _uiState.value = _uiState.value.copy(skin = value)
-                Timber.i("[Config] Skin set to $value")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set skin")
-            }
-        }
-    }
-
-    fun setPrompt(value: String) {
-        viewModelScope.launch {
-            try {
-                saveConfigSilent("prompt", value)
-                _uiState.value = _uiState.value.copy(prompt = value)
-                Timber.i("[Config] Prompt set")
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to set prompt")
+                Timber.e(e, "[Config] Failed to save SOUL.md")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to save SOUL.md: ${e.message}",
+                )
             }
         }
     }
@@ -552,24 +563,48 @@ class ConfigViewModel @Inject constructor(
     fun toggleTool(toolName: String, enabled: Boolean) {
         viewModelScope.launch {
             try {
-                // Fix S5F03: tools.configure params: {action: "enable"/"disable", names: [...]}
+                // Verified against tui_gateway/server.py's tools.configure:
+                // 1. Only names in the server's CONFIGURABLE_TOOLSETS whitelist
+                //    are applied — anything else returns OK with the name in
+                //    `unknown`. We used to ignore the response and flip the
+                //    switch locally, so non-configurable toolsets LOOKED
+                //    toggled while the server did nothing.
+                // 2. Without session_id the change only lands in config.yaml —
+                //    the LIVE agent keeps its current toolsets until the
+                //    session is reset. Passing session_id makes the server
+                //    reset the agent so the change applies to the current chat.
+                val sid = try {
+                    val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                } catch (e: Exception) {
+                    null
+                }
                 val params = buildJsonObject {
                     put("action", if (enabled) "enable" else "disable")
                     put("names", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(toolName))))
+                    if (!sid.isNullOrBlank()) put("session_id", sid)
                 }
-                gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
-                Timber.i("[Config] Tool $toolName -> $enabled")
-                // Update local state immediately
-                _uiState.value = _uiState.value.copy(
-                    availableTools = _uiState.value.availableTools.map {
-                        if (it.name == toolName) it.copy(enabled = enabled) else it
-                    }
-                )
+                val result = gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
+                val obj = result as? JsonObject
+                val unknown = (obj?.get("unknown") as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                if (toolName in unknown) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "\"$toolName\" cannot be toggled on this server",
+                    )
+                } else {
+                    val reset = (obj?.get("reset") as? JsonPrimitive)?.content == "true"
+                    Timber.i("[Config] Tool $toolName -> $enabled (live session reset=$reset)")
+                }
+                // Re-read from the server so switches show the REAL state
+                // instead of an optimistic local flip.
+                loadTools()
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to toggle tool")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to toggle tool: ${e.message}",
                 )
+                loadTools()
             }
         }
     }
@@ -640,23 +675,43 @@ class ConfigViewModel @Inject constructor(
             try {
                 // Read config.yaml directly as JSON via shell.exec — parsing
                 // config.show's human-formatted text was too fragile.
+                //
+                // Fix: this used to read/write a `providers:` dict keyed by
+                // slug — a key Hermes' config loader does not recognize at
+                // all. The real schema (per Hermes' own docs) is a
+                // `custom_providers:` LIST of {name, base_url, ...}, and a
+                // custom provider is only "active" once `model.provider` is
+                // set to `custom:<name>`. Likewise `fallback_providers` is a
+                // list of {provider, model} pairs, not bare name strings.
+                // Both were silently no-ops against the real agent before —
+                // this is why "add provider"/"auto-failover" never actually
+                // connected anything.
                 val out = execPython(
                     """
                     import json, yaml, pathlib
                     home = pathlib.Path.home() / '.hermes'
                     cp = home / 'config.yaml'
                     cfg = (yaml.safe_load(cp.read_text()) if cp.exists() else {}) or {}
-                    provs = cfg.get('providers') or {}
+                    custom = cfg.get('custom_providers') or []
+                    if not isinstance(custom, list): custom = []
                     model = cfg.get('model')
-                    if not isinstance(model, dict): model = {'model': model or ''}
+                    if not isinstance(model, dict): model = {}
+                    active_raw = str(model.get('provider') or '')
+                    active = active_raw[len('custom:'):] if active_raw.startswith('custom:') else ''
+                    def fb_name(x):
+                        p = str((x or {}).get('provider', '')) if isinstance(x, dict) else str(x or '')
+                        return p[len('custom:'):] if p.startswith('custom:') else p
+                    fallback_names = [fb_name(x) for x in (cfg.get('fallback_providers') or [])]
+                    fallback_names = [n for n in fallback_names if n]
                     print(json.dumps({
-                        'providers': {str(k): {
-                            'base_url': str((v or {}).get('base_url', '') if isinstance(v, dict) else ''),
-                            'default_model': str((v or {}).get('default_model', '') if isinstance(v, dict) else ''),
-                        } for k, v in provs.items()},
+                        'providers': [{
+                            'name': str((c or {}).get('name', '')),
+                            'base_url': str((c or {}).get('base_url', '')),
+                            'default_model': str((c or {}).get('default_model', '')),
+                        } for c in custom if isinstance(c, dict) and c.get('name')],
                         'strategies': cfg.get('credential_pool_strategies') or {},
-                        'fallback': [str(x) for x in (cfg.get('fallback_providers') or []) if isinstance(x, (str, int))],
-                        'active_provider': str(model.get('provider') or ''),
+                        'fallback': fallback_names,
+                        'active_provider': active,
                     }))
                     """.trimIndent()
                 )
@@ -665,12 +720,13 @@ class ConfigViewModel @Inject constructor(
                     ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
                 val strategies = root["strategies"] as? JsonObject
                 val activeProv = (root["active_provider"] as? JsonPrimitive)?.content ?: ""
-                val providers = (root["providers"] as? JsonObject)?.map { (slug, v) ->
-                    val obj = v as? JsonObject
+                val providers = (root["providers"] as? JsonArray)?.mapNotNull { el ->
+                    val obj = el as? JsonObject ?: return@mapNotNull null
+                    val slug = (obj["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
                     HermesProviderConfig(
                         slug = slug,
-                        baseUrl = (obj?.get("base_url") as? JsonPrimitive)?.content ?: "",
-                        defaultModel = (obj?.get("default_model") as? JsonPrimitive)?.content ?: "",
+                        baseUrl = (obj["base_url"] as? JsonPrimitive)?.content ?: "",
+                        defaultModel = (obj["default_model"] as? JsonPrimitive)?.content ?: "",
                         strategy = (strategies?.get(slug) as? JsonPrimitive)?.content ?: "rotate",
                         isPrimary = slug == activeProv,
                         isFallback = slug in fallbackList,
@@ -713,73 +769,176 @@ class ConfigViewModel @Inject constructor(
         return sections
     }
 
-    private fun parseFallbackProviders(raw: String?): List<String> {
-        if (raw.isNullOrBlank()) return emptyList()
-        // Parse "[provider1, provider2]" or "fallback_providers: [provider1, provider2]"
-        val value = raw.substringAfter(":").trim().removeSurrounding("[", "]").trim()
-        if (value.isBlank()) return emptyList()
-        return value.split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
-    }
-
     fun addProvider(slug: String, baseUrl: String, defaultModel: String, apiKey: String) {
         viewModelScope.launch {
             try {
                 // Sanitize the slug: it is interpolated into python/yaml.
                 val s = slug.trim().lowercase().filter { it.isLetterOrDigit() || it == '-' || it == '_' }
                 if (s.isEmpty()) throw IllegalArgumentException("Invalid provider name")
+                _uiState.value = _uiState.value.copy(isLoadingModels = true)
                 // The gateway's config.set RPC only accepts a whitelist of
                 // special keys and rejects everything else with "unknown
                 // config key" — writing providers.* through it can never
                 // work. Write config.yaml directly via shell.exec instead.
                 // Values travel base64-encoded so quoting can't break.
-                execPython(
+                //
+                // Beyond just writing the entry, ask the provider's own
+                // OpenAI-compatible /models endpoint for its model list,
+                // running server-side where the provider is reachable. This
+                // auto-detects models from just base_url + key and picks a
+                // default_model — without it, a custom provider sat selected
+                // but never actually connected. Try both {base}/models and
+                // {base}/v1/models so it works whether the base URL already
+                // includes /v1 or not, and surface the real failure reason
+                // (HTTP error / "no models") instead of failing silently.
+                val out = execPython(
                     """
-                    import base64, yaml, pathlib
+                    import base64, json, yaml, pathlib, urllib.request
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
                     d = yaml.safe_load(p.read_text()) if p.exists() else {}
                     d = d or {}
-                    provs = d.setdefault('providers', {})
-                    entry = provs.setdefault('$s', {})
-                    entry['base_url'] = base64.b64decode('${b64(baseUrl.trim())}').decode()
-                    dm = base64.b64decode('${b64(defaultModel.trim())}').decode()
-                    if dm: entry['default_model'] = dm
-                    # Let Hermes auto-list the provider's models on the next
-                    # model.options call, so the model dropdown fills itself.
-                    entry['discover_models'] = True
+                    base = base64.b64decode('${b64(baseUrl.trim())}').decode().strip()
+                    key = base64.b64decode('${b64(apiKey.trim())}').decode().strip()
+                    hint = base64.b64decode('${b64(defaultModel.trim())}').decode().strip()
+                    # custom_providers is a LIST of {name, base_url, ...} — the
+                    # `providers:` dict this used to write is not a key Hermes'
+                    # config loader recognizes at all.
+                    custom = d.setdefault('custom_providers', [])
+                    if not isinstance(custom, list): custom = d['custom_providers'] = []
+                    entry = next((c for c in custom if isinstance(c, dict) and c.get('name') == '$s'), None)
+                    if entry is None:
+                        entry = {'name': '$s'}
+                        custom.append(entry)
+                    if base: entry['base_url'] = base
+                    # The API key itself goes through the existing, already-
+                    # correct credential_pool mechanism (~/.hermes/auth.json,
+                    # see addCredentialDirect below) — not duplicated here.
+                    b = base.rstrip('/')
+                    cands = [b + '/models']
+                    if not b.endswith('/v1'):
+                        cands.insert(0, b + '/v1/models')
+                    ids = []
+                    err = ''
+                    for u in cands:
+                        try:
+                            hdr = {'Authorization': 'Bearer ' + key} if key else {}
+                            req = urllib.request.Request(u, headers=hdr)
+                            with urllib.request.urlopen(req, timeout=20) as r:
+                                body = r.read().decode('utf-8', 'replace')
+                            j = json.loads(body)
+                            rows = j.get('data') if isinstance(j, dict) else j
+                            if rows is None and isinstance(j, dict):
+                                rows = j.get('models') or []
+                            got = [ (m.get('id') or m.get('name')) for m in (rows or [])
+                                    if isinstance(m, dict) and (m.get('id') or m.get('name')) ]
+                            if got:
+                                ids = got; err = ''; break
+                            err = 'endpoint returned no models'
+                        except Exception as e:
+                            err = str(e)[:200]
+                    chosen = hint or (ids[0] if ids else '')
+                    if chosen: entry['default_model'] = chosen
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print('OK')
+                    print(json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands}))
                     """.trimIndent()
                 )
                 // Save API key to the credential pool
                 if (apiKey.isNotBlank()) addCredentialDirect(s, apiKey, "primary")
+
+                // Merge the detected models into the dropdown state directly, so
+                // it works even if Hermes' model.options doesn't surface them.
+                val detected = runCatching {
+                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
+                    val arr = obj?.get("models") as? JsonArray
+                    val chosen = (obj?.get("chosen") as? JsonPrimitive)?.content ?: ""
+                    val err = (obj?.get("error") as? JsonPrimitive)?.content ?: ""
+                    val ids = arr?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+                    Triple(ids, chosen, err)
+                }.getOrDefault(Triple(emptyList<String>(), "", ""))
+                val (modelIds, chosen, detectError) = detected
+                if (modelIds.isNotEmpty()) {
+                    val newModels = modelIds.map {
+                        ModelOption(provider = s, modelId = it, name = it, requiresApiKey = true)
+                    }
+                    val merged = _uiState.value.availableModels.filter { it.provider != s } + newModels
+                    _uiState.value = _uiState.value.copy(availableModels = merged)
+                }
+
                 loadProviders()
-                loadModels()
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Provider \"$s\" added"
-                )
+                // Actually connect: point the live agent at the detected model.
+                // Hermes only resolves this provider via the "custom:<name>"
+                // address (matching custom_providers[].name above) — passing
+                // the bare slug would silently fail to activate it.
+                if (chosen.isNotBlank()) {
+                    val err = applyHermesModelSwitch("custom:$s", chosen)
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingModels = false,
+                        activeProvider = if (err == null) s else _uiState.value.activeProvider,
+                        activeModel = if (err == null) chosen else _uiState.value.activeModel,
+                        errorMessage = err
+                            ?: "Provider \"$s\" added — ${modelIds.size} models, using $chosen",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingModels = false,
+                        errorMessage = "Provider \"$s\" added, but couldn't auto-detect models" +
+                            (if (detectError.isNotBlank()) " ($detectError)" else "") +
+                            ". Check the base URL/key, or type a model name.",
+                    )
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to add provider")
                 _uiState.value = _uiState.value.copy(
+                    isLoadingModels = false,
                     errorMessage = "Failed to add provider: ${e.message}"
                 )
             }
         }
     }
 
+    /**
+     * One-tap "auto-switch across all providers": put every configured provider
+     * into Hermes' `fallback_providers` chain so the agent automatically moves
+     * to the next provider when the current one fails (network error, auth,
+     * rate-limit / quota / billing). Hermes performs the actual switching — this
+     * just wires the chain so you stop doing it by hand.
+     */
+    fun enableAutoFailoverAllProviders() {
+        val all = _uiState.value.providers.map { it.slug }.filter { it.isNotBlank() }
+        if (all.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Add at least one provider first",
+            )
+            return
+        }
+        setFallbackProviders(all)
+    }
+
     fun removeProvider(rawSlug: String) {
         val slug = safeSlug(rawSlug)
         viewModelScope.launch {
             try {
-                // Use shell.exec to remove provider section from config.yaml
+                // Remove from config.yaml's custom_providers LIST (not a
+                // `providers:` dict — see loadProviders/addProvider), and
+                // drop any fallback_providers pair whose provider is this
+                // one (matched against both the bare name and "custom:name",
+                // since older-written entries may still use either form).
                 val script = """
                     import yaml, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
                     d = yaml.safe_load(p.read_text()) or {}
-                    d.get('providers', {}).pop('$slug', None)
-                    d.get('credential_pool_strategies', {}).pop('$slug', None)
+                    custom = d.get('custom_providers') or []
+                    d['custom_providers'] = [c for c in custom if not (isinstance(c, dict) and c.get('name') == '$slug')]
+                    strategies = d.get('credential_pool_strategies') or {}
+                    strategies.pop('$slug', None)
+                    d['credential_pool_strategies'] = strategies
+                    def fb_provider(x):
+                        return str((x or {}).get('provider', '')) if isinstance(x, dict) else str(x or '')
                     fb = d.get('fallback_providers') or []
-                    if '$slug' in fb: fb.remove('$slug')
-                    d['fallback_providers'] = fb
+                    d['fallback_providers'] = [x for x in fb if fb_provider(x) not in ('$slug', 'custom:$slug')]
+                    model = d.get('model')
+                    if isinstance(model, dict) and str(model.get('provider') or '') == 'custom:$slug':
+                        model['provider'] = ''
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
                     print('OK')
                 """.trimIndent()
@@ -802,8 +961,25 @@ class ConfigViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // config.set rejects non-whitelisted keys — write the yaml list
-                // directly. The list travels as base64 JSON to avoid quoting.
-                val json = providers.joinToString(",", "[", "]") { "\"${it.trim()}\"" }
+                // directly. fallback_providers is a list of {provider, model}
+                // pairs (not bare names) — Hermes needs to know which model to
+                // fail over to on each provider, and "provider" must use the
+                // "custom:<name>" address to resolve one of our own entries.
+                // Skip any provider with no default model set — Hermes has
+                // nothing to switch to for it.
+                val known = _uiState.value.providers.associateBy { it.slug }
+                val pairs = providers.mapNotNull { slug ->
+                    val model = known[slug]?.defaultModel?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    slug to model
+                }
+                val json = buildJsonArray {
+                    pairs.forEach { (slug, model) ->
+                        add(buildJsonObject {
+                            put("provider", "custom:$slug")
+                            put("model", model)
+                        })
+                    }
+                }.toString()
                 execPython(
                     """
                     import base64, json, yaml, pathlib
@@ -818,7 +994,11 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(fallbackProviders = providers)
                 loadProviders()
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Fallback providers updated"
+                    errorMessage = if (pairs.size < providers.size) {
+                        "Fallback providers updated (${providers.size - pairs.size} skipped — no default model set)"
+                    } else {
+                        "Fallback providers updated"
+                    }
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -871,7 +1051,10 @@ class ConfigViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                val error = applyHermesModelSwitch(provider.slug, model)
+                // provider.slug is one of our custom_providers entries — Hermes
+                // only resolves it via the "custom:<name>" address (see
+                // addProvider's comment for why the bare slug silently fails).
+                val error = applyHermesModelSwitch("custom:${provider.slug}", model)
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(errorMessage = error)
                     return@launch
@@ -1108,14 +1291,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    private suspend fun saveConfigSilent(key: String, value: String) {
-        val params = buildJsonObject {
-            put("key", key)
-            put("value", value)
-        }
-        gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
-    }
-
     private fun shellQuote(s: String): String {
         // Safe single-quote wrapping for shell
         return "'" + s.replace("'", "'\\''") + "'"
@@ -1166,15 +1341,11 @@ class ConfigViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
-    fun selectTab(tab: ConfigTab) {
-        _uiState.value = _uiState.value.copy(selectedTab = tab)
-    }
 }
 
 // ── UI State models ──────────────────────────────────────────────────────
 
 data class ConfigUiState(
-    val selectedTab: ConfigTab = ConfigTab.GENERAL,
     val configYaml: String = "",
     val isLoadingConfig: Boolean = false,
     val activeProvider: String? = null,
@@ -1197,30 +1368,22 @@ data class ConfigUiState(
     // Nous credits/balance panel (opened from the Models tab)
     val creditsText: String? = null,
     val isLoadingCredits: Boolean = false,
-    // Model behavior config
-    val yolo: Boolean = false,
-    val reasoning: String = "standard",
-    val thinkingMode: Boolean = true,
-    // Additional behavior config
-    val fast: Boolean = false,
-    val busy: Boolean = false,
-    val verbose: Boolean = false,
-    val detailsMode: Boolean = false,
-    val compact: Boolean = false,
-    val statusbar: Boolean = true,
-    val mouse: Boolean = false,
-    val indicator: Boolean = true,
-    // Text config values
-    val personality: String = "",
-    val skin: String = "",
-    val prompt: String = "",
+    // Agent behavior config — real Hermes config.yaml keys, verified against
+    // the official docs (see setApprovalMode/setReasoning/etc. comments).
+    // approvals.mode replaces the old fictional "yolo" boolean — "off" is
+    // the documented equivalent of --yolo. TUI-only cosmetics the old screen
+    // exposed (skin/compact/mouse/indicator/statusbar/details_mode) are gone:
+    // they only restyle the terminal UI on the server, which an Android
+    // client never sees.
+    val approvalMode: String = "manual", // approvals.mode: manual | smart | off
+    val reasoning: String = "medium", // agent.reasoning_effort: none|minimal|low|medium|high|xhigh
+    val personality: String = "", // display.personality — system-prompt overlay name
+    // SOUL.md — the agent's persistent identity/voice (first slot in the
+    // system prompt). Replaces the old free-text "prompt" field, which sent
+    // a config.set key ("prompt") that doesn't exist anywhere in Hermes.
+    val soulMd: String = "",
+    val isLoadingSoul: Boolean = false,
 )
-
-enum class ConfigTab(val label: String) {
-    GENERAL("General"),
-    MODELS("Models"),
-    TOOLS("Tools"),
-}
 
 data class ModelOption(
     val provider: String,

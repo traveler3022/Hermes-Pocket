@@ -549,3 +549,8 @@ can be ported 1:1 instead of rediscovered.
 Read `docs/upstream-reference/README.md`, run
 `scripts/check-upstream-drift.sh`, pick the next candidate above, find its
 handling in the reference TS files, port to Kotlin. Log the session here.
+
+## Session 9 — pending for next session
+- **OPEN BUG (priority #1): chat screen still suddenly goes black sometimes** — persists after the replay-race fix (9d443b2) and duplicate-id defense (b85d408). Next step: ask user WHEN it happens (first message? images/HTML in reply? random?), try to get logcat. Suspects not yet ruled out: WebView blocks (Mermaid/Html cards render black), fullscreen image Dialog.
+- Server now runs `hermes serve` (headless) via systemd unit hermes-dashboard.service (name kept, runs serve); dashboard web UI off; token rotated by user.
+- Merged-pending: today's branch commits (provider schema fix 805ce48, behavior settings rebuild 4f31bd9, ports b85d408/e8e172e) are on claude/dev-session-log-review-lmpwa7, CI green, NOT yet merged to main.

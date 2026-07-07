@@ -83,6 +83,65 @@ class ChatViewModel @Inject constructor(
         loadDraft()
         connectAndCollect()
         loadCommandCatalog()
+        loadReasoningLevel()
+    }
+
+    /**
+     * Reasoning effort (agent.reasoning_effort), quick-switchable from the
+     * input bar — mirrors ConfigViewModel's setting under Settings > General
+     * so both stay in sync (both read/write the same config.yaml key).
+     */
+    private fun loadReasoningLevel() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf(
+                        "command" to JsonPrimitive(
+                            "python3 - <<'H2PYEOF'\n" +
+                                "import yaml, pathlib\n" +
+                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
+                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
+                                "d = d or {}\n" +
+                                "print(str((d.get('agent') or {}).get('reasoning_effort', '') or 'medium'))\n" +
+                                "H2PYEOF"
+                        ),
+                    ),
+                )
+                val level = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content }
+                    ?.trim()?.takeIf { it.isNotBlank() } ?: "medium"
+                _uiState.update { it.copy(reasoningLevel = level) }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] Failed to load reasoning level")
+            }
+        }
+    }
+
+    /**
+     * Fix: this used to hand-edit config.yaml directly, which only affects
+     * future sessions. Verified against tui_gateway/server.py: config.set's
+     * key="reasoning" case, when given a session_id, sets
+     * session["create_reasoning_override"] and updates the live agent's
+     * reasoning_config in place — an immediate effect on the CURRENT chat.
+     * Passing our own activeSessionId is exactly that live-session path.
+     */
+    fun setReasoningLevel(rawLevel: String) {
+        val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("key", "reasoning")
+                    put("value", level)
+                    _uiState.value.activeSessionId?.let { put("session_id", it) }
+                }
+                gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(params))
+                _uiState.update { it.copy(reasoningLevel = level) }
+                Timber.i("[Chat] reasoning set to $level (session=${_uiState.value.activeSessionId})")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to set reasoning level")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Failed to set reasoning: ${e.message}")) }
+            }
+        }
     }
 
     /**
@@ -179,6 +238,20 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            // Collect events. Must be attached BEFORE connect() is called, not
+            // after: events.replay is 0 (see OkHttpGatewayClient), so any
+            // message.start/delta/complete the gateway pushes right after the
+            // handshake — e.g. as part of a session resume — would otherwise
+            // race the collector attaching and be dropped forever, silently
+            // wiping the messages that should have shown up as chat history.
+            // UNDISPATCHED guarantees the collector is live before this
+            // coroutine yields to call connect() below.
+            eventCollectionJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                gatewayClient.events.collect { event ->
+                    handleEvent(event)
+                }
+            }
+
             // Connect to gateway
             try {
                 gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
@@ -188,13 +261,6 @@ class ChatViewModel @Inject constructor(
                     errorEvent = ErrorEvent.Critical("Cannot connect to Hermes gateway. Is it running?"),
                     connectionState = ChatConnectionState.Failed,
                 ) }
-            }
-
-            // Collect events
-            eventCollectionJob = launch {
-                gatewayClient.events.collect { event ->
-                    handleEvent(event)
-                }
             }
         }
     }
@@ -1044,6 +1110,13 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ToolStart -> {
+                // Defense in depth: id is server-assigned (event.toolId), not a
+                // locally generated UUID, so a duplicate delivery of the same
+                // event (e.g. a stray replay after a reconnect) would append a
+                // second message with an id already in the list. Compose's
+                // LazyColumn (keyed by message id) treats a repeated key as
+                // fatal and crashes the whole screen. Update in place instead
+                // of appending when the id already exists.
                 val toolMsg = ChatMessage.ToolCall(
                     id = event.toolId,
                     timestamp = System.currentTimeMillis(),
@@ -1054,10 +1127,17 @@ class ChatViewModel @Inject constructor(
                     isRunning = true,
                     durationS = null,
                 )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + toolMsg,
-                    activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
-                ) }
+                _uiState.update { state ->
+                    val exists = state.messages.any { it.id == event.toolId }
+                    state.copy(
+                        messages = if (exists) {
+                            state.messages.updateFirst({ it.id == event.toolId }) { toolMsg }
+                        } else {
+                            state.messages + toolMsg
+                        },
+                        activeTodos = event.todos?.toUiTodos() ?: state.activeTodos,
+                    )
+                }
             }
 
             is GatewayEvent.ToolComplete -> {
@@ -1287,6 +1367,14 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.SessionInfo -> {
+                // Pushed after things like a session-scoped reasoning change
+                // (config.set key="reasoning") — reflects the LIVE agent's
+                // actual current effort (session override included), so this
+                // is the authoritative source for what the chat's control
+                // should show, not our own optimistic local copy.
+                (event.info["reasoning_effort"] as? JsonPrimitive)?.content?.let { effort ->
+                    _uiState.update { it.copy(reasoningLevel = effort.ifBlank { "none" }) }
+                }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 

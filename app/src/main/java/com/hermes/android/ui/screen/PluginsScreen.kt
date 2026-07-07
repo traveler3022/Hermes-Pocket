@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -106,7 +107,7 @@ fun PluginsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(uiState.plugins, key = { it.name }) { plugin ->
-                    PluginCard(plugin)
+                    PluginCard(plugin, onToggle = { viewModel.togglePlugin(plugin.name, it) })
                 }
             }
         }
@@ -114,7 +115,7 @@ fun PluginsScreen(
 }
 
 @Composable
-private fun PluginCard(plugin: PluginItem) {
+private fun PluginCard(plugin: PluginItem, onToggle: (Boolean) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -134,6 +135,14 @@ private fun PluginCard(plugin: PluginItem) {
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                if (plugin.description.isNotBlank()) {
+                    Text(
+                        text = plugin.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                    )
+                }
                 Text(
                     text = if (plugin.enabled) "Enabled" else "Disabled",
                     style = MaterialTheme.typography.labelSmall,
@@ -144,6 +153,11 @@ private fun PluginCard(plugin: PluginItem) {
                     },
                 )
             }
+            Switch(
+                checked = plugin.enabled,
+                onCheckedChange = onToggle,
+                enabled = plugin.source != "bundled",
+            )
         }
     }
 }

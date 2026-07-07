@@ -61,6 +61,15 @@ class PluginsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fix: plugins.manage's `list` action returns rows shaped
+     * {name, version, description, source, status} — there is no `enabled`
+     * field at all. Reading plugin["enabled"] always fell through to the
+     * `?: false` default, so every plugin showed "Disabled" regardless of
+     * its real state. Verified against tui_gateway/server.py's docstring for
+     * plugins.manage. Derive enabled from status instead (only an explicit
+     * "disabled" status counts as off — bundled/enabled/etc. are on).
+     */
     private fun parsePlugins(result: kotlinx.serialization.json.JsonElement): List<PluginItem> {
         return try {
             val obj = result as? JsonObject ?: return emptyList()
@@ -68,15 +77,43 @@ class PluginsViewModel @Inject constructor(
             pluginsArr.mapNotNull { pluginEl ->
                 val plugin = pluginEl as? JsonObject ?: return@mapNotNull null
                 val name = (plugin["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
-                val enabled = (plugin["enabled"] as? JsonPrimitive)?.content?.toBoolean() ?: false
+                val status = (plugin["status"] as? JsonPrimitive)?.content ?: ""
                 PluginItem(
                     name = name,
-                    enabled = enabled,
+                    description = (plugin["description"] as? JsonPrimitive)?.content ?: "",
+                    source = (plugin["source"] as? JsonPrimitive)?.content ?: "",
+                    status = status,
+                    enabled = status.lowercase() != "disabled",
                 )
             }
         } catch (e: Exception) {
             Timber.e(e, "[Plugins] Parse error")
             emptyList()
+        }
+    }
+
+    /**
+     * Fix: the screen had no way to actually enable/disable a plugin at all
+     * — plugins.manage's `toggle` action (name + enable) was never called
+     * from anywhere. "Plugins Manager" only ever listed plugins.
+     */
+    fun togglePlugin(name: String, enable: Boolean) {
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("action", "toggle")
+                    put("name", name)
+                    put("enable", enable)
+                }
+                gatewayClient.request(GatewayMethods.PLUGINS_MANAGE, params.toMap())
+                Timber.i("[Plugins] $name -> enabled=$enable")
+                loadPlugins()
+            } catch (e: GatewayException) {
+                Timber.e(e, "[Plugins] Failed to toggle $name")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to toggle $name: ${e.message}",
+                )
+            }
         }
     }
 
@@ -97,5 +134,8 @@ data class PluginsUiState(
 
 data class PluginItem(
     val name: String,
+    val description: String = "",
+    val source: String = "",
+    val status: String = "",
     val enabled: Boolean,
 )
