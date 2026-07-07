@@ -78,10 +78,15 @@ class PlatformsViewModel @Inject constructor(
 
     fun saveToken(platform: PlatformType, token: String) {
         // Fix S8F01: Cannot save platform tokens via config.get/config.set.
-        // Hermes config.set fallback writes to display.{key}, not root-level platforms.{key}.
-        // User must configure via `hermes gateway setup` in Termux.
+        // Hermes config.set fallback writes to display.{key}, not root-level
+        // platforms.{key} — this is a real gateway limitation, not something
+        // the app can work around. The old message told users to run
+        // `hermes gateway setup` in Termux, which no longer applies at all —
+        // the app is a thin client to a remote server now, no on-device
+        // Termux runtime exists to run that command in.
         _uiState.value = _uiState.value.copy(
-            errorMessage = "Platform tokens must be configured via 'hermes gateway setup' in Termux. The app cannot set them directly.",
+            errorMessage = "Platform tokens can't be set from the app yet — edit " +
+                "~/.hermes/config.yaml on your server (SSH) or run 'hermes gateway setup' there.",
         )
     }
 

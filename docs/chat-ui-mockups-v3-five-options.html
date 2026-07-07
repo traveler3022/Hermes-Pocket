@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>۵ طرح پیشنهادی صفحه چت</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#0b0c0f; color:#e6e8ee;
+    font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
+    padding:28px 16px 60px; display:flex; flex-direction:column; align-items:center; gap:20px;
+  }
+  h1 { font-size:19px; font-weight:700; color:#dfe3ec; }
+  .sub { font-size:13px; color:#8b93a5; text-align:center; max-width:480px; line-height:1.8; margin-bottom:6px; }
+
+  /* tabs — pure CSS via radio inputs */
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:8px; }
+  .tabs label {
+    padding:9px 16px; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer;
+    background:#181b21; color:#8b93a5; border:1px solid #262b34; transition:.15s;
+  }
+  input[type=radio] { display:none; }
+  .panel { display:none; flex-direction:column; align-items:center; gap:16px; }
+  #t1:checked ~ .tabs label[for=t1],
+  #t2:checked ~ .tabs label[for=t2],
+  #t3:checked ~ .tabs label[for=t3],
+  #t4:checked ~ .tabs label[for=t4],
+  #t5:checked ~ .tabs label[for=t5] { background:#22d3ee; color:#04222a; border-color:#22d3ee; }
+  #t1:checked ~ #p1, #t2:checked ~ #p2, #t3:checked ~ #p3, #t4:checked ~ #p4, #t5:checked ~ #p5 { display:flex; }
+
+  .phone {
+    width:365px; height:720px; border-radius:34px; overflow:hidden;
+    border:6px solid #2a2d34; display:flex; flex-direction:column;
+    box-shadow:0 24px 60px rgba(0,0,0,.55);
+  }
+  .msgs { flex:1; overflow:hidden; padding:16px 12px; display:flex; flex-direction:column; gap:16px; }
+  .top { display:flex; align-items:center; gap:10px; padding:13px 16px; font-weight:700; font-size:15px; }
+  .bar { display:flex; align-items:center; gap:8px; padding:10px 12px 14px; }
+  .note { max-width:400px; font-size:12.5px; line-height:2; color:#8b93a5; }
+  .note b { color:#cbd2e0; }
+
+  /* ============ 1. DOCUMENT MODE (no agent bubble) ============ */
+  #p1 .phone { background:#101216; }
+  #p1 .top { background:#14171c; border-bottom:1px solid #22262e; }
+  #p1 .msgs { background:#0f1115; }
+  #p1 .u { align-self:flex-start; max-width:75%; background:#0e7490; color:#eafeff; padding:9px 13px; border-radius:16px 16px 4px 16px; font-size:14px; }
+  #p1 .a { display:flex; gap:10px; }
+  #p1 .av { width:22px; height:22px; border-radius:50%; background:#22d3ee; flex-shrink:0; margin-top:2px; }
+  #p1 .a .txt { font-size:14px; line-height:1.85; color:#d6dae4; }
+  #p1 .bar { background:#14171c; border-top:1px solid #22262e; }
+  #p1 .field { flex:1; background:#1c2028; border:1px solid #262b34; border-radius:20px; padding:10px 14px; font-size:13px; color:#5b6270; }
+
+  /* ============ 2. CARD STACK ============ */
+  #p2 .phone { background:#111318; }
+  #p2 .top { background:#181c22; border-bottom:1px solid #262b33; }
+  #p2 .msgs { background:#0d0f13; }
+  #p2 .u { align-self:flex-end; background:#f4b731; color:#241a02; padding:9px 13px; border-radius:14px; font-size:14px; font-weight:600; max-width:75%; }
+  #p2 .card { background:#181c22; border:1px solid #262b33; border-radius:14px; overflow:hidden; }
+  #p2 .card .hd { display:flex; align-items:center; gap:8px; padding:9px 12px; background:#1e232b; font-size:12px; color:#f4b731; font-weight:700; }
+  #p2 .card .bd { padding:11px 13px; font-size:13.5px; line-height:1.8; color:#d6dae4; }
+  #p2 .card .bd hr { border:none; border-top:1px dashed #2c323d; margin:8px 0; }
+  #p2 .bar { background:#181c22; border-top:1px solid #262b33; }
+  #p2 .field { flex:1; background:#0d0f13; border:1px solid #262b33; border-radius:10px; padding:10px 14px; font-size:13px; color:#5b6270; }
+
+  /* ============ 3. MINIMAL MONO (no bubbles, hairlines) ============ */
+  #p3 .phone { background:#fafaf9; color:#1c1c1a; }
+  #p3 .top { background:#fafaf9; border-bottom:1px solid #e8e6e1; color:#1c1c1a; }
+  #p3 .msgs { background:#fafaf9; gap:20px; }
+  #p3 .u { align-self:flex-start; font-size:14px; color:#1c1c1a; }
+  #p3 .u .lbl { font-size:10px; letter-spacing:.08em; color:#a39d8f; margin-bottom:3px; }
+  #p3 .a .lbl { font-size:10px; letter-spacing:.08em; color:#b45309; margin-bottom:3px; }
+  #p3 .a .txt { font-size:14px; line-height:1.85; color:#2b2a27; }
+  #p3 hr.div { border:none; border-top:1px solid #ece9e3; margin:0; }
+  #p3 .bar { background:#fafaf9; border-top:1px solid #e8e6e1; }
+  #p3 .field { flex:1; background:#f1efe9; border:1px solid #e8e6e1; border-radius:10px; padding:10px 14px; font-size:13px; color:#a39d8f; }
+  #p3 .send { background:#1c1c1a !important; color:#fafaf9 !important; box-shadow:none !important; }
+
+  /* ============ 4. GLASS DEPTH ============ */
+  #p4 .phone { background:linear-gradient(160deg,#3b1e6d,#0e2a5e 55%,#052b3f); }
+  #p4 .top { background:rgba(255,255,255,.06); backdrop-filter:blur(10px); border-bottom:1px solid rgba(255,255,255,.08); }
+  #p4 .msgs { background:transparent; }
+  #p4 .u { align-self:flex-start; max-width:75%; background:rgba(168,85,247,.35); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.18); color:#fff; padding:10px 14px; border-radius:18px 18px 5px 18px; font-size:14px; }
+  #p4 .a { display:flex; gap:9px; }
+  #p4 .av { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#a855f7,#22d3ee); flex-shrink:0; }
+  #p4 .a .bubble { background:rgba(255,255,255,.09); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.15); color:#f1eefe; padding:11px 14px; border-radius:18px 18px 18px 5px; font-size:14px; line-height:1.8; }
+  #p4 .bar { background:rgba(255,255,255,.05); backdrop-filter:blur(12px); border-top:1px solid rgba(255,255,255,.1); }
+  #p4 .field { flex:1; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15); border-radius:22px; padding:10px 14px; font-size:13px; color:rgba(255,255,255,.5); }
+  #p4 .send { background:linear-gradient(135deg,#a855f7,#22d3ee) !important; }
+
+  /* ============ 5. TERMINAL / HACKER ============ */
+  #p5 * { font-family: "Courier New", ui-monospace, monospace !important; }
+  #p5 .phone { background:#050807; }
+  #p5 .top { background:#0a0f0d; border-bottom:1px solid #14251d; color:#5eead4; }
+  #p5 .msgs { background:#050807; gap:14px; }
+  #p5 .u { align-self:flex-start; color:#a7f3d0; font-size:13px; }
+  #p5 .u .lbl { color:#4ade80; }
+  #p5 .a .lbl { color:#5eead4; }
+  #p5 .a .txt { color:#d1fae5; font-size:13px; line-height:1.75; }
+  #p5 .bar { background:#0a0f0d; border-top:1px solid #14251d; }
+  #p5 .field { flex:1; background:#050807; border:1px solid #14251d; border-radius:4px; padding:10px 12px; font-size:12.5px; color:#3f6f5c; }
+  #p5 .send { background:#14251d !important; color:#4ade80 !important; border-radius:4px !important; box-shadow:none !important; }
+  #p5 .cursor { display:inline-block; width:7px; height:13px; background:#4ade80; animation:blink 1s step-end infinite; vertical-align:middle; }
+  @keyframes blink { 50%{opacity:0} }
+
+  /* shared bits */
+  .icon-btn { width:36px; height:36px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#8b93a5; font-size:17px; }
+  .send { width:42px; height:42px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:17px; background:linear-gradient(135deg,#22d3ee,#0891b2); box-shadow:0 3px 10px rgba(8,145,178,.35); }
+  .status { font-size:10px; color:#4ade80; margin-inline-start:auto; display:flex; align-items:center; gap:5px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#4ade80; }
+</style>
+</head>
+<body>
+
+<h1>۵ طرح متفاوت برای صفحه چت</h1>
+<div class="sub">هرکدوم یه فلسفه‌ی طراحی جداست — روی تب‌ها بزن تا عوض شه.</div>
+
+<input type="radio" name="tab" id="t1" checked>
+<input type="radio" name="tab" id="t2">
+<input type="radio" name="tab" id="t3">
+<input type="radio" name="tab" id="t4">
+<input type="radio" name="tab" id="t5">
+
+<div class="tabs">
+  <label for="t1">۱ · سند‌مانند</label>
+  <label for="t2">۲ · کارت‌ای</label>
+  <label for="t3">۳ · مینیمال</label>
+  <label for="t4">۴ · شیشه‌ای</label>
+  <label for="t5">۵ · ترمینال</label>
+</div>
+
+<!-- 1: DOCUMENT MODE -->
+<div class="panel" id="p1">
+  <div class="phone">
+    <div class="top">هرمس <span class="status"><span class="dot"></span>متصل</span></div>
+    <div class="msgs">
+      <div class="u">وضعیت سرور رو چک کن</div>
+      <div class="a">
+        <div class="av"></div>
+        <div class="txt">رمت ۱ گیگ از ۱.۹ گیگ استفاده شده، پردازش هرمس فقط ۱۰۸ مگ گرفته. همه‌چیز سالمه ✅ می‌خوای گزارش کامل‌تری بدم؟</div>
+      </div>
+      <div class="u">آره لطفاً جزئیات پردازش‌ها رو هم بگو</div>
+      <div class="a">
+        <div class="av"></div>
+        <div class="txt">فهرست پردازش‌های فعال:<br>• hermes-serve — ۱۰۸MB<br>• گیت‌وی پیام‌رسان‌ها — ۴۲MB<br>باقی سیستم عملیاتیه.</div>
+      </div>
+    </div>
+    <div class="bar">
+      <span class="icon-btn">＋</span>
+      <div class="field">پیام بنویس…</div>
+      <div class="send">➤</div>
+    </div>
+  </div>
+  <div class="note"><b>فلسفه:</b> کاربر تو حباب کوچیک، جواب ایجنت آزاد و بدون حباب — مثل ChatGPT/Claude. بهترین خوانایی برای جواب‌های بلند و کد. حس «سند خواندن» نه «چت دوستانه».</div>
+</div>
+
+<!-- 2: CARD STACK -->
+<div class="panel" id="p2">
+  <div class="phone">
+    <div class="top">هرمس <span class="status"><span class="dot"></span>متصل</span></div>
+    <div class="msgs">
+      <div class="u">دیتابیس رو ببک‌آپ بگیر</div>
+      <div class="card">
+        <div class="hd">⚡ هرمس</div>
+        <div class="bd">ببک‌آپ گرفته شد ✅<hr>مسیر: <code>/backups/db_0707.sql</code><br>حجم: ۴۲ مگابایت</div>
+      </div>
+      <div class="u">عالی، بعدی رو کی بگیریم؟</div>
+      <div class="card">
+        <div class="hd">⚡ هرمس</div>
+        <div class="bd">پیشنهاد من: هر شب ساعت ۳ بامداد به‌صورت خودکار (cron). می‌خوای براش تنظیمش کنم؟</div>
+      </div>
+    </div>
+    <div class="bar">
+      <span class="icon-btn">＋</span>
+      <div class="field">پیام بنویس…</div>
+      <div class="send">➤</div>
+    </div>
+  </div>
+  <div class="note"><b>فلسفه:</b> هر پاسخ ایجنت یه کارت مجزا با سربرگ — حس «گزارش/داشبورد» می‌ده. برای خروجی‌های ساختاریافته (لاگ، دستور، نتیجه‌ی ابزار) خیلی خوبه.</div>
+</div>
+
+<!-- 3: MINIMAL MONO -->
+<div class="panel" id="p3">
+  <div class="phone">
+    <div class="top">هرمس</div>
+    <div class="msgs">
+      <div>
+        <div class="u"><div class="lbl">تو</div>یه یادآوری برای فردا ساعت ۹ صبح بذار</div>
+      </div>
+      <hr class="div">
+      <div>
+        <div class="a"><div class="lbl">هرمس</div><div class="txt">یادآوری «فردا ۹ صبح» ثبت شد. جای دیگه‌ای هم لازمه یادآوری بذارم؟</div></div>
+      </div>
+      <hr class="div">
+      <div>
+        <div class="u"><div class="lbl">تو</div>نه همین کافیه، ممنون</div>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="field">پیام بنویس…</div>
+      <div class="send">➤</div>
+    </div>
+  </div>
+  <div class="note"><b>فلسفه:</b> بدون حباب، بدون رنگ‌بازی — فقط برچسب و متن، جداکننده‌ی نازک بین نوبت‌ها. روشن (لایت) و آروم، مثل Notion/Linear. برای تمرکز روی خودِ متن، نه دکوراسیون.</div>
+</div>
+
+<!-- 4: GLASS DEPTH -->
+<div class="panel" id="p4">
+  <div class="phone">
+    <div class="top">هرمس <span class="status"><span class="dot"></span>متصل</span></div>
+    <div class="msgs">
+      <div class="u">یه طرح رنگی جدید پیشنهاد بده</div>
+      <div class="a">
+        <div class="av"></div>
+        <div class="bubble">بنفش-فیروزه‌ای چطوره؟ حس مدرن و تکنولوژیک می‌ده، برای اپ AI مناسبه ✨</div>
+      </div>
+    </div>
+    <div class="bar">
+      <span class="icon-btn">＋</span>
+      <div class="field">پیام بنویس…</div>
+      <div class="send">➤</div>
+    </div>
+  </div>
+  <div class="note"><b>فلسفه:</b> پس‌زمینه‌ی گرادیان زنده + حباب‌های شیشه‌ای نیمه‌شفاف (بلور). حس iOS جدید/پریمیوم. جذاب‌ترین از نظر بصری، ولی خوانایی متن بلند کمی سخت‌تره.</div>
+</div>
+
+<!-- 5: TERMINAL -->
+<div class="panel" id="p5">
+  <div class="phone">
+    <div class="top">~/hermes ▸ chat</div>
+    <div class="msgs">
+      <div class="u"><span class="lbl">$</span> restart the gateway service</div>
+      <div class="a"><span class="lbl">#</span> <span class="txt">service restarted · pid 90038 · uptime 0s<br>listening on 127.0.0.1:9119</span></div>
+      <div class="u"><span class="lbl">$</span> show active sessions<span class="cursor"></span></div>
+    </div>
+    <div class="bar">
+      <div class="field">$ _</div>
+      <div class="send">↵</div>
+    </div>
+  </div>
+  <div class="note"><b>فلسفه:</b> مونواسپیس، سبک ترمینال/CLI — مناسب یه ابزار توسعه‌دهنده روی VPS. حس «قدرت و کنترل مستقیم» می‌ده، ولی برای کاربر غیرفنی سردتره.</div>
+</div>
+
+</body>
+</html>

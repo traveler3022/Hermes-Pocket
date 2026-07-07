@@ -3,6 +3,9 @@ package com.hermes.android.ui.screen
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -69,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -165,6 +169,7 @@ fun ChatScreen(
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
+    var showRenameAssistantDialog by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -211,6 +216,13 @@ fun ChatScreen(
     // Keep drawer state in sync with ViewModel state.
     LaunchedEffect(uiState.showSessionDrawer) {
         if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
+    }
+
+    // The avatar is customized from Settings (a separate ViewModel writing
+    // the same prefs key) — re-read it every time this screen re-enters
+    // composition so a change made there shows up on return.
+    LaunchedEffect(Unit) {
+        viewModel.loadAssistantAvatar()
     }
 
     // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
@@ -278,10 +290,22 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = t("Hermes", "هرمس"),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.clickable { showRenameAssistantDialog = true },
+                    ) {
+                        Text(
+                            text = uiState.assistantName,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = t("Rename", "تغییر نام"),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = { scope.launch { drawerState.close() } }) {
                         Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
                     }
@@ -504,10 +528,18 @@ fun ChatScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.clickable { onNavigateToRuntime() }
                             ) {
-                                Text(t("Hermes", "هرمس"))
-                                ConnectionIndicator(uiState.connectionState)
+                                // The name itself opens rename (matches the
+                                // drawer header affordance); the status dot
+                                // stays the entry point to Runtime, so both
+                                // remain reachable from the top bar.
+                                Text(
+                                    text = uiState.assistantName,
+                                    modifier = Modifier.clickable { showRenameAssistantDialog = true },
+                                )
+                                Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
+                                    ConnectionIndicator(uiState.connectionState)
+                                }
                             }
                         },
                         navigationIcon = {
@@ -628,7 +660,11 @@ fun ChatScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        // Tight gap by default; itemsIndexed adds extra top
+                        // padding when a message starts a new group (turn),
+                        // so the eye reads turn boundaries instead of a flat
+                        // evenly-spaced list.
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
                         if (filteredMessages.isEmpty() &&
@@ -639,20 +675,15 @@ fun ChatScreen(
                                     modifier = Modifier.fillParentMaxSize(),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        Text(
-                                            text = "⚕",
-                                            style = MaterialTheme.typography.displayLarge,
-                                        )
-                                        Text(
-                                            text = t("Ask Hermes anything", "هر چیزی از هرمس بپرس"),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
+                                    Text(
+                                        text = if (uiState.searchQuery.isNotBlank()) {
+                                            t("No matching messages", "پیامی پیدا نشد")
+                                        } else {
+                                            t("Ask Hermes anything", "هر چیزی از هرمس بپرس")
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
                         }
@@ -664,13 +695,28 @@ fun ChatScreen(
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
                             val prev = filteredMessages.getOrNull(index - 1)
+                            val next = filteredMessages.getOrNull(index + 1)
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
+                            val isLastInGroup = next == null ||
+                                    (next is ChatMessage.User) != (message is ChatMessage.User)
 
-                            Box(modifier = Modifier.animateItem()) {
+                            Box(
+                                modifier = Modifier
+                                    .animateItem(
+                                        fadeInSpec = tween(220),
+                                        placementSpec = spring(
+                                            stiffness = Spring.StiffnessMediumLow,
+                                            visibilityThreshold = IntOffset.VisibilityThreshold,
+                                        ),
+                                    )
+                                    .padding(top = if (grouped) 0.dp else 10.dp),
+                            ) {
                             MessageBubble(
                                 message = message,
                                 grouped = grouped,
+                                isLastInGroup = isLastInGroup,
+                                avatarUri = uiState.assistantAvatarPath,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
@@ -777,6 +823,36 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // Rename dialog — client-side display name only (top bar / drawer header).
+    if (showRenameAssistantDialog) {
+        var nameInput by remember(uiState.assistantName) { mutableStateOf(uiState.assistantName) }
+        AlertDialog(
+            onDismissRequest = { showRenameAssistantDialog = false },
+            title = { Text(t("Rename assistant", "تغییر نام دستیار")) },
+            text = {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it },
+                    singleLine = true,
+                    placeholder = { Text("Hermes") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setAssistantName(nameInput)
+                    showRenameAssistantDialog = false
+                }) {
+                    Text(t("Save", "ذخیره"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameAssistantDialog = false }) {
+                    Text(t("Cancel", "انصراف"))
+                }
+            },
+        )
     }
 }
 
