@@ -554,24 +554,48 @@ class ConfigViewModel @Inject constructor(
     fun toggleTool(toolName: String, enabled: Boolean) {
         viewModelScope.launch {
             try {
-                // Fix S5F03: tools.configure params: {action: "enable"/"disable", names: [...]}
+                // Verified against tui_gateway/server.py's tools.configure:
+                // 1. Only names in the server's CONFIGURABLE_TOOLSETS whitelist
+                //    are applied — anything else returns OK with the name in
+                //    `unknown`. We used to ignore the response and flip the
+                //    switch locally, so non-configurable toolsets LOOKED
+                //    toggled while the server did nothing.
+                // 2. Without session_id the change only lands in config.yaml —
+                //    the LIVE agent keeps its current toolsets until the
+                //    session is reset. Passing session_id makes the server
+                //    reset the agent so the change applies to the current chat.
+                val sid = try {
+                    val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                } catch (e: Exception) {
+                    null
+                }
                 val params = buildJsonObject {
                     put("action", if (enabled) "enable" else "disable")
                     put("names", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(toolName))))
+                    if (!sid.isNullOrBlank()) put("session_id", sid)
                 }
-                gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
-                Timber.i("[Config] Tool $toolName -> $enabled")
-                // Update local state immediately
-                _uiState.value = _uiState.value.copy(
-                    availableTools = _uiState.value.availableTools.map {
-                        if (it.name == toolName) it.copy(enabled = enabled) else it
-                    }
-                )
+                val result = gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
+                val obj = result as? JsonObject
+                val unknown = (obj?.get("unknown") as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                if (toolName in unknown) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "\"$toolName\" cannot be toggled on this server",
+                    )
+                } else {
+                    val reset = (obj?.get("reset") as? JsonPrimitive)?.content == "true"
+                    Timber.i("[Config] Tool $toolName -> $enabled (live session reset=$reset)")
+                }
+                // Re-read from the server so switches show the REAL state
+                // instead of an optimistic local flip.
+                loadTools()
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to toggle tool")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to toggle tool: ${e.message}",
                 )
+                loadTools()
             }
         }
     }
