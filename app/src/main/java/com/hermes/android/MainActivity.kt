@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
                     themeMode = themeModeState.mode,
                     colorTheme = themeModeState.colorTheme,
                     warmMode = themeModeState.warmMode,
+                    appFont = themeModeState.appFont,
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),

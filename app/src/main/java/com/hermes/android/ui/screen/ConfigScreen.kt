@@ -96,6 +96,7 @@ import com.hermes.android.ui.viewmodel.ToolOption
 import com.hermes.android.ui.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -398,6 +399,23 @@ private fun GeneralTab(
                             checked = themeModeState.warmMode,
                             onCheckedChange = { themeModeState.updateWarmMode(it) },
                         )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = t("Font", "فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppFont.entries.forEach { font ->
+                            androidx.compose.material3.FilterChip(
+                                selected = themeModeState.appFont == font,
+                                onClick = { themeModeState.updateAppFont(font) },
+                                label = { Text(t(font.displayEn, font.displayFa)) },
+                            )
+                        }
                     }
                 }
             }

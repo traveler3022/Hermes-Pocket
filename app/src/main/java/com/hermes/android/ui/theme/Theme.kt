@@ -24,6 +24,17 @@ enum class ThemeMode(val key: String) {
     }
 }
 
+enum class AppFont(val key: String, val displayEn: String, val displayFa: String) {
+    // Bundled Vazirmatn — shapes Persian correctly and stays clean for Latin.
+    VAZIR("vazir", "Vazirmatn", "وزیر"),
+    // The phone's own system font (whatever the user set device-wide).
+    SYSTEM("system", "System font", "فونت گوشی");
+
+    companion object {
+        fun fromKey(key: String): AppFont = entries.firstOrNull { it.key == key } ?: VAZIR
+    }
+}
+
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
@@ -59,6 +70,13 @@ class ThemeModeState(context: Context) {
     var warmMode: Boolean by mutableStateOf(prefs.getBoolean("warm_mode", false))
         private set
 
+    // Which font face the whole app is drawn with (Vazirmatn or the phone's
+    // own system font). One family across every screen = one reading rhythm.
+    var appFont: AppFont by mutableStateOf(
+        AppFont.fromKey(prefs.getString("app_font", "vazir") ?: "vazir")
+    )
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -72,6 +90,11 @@ class ThemeModeState(context: Context) {
     fun updateWarmMode(enabled: Boolean) {
         warmMode = enabled
         prefs.edit().putBoolean("warm_mode", enabled).apply()
+    }
+
+    fun updateAppFont(newFont: AppFont) {
+        appFont = newFont
+        prefs.edit().putString("app_font", newFont.key).apply()
     }
 }
 
@@ -418,6 +441,7 @@ fun Hermes2Theme(
     colorTheme: ColorTheme = ColorTheme.CARBON,
     dynamicColor: Boolean = false,
     warmMode: Boolean = false,
+    appFont: AppFont = AppFont.VAZIR,
     content: @Composable () -> Unit
 ) {
     val useDark = when (themeMode) {
@@ -441,9 +465,14 @@ fun Hermes2Theme(
         }
     }
 
+    val fontFamily = when (appFont) {
+        AppFont.VAZIR -> Vazirmatn
+        AppFont.SYSTEM -> androidx.compose.ui.text.font.FontFamily.Default
+    }
+
     MaterialTheme(
         colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
-        typography = HermesTypography,
+        typography = hermesTypography(fontFamily),
         content = content
     )
 }
