@@ -295,6 +295,7 @@ private fun SettingsMenuRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
