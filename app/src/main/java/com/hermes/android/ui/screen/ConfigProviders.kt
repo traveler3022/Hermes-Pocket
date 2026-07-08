@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
@@ -59,6 +62,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -77,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.i18n.AppLanguage
@@ -208,12 +213,18 @@ internal fun ModelDropdown(
     showProviderLabel: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    // Some providers expose hundreds of models (OpenRouter ~900) — an
-    // unsearchable dropdown is unusable at that size. Filter as you type,
-    // and cap the rendered rows (DropdownMenu is NOT lazy; rendering 900
-    // rows would jank hard).
+    // Some providers expose hundreds of models (OpenRouter ~900). The
+    // previous implementation used a Compose DropdownMenu capped at 50
+    // rows because DropdownMenu is NOT lazy — rendering 900 rows at once
+    // would jank hard. That cap meant users couldn't see the full list
+    // even when they wanted to browse it.
+    //
+    // Now we open a full-screen Dialog containing a LazyColumn. Lazy
+    // rendering means 9 or 9000 models cost the same per frame — only
+    // visible rows compose. The dialog can be scrolled end-to-end, so
+    // the user can see every model the provider exposes, with the same
+    // search-as-you-type filter to actually find one in a long list.
     var query by remember { mutableStateOf("") }
-    val maxShown = 50
     val filtered = remember(models, query) {
         if (query.isBlank()) models
         else models.filter { it.modelId.contains(query, ignoreCase = true) }
@@ -232,79 +243,132 @@ internal fun ModelDropdown(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
         ) {
-            Box {
-                Row(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { query = ""; expanded = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selected?.modelId
+                            ?: t("Select model...", "مدل رو انتخاب کن..."),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
+                        color = if (selected != null)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (selected != null) {
+                        Text(
+                            text = "✓ " + t("Active", "فعال"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = if (expanded)
+                        Icons.Default.ExpandLess
+                    else
+                        Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (expanded) {
+        Dialog(onDismissRequest = { expanded = false }) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                tonalElevation = 6.dp,
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { query = ""; expanded = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .heightIn(min = 200.dp, max = 560.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Header — title + close button.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
                         Text(
-                            text = selected?.modelId
-                                ?: t("Select model...", "مدل رو انتخاب کن..."),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
-                            color = if (selected != null)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = t("Select model", "انتخاب مدل"),
+                            style = MaterialTheme.typography.titleMedium,
                         )
-                        if (selected != null) {
-                            Text(
-                                text = "✓ " + t("Active", "فعال"),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                        Text(
+                            text = t("${filtered.size} / ${models.size}", "${filtered.size} / ${models.size}"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    Icon(
-                        imageVector = if (expanded)
-                            Icons.Default.ExpandLess
-                        else
-                            Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Search box — always visible now that we don't cap rows.
+                    // Helps when the provider exposes hundreds of models.
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        placeholder = {
+                            Text(t("Search ${models.size} models…", "جستجو بین ${models.size} مدل…"))
+                        },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
                     )
-                }
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    // Search box pinned at the top of the menu.
-                    if (models.size > 10) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            placeholder = {
-                                Text(t("Search ${models.size} models…", "جستجو بین ${models.size} مدل…"))
-                            },
-                            singleLine = true,
-                        )
-                    }
-                    if (filtered.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text(t("No match", "چیزی پیدا نشد")) },
-                            onClick = {},
-                            enabled = false,
-                        )
-                    }
-                    filtered.take(maxShown).forEach { model ->
-                        val isActive = model.provider == selected?.provider &&
-                            model.modelId == selected?.modelId
-                        DropdownMenuItem(
-                            text = {
+                    HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                    // LazyColumn — only visible rows compose, so even 900+
+                    // models scroll smoothly without the 50-row cap.
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (filtered.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = t("No match", "چیزی پیدا نشد"),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        } else {
+                            items(
+                                items = filtered,
+                                key = { "${it.provider}/${it.modelId}" },
+                            ) { model ->
+                                val isActive = model.provider == selected?.provider &&
+                                    model.modelId == selected?.modelId
                                 Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onSelect(model)
+                                            expanded = false
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = model.modelId,
                                             fontFamily = FontFamily.Monospace,
@@ -335,28 +399,8 @@ internal fun ModelDropdown(
                                         )
                                     }
                                 }
-                            },
-                            onClick = {
-                                onSelect(model)
-                                expanded = false
-                            },
-                        )
-                    }
-                    if (filtered.size > maxShown) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    t(
-                                        "…${filtered.size - maxShown} more — keep typing to narrow",
-                                        "…${filtered.size - maxShown} مدل دیگه — بیشتر تایپ کن",
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
-                            },
-                            onClick = {},
-                            enabled = false,
-                        )
+                            }
+                        }
                     }
                 }
             }
