@@ -464,20 +464,28 @@ internal fun MessageBubble(
             val assistantContext = LocalContext.current
             val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
             ) {
-                // Agent avatar: circular, shown once per group. Grouped
-                // messages reserve the same width so the text column stays
-                // aligned.
-                if (grouped) {
-                    Spacer(modifier = Modifier.width(40.dp))
-                } else {
+                // Agent avatar: circular, shown ABOVE the reply (not next
+                // to it). Previously this sat in a Row alongside the text
+                // column, which (a) stole ~40dp of horizontal real estate
+                // from the message on every turn and (b) made the avatar
+                // visually compete with the first line of the response.
+                // Stacking the avatar on top reads as a "header" for the
+                // agent's turn and gives the reply text the full row
+                // width. Only shown on the first message of a group so
+                // consecutive assistant messages don't repeat it.
+                //
+                // Size bumped from 32dp → 36dp: a touch bigger so the face
+                // is easier to read without dominating the layout. Past
+                // 40dp it starts to feel like a profile pic rather than a
+                // turn marker; 36dp is the sweet spot.
+                if (!grouped) {
                     Box(
                         modifier = Modifier
-                            .padding(top = 2.dp)
-                            .size(32.dp)
+                            .padding(bottom = 6.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
@@ -497,7 +505,6 @@ internal fun MessageBubble(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
                 Column(modifier = Modifier.widthIn(max = 460.dp)) {
                     Box {
