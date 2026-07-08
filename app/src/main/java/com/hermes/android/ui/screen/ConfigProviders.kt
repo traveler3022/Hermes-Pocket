@@ -116,7 +116,7 @@ private val knownEndpoints = mapOf(
 internal fun ProviderDropdown(
     providers: List<String>,
     selected: String?,
-    onSelect: (String) -> Unit,
+    onSelect: (String?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -143,13 +143,10 @@ internal fun ProviderDropdown(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = selected ?: t("Select provider...", "پرووایدر رو انتخاب کن..."),
+                        text = selected ?: t("All providers", "همه پرووایدرها"),
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
-                        color = if (selected != null)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Icon(
                         imageVector = if (expanded)
@@ -164,6 +161,22 @@ internal fun ProviderDropdown(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                 ) {
+                    // "All providers" — shows every model from every configured
+                    // provider in one flat, searchable list instead of forcing
+                    // a provider to be picked first just to browse models.
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = t("All providers", "همه پرووایدرها"),
+                                fontWeight = if (selected == null) FontWeight.Medium else FontWeight.Normal,
+                            )
+                        },
+                        onClick = {
+                            onSelect(null)
+                            expanded = false
+                        },
+                    )
+                    HorizontalDivider()
                     providers.forEach { provider ->
                         DropdownMenuItem(
                             text = {
@@ -192,6 +205,7 @@ internal fun ModelDropdown(
     models: List<ModelOption>,
     selected: ModelOption?,
     onSelect: (ModelOption) -> Unit,
+    showProviderLabel: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
     // Some providers expose hundreds of models (OpenRouter ~900) — an
@@ -290,15 +304,29 @@ internal fun ModelDropdown(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    Text(
-                                        text = model.modelId,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isActive)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurface,
-                                    )
+                                    Column {
+                                        Text(
+                                            text = model.modelId,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isActive)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        // When browsing "All providers", the same
+                                        // model id can appear under more than one
+                                        // provider — label it so the two rows are
+                                        // distinguishable instead of looking like
+                                        // duplicates.
+                                        if (showProviderLabel) {
+                                            Text(
+                                                text = model.provider,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
                                     if (isActive) {
                                         Text(
                                             text = "✓",

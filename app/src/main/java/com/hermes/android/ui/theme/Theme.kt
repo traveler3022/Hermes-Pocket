@@ -24,6 +24,17 @@ enum class ThemeMode(val key: String) {
     }
 }
 
+enum class AppFont(val key: String, val displayEn: String, val displayFa: String) {
+    // Bundled Vazirmatn — shapes Persian correctly and stays clean for Latin.
+    VAZIR("vazir", "Vazirmatn", "وزیر"),
+    // The phone's own system font (whatever the user set device-wide).
+    SYSTEM("system", "System font", "فونت گوشی");
+
+    companion object {
+        fun fromKey(key: String): AppFont = entries.firstOrNull { it.key == key } ?: VAZIR
+    }
+}
+
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
@@ -53,6 +64,28 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // Night/warm reading mode — shifts background/surface toward a soft
+    // amber tint (f.lux-style) to cut blue-light emission during long
+    // sessions, independent of which color theme is active.
+    var warmMode: Boolean by mutableStateOf(prefs.getBoolean("warm_mode", false))
+        private set
+
+    // Which font face the whole app is drawn with (Vazirmatn or the phone's
+    // own system font). One family across every screen = one reading rhythm.
+    var appFont: AppFont by mutableStateOf(
+        AppFont.fromKey(prefs.getString("app_font", "vazir") ?: "vazir")
+    )
+        private set
+
+    // Font size multiplier applied app-wide. Stored as an integer 80..140 (%)
+    // so it survives prefs round-trip cleanly; converted to float when
+    // building typography. 100 = the designer-set baseline; 80 = smaller,
+    // 140 = larger. Default 100.
+    var fontScalePct: Int by mutableStateOf(
+        prefs.getInt("font_scale_pct", 100)
+    )
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -61,6 +94,22 @@ class ThemeModeState(context: Context) {
     fun updateColorTheme(newTheme: ColorTheme) {
         colorTheme = newTheme
         prefs.edit().putString("color_theme", newTheme.key).apply()
+    }
+
+    fun updateWarmMode(enabled: Boolean) {
+        warmMode = enabled
+        prefs.edit().putBoolean("warm_mode", enabled).apply()
+    }
+
+    fun updateAppFont(newFont: AppFont) {
+        appFont = newFont
+        prefs.edit().putString("app_font", newFont.key).apply()
+    }
+
+    fun updateFontScalePct(pct: Int) {
+        val clamped = pct.coerceIn(80, 140)
+        fontScalePct = clamped
+        prefs.edit().putInt("font_scale_pct", clamped).apply()
     }
 }
 
@@ -406,6 +455,9 @@ fun Hermes2Theme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorTheme: ColorTheme = ColorTheme.CARBON,
     dynamicColor: Boolean = false,
+    warmMode: Boolean = false,
+    appFont: AppFont = AppFont.VAZIR,
+    fontScalePct: Int = 100,
     content: @Composable () -> Unit
 ) {
     val useDark = when (themeMode) {
@@ -429,9 +481,32 @@ fun Hermes2Theme(
         }
     }
 
+    val fontFamily = when (appFont) {
+        AppFont.VAZIR -> Vazirmatn
+        AppFont.SYSTEM -> androidx.compose.ui.text.font.FontFamily.Default
+    }
+
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = HermesTypography,
+        colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
+        typography = hermesTypography(fontFamily, fontScalePct),
         content = content
+    )
+}
+
+/** Night/warm reading mode: nudges the large background/surface areas
+ *  toward a soft amber tint (f.lux-style), reducing blue-light emission
+ *  during long sessions. Text/icon colors are left untouched so the
+ *  contrast ratios verified elsewhere stay intact. */
+private fun androidx.compose.material3.ColorScheme.warmed(): androidx.compose.material3.ColorScheme {
+    val warmTint = androidx.compose.ui.graphics.Color(0xFFFFD9A0)
+    fun androidx.compose.ui.graphics.Color.warm(strength: Float) =
+        androidx.compose.ui.graphics.lerp(this, warmTint, strength)
+    return copy(
+        background = background.warm(0.10f),
+        surface = surface.warm(0.10f),
+        surfaceVariant = surfaceVariant.warm(0.10f),
+        primaryContainer = primaryContainer.warm(0.06f),
+        secondaryContainer = secondaryContainer.warm(0.06f),
+        tertiaryContainer = tertiaryContainer.warm(0.06f),
     )
 }

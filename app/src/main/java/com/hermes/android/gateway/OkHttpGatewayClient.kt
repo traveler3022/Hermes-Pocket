@@ -152,9 +152,11 @@ class OkHttpGatewayClient @Inject constructor(
                         if (!deferred.isCompleted) {
                             deferred.complete(_connectionState.value)
                         }
-                        // Session resume on reconnect
-                        if (lastSessionId != null) {
-                            scope.launch { resumeSession(lastSessionId!!) }
+                        // Session resume on reconnect. Capture into a local so
+                        // a concurrent write to lastSessionId can't null it out
+                        // between the check and the resume call.
+                        lastSessionId?.let { sid ->
+                            scope.launch { resumeSession(sid) }
                         }
                     }
                     is WsState.Closed -> {
@@ -255,6 +257,16 @@ class OkHttpGatewayClient @Inject constructor(
         val request = GatewayRequest(id = id, method = method, params = params)
         val requestJson = json.encodeToString(GatewayRequest.serializer(), request)
         webSocket?.send(requestJson)
+    }
+
+    override suspend fun downloadFile(url: String): ByteArray = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).get().build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw GatewayException("Download failed: HTTP ${response.code}")
+            }
+            response.body?.bytes() ?: throw GatewayException("Download failed: empty response")
+        }
     }
 
     // ── Reconnection ───────────────────────────────────────────────────────

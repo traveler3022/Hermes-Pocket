@@ -57,7 +57,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides appLanguageState.language) {
-                Hermes2Theme(themeMode = themeModeState.mode, colorTheme = themeModeState.colorTheme) {
+                Hermes2Theme(
+                    themeMode = themeModeState.mode,
+                    colorTheme = themeModeState.colorTheme,
+                    warmMode = themeModeState.warmMode,
+                    appFont = themeModeState.appFont,
+                    fontScalePct = themeModeState.fontScalePct,
+                ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background,

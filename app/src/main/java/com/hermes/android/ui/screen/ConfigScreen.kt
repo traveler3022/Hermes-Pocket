@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,6 +56,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Slider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +68,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -94,6 +97,7 @@ import com.hermes.android.ui.viewmodel.ToolOption
 import com.hermes.android.ui.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -303,6 +307,16 @@ private fun GeneralTab(
         return
     }
 
+    // SOUL.md / env / MCP / raw config used to sit flat in the same
+    // scrolling column as theme and language — easy to bump into by
+    // accident. Tucked behind one "Advanced" drill-in instead, same nested
+    // pattern as the outer Settings menu.
+    var showAdvanced by remember { mutableStateOf(false) }
+    if (showAdvanced) {
+        AdvancedGeneralSection(state, viewModel, onBack = { showAdvanced = false })
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -350,19 +364,101 @@ private fun GeneralTab(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    Row(
+                    // FlowRow (not Row) so chips wrap to the next line instead
+                    // of getting squeezed horizontally — 6 themes in a single
+                    // Row was forcing each chip too narrow and Persian labels
+                    // like "ایندیگو" were rendering one character per line.
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         ColorTheme.entries.forEach { theme ->
                             val label = t(theme.displayEn, theme.displayFa)
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.colorTheme == theme,
                                 onClick = { themeModeState.updateColorTheme(theme) },
-                                label = { Text(label) },
+                                label = { Text(label, maxLines = 1) },
                             )
                         }
                     }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = t("Warm / Night mode", "حالت گرم / شب"),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = t(
+                                    "Shifts screens toward a warm amber tint to reduce blue light for long sessions.",
+                                    "صفحات را به سمت رنگ کهربایی گرم متمایل می‌کند تا نور آبی در استفاده طولانی کمتر شود.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.warmMode,
+                            onCheckedChange = { themeModeState.updateWarmMode(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = t("Font", "فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppFont.entries.forEach { font ->
+                            androidx.compose.material3.FilterChip(
+                                selected = themeModeState.appFont == font,
+                                onClick = { themeModeState.updateAppFont(font) },
+                                label = { Text(t(font.displayEn, font.displayFa)) },
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    // Font size slider — scales the entire app typography
+                    // together (80%..140%). 100% = designer baseline.
+                    Text(
+                        text = t("Font size", "اندازه فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = themeModeState.fontScalePct.toFloat(),
+                            onValueChange = { themeModeState.updateFontScalePct(it.toInt()) },
+                            valueRange = 80f..140f,
+                            steps = 11,  // 80,85,...,140 → 5% increments
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${themeModeState.fontScalePct}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    )
                 }
             }
         }
@@ -433,29 +529,6 @@ private fun GeneralTab(
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        // Provider configuration placeholder
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = t("Provider 1  ·  Provider 2", "پرووایدر ۱  ·  پرووایدر ۲"),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = t("Coming Soon", "به زودی"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }
@@ -640,47 +713,117 @@ private fun GeneralTab(
                         ) { Text(t("Save", "ذخیره")) }
                     }
                 }
+            }
+        }
 
-                HorizontalDivider()
-
-                // SOUL.md — the agent's persistent identity (first slot of
-                // the system prompt). This replaces the old "System Prompt"
-                // free-text field, whose config key never existed in Hermes.
-                Column {
+        // -- Advanced (SOUL.md, env vars, MCP servers, raw config) --
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showAdvanced = true },
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
+                        text = t("Advanced", "پیشرفته"),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
                         text = t(
-                            "The agent's persistent voice & identity — first part of its system prompt",
-                            "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
+                            "Identity, environment variables, MCP servers, raw config",
+                            "هویت، متغیرهای محیطی، سرورهای MCP، پیکربندی خام",
                         ),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (state.isLoadingSoul) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(12.dp).size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
-                        OutlinedTextField(
-                            value = soulText,
-                            onValueChange = { soulText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
-                            minLines = 4,
-                        )
-                        if (soulText != state.soulMd) {
-                            TextButton(
-                                onClick = { viewModel.saveSoul(soulText) },
-                                modifier = Modifier.align(Alignment.End),
-                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
-                        }
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+    }
+}
+
+/** SOUL.md / env vars / MCP servers / raw config — split out of the main
+ *  General list so they're not sitting next to theme/language where a
+ *  wrong tap is easy. Reached via the "Advanced" row in [GeneralTab]. */
+@Composable
+private fun AdvancedGeneralSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onBack),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "بازگشت"))
+            Spacer(Modifier.width(8.dp))
+            Text(t("Advanced", "پیشرفته"), style = MaterialTheme.typography.titleMedium)
+        }
+
+        // SOUL.md — the agent's persistent identity (first slot of the
+        // system prompt). This replaces the old "System Prompt" free-text
+        // field, whose config key never existed in Hermes.
+        Text(
+            text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "The agent's persistent voice & identity — first part of its system prompt",
+                        "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (state.isLoadingSoul) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(12.dp).size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                    OutlinedTextField(
+                        value = soulText,
+                        onValueChange = { soulText = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                        minLines = 4,
+                    )
+                    if (soulText != state.soulMd) {
+                        TextButton(
+                            onClick = { viewModel.saveSoul(soulText) },
+                            modifier = Modifier.align(Alignment.End),
+                        ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
                     }
                 }
             }
@@ -706,6 +849,30 @@ private fun GeneralTab(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                // Explicit, unmissable warning — this file is raw shell-
+                // sourced key=value config read directly into the agent
+                // process; a bad edit here can break the agent's startup or
+                // wipe a working API key with no undo.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("⚠️", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = t(
+                            "Advanced setting. If you don't know what this does, don't touch it — a bad edit here can break the agent or the whole system.",
+                            "تنظیمات پیشرفته. اگه نمی‌دونی این چیه، دستش نزن — یه ویرایش اشتباه اینجا می‌تونه ایجنت یا کل سیستم رو خراب کنه.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 LaunchedEffect(Unit) { viewModel.loadEnvFile() }
                 if (state.isLoadingEnv) {
                     CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
@@ -755,6 +922,26 @@ private fun GeneralTab(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("⚠️", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = t(
+                            "Advanced setting. Invalid JSON here will fail to save; a wrong server entry can stop MCP tools from loading.",
+                            "تنظیمات پیشرفته. JSON نامعتبر ذخیره نمی‌شه؛ یه ورودی اشتباه می‌تونه باعث بشه ابزارهای MCP لود نشن.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 LaunchedEffect(Unit) { viewModel.loadMcpServers() }
                 if (state.isLoadingMcp) {
                     CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)

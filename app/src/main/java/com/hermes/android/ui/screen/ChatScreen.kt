@@ -225,10 +225,25 @@ fun ChatScreen(
         viewModel.loadAssistantAvatar()
     }
 
-    // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
+    // When a new message arrives, scroll the latest USER message to the TOP
+    // of the viewport. This mirrors the Gemini / ChatGPT mobile pattern: the
+    // user's question stays pinned at the top of the visible area, leaving
+    // room below for the AI's reply to stream in. The eye stays at the top,
+    // no constant scroll-chasing, no flicker.
+    //
+    // We deliberately do NOT auto-scroll during streaming. Earlier attempts
+    // keyed an effect off the streaming content length and ran a scroll on
+    // every token — that caused an infinite render loop (scrollToItem flips
+    // isScrollInProgress, which re-collects, which re-launches the effect,
+    // which scrolls again, every second). Keying only on messages.size
+    // means this fires ONCE per new message, not per token.
+    //
+    // scrollToItem (instant) is used instead of animateScrollToItem so there
+    // is no animation in flight to be cancelled/restarted by the next event.
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+        val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
+        if (lastUserIndex >= 0) {
+            listState.scrollToItem(lastUserIndex)
         }
     }
 
@@ -701,6 +716,23 @@ fun ChatScreen(
                             val isLastInGroup = next == null ||
                                     (next is ChatMessage.User) != (message is ChatMessage.User)
 
+                            // Tool/subagent/request cards should stand apart
+                            // from the surrounding prose instead of being glued
+                            // to it (they're "objects", not continuous text).
+                            val isCard = message is ChatMessage.ToolCall ||
+                                    message is ChatMessage.SubagentCard ||
+                                    message is ChatMessage.InteractiveRequest
+                            val prevIsCard = prev is ChatMessage.ToolCall ||
+                                    prev is ChatMessage.SubagentCard ||
+                                    prev is ChatMessage.InteractiveRequest
+                            val topPad = when {
+                                prev == null -> 0.dp
+                                !grouped -> 18.dp                 // user <-> agent turn boundary
+                                isCard != prevIsCard -> 16.dp     // text <-> card: give the card air
+                                isCard && prevIsCard -> 8.dp      // stacked cards: a little gap between them
+                                else -> 0.dp                      // continuous prose from one speaker
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .animateItem(
@@ -710,7 +742,7 @@ fun ChatScreen(
                                             visibilityThreshold = IntOffset.VisibilityThreshold,
                                         ),
                                     )
-                                    .padding(top = if (grouped) 0.dp else 10.dp),
+                                    .padding(top = topPad),
                             ) {
                             MessageBubble(
                                 message = message,
@@ -735,7 +767,30 @@ fun ChatScreen(
                                 onImageClick = { url -> fullscreenImageUrl = url },
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
+                                onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                             )
+                            }
+                        }
+                        // Trailing spacer so the last user message can be
+                        // scrolled to the TOP of the viewport — but ONLY while
+                        // the AI is still composing its reply (isSending or
+                        // the last message is an Assistant that isStreaming).
+                        // Once the reply is done, the spacer collapses to zero
+                        // so the user can scroll normally and there's no large
+                        // empty gap at the bottom of the conversation.
+                        //
+                        // Without this spacer (while streaming), the last user
+                        // message can't be scrolled to the top — Compose pins
+                        // it to the bottom because there's nothing below it to
+                        // fill the visible area. With it, the user's question
+                        // stays pinned at the top while the AI's reply streams
+                        // in below, mirroring the Gemini / ChatGPT mobile UX.
+                        val lastMsg = filteredMessages.lastOrNull()
+                        val isAwaitingReply = uiState.isSending ||
+                            (lastMsg is ChatMessage.Assistant && lastMsg.isStreaming)
+                        if (isAwaitingReply) {
+                            item {
+                                Spacer(modifier = Modifier.height(600.dp))
                             }
                         }
                     }
@@ -809,7 +864,7 @@ fun ChatScreen(
                     )
                 }
                 IconButton(
-                    onClick = { saveImageToDownloads(context, imageUrl, "") },
+                    onClick = { viewModel.downloadFile(imageUrl, "") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp)

@@ -604,6 +604,54 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Download a gateway file/artifact (image, video, file-ref) and save it
+     * into the public Downloads/Hermes folder.
+     *
+     * Deliberately does NOT use the system DownloadManager. DownloadManager
+     * runs as a separate OS process with its own network stack — it doesn't
+     * necessarily honor this app's cleartext-traffic manifest policy (a
+     * self-hosted gateway is commonly plain http:// on a LAN/VPN), and any
+     * failure (cert, cleartext, or otherwise) happens silently with no
+     * exception the app can surface, which is exactly what "I tap download
+     * and nothing happens" looks like. Fetching through GatewayClient reuses
+     * the same HTTP client that's already proven to reach this host (the
+     * chat connection itself), and any failure here becomes a real,
+     * visible error message.
+     */
+    fun downloadFile(url: String, filename: String) {
+        viewModelScope.launch {
+            val derivedName = filename.ifBlank {
+                url.substringAfterLast('/').substringBefore('?')
+            }
+            val safeName = derivedName.ifBlank { "hermes_file" }
+                .let { name -> name.filter { it != '/' && it != '\\' } }
+                .ifBlank { "hermes_file" }
+                .let { if (!it.contains('.')) "$it.jpg" else it }
+            try {
+                val bytes = gatewayClient.downloadFile(url)
+                val resolver = context.contentResolver
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safeName)
+                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Hermes")
+                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val itemUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: error("Could not create download entry")
+                resolver.openOutputStream(itemUri)?.use { out -> out.write(bytes) }
+                    ?: error("Could not open output stream")
+                values.clear()
+                values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(itemUri, values, null, null)
+                Timber.i("[Chat] Downloaded $safeName (${bytes.size} bytes) -> Downloads/Hermes")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to Downloads/Hermes: $safeName")) }
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Download failed: $safeName")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Download failed: ${e.message}")) }
+            }
+        }
+    }
+
     /** Remove a staged attachment (detaches queued images gateway-side too). */
     fun removeAttachment(attachment: PendingAttachment) {
         _uiState.update { it.copy(
@@ -984,7 +1032,10 @@ class ChatViewModel @Inject constructor(
         // Remove the last assistant response (and any tool calls / status after it)
         val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1)
+            // .toList() copies — subList returns a live view backed by the
+            // original list, and stashing that view in immutable state is a
+            // latent aliasing bug.
+            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
             _uiState.update { it.copy(
                 messages = trimmedMessages,
                 isSending = true,

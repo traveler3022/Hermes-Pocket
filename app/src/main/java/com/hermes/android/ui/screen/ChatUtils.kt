@@ -1,10 +1,8 @@
 package com.hermes.android.ui.screen
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -250,20 +248,23 @@ internal fun reasoningLevelLabel(level: String): String = when (level) {
     else -> level
 }
 
-internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
-internal fun saveImageToDownloads(context: Context, url: String, alt: String) {
-    val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
-        .ifBlank { "hermes_image.jpg" }
-        .let { if (!it.contains('.')) "$it.jpg" else it }
-    val request = DownloadManager.Request(Uri.parse(url))
-        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Hermes/$filename")
-        .setTitle(filename)
-        .setDescription("در حال دانلود از هرمس")
-        .setAllowedOverMetered(true)
-    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    dm.enqueue(request)
+/** WCAG 2.3.3 — respects the OS-level "Remove animations" / reduced-motion
+ *  setting (exposed as the animator duration scale; 0 when the user has
+ *  disabled animations in Android's accessibility settings) so continuous
+ *  pulse/bounce effects don't run for users sensitive to persistent motion. */
+@Composable
+internal fun rememberReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+    }
 }
+
+internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 internal fun openUrlExternally(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
