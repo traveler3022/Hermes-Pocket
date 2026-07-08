@@ -772,20 +772,26 @@ fun ChatScreen(
                             }
                         }
                         // Trailing spacer so the last user message can be
-                        // scrolled to the TOP of the viewport — without it,
-                        // scrollToItem(lastUserIndex) has no content below the
-                        // item to push it up, so Compose pins the last item to
-                        // the bottom of the visible area instead. The spacer
-                        // gives the LazyColumn enough total height below the
-                        // last user message to actually honor the scroll-to-top
-                        // request, leaving empty space below for the AI's reply
-                        // to stream into (Gemini / ChatGPT mobile pattern).
-                        item {
-                            // 600dp is enough to fill a typical phone viewport
-                            // (most are ~640-800dp tall) below the last user
-                            // message. Using a fixed dp avoids fillParentMaxHeight
-                            // which can break in some LazyColumn contexts.
-                            Spacer(modifier = Modifier.height(600.dp))
+                        // scrolled to the TOP of the viewport — but ONLY while
+                        // the AI is still composing its reply (isSending or
+                        // the last message is an Assistant that isStreaming).
+                        // Once the reply is done, the spacer collapses to zero
+                        // so the user can scroll normally and there's no large
+                        // empty gap at the bottom of the conversation.
+                        //
+                        // Without this spacer (while streaming), the last user
+                        // message can't be scrolled to the top — Compose pins
+                        // it to the bottom because there's nothing below it to
+                        // fill the visible area. With it, the user's question
+                        // stays pinned at the top while the AI's reply streams
+                        // in below, mirroring the Gemini / ChatGPT mobile UX.
+                        val lastMsg = filteredMessages.lastOrNull()
+                        val isAwaitingReply = uiState.isSending ||
+                            (lastMsg is ChatMessage.Assistant && lastMsg.isStreaming)
+                        if (isAwaitingReply) {
+                            item {
+                                Spacer(modifier = Modifier.height(600.dp))
+                            }
                         }
                     }
                 }
