@@ -467,45 +467,12 @@ internal fun MessageBubble(
             Column(
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // Agent avatar: circular, shown ABOVE the reply (not next
-                // to it). Previously this sat in a Row alongside the text
-                // column, which (a) stole ~40dp of horizontal real estate
-                // from the message on every turn and (b) made the avatar
-                // visually compete with the first line of the response.
-                // Stacking the avatar on top reads as a "header" for the
-                // agent's turn and gives the reply text the full row
-                // width. Only shown on the first message of a group so
-                // consecutive assistant messages don't repeat it.
-                //
-                // Size bumped from 32dp → 36dp: a touch bigger so the face
-                // is easier to read without dominating the layout. Past
-                // 40dp it starts to feel like a profile pic rather than a
-                // turn marker; 36dp is the sweet spot.
-                if (!grouped) {
-                    Box(
-                        modifier = Modifier
-                            .padding(bottom = 6.dp)
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (avatarUri != null) {
-                            AsyncImage(
-                                model = avatarUri,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                        } else {
-                            Text(
-                                text = "⚕",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
-                    }
-                }
+                // The agent avatar used to live here (above the reply).
+                // It's now shown in the chat top bar instead — see the
+                // personalization section in Settings > General. Removing
+                // it from the message body lets the reply text take the
+                // full row width without the avatar competing for space
+                // or visual attention at the start of every turn.
                 Column(modifier = Modifier.widthIn(max = 460.dp)) {
                     Box {
                         // Document-style: no bubble/card behind the agent's

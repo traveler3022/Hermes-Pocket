@@ -157,6 +157,7 @@ fun ChatScreen(
     onNavigateToRuntime: () -> Unit = {},
     sharedText: String? = null,
     resumeSessionId: String? = null,
+    themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -544,14 +545,52 @@ fun ChatScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                // The name itself opens rename (matches the
-                                // drawer header affordance); the status dot
-                                // stays the entry point to Runtime, so both
-                                // remain reachable from the top bar.
-                                Text(
-                                    text = uiState.assistantName,
-                                    modifier = Modifier.clickable { showRenameAssistantDialog = true },
-                                )
+                                // Personalized identity (from Settings > General >
+                                // Top bar): either the assistant's name as text,
+                                // or the avatar image at the user-chosen size.
+                                // Tapping opens Settings so the user can change
+                                // either. Falls back to uiState.assistantName
+                                // when themeModeState is null (e.g. preview).
+                                val display = themeModeState?.topBarDisplay
+                                    ?: com.hermes.android.ui.theme.TopBarDisplay.NAME
+                                val displayName = themeModeState?.assistantName
+                                    ?: uiState.assistantName
+                                val avatarUri = uiState.assistantAvatarPath
+                                val sizeDp = (themeModeState?.avatarSizeDp ?: 36).dp
+                                Box(modifier = Modifier.clickable { onNavigateToSettings() }) {
+                                    when (display) {
+                                        com.hermes.android.ui.theme.TopBarDisplay.NAME -> {
+                                            Text(text = displayName)
+                                        }
+                                        com.hermes.android.ui.theme.TopBarDisplay.AVATAR -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(sizeDp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primary),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                if (avatarUri != null) {
+                                                    AsyncImage(
+                                                        model = avatarUri,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop,
+                                                    )
+                                                } else {
+                                                    // No avatar set yet — show the
+                                                    // first character of the assistant's
+                                                    // name as a placeholder.
+                                                    Text(
+                                                        text = displayName.take(1),
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
                                     ConnectionIndicator(uiState.connectionState)
                                 }
