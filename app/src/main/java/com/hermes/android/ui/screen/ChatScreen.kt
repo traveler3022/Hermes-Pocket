@@ -701,6 +701,23 @@ fun ChatScreen(
                             val isLastInGroup = next == null ||
                                     (next is ChatMessage.User) != (message is ChatMessage.User)
 
+                            // Tool/subagent/request cards should stand apart
+                            // from the surrounding prose instead of being glued
+                            // to it (they're "objects", not continuous text).
+                            val isCard = message is ChatMessage.ToolCall ||
+                                    message is ChatMessage.SubagentCard ||
+                                    message is ChatMessage.InteractiveRequest
+                            val prevIsCard = prev is ChatMessage.ToolCall ||
+                                    prev is ChatMessage.SubagentCard ||
+                                    prev is ChatMessage.InteractiveRequest
+                            val topPad = when {
+                                prev == null -> 0.dp
+                                !grouped -> 18.dp                 // user <-> agent turn boundary
+                                isCard != prevIsCard -> 16.dp     // text <-> card: give the card air
+                                isCard && prevIsCard -> 8.dp      // stacked cards: a little gap between them
+                                else -> 0.dp                      // continuous prose from one speaker
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .animateItem(
@@ -710,7 +727,7 @@ fun ChatScreen(
                                             visibilityThreshold = IntOffset.VisibilityThreshold,
                                         ),
                                     )
-                                    .padding(top = if (grouped) 0.dp else 10.dp),
+                                    .padding(top = topPad),
                             ) {
                             MessageBubble(
                                 message = message,
