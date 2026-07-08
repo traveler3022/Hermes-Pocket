@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⬡ Hermes Android
+# ⬡ Hermes Pocket
 
-### A native Material 3 client for your self-hosted Hermes Agent 🤖📱
+### Native Android chat client for a self-hosted Hermes Agent 🤖📱
 
 [![Build](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml)
 [![Download APK](https://img.shields.io/badge/⬇_Debug_APK-latest-0EA5E9?style=flat-square&logo=android)](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
@@ -11,28 +11,28 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material_3-0EA5E9?style=flat-square)](https://developer.android.com/jetpack/compose)
 [![Min API](https://img.shields.io/badge/minSdk-29_(Android_10)-0EA5E9?style=flat-square)](https://developer.android.com/about/versions/android-10)
 
-**No cloud middleman · No account · Your server, your keys, your data**
+**Your AI agent, in your pocket · No cloud middleman · No account · Your VPS, your keys, your data**
 
 </div>
 
 ---
 
-## 📖 What is Hermes Agent?
+## 📖 What is Hermes Pocket?
 
 [Hermes Agent](https://github.com/NousResearch/hermes_agent) is an open-source AI agent — built by
 [Nous Research](https://nousresearch.com) — that can run shell commands, edit files, browse the web, call
 APIs, and act on your behalf. You run it on **your own server or VPS**; nothing about the agent itself
 runs on your phone.
 
-**This repo is the Android client.** It's a native Jetpack Compose app that connects to your Hermes
-gateway over a secure WebSocket and gives you a full chat interface for it — streaming replies, tool-call
+**Hermes Pocket is the Android client for it.** It's a native Jetpack Compose app that connects to your
+Hermes gateway over a secure WebSocket and gives you a full chat interface — streaming replies, tool-call
 cards, file/image attachments, session history, and deep control over the agent's models, tools, plugins,
-and scheduled jobs.
+and scheduled jobs. Carry your agent in your pocket, reach it from anywhere over Wi-Fi or mobile data.
 
 | Piece | What it is | Where it runs |
 |---|---|---|
 | 🧠 **Hermes Agent** | The AI agent itself (open-source) | Your own server/VPS, via `hermes dashboard` behind a TLS reverse proxy |
-| 📱 **Hermes Android** *(this app)* | A native Material 3 chat client | A normal Android app, connects from anywhere over Wi-Fi or mobile data |
+| 📱 **Hermes Pocket** *(this app)* | A native Material 3 Android chat client | A normal Android app, connects from anywhere over Wi-Fi or mobile data |
 
 > [!IMPORTANT]
 > **You need a Hermes Agent server already running** before this app is useful — this repo is the Android
@@ -345,6 +345,6 @@ Research. This repo is not affiliated with or endorsed by Nous Research.
 
 <br><br>
 
-**⬡ Built for Android · Powered by Hermes Agent ⬡**
+**⬡ Hermes Pocket · Your AI agent, in your pocket ⬡**
 
 </div>
