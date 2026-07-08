@@ -170,7 +170,7 @@ internal fun InlineImageBlock(
         // collapsing to nothing (which read as "the image didn't send").
         SubcomposeAsyncImage(
             model = url,
-            contentDescription = alt.ifBlank { "تصویر" },
+            contentDescription = alt.ifBlank { t("Image", "تصویر") },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 120.dp, max = 320.dp)

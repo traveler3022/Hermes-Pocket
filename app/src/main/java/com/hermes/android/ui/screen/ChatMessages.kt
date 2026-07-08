@@ -442,7 +442,7 @@ internal fun MessageBubble(
                             ) {
                                 Icon(
                                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = if (isExpanded) "جمع کردن" else "باز کردن",
+                                    contentDescription = if (isExpanded) t("Collapse", "جمع کردن") else t("Expand", "باز کردن"),
                                     modifier = Modifier.size(18.dp),
                                     tint = bubbleTextColor.copy(alpha = 0.6f),
                                 )

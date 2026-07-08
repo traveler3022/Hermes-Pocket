@@ -1,11 +1,14 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.ui.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +42,7 @@ sealed interface SessionsEffect {
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionsUiState())
@@ -134,7 +138,7 @@ class SessionsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 selectedSessionHistory = messages,
                 isLoadingHistory = false,
-                errorMessage = if (messages.isEmpty()) "پیامی برای این گفتگو پیدا نشد" else null,
+                errorMessage = if (messages.isEmpty()) tForContext(context, "No messages found for this session.", "پیامی برای این گفتگو پیدا نشد") else null,
             )
         }
     }
