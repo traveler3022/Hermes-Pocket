@@ -56,6 +56,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Slider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -363,16 +364,21 @@ private fun GeneralTab(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    Row(
+                    // FlowRow (not Row) so chips wrap to the next line instead
+                    // of getting squeezed horizontally — 6 themes in a single
+                    // Row was forcing each chip too narrow and Persian labels
+                    // like "ایندیگو" were rendering one character per line.
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         ColorTheme.entries.forEach { theme ->
                             val label = t(theme.displayEn, theme.displayFa)
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.colorTheme == theme,
                                 onClick = { themeModeState.updateColorTheme(theme) },
-                                label = { Text(label) },
+                                label = { Text(label, maxLines = 1) },
                             )
                         }
                     }
@@ -417,6 +423,42 @@ private fun GeneralTab(
                             )
                         }
                     }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    // Font size slider — scales the entire app typography
+                    // together (80%..140%). 100% = designer baseline.
+                    Text(
+                        text = t("Font size", "اندازه فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = themeModeState.fontScalePct.toFloat(),
+                            onValueChange = { themeModeState.updateFontScalePct(it.toInt()) },
+                            valueRange = 80f..140f,
+                            steps = 11,  // 80,85,...,140 → 5% increments
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${themeModeState.fontScalePct}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    )
                 }
             }
         }
@@ -487,29 +529,6 @@ private fun GeneralTab(
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        // Provider configuration placeholder
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = t("Provider 1  ·  Provider 2", "پرووایدر ۱  ·  پرووایدر ۲"),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = t("Coming Soon", "به زودی"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }

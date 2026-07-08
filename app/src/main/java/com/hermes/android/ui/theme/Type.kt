@@ -23,83 +23,95 @@ val Vazirmatn = FontFamily(
 /** Builds the app typography around a chosen [fontFamily]. Defaults to
  *  Vazirmatn; pass [FontFamily.Default] to use the phone's own system font.
  *  Keeping one family across every text style is deliberate — a single,
- *  consistent reading rhythm is easier on the eyes than mixing faces. */
-fun hermesTypography(fontFamily: FontFamily = Vazirmatn): Typography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 54.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.25).sp,
-    ),
-    displayMedium = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 42.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp,
-    ),
-    headlineLarge = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 30.sp,
-        lineHeight = 40.sp,
-        letterSpacing = 0.sp,
-    ),
-    titleLarge = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.sp,
-    ),
-    titleMedium = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    titleSmall = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.sp,
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp,
-    ),
-    bodySmall = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.sp,
-    ),
-    labelMedium = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.sp,
-    ),
-    labelSmall = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.sp,
-    ),
-)
+ *  consistent reading rhythm is easier on the eyes than mixing faces.
+ *
+ *  [fontScalePct] applies a uniform percentage (80..140, default 100) to every
+ *  fontSize/lineHeight in the scale, so a single slider in Settings scales
+ *  the whole app's text together. */
+fun hermesTypography(
+    fontFamily: FontFamily = Vazirmatn,
+    fontScalePct: Int = 100,
+): Typography {
+    val s = fontScalePct / 100f
+    fun sp(value: Int) = (value * s).sp
+    fun spF(value: Float) = (value * s).sp
+    return Typography(
+        displayLarge = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = sp(54),
+            lineHeight = sp(64),
+            letterSpacing = spF(-0.25f),
+        ),
+        displayMedium = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = sp(42),
+            lineHeight = sp(52),
+            letterSpacing = sp(0),
+        ),
+        headlineLarge = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = sp(30),
+            lineHeight = sp(40),
+            letterSpacing = sp(0),
+        ),
+        titleLarge = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = sp(22),
+            lineHeight = sp(30),
+            letterSpacing = sp(0),
+        ),
+        titleMedium = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = sp(16),
+            lineHeight = sp(24),
+            letterSpacing = spF(0.1f),
+        ),
+        titleSmall = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = sp(14),
+            lineHeight = sp(22),
+            letterSpacing = spF(0.1f),
+        ),
+        bodyLarge = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = sp(15),
+            lineHeight = sp(24),
+            letterSpacing = sp(0),
+        ),
+        bodyMedium = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = sp(14),
+            lineHeight = sp(22),
+            letterSpacing = sp(0),
+        ),
+        bodySmall = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = sp(12),
+            lineHeight = sp(20),
+            letterSpacing = sp(0),
+        ),
+        labelMedium = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = sp(12),
+            lineHeight = sp(18),
+            letterSpacing = sp(0),
+        ),
+        labelSmall = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = sp(11),
+            lineHeight = sp(16),
+            letterSpacing = sp(0),
+        ),
+    )
+}
