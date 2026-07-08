@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillParentMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -770,6 +771,18 @@ fun ChatScreen(
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                             )
                             }
+                        }
+                        // Trailing spacer so the last user message can be
+                        // scrolled to the TOP of the viewport — without it,
+                        // scrollToItem(lastUserIndex) has no content below the
+                        // item to push it up, so Compose pins the last item to
+                        // the bottom of the visible area instead. The spacer
+                        // gives the LazyColumn enough total height below the
+                        // last user message to actually honor the scroll-to-top
+                        // request, leaving empty space below for the AI's reply
+                        // to stream into (Gemini / ChatGPT mobile pattern).
+                        item {
+                            Spacer(modifier = Modifier.fillParentMaxHeight())
                         }
                     }
                 }
