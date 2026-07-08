@@ -77,6 +77,15 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // Font size multiplier applied app-wide. Stored as an integer 80..140 (%)
+    // so it survives prefs round-trip cleanly; converted to float when
+    // building typography. 100 = the designer-set baseline; 80 = smaller,
+    // 140 = larger. Default 100.
+    var fontScalePct: Int by mutableStateOf(
+        prefs.getInt("font_scale_pct", 100)
+    )
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -95,6 +104,12 @@ class ThemeModeState(context: Context) {
     fun updateAppFont(newFont: AppFont) {
         appFont = newFont
         prefs.edit().putString("app_font", newFont.key).apply()
+    }
+
+    fun updateFontScalePct(pct: Int) {
+        val clamped = pct.coerceIn(80, 140)
+        fontScalePct = clamped
+        prefs.edit().putInt("font_scale_pct", clamped).apply()
     }
 }
 
@@ -442,6 +457,7 @@ fun Hermes2Theme(
     dynamicColor: Boolean = false,
     warmMode: Boolean = false,
     appFont: AppFont = AppFont.VAZIR,
+    fontScalePct: Int = 100,
     content: @Composable () -> Unit
 ) {
     val useDark = when (themeMode) {
@@ -472,7 +488,7 @@ fun Hermes2Theme(
 
     MaterialTheme(
         colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
-        typography = hermesTypography(fontFamily),
+        typography = hermesTypography(fontFamily, fontScalePct),
         content = content
     )
 }
