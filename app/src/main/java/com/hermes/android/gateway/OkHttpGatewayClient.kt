@@ -257,6 +257,16 @@ class OkHttpGatewayClient @Inject constructor(
         webSocket?.send(requestJson)
     }
 
+    override suspend fun downloadFile(url: String): ByteArray = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).get().build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw GatewayException("Download failed: HTTP ${response.code}")
+            }
+            response.body?.bytes() ?: throw GatewayException("Download failed: empty response")
+        }
+    }
+
     // ── Reconnection ───────────────────────────────────────────────────────
 
     private fun handleDisconnect(reason: String) {

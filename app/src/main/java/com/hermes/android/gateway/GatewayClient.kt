@@ -93,6 +93,24 @@ interface GatewayClient {
         params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     )
 
+    /**
+     * Fetch [url] (an already-resolved gateway download link, e.g. from
+     * ChatViewModel.resolveMediaUrl) and return the raw bytes.
+     *
+     * Deliberately routed through the same HTTP client used for every other
+     * gateway call — NOT the system DownloadManager. DownloadManager runs as
+     * a separate OS process with its own network stack, so it doesn't
+     * necessarily honor this app's cleartext-traffic policy (self-hosted
+     * gateways are commonly plain http:// on a LAN/VPN) or any future
+     * auth/cert customization added here; it fails silently with no
+     * exception the app can see. Reusing the client that's already proven to
+     * reach this exact host (the chat connection itself) avoids that whole
+     * class of "download button does nothing" failures.
+     *
+     * @return the response body bytes; throws on non-2xx or network failure.
+     */
+    suspend fun downloadFile(url: String): ByteArray
+
     companion object {
         /**
          * Default WebSocket URL — Hermes dashboard server (running in Termux).

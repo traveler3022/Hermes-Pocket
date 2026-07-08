@@ -1,10 +1,8 @@
 package com.hermes.android.ui.screen
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -267,19 +265,6 @@ internal fun rememberReduceMotion(): Boolean {
 }
 
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
-internal fun saveImageToDownloads(context: Context, url: String, alt: String) {
-    val filename = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
-        .ifBlank { "hermes_image.jpg" }
-        .let { if (!it.contains('.')) "$it.jpg" else it }
-    val request = DownloadManager.Request(Uri.parse(url))
-        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Hermes/$filename")
-        .setTitle(filename)
-        .setDescription("در حال دانلود از هرمس")
-        .setAllowedOverMetered(true)
-    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    dm.enqueue(request)
-}
 internal fun openUrlExternally(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

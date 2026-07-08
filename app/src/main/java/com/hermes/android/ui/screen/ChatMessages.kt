@@ -327,6 +327,7 @@ internal fun MessageBubble(
     onImageClick: (String) -> Unit = {},
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
+    onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -562,7 +563,7 @@ internal fun MessageBubble(
                                                 alt = block.alt,
                                                 url = block.url,
                                                 onImageClick = onImageClick,
-                                                onSave = { saveImageToDownloads(assistantContext, block.url, block.alt) },
+                                                onSave = { onDownloadFile(block.url, block.alt) },
                                             )
                                             is ContentBlock.Code -> CodeBlockCard(
                                                 language = block.language,
@@ -583,13 +584,13 @@ internal fun MessageBubble(
                                                 name = block.name,
                                                 actionLabel = t("Play", "پخش"),
                                                 onAction = { openUrlExternally(assistantContext, block.url) },
-                                                onDownload = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                                onDownload = { onDownloadFile(block.url, block.name) },
                                             )
                                             is ContentBlock.FileRef -> ArtifactCard(
                                                 emoji = "📄",
                                                 name = block.name,
                                                 actionLabel = t("Download", "دانلود"),
-                                                onAction = { saveImageToDownloads(assistantContext, block.url, block.name) },
+                                                onAction = { onDownloadFile(block.url, block.name) },
                                                 onDownload = null,
                                             )
                                         }

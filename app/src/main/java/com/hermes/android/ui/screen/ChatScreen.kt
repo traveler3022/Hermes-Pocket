@@ -735,6 +735,7 @@ fun ChatScreen(
                                 onImageClick = { url -> fullscreenImageUrl = url },
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
+                                onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                             )
                             }
                         }
@@ -809,7 +810,7 @@ fun ChatScreen(
                     )
                 }
                 IconButton(
-                    onClick = { saveImageToDownloads(context, imageUrl, "") },
+                    onClick = { viewModel.downloadFile(imageUrl, "") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp)
