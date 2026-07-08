@@ -225,10 +225,25 @@ fun ChatScreen(
         viewModel.loadAssistantAvatar()
     }
 
-    // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
+    // When a new message arrives, scroll the latest USER message to the TOP
+    // of the viewport. This mirrors the Gemini / ChatGPT mobile pattern: the
+    // user's question stays pinned at the top of the visible area, leaving
+    // room below for the AI's reply to stream in. The eye stays at the top,
+    // no constant scroll-chasing, no flicker.
+    //
+    // We deliberately do NOT auto-scroll during streaming. Earlier attempts
+    // keyed an effect off the streaming content length and ran a scroll on
+    // every token — that caused an infinite render loop (scrollToItem flips
+    // isScrollInProgress, which re-collects, which re-launches the effect,
+    // which scrolls again, every second). Keying only on messages.size
+    // means this fires ONCE per new message, not per token.
+    //
+    // scrollToItem (instant) is used instead of animateScrollToItem so there
+    // is no animation in flight to be cancelled/restarted by the next event.
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+        val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
+        if (lastUserIndex >= 0) {
+            listState.scrollToItem(lastUserIndex)
         }
     }
 
