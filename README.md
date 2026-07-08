@@ -2,21 +2,14 @@
 
 # ⬡ Hermes Android
 
-### A native Android client for your own Hermes Agent 🤖📱
-
-**This app does not run an AI on your phone.** It connects — over a secure WebSocket — to a
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) gateway running on **your own server or VPS**,
-and gives you a full Material 3 chat interface for it: streaming replies, tool-call cards, file/image
-attachments, session history, and deep control over the agent's models, tools, plugins, and scheduled jobs.
-
-<br>
-
-[![Download APK](https://img.shields.io/badge/⬇_Download_APK-Install_now-0EA5E9?style=for-the-badge&logo=android&logoColor=white)](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
+### A native Material 3 client for your self-hosted Hermes Agent 🤖📱
 
 [![Build](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml)
+[![Download APK](https://img.shields.io/badge/⬇_Debug_APK-latest-0EA5E9?style=flat-square&logo=android)](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0EA5E9?style=flat-square)](LICENSE)
-![Material 3](https://img.shields.io/badge/Material_3-0EA5E9?style=flat-square&logo=materialdesign&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material_3-0EA5E9?style=flat-square)](https://developer.android.com/jetpack/compose)
+[![Min API](https://img.shields.io/badge/minSdk-29_(Android_10)-0EA5E9?style=flat-square)](https://developer.android.com/about/versions/android-10)
 
 **No cloud middleman · No account · Your server, your keys, your data**
 
@@ -24,117 +17,206 @@ attachments, session history, and deep control over the agent's models, tools, p
 
 ---
 
-## 🤔 What is this?
+## 📖 What is Hermes Agent?
 
-You run [Hermes Agent](https://github.com/NousResearch/hermes-agent) — an open-source AI agent that can run
-commands, edit files, browse the web, and act — on a server or VPS you control. This app is the phone in your
-pocket for it: a proper native chat client instead of SSH-ing in from a terminal app every time you want to
-talk to your agent.
+[Hermes Agent](https://github.com/NousResearch/hermes_agent) is an open-source AI agent — built by
+[Nous Research](https://nousresearch.com) — that can run shell commands, edit files, browse the web, call
+APIs, and act on your behalf. You run it on **your own server or VPS**; nothing about the agent itself
+runs on your phone.
+
+**This repo is the Android client.** It's a native Jetpack Compose app that connects to your Hermes
+gateway over a secure WebSocket and gives you a full chat interface for it — streaming replies, tool-call
+cards, file/image attachments, session history, and deep control over the agent's models, tools, plugins,
+and scheduled jobs.
 
 | Piece | What it is | Where it runs |
 |---|---|---|
-| **Hermes Agent** 🧠 | The AI agent itself (open-source, by [Nous Research](https://nousresearch.com)) | Your own server/VPS, via `hermes dashboard` behind a TLS reverse proxy |
-| **Hermes Android** 📱 *(this app)* | A native Material 3 chat client that connects to it over a WebSocket | A normal Android app, connects from anywhere |
-
-The app talks to your server's `hermes dashboard` WebSocket endpoint (`wss://your-server/api/ws`) using a
-session token you set up once. Nothing about the agent itself lives on the phone — the app is purely a
-client, so it works the same over Wi-Fi or mobile data, from anywhere.
+| 🧠 **Hermes Agent** | The AI agent itself (open-source) | Your own server/VPS, via `hermes dashboard` behind a TLS reverse proxy |
+| 📱 **Hermes Android** *(this app)* | A native Material 3 chat client | A normal Android app, connects from anywhere over Wi-Fi or mobile data |
 
 > [!IMPORTANT]
-> **You need a Hermes Agent server already running somewhere** before this app is useful — this repo is the
-> Android client only. See [Hermes Agent](https://github.com/NousResearch/hermes-agent) for server setup.
+> **You need a Hermes Agent server already running** before this app is useful — this repo is the Android
+> client only. See [Hermes Agent](https://github.com/NousResearch/hermes_agent) for server setup.
 
 ---
 
-## ✨ What can it do?
+## ✨ Features
 
-- 💬 **Live chat** — streaming replies, visible reasoning/thinking (with a quick reasoning-effort switch:
-  none → minimal → low → medium → high → xhigh → max), tool-call cards, sub-agent cards
-- 📎 **Attachments** — send files & images to the agent from your phone; inline image rendering, code
-  blocks, Mermaid diagrams, and downloadable artifacts in replies
-- 🗂️ **Sessions** — search, pin, rename, branch, and resume any past conversation
-- 🎨 **Personalization** — rename the assistant, upload a custom avatar image, pick from 6 color themes
-  (light/dark), and customize the agent's personality preset + persistent identity (`SOUL.md`)
-- 🧠 **Model & provider management** — add custom OpenAI-compatible providers, auto-detect their available
-  models, build a fallback chain, and one-tap auto-failover across every configured provider
-- 🛠️ **Tool control** — toggle which tool categories the agent can use, live on the current session
-- 🔌 **Plugins manager** — see installed Hermes plugins and enable/disable them
-- ⏰ **Scheduled jobs (Cron)** — view and manage the agent's scheduled tasks
-- 🧩 **Skills catalog** — browse the agent's available skills
-- 🤝 **Platform bots** — connect the agent to Telegram, Discord, or Slack bot tokens
-- ✅ **Command approval** — manual / smart / off approval modes for risky actions, matching the server's
-  `approvals.mode`
-- 🌐 **English + فارسی**, full RTL support
+### 💬 Chat experience
+- **Streaming replies** — token-by-token, with the user's question pinned to the top of the viewport
+  (Gemini / ChatGPT mobile pattern) and the reply streaming into the empty space below
+- **Visible reasoning** — collapsible "thinking" block with live emotive markers the agent emits
+- **Reasoning effort switch** — none → minimal → low → medium → high → xhigh → max, changeable mid-session
+- **Tool-call cards** — terminal-style blocks for shell commands, with args + result, expandable
+- **Sub-agent cards** — separate visual treatment for spawned sub-agents
+- **Slash commands** — type `/` for shortcuts the server exposes
+- **Steer mid-turn** — redirect the agent while it's replying
+- **Branch conversation** — fork from any point in history
+- **Retry / edit** — regenerate the last reply, or edit your last question
+
+### 📎 Attachments & media
+- Send files & images from your phone to the agent
+- Inline image rendering in replies, with fullscreen viewer
+- Code blocks with syntax highlighting + one-tap copy
+- Mermaid diagram rendering
+- Downloadable artifacts (PDFs, videos, files) — routed through the gateway HTTP client so they work on
+  self-hosted `http://` setups where the system DownloadManager would silently fail
+
+### 🗂️ Sessions
+- Search, pin, rename, branch, and resume any past conversation
+- Auto-resume of the last session on reconnect
+- Draft auto-save (debounced)
+- Live history sync with the server
+
+### 🎨 Personalization
+- **Top bar identity** — show the assistant's name OR a custom avatar image (your choice)
+- **Custom assistant name** — rename the assistant (default "Hermes")
+- **Custom avatar** — upload any image; adjustable size 28-48dp
+- **6 color themes** — Hermes, Blue Eye, Mocha, Midnight, Indigo, Carbon (light + dark each)
+- **Font family** — Vazirmatn (bundled, Persian-shaped) or system font
+- **Font size slider** — 80% to 140% scaling across the whole app
+- **Warm / night mode** — amber tint for long sessions (f.lux-style)
+- **Reduce motion** — respects the OS accessibility setting
+- **SOUL.md** — edit the agent's persistent identity directly from the app
+- **Personality presets** — switch between presets
+
+### 🧠 Model & provider management
+- Add custom OpenAI-compatible providers (base URL + API key)
+- Auto-detect available models on provider add
+- **"All providers"** view — every model from every provider in one searchable list
+- Fallback chain — pick an ordering; auto-failover across providers on errors
+- One-tap live model switch on the active session
+
+### 🛠️ Agent control
+- **Tool toggles** — enable/disable tool categories live on the current session
+- **Plugins manager** — see installed Hermes plugins, enable/disable
+- **Skills catalog** — browse the agent's available skills
+- **Cron jobs** — view and manage the agent's scheduled tasks
+- **Command approval** — manual / smart / off modes for risky actions
+- **Platforms** — connect the agent to Telegram, Discord, or Slack bot tokens
+- **Memory** — view and edit the agent's persistent memory
+- **Environment variables** — manage the agent's env (under Settings > Advanced)
+
+### 🌐 Internationalization
+- Full **English + فارسی** support
+- Full RTL layout
+- Language override independent of device locale
 
 ---
 
-## ⚡ Setup
+## ⚡ Quick start
 
-### 1 — Have a Hermes Agent server running
+### 1. Have a Hermes Agent server running
 
-You need `hermes dashboard --host 127.0.0.1 --port <port>` running on your server, behind a TLS reverse
-proxy (Caddy, nginx, etc.) so the app can reach it as `wss://your-domain:port`. Set a session token with
+Run `hermes dashboard --host 127.0.0.1 --port <port>` on your server, behind a TLS reverse proxy (Caddy,
+nginx, etc.) so the app can reach it as `wss://your-domain:port`. Set a session token with
 `HERMES_DASHBOARD_SESSION_TOKEN` — this is what the app authenticates with.
 
-This part is entirely server-side and out of scope for this repo; see the
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) project for how to install and run the gateway
-itself.
+See [Hermes Agent](https://github.com/NousResearch/hermes_agent) for full server setup.
 
-### 2 — Install the app
+### 2. Install the app
 
-**[⬇ Download the latest debug build](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)**
+[⬇ **Download the latest debug APK**](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
 → open the APK → allow "install from unknown sources" → install.
 
-### 3 — Connect
+### 3. Connect
 
-Open the app → **Runtime** screen → enter your server's address and session token → **Save & Connect**.
-That's it — from then on the app reconnects automatically every time you open it.
+Open the app → **Runtime** screen → enter your server's address (`wss://your-domain:port`) and session
+token → **Save & Connect**. From then on the app reconnects automatically every time you open it.
 
----
-
-## 🛡️ Privacy & Security
-
-- **Your session token** and server address are stored locally in the app, never sent anywhere except your
-  own server.
-- **The connection** is a WebSocket over TLS (`wss://`) straight to the server you configured — no
-  intermediary service.
-- **What the agent can touch** depends entirely on your server-side setup and `approvals.mode` — this app
-  just renders what the agent reports and forwards your approve/deny decisions.
-
-> [!CAUTION]
-> Keep your session token private — anyone with it can control your agent. Treat it like a password.
+That's it — you're chatting with your agent.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-UI (Compose) ─► ViewModel ─► GatewayClient (interface)
-                                  │ Hilt DI
-                                  ▼
-                         OkHttpGatewayClient (impl)
-                                  │ JSON-RPC over WebSocket (wss://)
-                                  ▼
-                         Hermes Agent gateway (your server)
+┌────────────────────────────────────────────────────────────┐
+│                       Android phone                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  UI (Jetpack Compose, Material 3)                    │  │
+│  │  ├── ChatScreen   ConfigScreen   SessionsScreen      │  │
+│  │  └── CronScreen   PluginsScreen  SkillsScreen        │  │
+│  │                       │                              │  │
+│  │                       ▼                              │  │
+│  │  ViewModel (Hilt, StateFlow)                         │  │
+│  │  ├── ChatViewModel    ConfigViewModel                │  │
+│  │  └── SessionsViewModel CronViewModel                 │  │
+│  │                       │                              │  │
+│  │                       ▼                              │  │
+│  │  GatewayClient (interface)                           │  │
+│  │                       │                              │  │
+│  │                       ▼                              │  │
+│  │  OkHttpGatewayClient (impl)                          │  │
+│  │  └── JSON-RPC over WebSocket (wss://)                │  │
+│  └──────────────────────┬───────────────────────────────┘  │
+└─────────────────────────┼──────────────────────────────────┘
+                          │
+                          ▼
+              ┌────────────────────────┐
+              │  Your Hermes Agent     │
+              │  gateway (VPS/server)  │
+              │  ┌──────────────────┐  │
+              │  │  hermes dashboard│  │
+              │  │  behind TLS proxy│  │
+              │  └──────────────────┘  │
+              └────────────────────────┘
 ```
 
-All UI and ViewModel code depends only on the `GatewayClient` interface. Design docs: [`docs/`](docs/)
+All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation
+(e.g. for tests) is one Hilt module change. Design docs live in [`docs/`](docs/).
 
-### Build from source
+### Tech stack
+
+| Layer | Tech |
+|---|---|
+| UI | Jetpack Compose, Material 3 |
+| DI | Hilt |
+| Async | Kotlin Coroutines + Flow + StateFlow |
+| Networking | OkHttp WebSocket (JSON-RPC) |
+| Image loading | Coil |
+| Markdown | Markwon |
+| Persistence | SharedPreferences (settings) + server-side (sessions, memory) |
+| Min SDK | 29 (Android 10) |
+| Target SDK | 35 |
+| Java | 17 |
+
+### Project layout
+
+```
+app/src/main/java/com/hermes/android/
+├── MainActivity.kt              # NavHost + theme wiring
+├── HermesApplication.kt         # Hilt entry point
+├── di/                          # Hilt modules
+├── gateway/                     # GatewayClient interface + OkHttp impl
+├── runtime/                     # Runtime/connection state
+├── service/                     # Foreground service, approval notifications
+├── ui/
+│   ├── component/               # Reusable composables (HermesMarkdown, etc.)
+│   ├── i18n/                    # t() translation function, AppLanguage
+│   ├── screen/                  # All screens (Chat, Config, Sessions, etc.)
+│   ├── theme/                   # ColorTheme, Typography, ThemeModeState
+│   └── viewmodel/               # All ViewModels
+└── ...
+```
+
+---
+
+## 🛠️ Build from source
 
 ```bash
 git clone https://github.com/traveler3022/hermes-android-vps-.git
 cd hermes-android-vps-
 ./gradlew :app:assembleDebug        # APK → app/build/outputs/apk/debug/
-./gradlew :app:testDebugUnitTest    # unit tests
+./gradlew :app:testDebugUnitTest    # unit tests (when present)
 ```
 
-**Requires:** JDK 17 · Android SDK 35 · Android Studio Ladybug+
+**Requirements:** JDK 17 · Android SDK 35 · Android Studio Ladybug+
 
 ### Signed release builds
 
-Release signing is already wired up (`app/build.gradle.kts` + `.github/workflows/release.yml`) — it just
-needs your keystore. Add these four repository secrets (Settings → Secrets and variables → Actions):
+Release signing is wired up via `app/build.gradle.kts` + `.github/workflows/release.yml`. Add these four
+repository secrets (Settings → Secrets and variables → Actions):
 
 ```
 KEYSTORE_BASE64    base64 of your .keystore/.jks file
@@ -143,32 +225,126 @@ KEY_ALIAS          key alias
 KEY_PASSWORD       key password
 ```
 
-Then cut a release by pushing a version tag:
+Cut a release by pushing a version tag:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
-CI builds a signed release APK and publishes it as a GitHub Release automatically. Locally, the same signing
-config picks up a gitignored `keystore.properties` at the repo root (`storeFile`, `storePassword`,
-`keyAlias`, `keyPassword`) — without either source, `assembleRelease` still produces an unsigned APK, so the
-build never breaks for contributors who don't have the keystore.
+CI builds a signed release APK and publishes it as a GitHub Release automatically. Locally, the same
+signing config picks up a gitignored `keystore.properties` at the repo root.
+
+### Debug builds via CI
+
+Every push to `main` triggers a debug APK build. The debug keystore is cached across CI runs, so each new
+debug APK installs cleanly over the previous one without uninstalling first.
+
+---
+
+## 🛡️ Privacy & security
+
+- **Your session token and server address** are stored locally in the app, never sent anywhere except your
+  own server.
+- **The connection** is a WebSocket over TLS (`wss://`) straight to your server — no intermediary service,
+  no telemetry, no analytics.
+- **What the agent can touch** depends entirely on your server-side setup and `approvals.mode` — this app
+  just renders what the agent reports and forwards your approve/deny decisions.
+- **No accounts, no cloud, no tracking.** The app has zero network dependencies beyond the server you
+  configure.
+
+> [!CAUTION]
+> Keep your session token private — anyone with it can control your agent. Treat it like a password.
 
 ---
 
 ## 🤝 Contributing
 
 Issues and PRs welcome. This is an independent client project — not an official Nous Research product. When
-reporting bugs, include your **Android version**, **phone model**, and whether the issue is client-side (this
-app) or server-side (your Hermes gateway).
+reporting bugs, please include:
+
+- Android version
+- Phone model
+- Whether the issue is **client-side** (this app) or **server-side** (your Hermes gateway)
+- Steps to reproduce
+- Logs if available (the app logs to logcat under the `Hermes` tag)
+
+### Development workflow
+
+```bash
+# Create a feature branch
+git checkout -b your-feature main
+
+# Make changes, commit with a clear message
+git commit -m "feat(chat): add emoji reactions to messages"
+
+# Push and open a PR
+git push -u origin your-feature
+```
+
+---
+
+## 📋 Requirements
+
+| | Minimum | Recommended |
+|---|---|---|
+| Android version | 10 (API 29) | 13+ (API 33+) |
+| Server | Hermes Agent gateway running, reachable over `wss://` | Same, behind a proper TLS reverse proxy |
+| Network | Any internet connection | Stable connection for long streaming replies |
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>Does this app run an AI on my phone?</b></summary>
+
+No. The app is purely a client. The AI agent runs on your server; this app just connects to it over
+WebSocket and renders the conversation.
+</details>
+
+<details>
+<summary><b>Can I use this with a different AI agent?</b></summary>
+
+The app speaks the Hermes Agent gateway protocol (JSON-RPC over WebSocket). Any server implementing the
+same protocol would work, but the app is designed and tested against Hermes Agent specifically.
+</details>
+
+<details>
+<summary><b>Why does the app need a foreground service / battery exemption?</b></summary>
+
+To keep the WebSocket connection alive when the app is backgrounded (so you still get tool-approval
+notifications, for example). The battery exemption is optional — without it, the connection may drop when
+the phone sleeps, but the app still works while in the foreground.
+</details>
+
+<details>
+<summary><b>Where are my chat sessions stored?</b></summary>
+
+On **your server**, not your phone. The app syncs session history from the gateway on demand. Your phone
+only keeps transient UI state (current draft, last-opened session id) and your settings.
+</details>
+
+<details>
+<summary><b>Is this an official Nous Research product?</b></summary>
+
+No. This is an independent community project. "Hermes Agent" belongs to its respective authors at Nous
+Research. This repo is not affiliated with or endorsed by Nous Research.
+</details>
+
+---
 
 ## 📄 License
 
 **MIT** — see [LICENSE](LICENSE).
 
-<sub>Independent project · not affiliated with Nous Research · "Hermes Agent" belongs to its respective authors.</sub>
+---
 
-<p align="center">
-  <br>
-  <b>⬡ Built for Android · Powered by Hermes Agent ⬡</b>
-</p>
+<div align="center">
+
+<sub>Independent community project · not affiliated with Nous Research · "Hermes Agent" belongs to its respective authors.</sub>
+
+<br><br>
+
+**⬡ Built for Android · Powered by Hermes Agent ⬡**
+
+</div>
