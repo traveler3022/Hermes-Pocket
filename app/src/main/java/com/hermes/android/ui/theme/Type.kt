@@ -70,8 +70,8 @@ fun hermesTypography(fontFamily: FontFamily = Vazirmatn): Typography = Typograph
     bodyLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 26.sp,
+        fontSize = 15.sp,
+        lineHeight = 24.sp,
         letterSpacing = 0.sp,
     ),
     bodyMedium = TextStyle(
