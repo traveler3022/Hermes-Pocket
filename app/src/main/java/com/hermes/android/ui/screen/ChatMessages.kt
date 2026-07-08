@@ -513,14 +513,7 @@ internal fun MessageBubble(
                                     onClick = {},
                                     onLongClick = { showContextMenu = true },
                                 )
-                                // animateContentSize() belongs on occasional
-                                // size changes (the collapse/expand toggle),
-                                // not on content that's growing ~12 times a
-                                // second while streaming — a resize animation
-                                // restarting that often fights itself and
-                                // reads as the message flickering. Skip it
-                                // entirely while the reply is still coming in.
-                                .let { if (message.isStreaming) it else it.animateContentSize() }
+                                .animateContentSize()
                                 .padding(vertical = 2.dp),
                         ) {
                             if (hasThinking) {

@@ -64,7 +64,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
@@ -226,51 +225,10 @@ fun ChatScreen(
         viewModel.loadAssistantAvatar()
     }
 
-    // A separate "stick to bottom" flag, updated ONLY when a scroll gesture
-    // settles (never by content changes). The old derivedStateOf-based
-    // showScrollToBottom flips to true the instant a new message is appended
-    // (because the new item isn't laid out yet), which was the race condition
-    // that disabled auto-scroll even when the user was sitting at the very
-    // bottom. Using a gesture-only flag means content changes can't knock us
-    // out of "follow" mode.
-    var stickToBottom by remember { mutableStateOf(true) }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collect { scrolling ->
-                if (!scrolling) {
-                    val info = listState.layoutInfo
-                    val last = info.visibleItemsInfo.lastOrNull()
-                    stickToBottom = last == null || last.index >= info.totalItemsCount - 1
-                }
-            }
-    }
-
-    // A whole new message arriving gets a smooth animated scroll (rare).
+    // Auto-scroll to bottom when new messages arrive — only if user hasn't scrolled up
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty() && stickToBottom) {
+        if (uiState.messages.isNotEmpty() && !showScrollToBottom) {
             listState.animateScrollToItem(uiState.messages.size - 1)
-        }
-    }
-
-    // A streaming reply's content grows on nearly every token. Keying an
-    // *animated* scroll off that would restart a new spring on every single
-    // delta, and each restart cancels the one still in flight — that reads
-    // as the screen "flickering" while the agent is answering. An instant,
-    // non-animated re-snap has no animation to interrupt, so it just keeps
-    // the last line pinned to the bottom without any visible jank.
-    val lastContentLen = uiState.messages.lastOrNull()?.let {
-        when (it) {
-            is ChatMessage.Assistant -> it.text.length + (it.reasoning?.length ?: 0)
-            is ChatMessage.User -> it.text.length
-            is ChatMessage.ToolCall -> (it.resultText?.length ?: 0) + (it.argsText?.length ?: 0)
-            is ChatMessage.Status -> it.text.length
-            is ChatMessage.SubagentCard -> it.text.length
-            is ChatMessage.InteractiveRequest -> it.question.length
-        }
-    } ?: 0
-    LaunchedEffect(lastContentLen) {
-        if (uiState.messages.isNotEmpty() && stickToBottom) {
-            listState.scrollToItem(uiState.messages.size - 1)
         }
     }
 
