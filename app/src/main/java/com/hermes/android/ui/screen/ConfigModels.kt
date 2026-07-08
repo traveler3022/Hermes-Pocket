@@ -125,8 +125,10 @@ internal fun ModelsTab(
         )
     }
 
-    val filteredModels = remember(selectedProvider, grouped) {
-        grouped[selectedProvider].orEmpty()
+    // null selectedProvider means "All providers" — show every model from
+    // every configured provider instead of forcing one to be picked first.
+    val filteredModels = remember(selectedProvider, grouped, state.availableModels) {
+        if (selectedProvider == null) state.availableModels else grouped[selectedProvider].orEmpty()
     }
 
     LazyColumn(
@@ -293,6 +295,7 @@ internal fun ModelsTab(
                     it.provider == state.activeProvider && it.modelId == state.activeModel
                 },
                 onSelect = { viewModel.selectModel(it) },
+                showProviderLabel = selectedProvider == null,
             )
         }
 
