@@ -140,6 +140,7 @@ private fun HermesNavHost(
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 sharedText = shared,
                 resumeSessionId = resumeId,
+                themeModeState = themeModeState,
             )
         }
 

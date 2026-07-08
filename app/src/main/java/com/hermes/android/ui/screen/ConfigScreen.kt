@@ -101,6 +101,7 @@ import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
+import com.hermes.android.ui.theme.TopBarDisplay
 
 /**
  * Configuration screen — model picker, tool toggles, config viewer.
@@ -456,6 +457,91 @@ private fun GeneralTab(
                     }
                     Text(
                         text = "${themeModeState.fontScalePct}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    )
+                }
+            }
+        }
+
+        // -- Personalization: top bar identity --
+        // Lets the user pick what the chat top bar shows to represent the
+        // assistant (their chosen name, or the avatar image), set the name
+        // itself, and adjust the avatar size when shown. Tapping the
+        // identity in the top bar opens this section.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Top bar", "نوار بالا"),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = t("Display in top bar", "نمایش در نوار بالا"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    TopBarDisplay.entries.forEach { mode ->
+                        androidx.compose.material3.FilterChip(
+                            selected = themeModeState?.topBarDisplay == mode,
+                            onClick = { themeModeState?.updateTopBarDisplay(mode) },
+                            label = { Text(t(mode.displayEn, mode.displayFa), maxLines = 1) },
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                Text(
+                    text = t("Assistant name", "نام دستیار"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                OutlinedTextField(
+                    value = themeModeState?.assistantName ?: "Hermes",
+                    onValueChange = { themeModeState?.updateAssistantName(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(t("Hermes", "هرمس")) },
+                )
+                if (themeModeState?.topBarDisplay == TopBarDisplay.AVATAR) {
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = t("Avatar size", "اندازه آواتار"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = (themeModeState?.avatarSizeDp ?: 36).toFloat(),
+                            onValueChange = { themeModeState?.updateAvatarSizeDp(it.toInt()) },
+                            valueRange = 28f..48f,
+                            steps = 9,  // 28,30,...,48 → 2dp increments
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${themeModeState?.avatarSizeDp ?: 36} dp",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 16.dp, top = 2.dp),
