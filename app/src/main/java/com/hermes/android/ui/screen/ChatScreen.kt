@@ -236,12 +236,24 @@ fun ChatScreen(
     // keyed an effect off the streaming content length and ran a scroll on
     // every token — that caused an infinite render loop (scrollToItem flips
     // isScrollInProgress, which re-collects, which re-launches the effect,
-    // which scrolls again, every second). Keying only on messages.size
-    // means this fires ONCE per new message, not per token.
+    // which scrolls again, every second).
+    //
+    // Keying on messages.size (as this used to) has the same problem one
+    // level up: a single agent turn appends more than one item — a tool-call
+    // card per tool it runs, a status line, a sub-agent card, the assistant's
+    // own placeholder message before text starts arriving — so the size
+    // changes repeatedly through one turn, and every change re-ran the
+    // scroll and snapped back to the top of the (unchanged) user message.
+    // That's what "keeps jumping to the top while it's still writing, can't
+    // read it" was: not a per-token loop, but the same re-trigger one layer
+    // up. Key on the last user message's *id* instead — it only changes when
+    // a genuinely new user turn starts, so this now fires once per turn,
+    // not once per item the agent happens to add while answering it.
     //
     // scrollToItem (instant) is used instead of animateScrollToItem so there
     // is no animation in flight to be cancelled/restarted by the next event.
-    LaunchedEffect(uiState.messages.size) {
+    val lastUserMessageId = uiState.messages.lastOrNull { it is ChatMessage.User }?.id
+    LaunchedEffect(lastUserMessageId) {
         val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
             listState.scrollToItem(lastUserIndex)
