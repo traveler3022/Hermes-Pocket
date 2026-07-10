@@ -515,13 +515,18 @@ class ChatViewModel @Inject constructor(
     // (Termux keeps its sandbox: no shared-storage permission is involved.)
 
     // Each attachment call (file.attach / image.attach_bytes) sends its
-    // whole base64 payload in ONE WebSocket text frame — there's no
-    // chunked-upload RPC on the gateway. OkHttp's WebSocket silently
-    // refuses to even enqueue a frame once the outgoing buffer would
-    // exceed its internal 16 MiB limit: send() just returns false, no
-    // exception, no server round-trip, no useful error. Raw bytes
-    // base64-encode to ×4/3 their size, so a single call is only safe up
-    // to ~singlePartMaxBytes raw.
+    // whole base64 payload in ONE WebSocket text frame. WebSocket the
+    // *protocol* supports fragmenting one logical message across multiple
+    // frames — this isn't a protocol limit — but OkHttp's client doesn't
+    // expose fragmented/streamed sends to the app, only a single complete
+    // send(string) call, and it silently refuses to even enqueue that call
+    // once the outgoing buffer would exceed its internal 16 MiB limit:
+    // send() just returns false, no exception, no server round-trip.
+    // Working around that would mean replacing the WebSocket client
+    // entirely (real surgery on the reconnect/dispatch logic every other
+    // RPC depends on) — not something to do mid-fix. Splitting into
+    // several complete, safely-sized messages is the realistic option
+    // with the transport actually in use.
     //
     // Images always go through image.attach_bytes as one call (there's no
     // reassembly step for vision input, so they're capped at that safe
@@ -531,10 +536,17 @@ class ChatViewModel @Inject constructor(
     // to reassemble them with `cat` before using the file. This needs no
     // server-side changes: it's the same file.attach RPC called N times,
     // and the agent already has shell access to its own workspace.
-    private val singlePartMaxBytes = 8 * 1024 * 1024
+    //
+    // Part size kept modest (not pushed close to the 16 MiB ceiling) so
+    // each individual round trip is fast and light on a shaky mobile
+    // connection — smaller, more numerous parts fail (and retry) cheaper
+    // than fewer, larger ones.
+    private val singlePartMaxBytes = 4 * 1024 * 1024
 
-    /** Overall cap across all parts for a single non-image attachment. */
-    private val maxAttachBytes = 60 * 1024 * 1024
+    /** Sanity ceiling only — chunking has no technical size limit, this
+     *  just stops someone from queuing an hour-long sequential upload by
+     *  accident. Raise it freely if a real file needs more. */
+    private val maxAttachBytes = 500 * 1024 * 1024
 
     /** Chunk size for streaming Base64 encoding (1 MB raw = ~1.33 MB b64). */
     private val attachChunkSize = 1024 * 1024
@@ -703,6 +715,17 @@ class ChatViewModel @Inject constructor(
                 if (attempt > 0) {
                     _uiState.update { it.copy(attachProgress = "Retrying $name — part $partLabel (attempt ${attempt + 1})…") }
                     delay(partRetryDelayMs)
+                }
+                // A dead connection retried blindly just burns through every
+                // attempt with the same timeout each time — several minutes
+                // of "still uploading" before finally failing, which reads
+                // as the app hanging rather than erroring. Check first and
+                // fail immediately with a clear cause instead.
+                if (gatewayClient.connectionState.value !is ConnectionState.Connected) {
+                    throw IllegalStateException(
+                        "Connection lost during upload (part $partLabel of $name) — " +
+                            "reconnect and try again"
+                    )
                 }
                 try {
                     val b64 = encodeUriToBase64(resolver, uri, rangeStart = start, rangeLength = length)
