@@ -514,19 +514,27 @@ class ChatViewModel @Inject constructor(
     // ── Attachments — files/images travel over the loopback gateway only ──
     // (Termux keeps its sandbox: no shared-storage permission is involved.)
 
-    // The attachment travels as ONE base64 string inside a single WebSocket
-    // text frame (there's no chunked-upload RPC — file.attach/
-    // image.attach_bytes both take the whole thing in one call). OkHttp's
-    // WebSocket silently refuses to even enqueue a frame once its outgoing
-    // buffer would exceed 16 MiB (RealWebSocket.send() just returns false,
-    // no exception, no server round-trip) — so the real ceiling isn't the
-    // 25 MB this used to advertise, it's whatever RAW size base64-encodes
-    // (×4/3) to under that 16 MiB frame limit. A 25 MB file becomes ~33 MB
-    // of base64 and never even reaches the network; it fails at
-    // `ws.send()` with an opaque "Failed to send WebSocket message", which
-    // is almost certainly what a large zip was hitting. Capped to a raw
-    // size that safely base64-encodes under the 16 MiB frame limit.
-    private val maxAttachBytes = 10 * 1024 * 1024
+    // Each attachment call (file.attach / image.attach_bytes) sends its
+    // whole base64 payload in ONE WebSocket text frame — there's no
+    // chunked-upload RPC on the gateway. OkHttp's WebSocket silently
+    // refuses to even enqueue a frame once the outgoing buffer would
+    // exceed its internal 16 MiB limit: send() just returns false, no
+    // exception, no server round-trip, no useful error. Raw bytes
+    // base64-encode to ×4/3 their size, so a single call is only safe up
+    // to ~singlePartMaxBytes raw.
+    //
+    // Images always go through image.attach_bytes as one call (there's no
+    // reassembly step for vision input, so they're capped at that safe
+    // single-message size). Non-image files above that size are instead
+    // split into multiple sequential file.attach calls — each one safely
+    // under the frame limit — and the agent is told, in the prompt text,
+    // to reassemble them with `cat` before using the file. This needs no
+    // server-side changes: it's the same file.attach RPC called N times,
+    // and the agent already has shell access to its own workspace.
+    private val singlePartMaxBytes = 8 * 1024 * 1024
+
+    /** Overall cap across all parts for a single non-image attachment. */
+    private val maxAttachBytes = 60 * 1024 * 1024
 
     /** Chunk size for streaming Base64 encoding (1 MB raw = ~1.33 MB b64). */
     private val attachChunkSize = 1024 * 1024
@@ -534,15 +542,10 @@ class ChatViewModel @Inject constructor(
     /**
      * Upload a user-picked file to the gateway session.
      *
-     * Images → `image.attach_bytes` (queued for native vision on the next
-     * prompt). Everything else → `file.attach` (staged in the workspace,
-     * referenced from the prompt via the returned `@file:` token).
-     *
-     * Uses chunked Base64 encoding to avoid loading the entire file +
-     * its b64 representation in RAM simultaneously. Peak memory is ~2.7 MB
-     * regardless of file size — the encoding is streamed, only the final
-     * send is one shot (see maxAttachBytes for why that caps well below
-     * what this streaming approach could otherwise support).
+     * Images → `image.attach_bytes`, one call, capped at [singlePartMaxBytes]
+     * (queued for native vision on the next prompt). Everything else →
+     * one or more `file.attach` calls (see [attachLargeFile]), staged in
+     * the workspace and referenced from the prompt via `@file:` token(s).
      */
     fun attachFromUri(uri: Uri) {
         val sessionId = _uiState.value.activeSessionId ?: return
@@ -556,45 +559,42 @@ class ChatViewModel @Inject constructor(
                     if (i >= 0 && c.moveToFirst()) c.getString(i) else null
                 } ?: uri.lastPathSegment ?: "attachment"
                 val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val isImage = mime.startsWith("image/")
+                val sizeCap = if (isImage) singlePartMaxBytes else maxAttachBytes
 
-                // Stream the file in chunks and build Base64 incrementally.
-                // Peak RAM: one chunk (1 MB raw) + its b64 (1.33 MB) + the
-                // accumulated b64 StringBuilder.  For 25 MB files the final
-                // b64 string is ~33 MB but we never hold the raw bytes AND
-                // the b64 string at the same time.
-                val b64 = StringBuilder()
-                var totalSize = 0
+                // First pass: just measure, so we know up front whether this
+                // is a single-call upload or needs splitting, without
+                // holding anything in memory yet.
+                var totalSize = 0L
                 resolver.openInputStream(uri)?.use { stream ->
                     val buffer = ByteArray(attachChunkSize)
                     while (true) {
                         val read = stream.read(buffer)
                         if (read <= 0) break
                         totalSize += read
-                        if (totalSize > maxAttachBytes) {
-                            throw IllegalStateException(
-                                "File too large (max 10 MB — larger files can't fit in a single " +
-                                    "WebSocket message once base64-encoded)"
-                            )
+                        if (totalSize > sizeCap) {
+                            val capMb = sizeCap / (1024 * 1024)
+                            throw IllegalStateException("File too large (max $capMb MB)")
                         }
-                        val chunk = if (read == buffer.size) buffer else buffer.copyOf(read)
-                        b64.append(Base64.encodeToString(chunk, Base64.NO_WRAP))
                     }
                 } ?: throw IllegalStateException("Cannot read file")
 
-                if (totalSize == 0) {
+                if (totalSize == 0L) {
                     throw IllegalStateException("File is empty")
                 }
 
-                val attachment = if (mime.startsWith("image/")) {
+                val attachment = if (isImage) {
+                    val b64 = encodeUriToBase64(resolver, uri)
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("content_base64", b64.toString())
+                        put("content_base64", b64)
                         put("filename", name)
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
                     PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
-                } else {
+                } else if (totalSize <= singlePartMaxBytes) {
+                    val b64 = encodeUriToBase64(resolver, uri)
                     val params = buildJsonObject {
                         put("session_id", sessionId)
                         put("data_url", "data:$mime;base64,${b64}")
@@ -604,6 +604,8 @@ class ChatViewModel @Inject constructor(
                     val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
                         ?: throw IllegalStateException("Gateway returned no file reference")
                     PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
+                } else {
+                    attachLargeFile(sessionId, resolver, uri, name, mime, totalSize)
                 }
                 _uiState.update { it.copy(
                     pendingAttachments = _uiState.value.pendingAttachments + attachment,
@@ -618,6 +620,92 @@ class ChatViewModel @Inject constructor(
                 ) }
             }
         }
+    }
+
+    /** Streams [uri] through base64 encoding without holding raw bytes and
+     *  the full b64 string in memory at once. Peak RAM is ~2.7 MB regardless
+     *  of file size — safe to call repeatedly for large-file parts too,
+     *  since each call re-opens the stream at its own offset window. */
+    private fun encodeUriToBase64(
+        resolver: android.content.ContentResolver,
+        uri: Uri,
+        rangeStart: Long = 0L,
+        rangeLength: Long = Long.MAX_VALUE,
+    ): String {
+        val b64 = StringBuilder()
+        resolver.openInputStream(uri)?.use { stream ->
+            var skipped = 0L
+            while (skipped < rangeStart) {
+                val s = stream.skip(rangeStart - skipped)
+                if (s <= 0) break
+                skipped += s
+            }
+            val buffer = ByteArray(attachChunkSize)
+            var remaining = rangeLength
+            while (remaining > 0) {
+                val want = minOf(buffer.size.toLong(), remaining).toInt()
+                val read = stream.read(buffer, 0, want)
+                if (read <= 0) break
+                b64.append(Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP))
+                remaining -= read
+            }
+        } ?: throw IllegalStateException("Cannot read file")
+        return b64.toString()
+    }
+
+    /**
+     * Upload a file too large for a single WebSocket frame by splitting it
+     * into sequential [singlePartMaxBytes]-sized parts, each sent as its
+     * own `file.attach` call (same RPC the small-file path uses — no server
+     * changes needed). The prompt text gets a `cat`-and-verify instruction
+     * instead of a single `@file:` ref, so the agent reassembles the parts
+     * into the original filename before treating it as the actual
+     * attachment. Requires the agent to have shell access to its own
+     * workspace, which it already does for every other file-producing tool.
+     */
+    private suspend fun attachLargeFile(
+        sessionId: String,
+        resolver: android.content.ContentResolver,
+        uri: Uri,
+        name: String,
+        mime: String,
+        totalSize: Long,
+    ): PendingAttachment {
+        val partCount = ((totalSize + singlePartMaxBytes - 1) / singlePartMaxBytes).toInt()
+        val partRefs = mutableListOf<String>()
+        val partNames = mutableListOf<String>()
+        for (partIndex in 0 until partCount) {
+            val start = partIndex.toLong() * singlePartMaxBytes
+            val length = minOf(singlePartMaxBytes.toLong(), totalSize - start)
+            val partName = "$name.part${(partIndex + 1).toString().padStart(3, '0')}of" +
+                partCount.toString().padStart(3, '0')
+            val b64 = encodeUriToBase64(resolver, uri, rangeStart = start, rangeLength = length)
+            val params = buildJsonObject {
+                put("session_id", sessionId)
+                put("data_url", "data:application/octet-stream;base64,${b64}")
+                put("name", partName)
+            }
+            val result = gatewayClient.request("file.attach", jsonToElementMap(params))
+            val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
+                ?: throw IllegalStateException("Gateway returned no file reference for part ${partIndex + 1}/$partCount")
+            partRefs.add(ref)
+            partNames.add(partName)
+            Timber.i("[Chat] Attached part ${partIndex + 1}/$partCount of $name (${length} bytes)")
+        }
+
+        // One instruction block, not N separate attachment lines — tells
+        // the agent these parts are one file, in order, and exactly how to
+        // rebuild it before doing anything else with it.
+        val instruction = buildString {
+            append("The following $partCount file parts together make up \"$name\" ")
+            append("(${totalSize / (1024 * 1024)} MB total, mime type $mime). ")
+            append("Before using this file, reassemble it in order, e.g.:\n")
+            append("cat ")
+            append(partNames.joinToString(" ") { "\"$it\"" })
+            append(" > \"$name\"\n")
+            partRefs.forEach { append(it).append('\n') }
+        }
+        return PendingAttachment(name = name, isImage = false, refText = instruction)
     }
 
     /**
