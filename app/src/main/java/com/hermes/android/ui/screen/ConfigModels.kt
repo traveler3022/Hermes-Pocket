@@ -131,11 +131,142 @@ internal fun ModelsTab(
         if (selectedProvider == null) state.availableModels else grouped[selectedProvider].orEmpty()
     }
 
+    // One search box over EVERY model from EVERY provider (approved design
+    // F): typing switches the picker into a flat cross-provider result list.
+    var modelSearch by remember { mutableStateOf("") }
+    val searchResults = remember(modelSearch, state.availableModels) {
+        if (modelSearch.isBlank()) emptyList()
+        else state.availableModels.filter { model ->
+            model.modelId.contains(modelSearch, ignoreCase = true) ||
+                model.name.contains(modelSearch, ignoreCase = true) ||
+                model.provider.contains(modelSearch, ignoreCase = true)
+        }.take(30)
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ══════════════════════════════════════════════════════════════
+        // ── Active model hero (design F) ──
+        // ══════════════════════════════════════════════════════════════
+        item(key = "__active_model_hero") {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = t("Active model", "مدل فعال"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(
+                        text = if (state.activeModel != null) {
+                            "${state.activeProvider ?: "?"} / ${state.activeModel}"
+                        } else {
+                            t("No model selected", "مدلی انتخاب نشده")
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+        }
+
+        // ── Cross-provider model search ──
+        item(key = "__model_search") {
+            OutlinedTextField(
+                value = modelSearch,
+                onValueChange = { modelSearch = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text(t("Search all models…", "جستجو در همهٔ مدل‌ها…"))
+                },
+                singleLine = true,
+                trailingIcon = {
+                    if (modelSearch.isNotEmpty()) {
+                        TextButton(onClick = { modelSearch = "" }) {
+                            Text(t("Clear", "پاک کردن"))
+                        }
+                    }
+                },
+            )
+        }
+
+        if (modelSearch.isNotBlank()) {
+            if (searchResults.isEmpty()) {
+                item(key = "__search_empty") {
+                    Text(
+                        text = t("No matching models", "مدلی پیدا نشد"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            } else {
+                items(
+                    items = searchResults,
+                    key = { "search:${it.provider}/${it.modelId}" },
+                ) { model ->
+                    val isActive = model.provider == state.activeProvider &&
+                        model.modelId == state.activeModel
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.selectModel(model)
+                                modelSearch = ""
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isActive) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = model.modelId,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                    ),
+                                )
+                                Text(
+                                    text = model.provider,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (isActive) {
+                                Text(
+                                    text = "✓",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ══════════════════════════════════════════════════════════════
         // ── Provider Management Section ──
         // ══════════════════════════════════════════════════════════════
