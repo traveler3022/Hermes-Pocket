@@ -118,18 +118,17 @@ fun RuntimeSetupScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (isRemote) "Server Connection" else "Termux & Agent Setup") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
+    com.hermes.android.ui.design.HermesScaffold(
+        title = if (isRemote) {
+            com.hermes.android.ui.i18n.t("Server Connection", "اتصال سرور")
+        } else {
+            com.hermes.android.ui.i18n.t("Termux & Agent Setup", "راه‌اندازی ترموکس و ایجنت")
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        subtitle = if (isRemote) {
+            com.hermes.android.ui.i18n.t("Address, token, and connection status", "آدرس، توکن و وضعیت اتصال")
+        } else null,
+        onBack = onNavigateBack,
+        snackbarHostState = snackbarHostState,
     ) { padding ->
         Column(
             modifier = Modifier
