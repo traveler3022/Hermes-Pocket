@@ -1,41 +1,42 @@
 package com.hermes.android.ui.screen
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,11 +45,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.design.HermesEmptyState
+import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.HistoryMessage
 import com.hermes.android.ui.viewmodel.SessionSortOrder
@@ -60,7 +68,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Sessions screen, rebuilt on the design system (ui/design/DesignSystem.kt):
+ * list view with search, pinning, usage insights, and a per-session history
+ * detail. All state/actions come from [SessionsViewModel] — this file is
+ * presentation only.
+ */
 @Composable
 fun SessionsScreen(
     onNavigateBack: () -> Unit = {},
@@ -96,7 +109,6 @@ fun SessionsScreen(
         }
     }
 
-    // ── Delete confirmation dialog ──────────────────────────────────────
     if (uiState.showDeleteConfirm != null) {
         AlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
@@ -115,7 +127,6 @@ fun SessionsScreen(
         )
     }
 
-    // ── Rename dialog ───────────────────────────────────────────────────
     uiState.showRenameDialog?.let { renameState ->
         var newTitle by remember(renameState) { mutableStateOf(renameState.currentTitle) }
         AlertDialog(
@@ -148,33 +159,19 @@ fun SessionsScreen(
 
     val inHistoryDetail = uiState.selectedSessionId != null
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (inHistoryDetail)
-                            uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
-                                ?: t("Session history", "تاریخچه گفتگو")
-                        else
-                            t("Sessions", "گفتگوها"),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (inHistoryDetail) viewModel.closeHistory() else onNavigateBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (!inHistoryDetail) {
-                        TopBarMenu(uiState, viewModel)
-                    }
-                },
-            )
+    HermesScaffold(
+        title = if (inHistoryDetail) {
+            uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
+                ?: t("Session history", "تاریخچه گفتگو")
+        } else {
+            t("Sessions", "گفتگوها")
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        subtitle = if (inHistoryDetail) null else {
+            t("${uiState.sessions.size} conversations", "${uiState.sessions.size} گفتگو")
+        },
+        onBack = { if (inHistoryDetail) viewModel.closeHistory() else onNavigateBack() },
+        actions = { if (!inHistoryDetail) SortMenu(uiState, viewModel) },
+        snackbarHostState = snackbarHostState,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -191,76 +188,66 @@ fun SessionsScreen(
                     },
                 )
             } else {
-                SessionsTab(uiState, viewModel)
+                SessionsList(uiState, viewModel)
             }
         }
     }
 }
 
-// ── Top-bar overflow menu (sort + refresh) ──────────────────────────────
+// ── Top-bar sort/refresh menu ─────────────────────────────────────────────
 
 @Composable
-private fun TopBarMenu(state: SessionsUiState, viewModel: SessionsViewModel) {
+private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = t("More", "بیشتر"))
+            Icon(Icons.Default.SwapVert, contentDescription = t("Sort", "مرتب‌سازی"))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text(t("Refresh sessions", "به‌روزرسانی گفتگوها")) },
                 onClick = { viewModel.loadSessions(); expanded = false },
             )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        t("Newest first", "جدیدترین"),
-                        color = if (state.sortOrder == SessionSortOrder.NEWEST_FIRST)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                onClick = { viewModel.setSortOrder(SessionSortOrder.NEWEST_FIRST); expanded = false },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        t("Oldest first", "قدیمی‌ترین"),
-                        color = if (state.sortOrder == SessionSortOrder.OLDEST_FIRST)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                onClick = { viewModel.setSortOrder(SessionSortOrder.OLDEST_FIRST); expanded = false },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        t("Name A-Z", "نام الف-ی"),
-                        color = if (state.sortOrder == SessionSortOrder.NAME_AZ)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                onClick = { viewModel.setSortOrder(SessionSortOrder.NAME_AZ); expanded = false },
-            )
+            listOf(
+                SessionSortOrder.NEWEST_FIRST to t("Newest first", "جدیدترین"),
+                SessionSortOrder.OLDEST_FIRST to t("Oldest first", "قدیمی‌ترین"),
+                SessionSortOrder.NAME_AZ to t("Name A-Z", "نام الف-ی"),
+            ).forEach { (order, label) ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            label,
+                            color = if (state.sortOrder == order) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    },
+                    onClick = { viewModel.setSortOrder(order); expanded = false },
+                )
+            }
         }
     }
 }
 
-// ── Sessions tab ────────────────────────────────────────────────────────
+// ── Sessions list ─────────────────────────────────────────────────────────
 
 @Composable
-private fun SessionsTab(state: SessionsUiState, viewModel: SessionsViewModel) {
+private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
     if (state.isLoadingSessions) {
         LoadingIndicator(t("Loading sessions...", "در حال بارگذاری گفتگوها..."))
         return
     }
     if (state.sessions.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(t("No sessions yet", "هنوز گفتگویی وجود ندارد"), style = MaterialTheme.typography.bodyLarge)
-        }
+        HermesEmptyState(
+            icon = Icons.Default.Forum,
+            title = t("No sessions yet", "هنوز گفتگویی وجود ندارد"),
+            caption = t(
+                "Conversations you start with the agent will show up here",
+                "گفتگوهایی که با ایجنت شروع کنی اینجا نمایش داده می‌شن",
+            ),
+        )
         return
     }
 
@@ -282,48 +269,59 @@ private fun SessionsTab(state: SessionsUiState, viewModel: SessionsViewModel) {
     val displaySessions = sort(pinned) + sort(unpinned)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Search bar
+        // Search — pill-shaped, tonal, no heavy outline.
         OutlinedTextField(
             value = state.searchQuery,
             onValueChange = { viewModel.updateSearchQuery(it) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
             placeholder = { Text(t("Search sessions...", "جستجوی گفتگوها...")) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
             trailingIcon = {
                 if (state.searchQuery.isNotEmpty()) {
                     IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                        Icon(Icons.Default.Close, contentDescription = t("Clear", "پاک کردن"))
+                        Icon(Icons.Default.Close, contentDescription = t("Clear", "پاک کردن"), modifier = Modifier.size(18.dp))
                     }
                 }
             },
             singleLine = true,
+            shape = RoundedCornerShape(50),
         )
         if (state.searchQuery.isNotBlank()) {
             Text(
-                text = t("${displaySessions.size} of ${state.sessions.size} sessions",
-                    "${displaySessions.size} از ${state.sessions.size} گفتگو"),
+                text = t(
+                    "${displaySessions.size} of ${state.sessions.size} sessions",
+                    "${displaySessions.size} از ${state.sessions.size} گفتگو",
+                ),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
             )
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(
+                start = HxSpace.screen, end = HxSpace.screen,
+                top = HxSpace.sm, bottom = HxSpace.xl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            // Aggregate usage insights (insights.get) — only when present.
             state.insights?.let { ins ->
-                item(key = "insights") { InsightsCard(ins) }
+                item(key = "insights") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                        StatTile(value = "${ins.sessions}", label = t("sessions", "گفتگو"))
+                        StatTile(value = "${ins.messages}", label = t("messages", "پیام"))
+                        StatTile(value = "${ins.days}", label = t("days", "روز"))
+                    }
+                    Spacer(Modifier.height(HxSpace.xs))
+                }
             }
-            // Active agent processes (agents.list) — hidden when none.
             if (state.activeAgents.isNotEmpty()) {
-                item(key = "agents") { ActiveAgentsCard(state.activeAgents) }
+                item(key = "agents") { ActiveAgentsCard(state) }
             }
             items(displaySessions, key = { it.id }) { session ->
-                SessionCard(
+                SessionRow(
                     session = session,
                     viewModel = viewModel,
                     isPinned = session.id in state.pinnedSessionIds,
@@ -333,10 +331,10 @@ private fun SessionsTab(state: SessionsUiState, viewModel: SessionsViewModel) {
     }
 }
 
-// ── Session card with per-item 3-dot overflow menu ──────────────────────
+// ── One session row ───────────────────────────────────────────────────────
 
 @Composable
-private fun SessionCard(
+private fun SessionRow(
     session: SessionSummary,
     viewModel: SessionsViewModel,
     isPinned: Boolean,
@@ -344,50 +342,64 @@ private fun SessionCard(
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Card(
+    Surface(
+        shape = RoundedCornerShape(HxRadius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(HxRadius.md))
             .clickable { viewModel.loadSessionHistory(session.id) },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isPinned)
-                MaterialTheme.colorScheme.secondaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant,
-        ),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                .padding(start = HxSpace.inner, top = HxSpace.md, bottom = HxSpace.md, end = HxSpace.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = session.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isPinned) {
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = t("Pinned", "سنجاق‌شده"),
+                            modifier = Modifier.size(13.dp).padding(end = 0.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.size(4.dp))
+                    }
+                    Text(
+                        text = session.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 session.lastMessagePreview?.let { preview ->
                     Text(
-                        text = preview.take(80) + if (preview.length > 80) "..." else "",
+                        text = preview,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
                 Text(
                     text = "${session.messageCount} ${t("messages", "پیام")} · ${dateFormat.format(Date(session.updatedAt))}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 3.dp),
                 )
             }
 
-            // Single 3-dot overflow menu replaces all inline buttons
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = t("Options", "گزینه‌ها"),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp),
                     )
                 }
                 DropdownMenu(
@@ -411,12 +423,7 @@ private fun SessionCard(
                         onClick = { viewModel.shareSession(session.id); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                t("Delete", "حذف"),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        },
+                        text = { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) },
                         onClick = { viewModel.confirmDelete(session.id); menuExpanded = false },
                     )
                 }
@@ -425,7 +432,7 @@ private fun SessionCard(
     }
 }
 
-// ── History detail view (replaces sessions list when a session is tapped) ──
+// ── History detail ────────────────────────────────────────────────────────
 
 @Composable
 private fun HistoryDetailView(
@@ -440,74 +447,50 @@ private fun HistoryDetailView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // "Continue chat" button always visible at top
         Button(
             onClick = onResumeSession,
+            shape = RoundedCornerShape(50),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
         ) {
             Text(t("Continue this chat", "ادامه این گفتگو"))
         }
 
-        // Token usage / cost (session.usage) — the user's main concern.
         usage?.takeIf { it.total > 0 || it.calls > 0 }?.let { u ->
-            Card(
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                ),
+                    .padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = t("Token usage", "مصرف توکن"),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                    Text(
-                        text = "▸ in ${u.input} · out ${u.output} · total ${u.total} · ${u.calls} calls",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    u.creditsLines.forEach { line ->
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
-                        )
-                    }
-                }
+                StatTile(value = "${u.input}", label = t("in", "ورودی"))
+                StatTile(value = "${u.output}", label = t("out", "خروجی"))
+                StatTile(value = "${u.total}", label = t("total", "کل"))
+                StatTile(value = "${u.calls}", label = t("calls", "فراخوانی"))
+            }
+            u.creditsLines.forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = HxSpace.screen),
+                )
             }
         }
 
         if (messages.isEmpty()) {
-            Column(
+            HermesEmptyState(
+                icon = Icons.Default.Forum,
+                title = t("No messages found", "پیامی پیدا نشد"),
+                caption = t("This session may be empty or inaccessible", "این گفتگو خالی یا در دسترس نیست"),
                 modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    t("No messages found", "پیامی پیدا نشد"),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    t("This session may be empty or inaccessible", "این گفتگو خالی یا در دسترس نیست"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
+            )
         } else {
-            val listState = rememberLazyListState()
             LazyColumn(
-                state = listState,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = HxSpace.md, vertical = HxSpace.xs),
+                verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 items(messages, key = { it.role + it.content.take(40) + messages.indexOf(it) }) { msg ->
                     HistoryMessageBubble(msg)
@@ -520,33 +503,29 @@ private fun HistoryDetailView(
 @Composable
 private fun HistoryMessageBubble(msg: HistoryMessage) {
     val isUser = msg.role == "user"
-    val bgColor = if (isUser)
-        MaterialTheme.colorScheme.primaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isUser)
-        MaterialTheme.colorScheme.onPrimaryContainer
-    else
-        MaterialTheme.colorScheme.onSurfaceVariant
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        Card(
+        Surface(
+            shape = RoundedCornerShape(HxRadius.md),
+            color = if (isUser) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            },
             modifier = Modifier.fillMaxWidth(0.9f),
-            colors = CardDefaults.cardColors(containerColor = bgColor),
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(HxSpace.md)) {
                 Text(
                     text = if (isUser) t("You", "شما") else "Hermes",
                     style = MaterialTheme.typography.labelSmall,
-                    color = textColor.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
                 Text(
                     text = msg.content,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = textColor,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
@@ -554,56 +533,42 @@ private fun HistoryMessageBubble(msg: HistoryMessage) {
     }
 }
 
-// ── Insights & active agents ────────────────────────────────────────────
+// ── Active agents ─────────────────────────────────────────────────────────
 
 @Composable
-private fun InsightsCard(insights: com.hermes.android.ui.viewmodel.InsightsData) {
-    Card(
+private fun ActiveAgentsCard(state: SessionsUiState) {
+    val agents = state.activeAgents
+    Surface(
+        shape = RoundedCornerShape(HxRadius.md),
+        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = t("Last ${insights.days} days", "${insights.days} روز اخیر"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = t(
-                    "${insights.sessions} sessions · ${insights.messages} messages",
-                    "${insights.sessions} گفتگو · ${insights.messages} پیام",
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActiveAgentsCard(agents: List<com.hermes.android.ui.viewmodel.AgentProcess>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = t("Active agents (${agents.size})", "ایجنت‌های فعال (${agents.size})"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+        Column(modifier = Modifier.padding(HxSpace.md)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(MaterialTheme.colorScheme.tertiary),
+                )
+                Text(
+                    text = t("Active agents (${agents.size})", "ایجنت‌های فعال (${agents.size})"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             agents.take(8).forEach { a ->
                 Text(
-                    text = "• ${a.command}  —  ${a.status}",
+                    text = "${a.command}  —  ${a.status}",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(top = 2.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
