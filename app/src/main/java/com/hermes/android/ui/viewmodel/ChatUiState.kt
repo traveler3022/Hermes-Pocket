@@ -101,6 +101,23 @@ data class NotificationUi(
 )
 
 /**
+ * A pending tool-approval request (`approval.request` event), rendered as a
+ * modal bottom sheet over the chat. The gateway blocks the turn until
+ * `approval.respond` is sent, so the sheet stays up until the user picks
+ * Deny / Allow once / Always allow.
+ */
+data class PendingApprovalUi(
+    val requestId: String,
+    val sessionId: String?,
+    val command: String,
+    val description: String,
+    val patternKeys: List<String> = emptyList(),
+    /** When false the "always allow" choice must not be offered
+     *  (mirrors upstream allow_permanent). */
+    val allowPermanent: Boolean = true,
+)
+
+/**
  * A conversation session.
  */
 data class SessionItem(
@@ -147,6 +164,8 @@ data class ChatUiState(
     val isAttaching: Boolean = false,
     // Agent's live task list for the current turn (empty = no plan to show)
     val activeTodos: List<TodoItemUi> = emptyList(),
+    // Tool-approval request awaiting the user's decision (modal sheet).
+    val pendingApproval: PendingApprovalUi? = null,
     // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
     // chat input bar, mirrors the same setting in Settings > General.
     val reasoningLevel: String = "medium",

@@ -172,6 +172,49 @@ internal fun ConnectionIndicator(state: ChatConnectionState) {
     }
 }
 
+/**
+ * Live agent activity, shown IN PLACE of [ConnectionIndicator] while a turn
+ * runs (user decision: the working state replaces the connection chip — no
+ * extra chrome in the already-busy chat top bar). Same card styling as
+ * [ConnectionIndicator] so the swap is seamless; a pulsing dot signals
+ * "alive" without animation-heavy noise.
+ */
+@Composable
+internal fun AgentWorkingIndicator(label: String) {
+    val transition = rememberInfiniteTransition(label = "agent_working")
+    val dotAlpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "agent_working_dot",
+    )
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha)),
+            )
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
 // ── Agent task list (todos from tool.start / tool.complete) ──────────────
 
 @Composable

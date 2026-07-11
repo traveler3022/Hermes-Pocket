@@ -383,6 +383,8 @@ class ChatViewModel @Inject constructor(
                     showSessionDrawer = false,
                     errorEvent = null,
                     sessionLoadedAt = System.currentTimeMillis(),
+                    activeTodos = emptyList(),
+                    pendingApproval = null,
                 ) }
                 if (history.isNotEmpty()) {
                     Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
@@ -1195,6 +1197,10 @@ class ChatViewModel @Inject constructor(
                         }
                     },
                     isSending = false,
+                    // Turn is over — drop the live plan so a stale list can't
+                    // reappear at the start of the next turn (the strip is
+                    // only visible while a turn is active anyway).
+                    activeTodos = emptyList(),
                 ) }
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
@@ -1299,7 +1305,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ApprovalRequest -> {
-                // Step 7: show approval notification + in-chat card
+                // Step 7: notification (for when the app is backgrounded) +
+                // modal approval sheet in the chat (pendingApproval). The
+                // transcript keeps a status line as the permanent record of
+                // the request.
                 val requestId = UUID.randomUUID().toString()
                 approvalNotificationManager.showApprovalRequest(
                     requestId = requestId,
@@ -1317,6 +1326,14 @@ class ChatViewModel @Inject constructor(
                 )
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages + statusMsg,
+                    pendingApproval = PendingApprovalUi(
+                        requestId = requestId,
+                        sessionId = event.sessionId,
+                        command = event.command,
+                        description = event.description,
+                        patternKeys = event.patternKeys,
+                        allowPermanent = event.allowPermanent,
+                    ),
                 ) }
             }
 
@@ -1678,6 +1695,8 @@ class ChatViewModel @Inject constructor(
                 messages = emptyList(),
                 showSessionDrawer = false,
                 activeSessionId = null,
+                activeTodos = emptyList(),
+                pendingApproval = null,
             ) }
             createSession()
         }
@@ -1688,6 +1707,37 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Interactive responds ──────────────────────────────────────────────
+
+    /**
+     * Answer the pending tool-approval request (the modal sheet). [choice]
+     * uses the canonical upstream values: "once" | "always" | "deny"
+     * (see `tools/approval.py` — same contract as the notification buttons
+     * in ApprovalActionReceiver). approval.respond is per-session: the
+     * gateway holds a single pending approval, so no request_id is sent.
+     */
+    fun respondToApproval(choice: String) {
+        val pending = _uiState.value.pendingApproval ?: return
+        _uiState.update { it.copy(pendingApproval = null) }
+        // The notification mirrors the same request — dismiss it so the user
+        // can't answer twice.
+        approvalNotificationManager.cancelApproval(pending.requestId)
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.APPROVAL_RESPOND,
+                    params = buildJsonObject {
+                        pending.sessionId?.let { sid -> put("session_id", sid) }
+                        put("choice", choice)
+                        put("all", false)
+                    },
+                )
+                Timber.i("[Chat] Approval response sent: $choice")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to respond to approval")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
+            }
+        }
+    }
 
     fun respondToClarify(requestId: String, answer: String) {
         viewModelScope.launch {
