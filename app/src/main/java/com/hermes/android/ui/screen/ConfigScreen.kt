@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -67,6 +68,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -281,103 +285,113 @@ private fun SettingsMenu(
             )
         }
 
-        // ── Domains ────────────────────────────────────────────────────────
-        com.hermes.android.ui.design.SectionHeader(t("Agent", "عامل"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Agent Behavior", "رفتار عامل"),
+        // ── Domain grid (mockup E's dgrid: 2-per-row tiles, live subtitles) ─
+        val tiles = listOf(
+            DomainSpec(
+                title = t("Models", "مدل‌ها"),
+                subtitle = state.activeModel?.let { model ->
+                    "${state.activeProvider ?: "?"} / $model"
+                } ?: t("Model, API keys, fallback", "مدل، کلید API، جایگزین"),
+                icon = Icons.Default.SwapHoriz,
+                onClick = { onOpen(SettingsSection.MODELS) },
+            ),
+            DomainSpec(
+                title = t("Behavior", "رفتار"),
                 subtitle = t(
-                    "Approval: ${state.approvalMode} · Reasoning: ${state.reasoning}",
+                    "Approval: ${state.approvalMode} · ${state.reasoning}",
                     "تأیید: ${approvalModeFa(state.approvalMode)} · تفکر: ${state.reasoning}",
                 ),
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.BEHAVIOR) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Models & Providers", "مدل‌ها و پرووایدرها"),
-                subtitle = state.activeModel?.let { model ->
-                    "${state.activeProvider ?: "?"} / $model"
-                } ?: t("Model switch, API keys, fallback", "تعویض مدل، کلید API، جایگزین"),
-                icon = Icons.Default.SwapHoriz,
-                onClick = { onOpen(SettingsSection.MODELS) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
+            ),
+            DomainSpec(
                 title = t("Memory", "حافظه"),
-                subtitle = t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
+                subtitle = t("USER.md · MEMORY.md", "USER.md · MEMORY.md"),
                 icon = Icons.Default.Psychology,
                 onClick = { onOpen(SettingsSection.MEMORY) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
+            ),
+            DomainSpec(
                 title = t("Tools", "ابزارها"),
                 subtitle = if (state.availableTools.isNotEmpty()) {
                     val enabled = state.availableTools.count { it.enabled }
                     t(
-                        "$enabled of ${state.availableTools.size} toolsets enabled",
+                        "$enabled of ${state.availableTools.size} toolsets on",
                         "$enabled از ${state.availableTools.size} گروه فعال",
                     )
                 } else {
-                    t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها")
+                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
                 },
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.TOOLS) },
-            )
-        }
-
-        com.hermes.android.ui.design.SectionHeader(t("Server", "سرور"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Messaging Platforms", "پیام‌رسان‌ها"),
-                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
-                icon = Icons.Default.Link,
-                onClick = onNavigateToPlatforms,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Advanced", "پیشرفته"),
-                subtitle = t("env, MCP servers, console, gateway log", "env، سرورهای MCP، کنسول، لاگ گیت‌وی"),
-                icon = Icons.Default.Terminal,
-                onClick = { onOpen(SettingsSection.ADVANCED) },
-            )
-        }
-
-        com.hermes.android.ui.design.SectionHeader(t("Extensions", "افزودنی‌ها"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Plugins Manager", "مدیر افزونه‌ها"),
-                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
-                icon = Icons.Default.AccountBalanceWallet,
-                onClick = onNavigateToPlugins,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
+            ),
+            DomainSpec(
                 title = t("Skills", "مهارت‌ها"),
                 subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToSkills,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Cron Scheduler", "زمان‌بندی"),
+            ),
+            DomainSpec(
+                title = t("Plugins", "افزونه‌ها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToPlugins,
+            ),
+            DomainSpec(
+                title = t("Scheduler", "زمان‌بندی"),
                 subtitle = t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
                 icon = Icons.Default.Schedule,
                 onClick = onNavigateToCron,
-            )
-        }
-
-        com.hermes.android.ui.design.SectionHeader(t("App", "برنامه"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Appearance & Language", "ظاهر و زبان"),
+            ),
+            DomainSpec(
+                title = t("Platforms", "پلتفرم‌ها"),
+                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
+                icon = Icons.Default.Link,
+                onClick = onNavigateToPlatforms,
+            ),
+            DomainSpec(
+                title = t("Advanced", "پیشرفته"),
+                subtitle = t("env · MCP · console · log", "env · MCP · کنسول · لاگ"),
+                icon = Icons.Default.Terminal,
+                onClick = { onOpen(SettingsSection.ADVANCED) },
+            ),
+            DomainSpec(
+                title = t("Appearance", "ظاهر"),
                 subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
                 icon = Icons.Default.Language,
                 onClick = { onOpen(SettingsSection.GENERAL) },
-            )
+            ),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            tiles.chunked(2).forEach { rowTiles ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowTiles.forEach { spec ->
+                        com.hermes.android.ui.design.DomainTile(
+                            title = spec.title,
+                            subtitle = spec.subtitle,
+                            icon = spec.icon,
+                            onClick = spec.onClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (rowTiles.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
         }
     }
 }
+
+/** One entry of the Control Center domain grid. */
+private data class DomainSpec(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+)
 
 /** Persian labels for approvals.mode values (hub subtitle). */
 private fun approvalModeFa(mode: String): String = when (mode) {
@@ -737,7 +751,7 @@ private fun GeneralTab(
  * approvals.mode / reasoning / display.personality via config.set,
  * SOUL.md via the verified shell.exec pattern.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BehaviorSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
@@ -763,20 +777,19 @@ private fun BehaviorSection(
                     text = t("Command Approval", "تأیید فرمان‌ها"),
                     style = MaterialTheme.typography.titleSmall,
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    listOf(
+                // Segmented control, one piece per mode — the mockup-G shape.
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val modes = listOf(
                         "manual" to t("Manual", "دستی"),
                         "smart" to t("Smart", "هوشمند"),
                         "off" to t("Off", "خاموش"),
-                    ).forEach { (mode, label) ->
-                        FilterChip(
+                    )
+                    modes.forEachIndexed { index, (mode, label) ->
+                        SegmentedButton(
                             selected = state.approvalMode == mode,
                             onClick = { viewModel.setApprovalMode(mode) },
-                            label = { Text(label) },
-                        )
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                        ) { Text(label, maxLines = 1) }
                     }
                 }
                 val approvalDescription = when (state.approvalMode) {
@@ -819,18 +832,55 @@ private fun BehaviorSection(
                     text = t("Reasoning depth", "عمق تفکر"),
                     style = MaterialTheme.typography.titleSmall,
                 )
-                FlowRow(
+                // 7-segment fill bar (mockup-G shape): tap a segment to set
+                // the level; segments up to the current level are filled.
+                val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+                val currentIdx = levels.indexOf(state.reasoning).let { if (it < 0) 3 else it }
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    listOf("none", "minimal", "low", "medium", "high", "xhigh", "max").forEach { level ->
-                        FilterChip(
-                            selected = state.reasoning == level,
-                            onClick = { viewModel.setReasoning(level) },
-                            label = { Text(level) },
-                        )
+                    levels.forEachIndexed { i, level ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.setReasoning(level) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (i <= currentIdx) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                            )
+                        }
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "none",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = state.reasoning,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "max",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Text(
                     text = t(
@@ -884,11 +934,8 @@ private fun BehaviorSection(
         }
 
         // ── SOUL.md — the agent's persistent identity (first slot of the
-        //    system prompt). ──
-        Text(
-            text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        //    system prompt). Mockup-G shape: header row with an Edit action,
+        //    a monospace preview when collapsed, the editor when editing. ──
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -897,6 +944,20 @@ private fun BehaviorSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                var editingSoul by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("SOUL.md — persistent identity", "SOUL.md — هویت پایدار عامل"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingSoul = !editingSoul }) {
+                        Text(if (editingSoul) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t(
                         "The agent's persistent voice & identity — first part of its system prompt",
@@ -905,28 +966,39 @@ private fun BehaviorSection(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
-                if (state.isLoadingSoul) {
-                    CircularProgressIndicator(
+                when {
+                    state.isLoadingSoul -> CircularProgressIndicator(
                         modifier = Modifier.padding(12.dp).size(20.dp),
                         strokeWidth = 2.dp,
                     )
-                } else {
-                    var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
-                    OutlinedTextField(
-                        value = soulText,
-                        onValueChange = { soulText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
-                        minLines = 4,
-                    )
-                    if (soulText != state.soulMd) {
-                        TextButton(
-                            onClick = { viewModel.saveSoul(soulText) },
-                            modifier = Modifier.align(Alignment.End),
-                        ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                    editingSoul -> {
+                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                        OutlinedTextField(
+                            value = soulText,
+                            onValueChange = { soulText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                            minLines = 4,
+                        )
+                        if (soulText != state.soulMd) {
+                            TextButton(
+                                onClick = { viewModel.saveSoul(soulText) },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        }
                     }
+                    else -> Text(
+                        text = state.soulMd.ifBlank { t("(empty — tap Edit)", "(خالی — روی ویرایش بزنید)") },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -950,13 +1022,10 @@ private fun AdvancedSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // ── Environment variables (~/.hermes/.env) — editable, not just a
-        //    reload-from-disk button that had nothing to actually change
-        //    what's on disk. ──
-        Text(
-            text = t("Environment Variables", "متغیرهای محیطی"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        // ── Environment variables (~/.hermes/.env) — mockup-I shape: a
+        //    compact card with an Edit action; the editor and its warning
+        //    only unfold when asked for. ──
+        var editingEnv by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -965,11 +1034,25 @@ private fun AdvancedSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("Environment Variables (.env)", "متغیرهای محیطی (.env)"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingEnv = !editingEnv }) {
+                        Text(if (editingEnv) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t("~/.hermes/.env — API keys and other env vars", "~/.hermes/.env — کلیدهای API و سایر متغیرها"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                if (editingEnv) {
                 // Explicit, unmissable warning — this file is raw shell-
                 // sourced key=value config read directly into the agent
                 // process; a bad edit here can break the agent's startup or
@@ -1022,14 +1105,12 @@ private fun AdvancedSection(
                         }
                     }
                 }
+                }
             }
         }
 
-        // ── MCP servers (config.yaml: mcp_servers) — same idea. ──
-        Text(
-            text = t("MCP Servers", "سرورهای MCP"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        // ── MCP servers (config.yaml: mcp_servers) — same collapsed shape. ──
+        var editingMcp by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -1038,11 +1119,25 @@ private fun AdvancedSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("MCP Servers", "سرورهای MCP"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingMcp = !editingMcp }) {
+                        Text(if (editingMcp) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t("Raw JSON — config.yaml's mcp_servers section", "JSON خام — بخش mcp_servers فایل config.yaml"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                if (editingMcp) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1090,6 +1185,7 @@ private fun AdvancedSection(
                             ) { Text(t("Save", "ذخیره")) }
                         }
                     }
+                }
                 }
             }
         }

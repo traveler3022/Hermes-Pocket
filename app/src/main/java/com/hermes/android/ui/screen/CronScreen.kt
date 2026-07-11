@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,12 +85,15 @@ fun CronScreen(
             )
         },
         onBack = onNavigateBack,
-        actions = {
-            IconButton(onClick = { viewModel.showCreateDialog() }) {
-                Icon(Icons.Default.Add, contentDescription = t("Add job", "افزودن کار"))
-            }
-        },
         snackbarHostState = snackbarHostState,
+        floatingActionButton = {
+            // Mockup-H shape: the create action is a FAB, not a top-bar icon.
+            ExtendedFloatingActionButton(
+                onClick = { viewModel.showCreateDialog() },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text(t("New job", "کار جدید")) },
+            )
+        },
     ) { padding ->
         when {
             uiState.isLoading -> Column(

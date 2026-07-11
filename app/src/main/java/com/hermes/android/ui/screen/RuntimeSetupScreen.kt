@@ -173,18 +173,19 @@ fun RuntimeSetupScreen(
                     textAlign = TextAlign.Center,
                 )
 
-                ConnectionStatusCard(
-                    connection = connection,
-                    serverUrl = serverConfig.serverUrl,
-                    onReconnect = { viewModel.startGateway() },
-                )
-
                 ServerConfigCard(
                     initialUrl = serverConfig.serverUrl,
                     initialToken = serverConfig.token,
                     onSaveAndConnect = { url, token ->
                         viewModel.saveServerConfigAndConnect(url, token)
                     },
+                )
+
+                // Mockup-A shape: the live state sits as a centered chip
+                // right under the Save & Connect button.
+                ConnectionStatusBlock(
+                    connection = connection,
+                    onReconnect = { viewModel.startGateway() },
                 )
 
                 OutlinedButton(
@@ -480,15 +481,14 @@ private fun ServerConfigCard(
 }
 
 /**
- * Live connection state machine (design A, callout ۳): dot-chip with the
- * current state, the configured host (never the token), and the REAL cause
- * on failure — timeout / rejected token / TLS — straight from the gateway's
- * ConnectionState, plus the reconnect attempt counter during backoff.
+ * Live connection state (mockup-A shape): a centered dot-chip under the
+ * Save & Connect button, with the REAL failure cause — timeout / rejected
+ * token / TLS — straight from the gateway's ConnectionState, plus the
+ * reconnect attempt counter during backoff.
  */
 @Composable
-private fun ConnectionStatusCard(
+private fun ConnectionStatusBlock(
     connection: GatewayConnectionUi,
-    serverUrl: String,
     onReconnect: () -> Unit,
 ) {
     val (color, label) = when (connection.state) {
@@ -503,63 +503,35 @@ private fun ConnectionStatusCard(
         ChatConnectionState.Disconnected ->
             MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
     }
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        StatusChip(label = label, color = color)
+        connection.detail?.let { detail ->
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = if (connection.state == ChatConnectionState.Failed) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        connection.reconnectAttempt?.let { attempt ->
+            Text(
+                text = t("Attempt $attempt", "تلاش $attempt"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (connection.state == ChatConnectionState.Failed ||
+            connection.state == ChatConnectionState.Disconnected
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusChip(label = label, color = color)
-                if (connection.state == ChatConnectionState.Connected ||
-                    connection.state == ChatConnectionState.Failed ||
-                    connection.state == ChatConnectionState.Disconnected
-                ) {
-                    TextButton(onClick = onReconnect) {
-                        Text(
-                            if (connection.state == ChatConnectionState.Connected) {
-                                t("Reconnect", "اتصال دوباره")
-                            } else {
-                                t("Connect", "اتصال")
-                            },
-                        )
-                    }
-                }
-            }
-            if (serverUrl.isNotBlank()) {
-                Text(
-                    text = serverUrl,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        textDirection = TextDirection.Ltr,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            connection.detail?.let { detail ->
-                Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (connection.state == ChatConnectionState.Failed) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            connection.reconnectAttempt?.let { attempt ->
-                Text(
-                    text = t("Attempt $attempt", "تلاش $attempt"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            TextButton(onClick = onReconnect) {
+                Text(t("Try again", "تلاش دوباره"))
             }
         }
     }
