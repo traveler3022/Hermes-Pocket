@@ -189,7 +189,8 @@ class RemoteRuntime @Inject constructor(
         if (!config.isComplete) {
             return "Server connection not configured. Enter the server address and token in Runtime Setup."
         }
-        val url = settings.webSocketUrl() ?: return Result.failure(Exception("WebSocket URL not configured"))
+        val url = settings.webSocketUrl()
+            ?: return "Server connection not configured. Enter the server address and token in Runtime Setup."
         return try {
             val state = gatewayClient.connect(url = url, connectTimeoutMs = CONNECT_TIMEOUT_MS)
             if (state is ConnectionState.Connected) {

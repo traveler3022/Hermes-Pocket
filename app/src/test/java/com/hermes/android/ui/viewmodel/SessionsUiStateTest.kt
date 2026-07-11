@@ -55,7 +55,7 @@ class SessionsUiStateTest {
 
     @Test
     fun `AgentProcess fields`() {
-        val agent = AgentProcess(sessionId = "s1", command = "run", status = "running")
+        val agent = AgentProcess(sessionId = "s1", command = "run", status = "running", uptimeSeconds = 42L)
         assertEquals("s1", agent.sessionId)
         assertEquals("running", agent.status)
     }

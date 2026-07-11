@@ -14,10 +14,12 @@ class ContentBlocksExtendedTest {
     }
 
     @Test
-    fun `whitespace only produces single text block`() {
+    fun `whitespace only produces no blocks`() {
+        // parseContentBlocks treats blank input like empty input — there is
+        // nothing to render, so no block is emitted (consistent with the
+        // empty-string case above).
         val blocks = parseContentBlocks("   ")
-        assertEquals(1, blocks.size)
-        assertTrue(blocks[0] is ContentBlock.Text)
+        assertTrue(blocks.isEmpty())
     }
 
     @Test
@@ -36,7 +38,7 @@ class ContentBlocksExtendedTest {
         assertEquals(1, blocks.size)
         assertTrue(blocks[0] is ContentBlock.Image)
         val img = blocks[0] as ContentBlock.Image
-        assertEquals("/path/no-alt.png", img.path)
+        assertEquals("/path/no-alt.png", img.url)
     }
 
     @Test
@@ -44,7 +46,7 @@ class ContentBlocksExtendedTest {
         val blocks = parseContentBlocks("Just plain text here")
         assertEquals(1, blocks.size)
         val text = blocks[0] as ContentBlock.Text
-        assertEquals("Just plain text here", text.text)
+        assertEquals("Just plain text here", text.markdown)
     }
 
     @Test

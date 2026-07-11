@@ -180,9 +180,7 @@ private fun parseMarkdownBlocks(md: String): List<MdBlock> {
                 out.add(MdBlock.Code(sb.toString().trimEnd('\n'))); i++
             }
             headingRe.matches(t) -> {
-                flush()
-                val m = headingRe.find(t) ?: return
-                out.add(MdBlock.Heading(m.groupValues[1].length, m.groupValues[2])); i++
+                val m = headingRe.find(t); if (m != null) { flush(); out.add(MdBlock.Heading(m.groupValues[1].length, m.groupValues[2])); }; i++
             }
             t.startsWith(">") -> {
                 flush(); out.add(MdBlock.Quote(t.removePrefix(">").trim())); i++
@@ -191,9 +189,7 @@ private fun parseMarkdownBlocks(md: String): List<MdBlock> {
                 val bm = bulletRe.find(t); if (bm != null) { flush(); out.add(MdBlock.ListItem("•", bm.groupValues[1])); }; i++
             }
             numberRe.matches(t) -> {
-                flush()
-                val m = numberRe.find(t) ?: return
-                out.add(MdBlock.ListItem("${m.groupValues[1]}.", m.groupValues[2])); i++
+                val m = numberRe.find(t); if (m != null) { flush(); out.add(MdBlock.ListItem("${m.groupValues[1]}.", m.groupValues[2])); }; i++
             }
             t.isBlank() -> { flush(); i++ }
             else -> { if (para.isNotEmpty()) para.append('\n'); para.append(line); i++ }
