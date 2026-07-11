@@ -138,20 +138,11 @@ fun ConfigScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(section?.let { t(it.titleEn, it.titleFa) } ?: t("Settings", "تنظیمات"))
-                },
-                navigationIcon = {
-                    IconButton(onClick = { if (section != null) section = null else onNavigateBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    com.hermes.android.ui.design.HermesScaffold(
+        title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Settings", "تنظیمات"),
+        subtitle = if (section == null) t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه") else null,
+        onBack = { if (section != null) section = null else onNavigateBack() },
+        snackbarHostState = snackbarHostState,
     ) { padding ->
         Box(
             modifier = Modifier
@@ -202,97 +193,86 @@ private fun SettingsMenu(
     onNavigateToSkills: () -> Unit,
     onNavigateToCron: () -> Unit,
 ) {
+    // Grouped by what the user is configuring: the agent itself, the server
+    // it runs on, and the extensions around it — instead of one flat list
+    // where "Theme" and "Cron jobs" sat visually equal.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp),
+            .padding(bottom = 24.dp),
     ) {
-        SettingsMenuRow(
-            Icons.Default.Language,
-            t("General", "عمومی"),
-            t("Appearance, language, backend, raw config", "ظاهر، زبان، بک‌اند، پیکربندی خام"),
-        ) { onOpen(SettingsSection.GENERAL) }
-        SettingsMenuRow(
-            Icons.Default.Psychology,
-            t("Memory", "حافظه"),
-            t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
-        ) { onOpen(SettingsSection.MEMORY) }
-        SettingsMenuRow(
-            Icons.Default.SwapHoriz,
-            t("Models & Providers", "مدل‌ها و پرووایدرها"),
-            t("Model switch, API keys, credits", "تعویض مدل، کلید API، اعتبار"),
-        ) { onOpen(SettingsSection.MODELS) }
-        SettingsMenuRow(
-            Icons.Default.Security,
-            t("Tools", "ابزارها"),
-            t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها"),
-        ) { onOpen(SettingsSection.TOOLS) }
-
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-
-        SettingsMenuRow(
-            Icons.Default.Dns,
-            t("Server & Connection", "سرور و اتصال"),
-            t("Remote server address and token", "آدرس و توکن سرور"),
-        ) { onNavigateToRuntime() }
-        SettingsMenuRow(
-            Icons.Default.Link,
-            t("Messaging Platforms", "پیام‌رسان‌ها"),
-            t("Telegram, WhatsApp, …", "تلگرام، واتساپ، …"),
-        ) { onNavigateToPlatforms() }
-        SettingsMenuRow(
-            Icons.Default.AccountBalanceWallet,
-            t("Plugins Manager", "مدیر افزونه‌ها"),
-            t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
-        ) { onNavigateToPlugins() }
-        SettingsMenuRow(
-            Icons.Default.Star,
-            t("Skills", "مهارت‌ها"),
-            t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
-        ) { onNavigateToSkills() }
-        SettingsMenuRow(
-            Icons.Default.Schedule,
-            t("Cron Scheduler", "زمان‌بندی"),
-            t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
-        ) { onNavigateToCron() }
-    }
-}
-
-@Composable
-private fun SettingsMenuRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        com.hermes.android.ui.design.SectionHeader(t("Agent", "ایجنت"))
+        com.hermes.android.ui.design.SettingsGroup {
+            com.hermes.android.ui.design.SettingRow(
+                title = t("General", "عمومی"),
+                subtitle = t("Appearance, language, backend, raw config", "ظاهر، زبان، بک‌اند، پیکربندی خام"),
+                icon = Icons.Default.Language,
+                onClick = { onOpen(SettingsSection.GENERAL) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Memory", "حافظه"),
+                subtitle = t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
+                icon = Icons.Default.Psychology,
+                onClick = { onOpen(SettingsSection.MEMORY) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Models & Providers", "مدل‌ها و پرووایدرها"),
+                subtitle = t("Model switch, API keys, credits", "تعویض مدل، کلید API، اعتبار"),
+                icon = Icons.Default.SwapHoriz,
+                onClick = { onOpen(SettingsSection.MODELS) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Tools", "ابزارها"),
+                subtitle = t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها"),
+                icon = Icons.Default.Security,
+                onClick = { onOpen(SettingsSection.TOOLS) },
             )
         }
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
-        )
+
+        com.hermes.android.ui.design.SectionHeader(t("Server", "سرور"))
+        com.hermes.android.ui.design.SettingsGroup {
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Server & Connection", "سرور و اتصال"),
+                subtitle = t("Remote server address and token", "آدرس و توکن سرور"),
+                icon = Icons.Default.Dns,
+                onClick = onNavigateToRuntime,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Messaging Platforms", "پیام‌رسان‌ها"),
+                subtitle = t("Telegram, WhatsApp, …", "تلگرام، واتساپ، …"),
+                icon = Icons.Default.Link,
+                onClick = onNavigateToPlatforms,
+            )
+        }
+
+        com.hermes.android.ui.design.SectionHeader(t("Extensions", "افزودنی‌ها"))
+        com.hermes.android.ui.design.SettingsGroup {
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Plugins Manager", "مدیر افزونه‌ها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+                icon = Icons.Default.AccountBalanceWallet,
+                onClick = onNavigateToPlugins,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Skills", "مهارت‌ها"),
+                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
+                icon = Icons.Default.Star,
+                onClick = onNavigateToSkills,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.SettingRow(
+                title = t("Cron Scheduler", "زمان‌بندی"),
+                subtitle = t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
+                icon = Icons.Default.Schedule,
+                onClick = onNavigateToCron,
+            )
+        }
     }
 }
 
