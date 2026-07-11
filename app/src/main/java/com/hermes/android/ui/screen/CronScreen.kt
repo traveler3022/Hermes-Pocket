@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -19,6 +21,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,12 +85,15 @@ fun CronScreen(
             )
         },
         onBack = onNavigateBack,
-        actions = {
-            IconButton(onClick = { viewModel.showCreateDialog() }) {
-                Icon(Icons.Default.Add, contentDescription = t("Add job", "افزودن کار"))
-            }
-        },
         snackbarHostState = snackbarHostState,
+        floatingActionButton = {
+            // Mockup-H shape: the create action is a FAB, not a top-bar icon.
+            ExtendedFloatingActionButton(
+                onClick = { viewModel.showCreateDialog() },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text(t("New job", "کار جدید")) },
+            )
+        },
     ) { padding ->
         when {
             uiState.isLoading -> Column(
@@ -163,10 +170,16 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // Cron expressions are write-only for most people — show
+                    // the schedule in words first, raw expression next to it
+                    // (approved design H).
+                    val human = humanizeCron(job.schedule)
                     Text(
-                        text = job.schedule,
+                        text = if (human != null) "${job.schedule} — $human" else job.schedule,
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
@@ -197,6 +210,19 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                     color = if (job.enabled) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Last run result — failures must be visible at a glance
+                // (approved design H); the field was fetched but never shown.
+                job.lastStatus?.takeIf { it.isNotBlank() }?.let { status ->
+                    val failed = status.lowercase().let {
+                        it.contains("error") || it.contains("fail")
+                    }
+                    StatusChip(
+                        label = if (failed) t("last: failed", "آخرین: خطا")
+                            else t("last: ok", "آخرین: موفق"),
+                        color = if (failed) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.primary,
+                    )
+                }
                 job.nextRunAt?.let {
                     Text(
                         text = t("next: $it", "بعدی: $it"),
@@ -229,6 +255,38 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
     }
 }
 
+/**
+ * Best-effort plain-language rendering of the common cron shapes — hourly,
+ * every-N-minutes, daily, weekdays, weekly. Anything fancier returns null
+ * and the raw expression stands alone.
+ */
+@Composable
+private fun humanizeCron(schedule: String): String? {
+    val parts = schedule.trim().split(Regex("\\s+"))
+    if (parts.size != 5) return null
+    val (min, hour, dom, month, dow) = parts
+    fun clock(): String? {
+        val h = hour.toIntOrNull() ?: return null
+        val m = min.toIntOrNull() ?: return null
+        return "%02d:%02d".format(h, m)
+    }
+    return when {
+        min.startsWith("*/") && hour == "*" && dom == "*" && month == "*" && dow == "*" ->
+            min.removePrefix("*/").toIntOrNull()?.let { n ->
+                t("every $n min", "هر $n دقیقه")
+            }
+        min.toIntOrNull() != null && hour == "*" && dom == "*" && month == "*" && dow == "*" ->
+            t("hourly", "هر ساعت")
+        dom == "*" && month == "*" && dow == "*" ->
+            clock()?.let { t("daily at $it", "هر روز $it") }
+        dom == "*" && month == "*" && dow == "1-5" ->
+            clock()?.let { t("weekdays at $it", "روزهای کاری $it") }
+        dom == "*" && month == "*" && dow.toIntOrNull() != null ->
+            clock()?.let { t("weekly at $it", "هفتگی $it") }
+        else -> null
+    }
+}
+
 /** Handles both create (existingJob = null) and edit (pre-filled; edit is a
  *  remove+add under the hood since cron.manage has no update verb, but the
  *  user just sees one form either way). */
@@ -258,6 +316,34 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     singleLine = true,
                     placeholder = { Text("0 9 * * *") },
                 )
+                // Common schedules one tap away (approved design H) — the
+                // field stays editable for anything the presets don't cover.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    listOf(
+                        t("hourly", "هر ساعت") to "0 * * * *",
+                        t("daily 9:00", "روزانه ۹") to "0 9 * * *",
+                        t("weekdays 7:00", "روزهای کاری ۷") to "0 7 * * 1-5",
+                        t("weekly", "هفتگی") to "0 9 * * 1",
+                    ).forEach { (label, expr) ->
+                        FilterChip(
+                            selected = schedule == expr,
+                            onClick = { schedule = expr },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                        )
+                    }
+                }
+                humanizeCron(schedule)?.let { human ->
+                    Text(
+                        text = human,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = { prompt = it },

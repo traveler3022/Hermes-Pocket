@@ -215,6 +215,25 @@ fun ChatScreen(
         }
     }
 
+    // What the agent is doing right now (null = idle). Derived, not stored —
+    // the running tool cards / streaming flags already carry the state.
+    // Shown in the connection-status slot of the top bar while a turn runs
+    // (user decision: working state replaces the connection chip, no extra
+    // chrome), and reused to gate the live plan (todo) strip so it only
+    // appears while the plan is actually being executed.
+    val isToolRunning = uiState.messages.any { it is ChatMessage.ToolCall && it.isRunning }
+    val streamingAssistant =
+        uiState.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
+    val agentActivity: String? = when {
+        uiState.connectionState != ChatConnectionState.Connected -> null
+        isToolRunning -> t("Running tool…", "در حال اجرای ابزار…")
+        streamingAssistant?.isStreaming == true && streamingAssistant.text.isNotBlank() ->
+            t("Writing…", "در حال نوشتن…")
+        streamingAssistant?.isStreaming == true || uiState.isSending ->
+            t("Thinking…", "در حال فکر کردن…")
+        else -> null
+    }
+
     // Keep drawer state in sync with ViewModel state.
     LaunchedEffect(uiState.showSessionDrawer) {
         if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
@@ -605,7 +624,11 @@ fun ChatScreen(
                                     }
                                 }
                                 Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
-                                    ConnectionIndicator(uiState.connectionState)
+                                    if (agentActivity != null) {
+                                        AgentWorkingIndicator(agentActivity)
+                                    } else {
+                                        ConnectionIndicator(uiState.connectionState)
+                                    }
                                 }
                             }
                         },
@@ -754,9 +777,6 @@ fun ChatScreen(
                                         assistantName = uiState.assistantName,
                                         avatarUri = uiState.assistantAvatarPath,
                                         modifier = Modifier.fillParentMaxSize(),
-                                        onPromptClick = { prompt ->
-                                            viewModel.updateInputText(prompt)
-                                        },
                                     )
                                 }
                             }
@@ -864,8 +884,11 @@ fun ChatScreen(
                 }
 
                 // Agent's live task list for the current turn (todos from
-                // tool.start / tool.complete), pinned above the input bar
-                if (uiState.activeTodos.isNotEmpty()) {
+                // tool.start / tool.complete), pinned above the input bar.
+                // Only while the turn is actually running (agentActivity !=
+                // null) — user decision: the plan is execution feedback, not
+                // permanent furniture, and the chat must stay uncluttered.
+                if (uiState.activeTodos.isNotEmpty() && agentActivity != null) {
                     AgentTodoCard(todos = uiState.activeTodos)
                 }
 
@@ -947,6 +970,16 @@ fun ChatScreen(
         }
     }
 
+    // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
+    // level so it overlays the whole screen; see ChatApprovalSheet.kt for
+    // why it can't be swiped away.
+    uiState.pendingApproval?.let { approval ->
+        ApprovalSheet(
+            approval = approval,
+            onRespond = viewModel::respondToApproval,
+        )
+    }
+
     // Rename dialog — client-side display name only (top bar / drawer header).
     if (showRenameAssistantDialog) {
         var nameInput by remember(uiState.assistantName) { mutableStateOf(uiState.assistantName) }
@@ -980,24 +1013,16 @@ fun ChatScreen(
 
 
 /**
- * Welcoming zero-state for a fresh conversation: the assistant's identity
- * up top and a short column of tappable starter prompts that prefill the
- * composer (prefill, not auto-send — the user stays in control of what
- * actually goes to the agent).
+ * Welcoming zero-state for a fresh conversation: just the assistant's
+ * identity. (The tappable starter prompts that used to sit below it were
+ * removed on user request — a fresh session should open clean.)
  */
 @Composable
 private fun EmptyChatHero(
     assistantName: String,
     avatarUri: String?,
-    onPromptClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val starterPrompts = listOf(
-        t("Check my server status", "وضعیت سرورم رو چک کن"),
-        t("Analyze the recent logs", "لاگ‌های اخیر رو تحلیل کن"),
-        t("Write a backup script", "یه اسکریپت بکاپ بنویس"),
-        t("What can you do?", "چه کارهایی بلدی؟"),
-    )
     Column(
         modifier = modifier.padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1040,23 +1065,5 @@ private fun EmptyChatHero(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(28.dp))
-        starterPrompts.forEach { prompt ->
-            Surface(
-                onClick = { onPromptClick(prompt) },
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                Text(
-                    text = prompt,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                )
-            }
-        }
     }
 }

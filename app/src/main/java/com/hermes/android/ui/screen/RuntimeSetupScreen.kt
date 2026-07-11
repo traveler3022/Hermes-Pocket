@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,7 +39,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -53,14 +56,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.service.HermesGatewayService
+import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.ChatConnectionState
+import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
 import com.hermes.android.ui.viewmodel.InstallProgressUi
 import com.hermes.android.ui.viewmodel.RuntimeEffect
@@ -139,24 +147,32 @@ fun RuntimeSetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "Hermes",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = if (isRemote) {
-                    "Connect to your Hermes server"
-                } else {
-                    "Termux & Hermes Agent Gateway Connection"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             if (isRemote) {
+                // ── Remote server flow (design A) ─────────────────────────
+                // The live gateway connection state drives everything here;
+                // RuntimeUiState only matters for the legacy Termux flow.
+                val connection by viewModel.connectionState.collectAsStateWithLifecycle()
+
+                Text(
+                    text = "⬡",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = t("Connect to your Hermes server", "اتصال به سرور هرمس"),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = t(
+                        "The agent lives on your server — this app is just the key to it.",
+                        "عامل روی سرور شماست؛ این اپ فقط کلید آن است.",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+
                 ServerConfigCard(
                     initialUrl = serverConfig.serverUrl,
                     initialToken = serverConfig.token,
@@ -164,38 +180,68 @@ fun RuntimeSetupScreen(
                         viewModel.saveServerConfigAndConnect(url, token)
                     },
                 )
-            }
 
-            when (val state = uiState) {
-                is RuntimeUiState.NotDetected -> {
-                    if (isRemote) {
-                        Text(
-                            text = "Enter your server address and token above, then tap Save & Connect.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Mockup-A shape: the live state sits as a centered chip
+                // right under the Save & Connect button.
+                ConnectionStatusBlock(
+                    connection = connection,
+                    onReconnect = { viewModel.startGateway() },
+                )
+
+                OutlinedButton(
+                    onClick = { viewModel.runDoctor() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(t("Test connection", "آزمایش اتصال"))
+                }
+
+                TextButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://github.com/NousResearch/hermes_agent"),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                         )
-                    } else {
+                    },
+                ) {
+                    Icon(
+                        Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(t("Server setup guide", "راهنمای راه‌اندازی سرور"))
+                }
+            } else {
+                // ── Legacy Termux flow (unchanged) ─────────────────────────
+                Text(
+                    text = "Hermes",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Termux & Hermes Agent Gateway Connection",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when (val state = uiState) {
+                    is RuntimeUiState.NotDetected -> {
                         Text("Detecting runtime...", style = MaterialTheme.typography.bodyLarge)
                         CircularProgressIndicator()
                     }
-                }
 
-                is RuntimeUiState.Detecting -> {
-                    Text(
-                        if (isRemote) "Checking server connection..." else "Detecting runtime...",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    CircularProgressIndicator()
-                }
+                    is RuntimeUiState.Detecting -> {
+                        Text("Detecting runtime...", style = MaterialTheme.typography.bodyLarge)
+                        CircularProgressIndicator()
+                    }
 
-                is RuntimeUiState.Detected -> {
-                    if (isRemote) {
-                        RemoteConfiguredContent(
-                            serverUrl = serverConfig.serverUrl,
-                            onConnect = { viewModel.startGateway() },
-                        )
-                    } else {
+                    is RuntimeUiState.Detected -> {
                         DetectedContent(
                             version = state.version,
                             diskFreeBytes = state.diskFreeBytes,
@@ -205,73 +251,64 @@ fun RuntimeSetupScreen(
                             onStartGateway = { viewModel.startGateway() },
                         )
                     }
-                }
 
-                is RuntimeUiState.Installing -> {
-                    InstallingContent(
-                        progress = installProgress,
-                    )
-                }
-
-                is RuntimeUiState.Installed -> {
-                    if (isRemote) {
-                        RemoteConfiguredContent(
-                            serverUrl = serverConfig.serverUrl,
-                            onConnect = { viewModel.startGateway() },
+                    is RuntimeUiState.Installing -> {
+                        InstallingContent(
+                            progress = installProgress,
                         )
-                    } else {
+                    }
+
+                    is RuntimeUiState.Installed -> {
                         InstalledContent(
                             hermesVersion = state.hermesVersion,
                             onStartGateway = { viewModel.startGateway() },
                         )
                     }
-                }
 
-                is RuntimeUiState.Running -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                    is RuntimeUiState.Running -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            ),
                         ) {
-                            Text(
-                                if (isRemote) "Connected to server 🎉" else "Gateway is running 🎉",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                // Never render the token on screen.
-                                text = state.webSocketUrl.substringBefore("?token="),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { viewModel.startGateway() },
-                                modifier = Modifier.fillMaxWidth(),
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Text(if (isRemote) "Reconnect" else "Restart Agent Gateway")
+                                Text(
+                                    "Gateway is running 🎉",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                                Text(
+                                    // Never render the token on screen.
+                                    text = state.webSocketUrl.substringBefore("?token="),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { viewModel.startGateway() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Restart Agent Gateway")
+                                }
                             }
                         }
                     }
+
+                    is RuntimeUiState.Error -> {
+                        ErrorContent(
+                            message = state.message,
+                            onRetry = { viewModel.detect() },
+                            onFetchLogs = { viewModel.fetchLogs() },
+                        )
+                    }
                 }
 
-                is RuntimeUiState.Error -> {
-                    ErrorContent(
-                        message = state.message,
-                        onRetry = { viewModel.detect() },
-                        onFetchLogs = { viewModel.fetchLogs() },
-                    )
-                }
-            }
-
-            if (!isRemote) {
                 Button(
                     onClick = { viewModel.fetchLogs() },
                     modifier = Modifier.fillMaxWidth(),
@@ -280,15 +317,15 @@ fun RuntimeSetupScreen(
                     Spacer(modifier = Modifier.size(8.dp))
                     Text("Fetch & View Logs")
                 }
-            }
 
-            OutlinedButton(
-                onClick = { viewModel.runDoctor() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.Description, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(if (isRemote) "Test connection" else "Run diagnostics (hermes doctor)")
+                OutlinedButton(
+                    onClick = { viewModel.runDoctor() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Run diagnostics (hermes doctor)")
+                }
             }
 
             AnimatedVisibility(visible = logs != null) {
@@ -443,39 +480,58 @@ private fun ServerConfigCard(
     }
 }
 
-/** Shown when the remote server is configured but not yet connected. */
+/**
+ * Live connection state (mockup-A shape): a centered dot-chip under the
+ * Save & Connect button, with the REAL failure cause — timeout / rejected
+ * token / TLS — straight from the gateway's ConnectionState, plus the
+ * reconnect attempt counter during backoff.
+ */
 @Composable
-private fun RemoteConfiguredContent(
-    serverUrl: String,
-    onConnect: () -> Unit,
+private fun ConnectionStatusBlock(
+    connection: GatewayConnectionUi,
+    onReconnect: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+    val (color, label) = when (connection.state) {
+        ChatConnectionState.Connected ->
+            MaterialTheme.colorScheme.primary to t("Connected — gateway ready", "متصل — گیت‌وی آماده است")
+        ChatConnectionState.Connecting ->
+            MaterialTheme.colorScheme.tertiary to t("Connecting…", "در حال اتصال…")
+        ChatConnectionState.Reconnecting ->
+            MaterialTheme.colorScheme.tertiary to t("Reconnecting…", "در حال اتصال دوباره…")
+        ChatConnectionState.Failed ->
+            MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
+        ChatConnectionState.Disconnected ->
+            MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        StatusChip(label = label, color = color)
+        connection.detail?.let { detail ->
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = if (connection.state == ChatConnectionState.Failed) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        connection.reconnectAttempt?.let { attempt ->
+            Text(
+                text = t("Attempt $attempt", "تلاش $attempt"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (connection.state == ChatConnectionState.Failed ||
+            connection.state == ChatConnectionState.Disconnected
         ) {
-            Text(
-                text = "Server configured ✓",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Text(
-                text = serverUrl,
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Button(
-                onClick = onConnect,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Connect")
+            TextButton(onClick = onReconnect) {
+                Text(t("Try again", "تلاش دوباره"))
             }
         }
     }

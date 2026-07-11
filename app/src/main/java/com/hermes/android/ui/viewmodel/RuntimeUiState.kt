@@ -59,3 +59,15 @@ data class InstallInstructionsUi(
     val steps: List<String>,
     val command: String?,
 )
+
+/**
+ * Live gateway connection state for the Server Connection screen's status
+ * chip. Wraps [ChatConnectionState] with the human-readable detail (failure
+ * reason, reconnect attempt) the gateway reports, so the screen can show
+ * real causes ("token rejected", "timeout") instead of a generic error.
+ */
+data class GatewayConnectionUi(
+    val state: ChatConnectionState,
+    val detail: String? = null,
+    val reconnectAttempt: Int? = null,
+)
