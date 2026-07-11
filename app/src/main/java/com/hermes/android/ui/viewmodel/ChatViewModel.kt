@@ -74,6 +74,7 @@ class ChatViewModel @Inject constructor(
     private var connectionWatchJob: Job? = null
     private var activeAssistantMessageId: String? = null
     private val streamingBuffer = StringBuilder()
+    private val reasoningBuffer = StringBuilder()
     private var streamingFlushJob: Job? = null
 
     // Feature #23: SharedPreferences for draft persistence
@@ -908,8 +909,16 @@ class ChatViewModel @Inject constructor(
         val sessionId = _uiState.value.activeSessionId ?: return
         // Make the UI stop spinning immediately. The backend interrupt is
         // cooperative and can take a moment if a tool/model call is in-flight.
+        //
+        // The streaming assistant message must be finalized here too — the
+        // server doesn't reliably send message.complete for an interrupted
+        // turn, so without this the bubble stays isStreaming=true forever:
+        // typing dots never stop, and the streaming spacer at the end of the
+        // list keeps a permanent blank gap. finalizeOrphanedStreamingMessage
+        // needs activeAssistantMessageId, so it runs before the null-out.
+        finalizeOrphanedStreamingMessage(marker = "(stopped)")
         _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateFirst({ msg ->
+            messages = _uiState.value.messages.updateAll({ msg ->
                 msg is ChatMessage.ToolCall && msg.isRunning
             }) { msg ->
                 (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
@@ -1016,9 +1025,17 @@ class ChatViewModel @Inject constructor(
         val sessionId = _uiState.value.activeSessionId ?: return
         if (_uiState.value.isSending) return
 
-        // Find the last user message
+        // Find the last user message. Rebuild the same wire text sendMessage()
+        // originally submitted: typed text + the @file: refs of any attachments
+        // that rode along. Retrying with .text alone silently dropped the
+        // files from the retried turn.
         val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
-        val lastUserText = lastUserMsg.text
+        val refs = lastUserMsg.attachments.mapNotNull { it.refText }
+        val lastUserText = if (refs.isEmpty()) {
+            lastUserMsg.text
+        } else {
+            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+        }
 
         // Fix F-A3: Compute the user-message ordinal (0-based index among
         // user messages only) of the last user message. The server's
@@ -1163,8 +1180,11 @@ class ChatViewModel @Inject constructor(
                             reasoning = event.reasoning,
                         )
                     }.let { msgs ->
-                        // Also finalize any running tool calls
-                        msgs.updateFirst({ msg ->
+                        // Also finalize any running tool calls — ALL of them,
+                        // not just the first match: the agent can run several
+                        // tools in parallel, and finalizing only one left the
+                        // rest spinning forever after the turn ended.
+                        msgs.updateAll({ msg ->
                             msg is ChatMessage.ToolCall && msg.isRunning
                         }) { msg ->
                             (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Completed")
@@ -1177,14 +1197,14 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ThinkingDelta -> {
-                val targetId = activeAssistantMessageId ?: return
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId
-                    }) { msg ->
-                        (msg as ChatMessage.Assistant).copy(reasoning = (msg.reasoning ?: "") + event.text)
-                    }
-                ) }
+                // Reasoning tokens arrive just as fast as text tokens, so they
+                // go through the same 80ms flush buffer — updating state per
+                // token here re-rendered the whole message list on every
+                // reasoning token, the exact per-token recomposition storm the
+                // text path was already protected against.
+                if (activeAssistantMessageId != null) {
+                    enqueueStreamingDelta(event.text, isReasoning = true)
+                }
             }
 
             is GatewayEvent.ToolStart -> {
@@ -1239,7 +1259,7 @@ class ChatViewModel @Inject constructor(
                         event.message?.contains("429") == true
                 val displayMsg = if (isRateLimit) "Rate limited — please wait" else event.message
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
+                    messages = _uiState.value.messages.updateAll({ msg ->
                         msg is ChatMessage.ToolCall && msg.isRunning
                     }) { msg ->
                         (msg as ChatMessage.ToolCall).copy(isRunning = false, error = displayMsg)
@@ -1395,14 +1415,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ReasoningDelta -> {
-                val targetId = activeAssistantMessageId ?: return
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.Assistant && msg.isStreaming && msg.id == targetId
-                    }) { msg ->
-                        (msg as ChatMessage.Assistant).copy(reasoning = (msg.reasoning ?: "") + event.text)
-                    }
-                ) }
+                // Same buffering as ThinkingDelta — see the comment there.
+                if (activeAssistantMessageId != null) {
+                    enqueueStreamingDelta(event.text, isReasoning = true)
+                }
             }
 
             is GatewayEvent.ReasoningAvailable -> {
@@ -1474,9 +1490,9 @@ class ChatViewModel @Inject constructor(
 
     // ── Streaming buffer ─────────────────────────────────────────────────
 
-    private fun enqueueStreamingDelta(text: String) {
+    private fun enqueueStreamingDelta(text: String, isReasoning: Boolean = false) {
         if (text.isEmpty()) return
-        streamingBuffer.append(text)
+        (if (isReasoning) reasoningBuffer else streamingBuffer).append(text)
         if (streamingFlushJob?.isActive == true) return
         streamingFlushJob = viewModelScope.launch {
             delay(STREAM_FLUSH_INTERVAL_MS)
@@ -1486,16 +1502,22 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun flushStreamingBuffer() {
-        if (streamingBuffer.isEmpty()) return
+        if (streamingBuffer.isEmpty() && reasoningBuffer.isEmpty()) return
         val chunk = streamingBuffer.toString()
         streamingBuffer.setLength(0)
+        val reasoningChunk = reasoningBuffer.toString()
+        reasoningBuffer.setLength(0)
         val targetId = activeAssistantMessageId
         _uiState.update { it.copy(
             messages = _uiState.value.messages.updateFirst({ msg ->
                 msg is ChatMessage.Assistant && msg.isStreaming &&
                     (targetId == null || msg.id == targetId)
             }) { msg ->
-                (msg as ChatMessage.Assistant).copy(text = msg.text + chunk)
+                (msg as ChatMessage.Assistant).copy(
+                    text = msg.text + chunk,
+                    reasoning = if (reasoningChunk.isEmpty()) msg.reasoning
+                        else (msg.reasoning ?: "") + reasoningChunk,
+                )
             }
         ) }
     }
@@ -1504,6 +1526,7 @@ class ChatViewModel @Inject constructor(
         streamingFlushJob?.cancel()
         streamingFlushJob = null
         streamingBuffer.setLength(0)
+        reasoningBuffer.setLength(0)
     }
 
     /**
@@ -1773,6 +1796,17 @@ class ChatViewModel @Inject constructor(
         val idx = indexOfFirst(predicate)
         if (idx == -1) return this
         return updateAt(idx, transform)
+    }
+
+    /**
+     * Replace EVERY item matching [predicate] — for cleanup passes where any
+     * number of items can be in the target state (e.g. several tool calls
+     * running in parallel when the turn ends). Returns the same list when
+     * nothing matches.
+     */
+    private inline fun <T> List<T>.updateAll(predicate: (T) -> Boolean, transform: (T) -> T): List<T> {
+        if (none(predicate)) return this
+        return map { if (predicate(it)) transform(it) else it }
     }
 
     override fun onCleared() {

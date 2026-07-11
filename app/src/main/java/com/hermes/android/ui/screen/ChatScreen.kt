@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -839,10 +840,18 @@ fun ChatScreen(
                         val lastMsg = filteredMessages.lastOrNull()
                         val isAwaitingReply = uiState.isSending ||
                             (lastMsg is ChatMessage.Assistant && lastMsg.isStreaming)
-                        if (isAwaitingReply) {
-                            item {
-                                Spacer(modifier = Modifier.height(600.dp))
-                            }
+                        // Always-present item animating between 600dp and 0 —
+                        // conditionally removing it made the whole tail of the
+                        // list snap upward the instant a reply finished. Kept
+                        // in composition with a stable key so the collapse is
+                        // a smooth ease-out instead of a jump cut.
+                        item(key = "streaming-tail-spacer") {
+                            val spacerHeight by animateDpAsState(
+                                targetValue = if (isAwaitingReply) 600.dp else 0.dp,
+                                animationSpec = tween(durationMillis = 450),
+                                label = "streamingTailSpacer",
+                            )
+                            Spacer(modifier = Modifier.height(spacerHeight))
                         }
                     }
                 }
