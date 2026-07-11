@@ -74,7 +74,7 @@ class ChatUiStateTest {
         assertTrue(states.contains(ChatConnectionState.Connecting))
         assertTrue(states.contains(ChatConnectionState.Connected))
         assertTrue(states.contains(ChatConnectionState.Reconnecting))
-        assertTrue(states.contains(ChatConnectionState.Error))
+        assertTrue(states.contains(ChatConnectionState.Failed))
     }
 
     @Test
