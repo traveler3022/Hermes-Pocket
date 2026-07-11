@@ -198,8 +198,14 @@ internal fun ThinkingBlock(
 
     // Emotive markers the model emits inside its reasoning (😌 🤔 😅 …) become
     // a big "sticker" beside the thinking state — the agent's mood, live.
+    // Scan only a bounded tail: reasoning grows by hundreds of tokens per
+    // turn and this re-runs on every buffered flush, so a full-string
+    // findAll was O(n²) across the turn — enough to visibly stutter long
+    // thinking phases on a phone.
     val emojiRe = remember { Regex("[\\uD83C-\\uDBFF][\\uDC00-\\uDFFF]|[\\u2600-\\u27BF\\u2B00-\\u2BFF]") }
-    val sticker = remember(reasoning) { emojiRe.findAll(reasoning).map { it.value }.lastOrNull() }
+    val sticker = remember(reasoning) {
+        emojiRe.findAll(reasoning.takeLast(400)).map { it.value }.lastOrNull()
+    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Row(
@@ -244,7 +250,8 @@ internal fun ThinkingBlock(
         // Live preview: latest reasoning line, fading with the pulse, while collapsed.
         if (isStreaming && !expanded) {
             val preview = remember(reasoning) {
-                reasoning.trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
+                // Bounded tail for the same O(n²) reason as the sticker scan.
+                reasoning.takeLast(400).trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
             }
             if (preview.isNotEmpty()) {
                 Text(
