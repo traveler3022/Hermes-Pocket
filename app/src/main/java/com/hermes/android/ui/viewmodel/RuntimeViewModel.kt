@@ -316,6 +316,6 @@ class RuntimeViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        try { context.unregisterReceiver(logReceiver) } catch (e: Exception) {}
+        try { context.unregisterReceiver(logReceiver) } catch (e: Exception) { Timber.w(e, "[Runtime] Failed to unregister log receiver") }
     }
 }
