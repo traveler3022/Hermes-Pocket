@@ -2,48 +2,46 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.viewmodel.PluginItem
+import com.hermes.android.ui.design.GroupDivider
+import com.hermes.android.ui.design.HermesEmptyState
+import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.SettingRow
+import com.hermes.android.ui.design.SettingsGroup
+import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PluginsViewModel
 
 /**
- * Plugins Manager screen — list, enable/disable, reload plugins.
+ * Plugins Manager — list, enable/disable, reload. Rebuilt on the design
+ * system as one grouped list of toggle rows; also fully bilingual now
+ * (the old version was hardcoded English).
  *
- * Depends ONLY on [PluginsViewModel] — never on gateway or runtime.
- *
- * Reference: Phase 1.5 Rule 1
+ * Depends ONLY on [PluginsViewModel].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PluginsScreen(
     onNavigateBack: () -> Unit = {},
@@ -59,26 +57,24 @@ fun PluginsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Plugins") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.reloadPlugins() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
-                    }
-                },
+    HermesScaffold(
+        title = t("Plugins", "افزونه‌ها"),
+        subtitle = if (uiState.plugins.isEmpty()) null else {
+            t(
+                "${uiState.plugins.count { it.enabled }} of ${uiState.plugins.size} enabled",
+                "${uiState.plugins.count { it.enabled }} از ${uiState.plugins.size} فعال",
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        onBack = onNavigateBack,
+        actions = {
+            IconButton(onClick = { viewModel.reloadPlugins() }) {
+                Icon(Icons.Default.Refresh, contentDescription = t("Reload", "بارگذاری مجدد"))
+            }
+        },
+        snackbarHostState = snackbarHostState,
     ) { padding ->
-        if (uiState.isLoading) {
-            Column(
+        when {
+            uiState.isLoading -> Column(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize(),
@@ -86,78 +82,58 @@ fun PluginsScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 CircularProgressIndicator()
-                Text("Loading plugins…", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(HxSpace.sm))
+                Text(
+                    t("Loading plugins…", "در حال بارگذاری افزونه‌ها…"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-        } else if (uiState.plugins.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("No plugins available", style = MaterialTheme.typography.bodyLarge)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(uiState.plugins, key = { it.name }) { plugin ->
-                    PluginCard(plugin, onToggle = { viewModel.togglePlugin(plugin.name, it) })
-                }
-            }
-        }
-    }
-}
 
-@Composable
-private fun PluginCard(plugin: PluginItem, onToggle: (Boolean) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = plugin.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (plugin.description.isNotBlank()) {
-                    Text(
-                        text = plugin.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                    )
-                }
-                Text(
-                    text = if (plugin.enabled) "Enabled" else "Disabled",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (plugin.enabled) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.outline
-                    },
+            uiState.plugins.isEmpty() -> Column(modifier = Modifier.padding(padding)) {
+                HermesEmptyState(
+                    icon = Icons.Default.Extension,
+                    title = t("No plugins available", "افزونه‌ای موجود نیست"),
+                    caption = t(
+                        "Plugins the gateway exposes will appear here",
+                        "افزونه‌هایی که گیت‌وی ارائه بده اینجا نمایش داده می‌شن",
+                    ),
                 )
             }
-            Switch(
-                checked = plugin.enabled,
-                onCheckedChange = onToggle,
-                enabled = plugin.source != "bundled",
-            )
+
+            else -> LazyColumn(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(top = HxSpace.sm, bottom = HxSpace.xl),
+            ) {
+                item {
+                    SettingsGroup {
+                        uiState.plugins.forEachIndexed { index, plugin ->
+                            if (index > 0) GroupDivider()
+                            SettingRow(
+                                title = plugin.name,
+                                subtitle = plugin.description.ifBlank {
+                                    if (plugin.source == "bundled") t("Bundled", "همراه برنامه") else null
+                                },
+                                icon = Icons.Default.Extension,
+                                iconTint = if (plugin.enabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                trailing = {
+                                    Switch(
+                                        checked = plugin.enabled,
+                                        onCheckedChange = { viewModel.togglePlugin(plugin.name, it) },
+                                        enabled = plugin.source != "bundled",
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
