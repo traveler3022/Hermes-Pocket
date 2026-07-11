@@ -281,6 +281,24 @@ internal fun ThinkingBlock(
     }
 }
 
+/** One quiet icon in the post-reply action row: 32dp touch target, 16dp
+ *  glyph, muted tint — present but never competing with the reply text. */
+@Composable
+private fun MessageActionIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        )
+    }
+}
+
 /** Bouncing three-dot "typing" indicator — replaces the generic circular
  *  spinner while the agent is composing a reply, matching the familiar
  *  chat-app convention (WhatsApp/iMessage) instead of a loading spinner. */
@@ -658,51 +676,42 @@ internal fun MessageBubble(
                         }
                     }
 
-                    // Feature #3: "Copy Code" button for messages with code blocks
-                    if (codeBlocks.isNotEmpty()) {
-                        codeBlocks.forEachIndexed { index, code ->
-                            Row(
-                                modifier = Modifier.padding(start = 4.dp, top = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextButton(
-                                    onClick = { onCopyCode(code) },
-                                ) {
-                                    Icon(
-                                        Icons.Default.ContentCopy,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (codeBlocks.size > 1) {
-                                            t("Copy Code ${index + 1}", "کپی کد ${index + 1}")
-                                        } else {
-                                            t("Copy Code", "کپی کد")
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Feature #5: Retry button on last assistant message (when not streaming/sending)
-                    if (isLastAssistant && !isSending) {
+                    // Compact ghost action row under a finished reply — the
+                    // ChatGPT/Claude pattern: quiet icons, no filled buttons.
+                    // Replaces the old stacked "Copy Code N" TextButtons (each
+                    // code block already has its own copy affordance on the
+                    // CodeBlockCard header) and the labeled Retry TextButton,
+                    // which together took a full extra row per element and
+                    // read louder than the reply itself.
+                    if (!message.isStreaming && message.text.isNotBlank()) {
                         Row(
-                            modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            TextButton(onClick = onRetry) {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    t("Retry", "تلاش دوباره"),
-                                    style = MaterialTheme.typography.labelSmall,
+                            MessageActionIcon(
+                                icon = Icons.Default.ContentCopy,
+                                contentDescription = t("Copy text", "کپی متن"),
+                                onClick = { onCopyMessage(message.text) },
+                            )
+                            MessageActionIcon(
+                                icon = Icons.Default.Share,
+                                contentDescription = t("Share", "اشتراک‌گذاری"),
+                                onClick = {
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, message.text)
+                                        type = "text/plain"
+                                    }
+                                    assistantContext.startActivity(
+                                        Intent.createChooser(sendIntent, null),
+                                    )
+                                },
+                            )
+                            if (isLastAssistant && !isSending) {
+                                MessageActionIcon(
+                                    icon = Icons.Default.Refresh,
+                                    contentDescription = t("Retry", "تلاش دوباره"),
+                                    onClick = onRetry,
                                 )
                             }
                         }
@@ -737,11 +746,26 @@ internal fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = if (message.isRunning) "◌" else "✓",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (message.isRunning) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                        )
+                        // A real spinner while running — the old "◌" glyph was
+                        // static, so a running tool looked identical to a hung
+                        // one. Movement is the signal that work is happening.
+                        if (message.isRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        } else {
+                            Text(
+                                text = if (message.error != null) "✕" else "✓",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (message.error != null) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                            )
+                        }
                         Text(
                             text = message.toolName,
                             style = MaterialTheme.typography.labelMedium,

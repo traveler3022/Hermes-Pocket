@@ -1177,7 +1177,11 @@ class ChatViewModel @Inject constructor(
                         (msg as ChatMessage.Assistant).copy(
                             text = event.text.ifEmpty { msg.text },
                             isStreaming = false,
-                            reasoning = event.reasoning,
+                            // Keep the reasoning accumulated from deltas when
+                            // the complete event doesn't carry its own copy —
+                            // overwriting with a null here erased the Thoughts
+                            // block the moment the reply finished.
+                            reasoning = event.reasoning?.takeIf { it.isNotBlank() } ?: msg.reasoning,
                         )
                     }.let { msgs ->
                         // Also finalize any running tool calls — ALL of them,
