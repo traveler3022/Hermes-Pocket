@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -737,18 +738,25 @@ fun ChatScreen(
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
-                                Box(
-                                    modifier = Modifier.fillParentMaxSize(),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = if (uiState.searchQuery.isNotBlank()) {
-                                            t("No matching messages", "پیامی پیدا نشد")
-                                        } else {
-                                            t("Ask Hermes anything", "هر چیزی از هرمس بپرس")
+                                if (uiState.searchQuery.isNotBlank()) {
+                                    Box(
+                                        modifier = Modifier.fillParentMaxSize(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = t("No matching messages", "پیامی پیدا نشد"),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                } else {
+                                    EmptyChatHero(
+                                        assistantName = uiState.assistantName,
+                                        avatarUri = uiState.assistantAvatarPath,
+                                        modifier = Modifier.fillParentMaxSize(),
+                                        onPromptClick = { prompt ->
+                                            viewModel.updateInputText(prompt)
                                         },
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -839,10 +847,18 @@ fun ChatScreen(
                         val lastMsg = filteredMessages.lastOrNull()
                         val isAwaitingReply = uiState.isSending ||
                             (lastMsg is ChatMessage.Assistant && lastMsg.isStreaming)
-                        if (isAwaitingReply) {
-                            item {
-                                Spacer(modifier = Modifier.height(600.dp))
-                            }
+                        // Always-present item animating between 600dp and 0 —
+                        // conditionally removing it made the whole tail of the
+                        // list snap upward the instant a reply finished. Kept
+                        // in composition with a stable key so the collapse is
+                        // a smooth ease-out instead of a jump cut.
+                        item(key = "streaming-tail-spacer") {
+                            val spacerHeight by animateDpAsState(
+                                targetValue = if (isAwaitingReply) 600.dp else 0.dp,
+                                animationSpec = tween(durationMillis = 450),
+                                label = "streamingTailSpacer",
+                            )
+                            Spacer(modifier = Modifier.height(spacerHeight))
                         }
                     }
                 }
@@ -962,3 +978,85 @@ fun ChatScreen(
     }
 }
 
+
+/**
+ * Welcoming zero-state for a fresh conversation: the assistant's identity
+ * up top and a short column of tappable starter prompts that prefill the
+ * composer (prefill, not auto-send — the user stays in control of what
+ * actually goes to the agent).
+ */
+@Composable
+private fun EmptyChatHero(
+    assistantName: String,
+    avatarUri: String?,
+    onPromptClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val starterPrompts = listOf(
+        t("Check my server status", "وضعیت سرورم رو چک کن"),
+        t("Analyze the recent logs", "لاگ‌های اخیر رو تحلیل کن"),
+        t("Write a backup script", "یه اسکریپت بکاپ بنویس"),
+        t("What can you do?", "چه کارهایی بلدی؟"),
+    )
+    Column(
+        modifier = modifier.padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (avatarUri != null) {
+                AsyncImage(
+                    model = avatarUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    text = assistantName.take(1),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = t("Hi, I'm $assistantName", "سلام، من ${assistantName}م"),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = t(
+                "Your server, one message away",
+                "سرورت، فقط یه پیام فاصله داره",
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(28.dp))
+        starterPrompts.forEach { prompt ->
+            Surface(
+                onClick = { onPromptClick(prompt) },
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    text = prompt,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                )
+            }
+        }
+    }
+}
