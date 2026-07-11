@@ -357,7 +357,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 onClick = {
                     if (name.isNotBlank() && schedule.isNotBlank()) {
                         if (isEdit) {
-                            viewModel.updateJob(existingJob!!.id, name, schedule, prompt)
+                            val jobId = existingJob?.id; if (jobId != null) viewModel.updateJob(jobId, name, schedule, prompt)
                         } else {
                             viewModel.createJob(name, schedule, prompt)
                         }

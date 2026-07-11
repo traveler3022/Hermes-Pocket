@@ -102,7 +102,7 @@ class RuntimeViewModel @Inject constructor(
                 val result = runtimeManager.runtime.detect()
                 if (result is DetectionResult.Available) {
                     val handle = runtimeManager.runtime.startGateway()
-                    Timber.i("[Runtime] Connected to remote server: ${handle.webSocketUrl}")
+                    Timber.i("[Runtime] Connected to remote server: ${handle.webSocketUrl.substringBefore("?token=")}")
                     _effects.emit(RuntimeEffect.StartForegroundService)
                 }
             } catch (e: CancellationException) {
@@ -253,7 +253,7 @@ class RuntimeViewModel @Inject constructor(
             _errorMessage.value = null
             try {
                 val handle = runtimeManager.runtime.startGateway()
-                Timber.i("[Runtime] Gateway started: ${handle.webSocketUrl}")
+                Timber.i("[Runtime] Gateway started: ${handle.webSocketUrl.substringBefore("?token=")}")
                 _effects.emit(RuntimeEffect.StartForegroundService)
             } catch (e: CancellationException) {
                 throw e
