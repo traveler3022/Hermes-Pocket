@@ -6,6 +6,7 @@ import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
@@ -55,6 +57,8 @@ class ConfigViewModel @Inject constructor(
     init {
         loadAll()
         loadAvatarUri()
+        loadHubStats()
+        collectGatewayLog()
     }
 
     fun loadAll() {
@@ -1449,6 +1453,144 @@ class ConfigViewModel @Inject constructor(
 
     // ── UI actions ────────────────────────────────────────────────────────
 
+    // ── Control Center stats (design E) ───────────────────────────────────
+
+    /**
+     * Live numbers for the Settings hub's stat tiles: credit balance
+     * (`credits.view` — a backend capability that was never surfaced in any
+     * UI before) and 30-day usage (`insights.get`). Both are best-effort:
+     * a failure leaves the tile empty instead of raising an error banner.
+     */
+    fun loadHubStats() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.CREDITS_VIEW)
+                val obj = result as? JsonObject
+                val loggedIn = (obj?.get("logged_in") as? JsonPrimitive)?.content == "true"
+                val balance = (obj?.get("balance_lines") as? JsonArray)
+                    ?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
+                _uiState.value = _uiState.value.copy(
+                    creditsSummary = when {
+                        balance != null -> balance
+                        loggedIn -> null
+                        else -> null
+                    },
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] credits.view failed (tile stays empty)")
+            }
+        }
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("days", 30) }
+                val result = gatewayClient.request(GatewayMethods.INSIGHTS_GET, params.toMap())
+                val obj = result as? JsonObject
+                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                _uiState.value = _uiState.value.copy(
+                    insights = InsightsData(
+                        days = intOf("days").takeIf { it > 0 } ?: 30,
+                        sessions = intOf("sessions"),
+                        messages = intOf("messages"),
+                    ),
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] insights.get failed (tile stays empty)")
+            }
+        }
+    }
+
+    // ── Command console (design I) ────────────────────────────────────────
+
+    /**
+     * Run one shell command on the server (`shell.exec`) and append the
+     * result to the console history. The same RPC already powers all the
+     * file editors here — this just exposes it directly for diagnostics
+     * without SSH.
+     */
+    fun runConsoleCommand(command: String) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty() || _uiState.value.isConsoleRunning) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isConsoleRunning = true)
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.SHELL_EXEC,
+                    mapOf("command" to JsonPrimitive(trimmed)),
+                )
+                val obj = result as? JsonObject
+                val stdout = (obj?.get("stdout") as? JsonPrimitive)?.content.orEmpty()
+                val stderr = (obj?.get("stderr") as? JsonPrimitive)?.content.orEmpty()
+                val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                val output = buildString {
+                    if (stdout.isNotBlank()) append(stdout.trimEnd())
+                    if (stderr.isNotBlank()) {
+                        if (isNotEmpty()) append('\n')
+                        append(stderr.trimEnd())
+                    }
+                    if (isEmpty()) append("(exit $code)")
+                }
+                _uiState.value = _uiState.value.copy(
+                    isConsoleRunning = false,
+                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
+                        command = trimmed,
+                        output = output,
+                        isError = code != 0,
+                    )).takeLast(30),
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Console command failed")
+                _uiState.value = _uiState.value.copy(
+                    isConsoleRunning = false,
+                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
+                        command = trimmed,
+                        output = e.message ?: "request failed",
+                        isError = true,
+                    )).takeLast(30),
+                )
+            }
+        }
+    }
+
+    /** Emergency stop for runaway processes started from the console. */
+    fun stopProcesses() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(GatewayMethods.PROCESS_STOP)
+                val killed = ((result as? JsonObject)?.get("killed") as? JsonPrimitive)
+                    ?.content?.toIntOrNull() ?: 0
+                _uiState.value = _uiState.value.copy(
+                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
+                        command = "process.stop",
+                        output = "killed: $killed",
+                        isError = false,
+                    )).takeLast(30),
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] process.stop failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to stop: ${e.message}")
+            }
+        }
+    }
+
+    // ── Gateway log (design I) ────────────────────────────────────────────
+
+    /**
+     * Keep the last lines of the server's stderr stream (gateway.stderr
+     * events) so connection problems can be diagnosed from the phone,
+     * without SSH. Bounded to 200 lines.
+     */
+    private fun collectGatewayLog() {
+        viewModelScope.launch {
+            gatewayClient.events
+                .filterIsInstance<GatewayEvent.GatewayStderr>()
+                .collect { event ->
+                    _uiState.value = _uiState.value.copy(
+                        gatewayLog = (_uiState.value.gatewayLog + event.line).takeLast(200),
+                    )
+                }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
@@ -1505,6 +1647,22 @@ data class ConfigUiState(
     val isLoadingMcp: Boolean = false,
     // Client-side avatar image (local file path, null = default icon).
     val avatarUri: String? = null,
+    // ── Control Center stats (design E) ──
+    // First balance line from credits.view, or null (not logged in / failed).
+    val creditsSummary: String? = null,
+    // 30-day aggregate from insights.get (reuses SessionsViewModel's type).
+    val insights: InsightsData? = null,
+    // ── Advanced: command console + gateway log (design I) ──
+    val consoleEntries: List<ConsoleEntry> = emptyList(),
+    val isConsoleRunning: Boolean = false,
+    val gatewayLog: List<String> = emptyList(),
+)
+
+/** One command + its result in the Advanced screen's console. */
+data class ConsoleEntry(
+    val command: String,
+    val output: String,
+    val isError: Boolean,
 )
 
 data class ModelOption(

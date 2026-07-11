@@ -109,9 +109,11 @@ fun HermesScaffold(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
+    floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit,
 ) {
     Scaffold(
+        floatingActionButton = floatingActionButton,
         topBar = {
             TopAppBar(
                 title = {
@@ -329,6 +331,66 @@ fun RowScope.StatTile(value: String, label: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
+        }
+    }
+}
+
+/**
+ * One tile of the Control Center's domain grid (approved mockup E): tinted
+ * icon bubble on top, then the domain title with its live-value support
+ * line. Laid out 2-per-row; colors come from the active theme's roles so
+ * every palette keeps working.
+ */
+@Composable
+fun DomainTile(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+) {
+    Surface(
+        shape = RoundedCornerShape(HxRadius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        onClick = onClick,
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(HxRadius.sm))
+                    .background(iconTint.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = iconTint,
+                )
+            }
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

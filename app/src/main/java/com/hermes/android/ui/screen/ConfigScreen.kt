@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -66,6 +68,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -89,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -126,6 +132,13 @@ fun ConfigScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Live connection state for the hub's connection card — the same source
+    // the Server Connection screen uses (RuntimeViewModel maps the gateway's
+    // ConnectionState to the UI-facing type).
+    val runtimeViewModel: com.hermes.android.ui.viewmodel.RuntimeViewModel = hiltViewModel()
+    val connection by runtimeViewModel.connectionState.collectAsStateWithLifecycle()
+    val serverConfig by runtimeViewModel.serverConfig.collectAsStateWithLifecycle()
+
     // Nested navigation: null = the top-level category menu; a value = drilled
     // into that category. The back arrow pops one level (category -> menu ->
     // out of Settings), so Settings can grow deep without one giant scroll.
@@ -139,7 +152,7 @@ fun ConfigScreen(
     }
 
     com.hermes.android.ui.design.HermesScaffold(
-        title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Settings", "تنظیمات"),
+        title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Control Center", "میز فرمان"),
         subtitle = if (section == null) t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه") else null,
         onBack = { if (section != null) section = null else onNavigateBack() },
         snackbarHostState = snackbarHostState,
@@ -151,6 +164,9 @@ fun ConfigScreen(
         ) {
             when (section) {
                 null -> SettingsMenu(
+                    state = uiState,
+                    connection = connection,
+                    serverUrl = serverConfig.serverUrl,
                     onOpen = { section = it },
                     onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToPlatforms = onNavigateToPlatforms,
@@ -164,9 +180,11 @@ fun ConfigScreen(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
+                SettingsSection.BEHAVIOR -> BehaviorSection(uiState, viewModel)
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
                 SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
             }
         }
     }
@@ -175,17 +193,25 @@ fun ConfigScreen(
 /** Top-level Settings categories (drill-down targets). */
 private enum class SettingsSection(val titleEn: String, val titleFa: String) {
     GENERAL("General", "عمومی"),
+    BEHAVIOR("Agent Behavior", "رفتار عامل"),
     MEMORY("Memory", "حافظه"),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     TOOLS("Tools", "ابزارها"),
+    ADVANCED("Advanced", "پیشرفته"),
 }
 
 /**
- * The Settings root: a scannable list of categories. In-app categories drill
- * into a sub-page ([onOpen]); the rest jump to their own full screens.
+ * The Settings root, restructured as the Control Center (approved design E):
+ * a live connection card, live stat tiles (active model / credits / 30-day
+ * usage — `credits.view` and `insights.get` were backend capabilities no UI
+ * ever surfaced), then the domain list with live values in the subtitles
+ * where the data is already loaded.
  */
 @Composable
 private fun SettingsMenu(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    connection: com.hermes.android.ui.viewmodel.GatewayConnectionUi,
+    serverUrl: String,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToRuntime: () -> Unit,
     onNavigateToPlatforms: () -> Unit,
@@ -193,87 +219,186 @@ private fun SettingsMenu(
     onNavigateToSkills: () -> Unit,
     onNavigateToCron: () -> Unit,
 ) {
-    // Grouped by what the user is configuring: the agent itself, the server
-    // it runs on, and the extensions around it — instead of one flat list
-    // where "Theme" and "Cron jobs" sat visually equal.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
-        com.hermes.android.ui.design.SectionHeader(t("Agent", "ایجنت"))
+        // ── Connection card ────────────────────────────────────────────────
+        val (connColor, connLabel) = when (connection.state) {
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Connected ->
+                MaterialTheme.colorScheme.primary to t("Connected", "متصل")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Connecting ->
+                MaterialTheme.colorScheme.tertiary to t("Connecting…", "در حال اتصال…")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Reconnecting ->
+                MaterialTheme.colorScheme.tertiary to t("Reconnecting…", "اتصال دوباره…")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Failed ->
+                MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Disconnected ->
+                MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
+        }
+        Spacer(Modifier.height(12.dp))
         com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("General", "عمومی"),
-                subtitle = t("Appearance, language, backend, raw config", "ظاهر، زبان، بک‌اند، پیکربندی خام"),
-                icon = Icons.Default.Language,
-                onClick = { onOpen(SettingsSection.GENERAL) },
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToRuntime)
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = serverUrl.ifBlank { t("No server configured", "سروری تنظیم نشده") },
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = t("Server & connection settings", "تنظیمات سرور و اتصال"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                com.hermes.android.ui.design.StatusChip(label = connLabel, color = connColor)
+            }
+        }
+
+        // ── Live stat tiles ────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StatTile(
+                value = state.activeModel ?: "—",
+                label = t("Active model", "مدل فعال"),
             )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Memory", "حافظه"),
-                subtitle = t("USER.md and MEMORY.md", "فایل‌های USER.md و MEMORY.md"),
-                icon = Icons.Default.Psychology,
-                onClick = { onOpen(SettingsSection.MEMORY) },
+            StatTile(
+                value = state.creditsSummary ?: "—",
+                label = t("Credits", "اعتبار"),
             )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Models & Providers", "مدل‌ها و پرووایدرها"),
-                subtitle = t("Model switch, API keys, credits", "تعویض مدل، کلید API، اعتبار"),
+            StatTile(
+                value = state.insights?.let { "${it.sessions}" } ?: "—",
+                label = t("Sessions / 30d", "جلسه / ۳۰ روز"),
+            )
+        }
+
+        // ── Domain grid (mockup E's dgrid: 2-per-row tiles, live subtitles) ─
+        val tiles = listOf(
+            DomainSpec(
+                title = t("Models", "مدل‌ها"),
+                subtitle = state.activeModel?.let { model ->
+                    "${state.activeProvider ?: "?"} / $model"
+                } ?: t("Model, API keys, fallback", "مدل، کلید API، جایگزین"),
                 icon = Icons.Default.SwapHoriz,
                 onClick = { onOpen(SettingsSection.MODELS) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Tools", "ابزارها"),
-                subtitle = t("Enable or disable agent tools", "فعال یا غیرفعال کردن ابزارها"),
+            ),
+            DomainSpec(
+                title = t("Behavior", "رفتار"),
+                subtitle = t(
+                    "Approval: ${state.approvalMode} · ${state.reasoning}",
+                    "تأیید: ${approvalModeFa(state.approvalMode)} · تفکر: ${state.reasoning}",
+                ),
                 icon = Icons.Default.Security,
+                onClick = { onOpen(SettingsSection.BEHAVIOR) },
+            ),
+            DomainSpec(
+                title = t("Memory", "حافظه"),
+                subtitle = t("USER.md · MEMORY.md", "USER.md · MEMORY.md"),
+                icon = Icons.Default.Psychology,
+                onClick = { onOpen(SettingsSection.MEMORY) },
+            ),
+            DomainSpec(
+                title = t("Tools", "ابزارها"),
+                subtitle = if (state.availableTools.isNotEmpty()) {
+                    val enabled = state.availableTools.count { it.enabled }
+                    t(
+                        "$enabled of ${state.availableTools.size} toolsets on",
+                        "$enabled از ${state.availableTools.size} گروه فعال",
+                    )
+                } else {
+                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                },
+                icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.TOOLS) },
-            )
-        }
-
-        com.hermes.android.ui.design.SectionHeader(t("Server", "سرور"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Server & Connection", "سرور و اتصال"),
-                subtitle = t("Remote server address and token", "آدرس و توکن سرور"),
-                icon = Icons.Default.Dns,
-                onClick = onNavigateToRuntime,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Messaging Platforms", "پیام‌رسان‌ها"),
-                subtitle = t("Telegram, WhatsApp, …", "تلگرام، واتساپ، …"),
-                icon = Icons.Default.Link,
-                onClick = onNavigateToPlatforms,
-            )
-        }
-
-        com.hermes.android.ui.design.SectionHeader(t("Extensions", "افزودنی‌ها"))
-        com.hermes.android.ui.design.SettingsGroup {
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Plugins Manager", "مدیر افزونه‌ها"),
-                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
-                icon = Icons.Default.AccountBalanceWallet,
-                onClick = onNavigateToPlugins,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
+            ),
+            DomainSpec(
                 title = t("Skills", "مهارت‌ها"),
                 subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToSkills,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            com.hermes.android.ui.design.SettingRow(
-                title = t("Cron Scheduler", "زمان‌بندی"),
+            ),
+            DomainSpec(
+                title = t("Plugins", "افزونه‌ها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToPlugins,
+            ),
+            DomainSpec(
+                title = t("Scheduler", "زمان‌بندی"),
                 subtitle = t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
                 icon = Icons.Default.Schedule,
                 onClick = onNavigateToCron,
-            )
+            ),
+            DomainSpec(
+                title = t("Platforms", "پلتفرم‌ها"),
+                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
+                icon = Icons.Default.Link,
+                onClick = onNavigateToPlatforms,
+            ),
+            DomainSpec(
+                title = t("Advanced", "پیشرفته"),
+                subtitle = t("env · MCP · console · log", "env · MCP · کنسول · لاگ"),
+                icon = Icons.Default.Terminal,
+                onClick = { onOpen(SettingsSection.ADVANCED) },
+            ),
+            DomainSpec(
+                title = t("Appearance", "ظاهر"),
+                subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
+                icon = Icons.Default.Language,
+                onClick = { onOpen(SettingsSection.GENERAL) },
+            ),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            tiles.chunked(2).forEach { rowTiles ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowTiles.forEach { spec ->
+                        com.hermes.android.ui.design.DomainTile(
+                            title = spec.title,
+                            subtitle = spec.subtitle,
+                            icon = spec.icon,
+                            onClick = spec.onClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (rowTiles.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
         }
     }
+}
+
+/** One entry of the Control Center domain grid. */
+private data class DomainSpec(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+)
+
+/** Persian labels for approvals.mode values (hub subtitle). */
+private fun approvalModeFa(mode: String): String = when (mode) {
+    "manual" -> "دستی"
+    "smart" -> "هوشمند"
+    "off" -> "خاموش"
+    else -> mode
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -284,21 +409,8 @@ private fun GeneralTab(
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
-    if (state.isLoadingConfig) {
-        LoadingIndicator("Loading config…")
-        return
-    }
-
-    // SOUL.md / env / MCP / raw config used to sit flat in the same
-    // scrolling column as theme and language — easy to bump into by
-    // accident. Tucked behind one "Advanced" drill-in instead, same nested
-    // pattern as the outer Settings menu.
-    var showAdvanced by remember { mutableStateOf(false) }
-    if (showAdvanced) {
-        AdvancedGeneralSection(state, viewModel, onBack = { showAdvanced = false })
-        return
-    }
-
+    // Client-side appearance/identity/language only — everything that talks
+    // to the server moved to its own section (Behavior, Models, Advanced).
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -565,126 +677,9 @@ private fun GeneralTab(
             }
         }
 
+        // -- Assistant avatar (client-side, shown next to agent replies) --
         Text(
-            text = "Backend & Capabilities",
-            style = MaterialTheme.typography.titleMedium,
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "Active backend",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = "Provider: ${state.activeProvider ?: "unknown"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = "Model: ${state.activeModel ?: "unknown"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        // -- Agent Behavior --
-        // Only settings that actually affect the agent (and therefore this
-        // app) live here. The old screen also exposed a pile of server-TUI
-        // cosmetics (skin/compact/fast/verbose/...) — some sent config keys
-        // that don't exist in Hermes at all, and the rest only restyle the
-        // terminal UI on the server, which an Android client never sees.
-        Text(
-            text = t("Agent Behavior", "رفتار ایجنت"),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Command approval mode (approvals.mode) — "off" is the
-                // persistent equivalent of --yolo.
-                Column {
-                    Text(
-                        text = t("Command Approval", "تأیید دستورات"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t(
-                            "How dangerous commands get approved",
-                            "دستورات خطرناک چطور تأیید بشن",
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    var approvalExpanded by remember { mutableStateOf(false) }
-                    val approvalLabel = when (state.approvalMode) {
-                        "manual" -> t("Manual — always ask me", "دستی — همیشه از من بپرس")
-                        "smart" -> t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار")
-                        "off" -> t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)")
-                        else -> state.approvalMode
-                    }
-                    Box {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { approvalExpanded = true },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                        ) {
-                            Text(
-                                text = approvalLabel,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(12.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = approvalExpanded,
-                            onDismissRequest = { approvalExpanded = false },
-                        ) {
-                            listOf(
-                                "manual" to t("Manual — always ask me", "دستی — همیشه از من بپرس"),
-                                "smart" to t("Smart — auto-approve low-risk", "هوشمند — کم‌خطرها خودکار"),
-                                "off" to t("Off — approve everything (yolo)", "خاموش — همه‌چیز خودکار (yolo)"),
-                            ).forEach { (mode, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        viewModel.setApprovalMode(mode)
-                                        approvalExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-                // Reasoning effort lives on the chat screen's quick-switcher
-                // (the "+" menu) — same setting, same RPC, no need for a
-                // second control here that just duplicates it.
-            }
-        }
-
-        // -- Personality & Identity --
-        Text(
-            text = t("Personality & Identity", "شخصیت و هویت"),
+            text = t("Avatar", "آواتار"),
             style = MaterialTheme.typography.titleMedium,
         )
         Card(
@@ -744,90 +739,23 @@ private fun GeneralTab(
                         }
                     }
                 }
-
-                HorizontalDivider()
-
-                // Personality preset name (display.personality). Saved on
-                // button press — the old field fired a server write on every
-                // keystroke.
-                Column {
-                    Text(
-                        text = t("Personality", "شخصیت"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t(
-                            "Preset name, e.g. helpful / kawaii / pirate",
-                            "اسم یک پریست، مثل helpful / kawaii / pirate",
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
-                    OutlinedTextField(
-                        value = personalityText,
-                        onValueChange = { personalityText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
-                        singleLine = true,
-                    )
-                    if (personalityText != state.personality) {
-                        TextButton(
-                            onClick = { viewModel.setPersonality(personalityText) },
-                            modifier = Modifier.align(Alignment.End),
-                        ) { Text(t("Save", "ذخیره")) }
-                    }
-                }
-            }
-        }
-
-        // -- Advanced (SOUL.md, env vars, MCP servers, raw config) --
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showAdvanced = true },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = t("Advanced", "پیشرفته"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = t(
-                            "Identity, environment variables, MCP servers, raw config",
-                            "هویت، متغیرهای محیطی، سرورهای MCP، پیکربندی خام",
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                )
             }
         }
     }
 }
 
-/** SOUL.md / env vars / MCP servers / raw config — split out of the main
- *  General list so they're not sitting next to theme/language where a
- *  wrong tap is easy. Reached via the "Advanced" row in [GeneralTab]. */
+/**
+ * Agent Behavior (approved design G): approval mode with risk copy, the
+ * 7-level reasoning effort, the personality preset, and the SOUL.md
+ * identity editor. Every control maps to a real server write —
+ * approvals.mode / reasoning / display.personality via config.set,
+ * SOUL.md via the verified shell.exec pattern.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AdvancedGeneralSection(
+private fun BehaviorSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
-    onBack: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -836,24 +764,7 @@ private fun AdvancedGeneralSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onBack),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "بازگشت"))
-            Spacer(Modifier.width(8.dp))
-            Text(t("Advanced", "پیشرفته"), style = MaterialTheme.typography.titleMedium)
-        }
-
-        // SOUL.md — the agent's persistent identity (first slot of the
-        // system prompt). This replaces the old "System Prompt" free-text
-        // field, whose config key never existed in Hermes.
-        Text(
-            text = t("Identity (SOUL.md)", "هویت (SOUL.md)"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        // ── Command approval (approvals.mode) ──
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -862,6 +773,191 @@ private fun AdvancedGeneralSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Text(
+                    text = t("Command Approval", "تأیید فرمان‌ها"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                // Segmented control, one piece per mode — the mockup-G shape.
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val modes = listOf(
+                        "manual" to t("Manual", "دستی"),
+                        "smart" to t("Smart", "هوشمند"),
+                        "off" to t("Off", "خاموش"),
+                    )
+                    modes.forEachIndexed { index, (mode, label) ->
+                        SegmentedButton(
+                            selected = state.approvalMode == mode,
+                            onClick = { viewModel.setApprovalMode(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                        ) { Text(label, maxLines = 1) }
+                    }
+                }
+                val approvalDescription = when (state.approvalMode) {
+                    "manual" -> t(
+                        "Every risky command asks for your permission before running — the safest mode.",
+                        "هر فرمان پرریسک قبل از اجرا از شما اجازه می‌گیرد — امن‌ترین حالت.",
+                    )
+                    "smart" -> t(
+                        "Low-risk commands run automatically; risky ones still ask.",
+                        "فرمان‌های کم‌خطر خودکار اجرا می‌شوند؛ پرریسک‌ها همچنان می‌پرسند.",
+                    )
+                    "off" -> t(
+                        "Nothing asks for permission (yolo). Only for servers you can afford to lose.",
+                        "هیچ‌چیز اجازه نمی‌گیرد (yolo). فقط برای سروری که از دست دادنش مهم نیست.",
+                    )
+                    else -> state.approvalMode
+                }
+                Text(
+                    text = approvalDescription,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state.approvalMode == "off") {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                )
+            }
+        }
+
+        // ── Reasoning effort (agent.reasoning_effort) ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Reasoning depth", "عمق تفکر"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                // 7-segment fill bar (mockup-G shape): tap a segment to set
+                // the level; segments up to the current level are filled.
+                val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+                val currentIdx = levels.indexOf(state.reasoning).let { if (it < 0) 3 else it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    levels.forEachIndexed { i, level ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.setReasoning(level) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (i <= currentIdx) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "none",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = state.reasoning,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "max",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = t(
+                        "Also switchable mid-session from the chat input bar.",
+                        "وسط جلسه هم از نوار ورودی چت قابل تغییر است.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+
+        // ── Personality preset (display.personality) ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Personality", "شخصیت"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = t(
+                        "Preset name, e.g. helpful / kawaii / pirate",
+                        "اسم یک پریست، مثل helpful / kawaii / pirate",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
+                OutlinedTextField(
+                    value = personalityText,
+                    onValueChange = { personalityText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
+                    singleLine = true,
+                )
+                if (personalityText != state.personality) {
+                    TextButton(
+                        onClick = { viewModel.setPersonality(personalityText) },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text(t("Save", "ذخیره")) }
+                }
+            }
+        }
+
+        // ── SOUL.md — the agent's persistent identity (first slot of the
+        //    system prompt). Mockup-G shape: header row with an Edit action,
+        //    a monospace preview when collapsed, the editor when editing. ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                var editingSoul by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("SOUL.md — persistent identity", "SOUL.md — هویت پایدار عامل"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingSoul = !editingSoul }) {
+                        Text(if (editingSoul) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t(
                         "The agent's persistent voice & identity — first part of its system prompt",
@@ -870,39 +966,66 @@ private fun AdvancedGeneralSection(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
-                if (state.isLoadingSoul) {
-                    CircularProgressIndicator(
+                when {
+                    state.isLoadingSoul -> CircularProgressIndicator(
                         modifier = Modifier.padding(12.dp).size(20.dp),
                         strokeWidth = 2.dp,
                     )
-                } else {
-                    var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
-                    OutlinedTextField(
-                        value = soulText,
-                        onValueChange = { soulText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
-                        minLines = 4,
-                    )
-                    if (soulText != state.soulMd) {
-                        TextButton(
-                            onClick = { viewModel.saveSoul(soulText) },
-                            modifier = Modifier.align(Alignment.End),
-                        ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                    editingSoul -> {
+                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                        OutlinedTextField(
+                            value = soulText,
+                            onValueChange = { soulText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                            minLines = 4,
+                        )
+                        if (soulText != state.soulMd) {
+                            TextButton(
+                                onClick = { viewModel.saveSoul(soulText) },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        }
                     }
+                    else -> Text(
+                        text = state.soulMd.ifBlank { t("(empty — tap Edit)", "(خالی — روی ویرایش بزنید)") },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
+    }
+}
 
-        // ── Environment variables (~/.hermes/.env) — editable, not just a
-        //    reload-from-disk button that had nothing to actually change
-        //    what's on disk. ──
-        Text(
-            text = t("Environment Variables", "متغیرهای محیطی"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+/**
+ * Advanced (approved design I): env editor + reload, MCP servers editor +
+ * reload, a command console over shell.exec (with process.stop as the
+ * emergency brake), the live gateway stderr log, and the raw config view.
+ */
+@Composable
+private fun AdvancedSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // ── Environment variables (~/.hermes/.env) — mockup-I shape: a
+        //    compact card with an Edit action; the editor and its warning
+        //    only unfold when asked for. ──
+        var editingEnv by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -911,11 +1034,25 @@ private fun AdvancedGeneralSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("Environment Variables (.env)", "متغیرهای محیطی (.env)"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingEnv = !editingEnv }) {
+                        Text(if (editingEnv) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t("~/.hermes/.env — API keys and other env vars", "~/.hermes/.env — کلیدهای API و سایر متغیرها"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                if (editingEnv) {
                 // Explicit, unmissable warning — this file is raw shell-
                 // sourced key=value config read directly into the agent
                 // process; a bad edit here can break the agent's startup or
@@ -968,14 +1105,12 @@ private fun AdvancedGeneralSection(
                         }
                     }
                 }
+                }
             }
         }
 
-        // ── MCP servers (config.yaml: mcp_servers) — same idea. ──
-        Text(
-            text = t("MCP Servers", "سرورهای MCP"),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        // ── MCP servers (config.yaml: mcp_servers) — same collapsed shape. ──
+        var editingMcp by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -984,11 +1119,25 @@ private fun AdvancedGeneralSection(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("MCP Servers", "سرورهای MCP"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingMcp = !editingMcp }) {
+                        Text(if (editingMcp) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
                 Text(
                     text = t("Raw JSON — config.yaml's mcp_servers section", "JSON خام — بخش mcp_servers فایل config.yaml"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                if (editingMcp) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1036,6 +1185,148 @@ private fun AdvancedGeneralSection(
                             ) { Text(t("Save", "ذخیره")) }
                         }
                     }
+                }
+                }
+            }
+        }
+
+        // ── Command console (shell.exec) ──
+        Text(
+            text = t("Command Console", "کنسول فرمان"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "Run one-off shell commands on the server — for diagnostics without SSH.",
+                        "اجرای فرمان‌های تکی روی سرور — برای عیب‌یابی بدون SSH.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                state.consoleEntries.forEach { entry ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "$ ${entry.command}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = entry.output,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                            ),
+                            color = if (entry.isError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 12,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                var consoleInput by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = consoleInput,
+                    onValueChange = { consoleInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("df -h /") },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                    ),
+                    singleLine = true,
+                    enabled = !state.isConsoleRunning,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.runConsoleCommand(consoleInput)
+                            consoleInput = ""
+                        },
+                        enabled = consoleInput.isNotBlank() && !state.isConsoleRunning,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        if (state.isConsoleRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text(t("Run", "اجرا"))
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.stopProcesses() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(t("Stop processes", "توقف فرایندها")) }
+                }
+            }
+        }
+
+        // ── Gateway log (gateway.stderr stream) ──
+        Text(
+            text = t("Gateway Log", "لاگ گیت‌وی"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "Live server stderr — fills in as events arrive while the app is open.",
+                        "stderr زندهٔ سرور — تا وقتی برنامه باز است با رسیدن رویدادها پر می‌شود.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (state.gatewayLog.isEmpty()) {
+                    Text(
+                        text = t("No log lines yet", "هنوز خطی نرسیده"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        text = state.gatewayLog.takeLast(40).joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
                 }
             }
         }

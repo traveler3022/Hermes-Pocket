@@ -3,6 +3,8 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
+import com.hermes.android.gateway.ConnectionState
+import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
 import com.hermes.android.runtime.InstallResult
@@ -17,9 +19,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -48,11 +53,38 @@ sealed interface RuntimeEffect {
 class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
     private val remoteServerSettings: RemoteServerSettings,
+    gatewayClient: GatewayClient,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
 
     /** True when the bound runtime is the remote-server runtime. */
     val isRemoteRuntime: Boolean get() = runtimeManager.runtimeType == RuntimeType.REMOTE
+
+    /**
+     * Live gateway connection state for the setup screen's status chip,
+     * mapped to the UI-facing type ([GatewayConnectionUi]) so the screen
+     * never imports from the gateway package (Phase 1.5 Rule 1). Carries
+     * the human-readable detail (failure reason / reconnect attempt) so
+     * errors surface with their real cause instead of a generic message.
+     */
+    val connectionState: StateFlow<GatewayConnectionUi> = gatewayClient.connectionState
+        .map { state ->
+            when (state) {
+                is ConnectionState.Connected -> GatewayConnectionUi(ChatConnectionState.Connected)
+                is ConnectionState.Connecting -> GatewayConnectionUi(ChatConnectionState.Connecting)
+                is ConnectionState.Reconnecting -> GatewayConnectionUi(
+                    ChatConnectionState.Reconnecting,
+                    detail = state.lastError,
+                    reconnectAttempt = state.attempt,
+                )
+                is ConnectionState.Failed -> GatewayConnectionUi(
+                    ChatConnectionState.Failed,
+                    detail = state.reason,
+                )
+                is ConnectionState.Disconnected -> GatewayConnectionUi(ChatConnectionState.Disconnected)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, GatewayConnectionUi(ChatConnectionState.Disconnected))
 
     /** Current remote-server connection settings (URL + token). */
     val serverConfig: kotlinx.coroutines.flow.StateFlow<RemoteServerConfig> =
