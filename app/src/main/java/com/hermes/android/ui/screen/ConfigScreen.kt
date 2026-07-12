@@ -291,7 +291,7 @@ private fun SettingsMenu(
                 title = t("Models", "مدل‌ها"),
                 subtitle = state.activeModel?.let { model ->
                     "${state.activeProvider ?: "?"} / $model"
-                } ?: t("Model, API keys, fallback", "مدل، کلید API، جایگزین"),
+                } ?: t("Model, API keys", "مدل، کلید API"),
                 icon = Icons.Default.SwapHoriz,
                 onClick = { onOpen(SettingsSection.MODELS) },
             ),

@@ -7,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,10 +35,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,7 +87,6 @@ import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 internal fun ModelsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
@@ -293,28 +287,6 @@ internal fun ModelsTab(
             }
         }
 
-        // ── One-tap auto-failover: chain every provider so Hermes switches
-        //    automatically when one fails (error / quota / billing). ──
-        item(key = "__auto_failover") {
-            OutlinedButton(
-                onClick = { viewModel.enableAutoFailoverAllProviders() },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            ) {
-                Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (state.fallbackProviders.isEmpty()) {
-                        t("Auto-switch between all providers", "جابه‌جایی خودکار بین همه پرووایدرها")
-                    } else {
-                        t(
-                            "Auto-switch on: ${state.fallbackProviders.size} providers",
-                            "خودکار روی ${state.fallbackProviders.size} پرووایدر",
-                        )
-                    }
-                )
-            }
-        }
-
         if (state.isLoadingProviders) {
             item(key = "__providers_loading") {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
@@ -339,13 +311,6 @@ internal fun ModelsTab(
                 }
             }
         } else {
-            // ── Fallback chain visualization ──
-            if (state.fallbackProviders.isNotEmpty()) {
-                item(key = "__fallback_chain") {
-                    FallbackChainBar(state.fallbackProviders)
-                }
-            }
-
             // ── Provider cards ──
             items(
                 items = state.providers,
@@ -357,13 +322,9 @@ internal fun ModelsTab(
                     isExpanded = state.expandedProviderSlug == provider.slug,
                     onToggleExpand = { viewModel.toggleProviderExpanded(provider.slug) },
                     onRemove = { viewModel.removeProvider(provider.slug) },
-                    onAddCredential = { key, label -> viewModel.addCredential(provider.slug, key, label) },
-                    onRemoveCredential = { index -> viewModel.removeCredential(provider.slug, index) },
-                    onSetStrategy = { strategy -> viewModel.setProviderStrategy(provider.slug, strategy) },
+                    onSetCredential = { key -> viewModel.setCredential(provider.slug, key) },
+                    onRemoveCredential = { viewModel.removeCredential(provider.slug) },
                     onSetPrimary = { viewModel.setPrimaryProvider(provider) },
-                    onToggleFallback = { viewModel.toggleFallback(provider.slug) },
-                    onMoveFallback = { up -> viewModel.moveFallback(provider.slug, up) },
-                    onMoveCredential = { index, up -> viewModel.moveCredential(provider.slug, index, up) },
                 )
             }
         }
@@ -462,55 +423,5 @@ internal fun ModelsTab(
         )
     }
 
-}
-
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun FallbackChainBar(fallbackProviders: List<String>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = t("Fallback Chain", "زنجیره جایگزین"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Spacer(Modifier.height(6.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                fallbackProviders.forEachIndexed { index, slug ->
-                    if (index > 0) {
-                        Text(
-                            text = "→",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                        )
-                    }
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(slug, style = MaterialTheme.typography.labelSmall) },
-                        leadingIcon = {
-                            Text(
-                                text = "${index + 1}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    )
-                }
-            }
-        }
-    }
 }
 
