@@ -48,6 +48,7 @@ object GatewayMethods {
     const val MODEL_DISCONNECT = "model.disconnect"
 
     const val CONFIG_SET = "config.set"
+    const val CONFIG_GET = "config.get"
     const val CONFIG_SHOW = "config.show"
 
     const val COMMANDS_CATALOG = "commands.catalog"

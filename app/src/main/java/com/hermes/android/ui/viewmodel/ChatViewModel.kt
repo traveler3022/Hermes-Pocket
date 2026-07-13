@@ -86,32 +86,30 @@ class ChatViewModel @Inject constructor(
         loadAssistantAvatar()
         connectAndCollect()
         loadCommandCatalog()
-        loadReasoningLevel()
+        // reasoning level is loaded from the Connected branch of
+        // connectAndCollect — calling it here would race the WS handshake.
     }
 
     /**
-     * Reasoning effort (agent.reasoning_effort), quick-switchable from the
-     * input bar — mirrors ConfigViewModel's setting under Settings > General
-     * so both stay in sync (both read/write the same config.yaml key).
+     * Reasoning effort, quick-switchable from the input bar.
+     *
+     * Fix: this used to shell out to python/yaml and read the GLOBAL
+     * config.yaml value — but setReasoningLevel writes session-scoped, so
+     * the control showed the global default instead of what the live chat
+     * actually runs at. The server's `config.get key="reasoning"` (see
+     * tui_gateway/server.py) prefers the session's live reasoning_config
+     * (create_reasoning_override included) and only falls back to
+     * config.yaml — use that, with our live session id when we have one.
      */
     private fun loadReasoningLevel() {
         viewModelScope.launch {
             try {
-                val result = gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf(
-                        "command" to JsonPrimitive(
-                            "python3 - <<'H2PYEOF'\n" +
-                                "import yaml, pathlib\n" +
-                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
-                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
-                                "d = d or {}\n" +
-                                "print(str((d.get('agent') or {}).get('reasoning_effort', '') or 'medium'))\n" +
-                                "H2PYEOF"
-                        ),
-                    ),
-                )
-                val level = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content }
+                val params = buildJsonObject {
+                    put("key", "reasoning")
+                    _uiState.value.activeSessionId?.let { put("session_id", it) }
+                }
+                val result = gatewayClient.request(GatewayMethods.CONFIG_GET, jsonToElementMap(params))
+                val level = (result as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.content }
                     ?.trim()?.takeIf { it.isNotBlank() } ?: "medium"
                 _uiState.update { it.copy(reasoningLevel = level) }
             } catch (e: Exception) {
@@ -140,6 +138,20 @@ class ChatViewModel @Inject constructor(
                 gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(params))
                 _uiState.update { it.copy(reasoningLevel = level) }
                 Timber.i("[Chat] reasoning set to $level (session=${_uiState.value.activeSessionId})")
+                // The session-scoped write above deliberately never touches
+                // config.yaml (server-side design), so on its own the choice
+                // dies with this session and every new chat reverts to the
+                // old global default. Persist it as the global default too —
+                // best-effort, the live change already landed.
+                try {
+                    val globalParams = buildJsonObject {
+                        put("key", "reasoning")
+                        put("value", level)
+                    }
+                    gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(globalParams))
+                } catch (e: Exception) {
+                    Timber.w(e, "[Chat] reasoning global persist failed (live change applied)")
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to set reasoning level")
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Failed to set reasoning: ${e.message}")) }
@@ -237,6 +249,12 @@ class ChatViewModel @Inject constructor(
                             // worst, not destructive.
                             createOrResumeSession()
                         }
+                        // Now that a live session id is (or is about to be)
+                        // settled, read the effort the chat actually runs at.
+                        // The init-time call races the WebSocket handshake and
+                        // silently fails on a cold start, leaving the control
+                        // stuck on the "medium" default.
+                        loadReasoningLevel()
                     }
                 }
             }
@@ -386,6 +404,9 @@ class ChatViewModel @Inject constructor(
                     activeTodos = emptyList(),
                     pendingApproval = null,
                 ) }
+                // The resumed session may carry its own reasoning override —
+                // re-read against the new live id so the control matches it.
+                loadReasoningLevel()
                 if (history.isNotEmpty()) {
                     Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
                 } else {
