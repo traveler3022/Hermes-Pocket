@@ -107,9 +107,12 @@ class OkHttpGatewayClient @Inject constructor(
         url: String,
         connectTimeoutMs: Long,
     ): ConnectionState {
-        // Idempotent — if already connected, return immediately
+        // Idempotent — if already connected, return immediately. But verify
+        // the socket actually exists: a stale Connected (socket died, state
+        // never downgraded) must fall through and dial, not no-op.
         if (_connectionState.value is ConnectionState.Connected) {
-            return _connectionState.value
+            if (webSocket != null) return _connectionState.value
+            Timber.w("[Gateway] state=Connected but socket is null — re-dialing")
         }
         // A connect attempt is already in flight — join it instead of opening a
         // second WebSocket. Without this, callers that race (ChatViewModel, the
@@ -243,6 +246,13 @@ class OkHttpGatewayClient @Inject constructor(
         trackSession: Boolean,
     ): JsonElement {
         var state = _connectionState.value
+        if (state is ConnectionState.Connected && webSocket == null) {
+            // Stale Connected: the socket died but no callback downgraded the
+            // state yet. Kick the recovery machine and fall through to the
+            // dial-on-demand path below instead of dying "WebSocket is null".
+            handleDisconnect("stale Connected state (socket is null)")
+            state = _connectionState.value
+        }
         if (state !is ConnectionState.Connected) {
             // Dial-on-demand (v2ray model): a user action is the strongest
             // possible "we need a connection NOW" signal — dial instead of
@@ -267,12 +277,17 @@ class OkHttpGatewayClient @Inject constructor(
         if (ws == null) {
             pendingRequests.remove(id)
             nonTrackingRequestIds.remove(id)
+            handleDisconnect("socket vanished mid-request")
             throw GatewayException("WebSocket is null")
         }
 
         if (!ws.send(requestJson)) {
             pendingRequests.remove(id)
             nonTrackingRequestIds.remove(id)
+            // A refused send means the socket is dead even if no callback has
+            // fired yet — arm recovery now rather than waiting for the ping
+            // cycle to notice.
+            handleDisconnect("send failed (socket dead)")
             throw GatewayException("Failed to send WebSocket message")
         }
 
@@ -328,6 +343,22 @@ class OkHttpGatewayClient @Inject constructor(
         // terminal — treating it as terminal is what used to strand the app
         // offline until a force-stop.
         if (_connectionState.value is ConnectionState.Disconnected) return
+
+        // CRITICAL: downgrade the state. Nothing else does — and a live-drop
+        // used to leave state=Connected with webSocket=null, so the reconnect
+        // loop saw "Connected" and returned instantly, connect() early-returned
+        // "already connected", dial-on-demand never fired, and every request
+        // died with "WebSocket is null" until a force-stop. This one line is
+        // what actually arms the whole recovery machine.
+        if (_connectionState.value is ConnectionState.Connected ||
+            _connectionState.value is ConnectionState.Connecting
+        ) {
+            _connectionState.value = ConnectionState.Reconnecting(
+                attempt = 0,
+                nextAttemptInMs = 0,
+                lastError = reason,
+            )
+        }
 
         // Do NOT cancel-and-restart here: the reconnect loop's own failed
         // sockets fire onFailure → handleDisconnect too, and restarting the
