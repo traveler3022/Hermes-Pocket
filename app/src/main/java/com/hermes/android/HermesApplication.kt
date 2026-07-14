@@ -23,6 +23,9 @@ class HermesApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var appForegroundState: com.hermes.android.service.AppForegroundState
+
     override fun onCreate() {
         super.onCreate()
 
@@ -30,6 +33,9 @@ class HermesApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        // Foreground tracking for proactive notifications: the event observer
+        // only notifies when no Activity is visible.
+        registerActivityLifecycleCallbacks(appForegroundState)
         Timber.i("HermesApplication initializing")
     }
 

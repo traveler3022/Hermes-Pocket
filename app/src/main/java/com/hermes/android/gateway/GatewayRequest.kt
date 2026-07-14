@@ -77,4 +77,8 @@ object GatewayMethods {
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
     const val CREDITS_VIEW = "credits.view"
+
+    // Delegation v1 (Task Desk)
+    const val SESSION_ACTIVE_LIST = "session.active_list"
+    const val SESSION_CLOSE = "session.close"
 }

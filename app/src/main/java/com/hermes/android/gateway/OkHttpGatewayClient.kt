@@ -90,6 +90,11 @@ class OkHttpGatewayClient @Inject constructor(
 
     private var lastSessionId: String? = null
 
+    /** Request ids whose responses must NOT update [lastSessionId] (see
+     *  GatewayClient.request's trackSession param). */
+    private val nonTrackingRequestIds =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
     override suspend fun connect(
         url: String,
         connectTimeoutMs: Long,
@@ -203,12 +208,14 @@ class OkHttpGatewayClient @Inject constructor(
         // Fail all pending requests
         pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
         pendingRequests.clear()
+        nonTrackingRequestIds.clear()
     }
 
     override suspend fun request(
         method: String,
         params: Map<String, JsonElement>,
         timeoutMs: Long,
+        trackSession: Boolean,
     ): JsonElement {
         val state = _connectionState.value
         if (state !is ConnectionState.Connected) {
@@ -216,6 +223,7 @@ class OkHttpGatewayClient @Inject constructor(
         }
 
         val id = nextRequestId.getAndIncrement()
+        if (!trackSession) nonTrackingRequestIds.add(id)
         val request = GatewayRequest(id = id, method = method, params = params)
         val requestJson = json.encodeToString(GatewayRequest.serializer(), request)
 
@@ -225,11 +233,13 @@ class OkHttpGatewayClient @Inject constructor(
         val ws = webSocket
         if (ws == null) {
             pendingRequests.remove(id)
+            nonTrackingRequestIds.remove(id)
             throw GatewayException("WebSocket is null")
         }
 
         if (!ws.send(requestJson)) {
             pendingRequests.remove(id)
+            nonTrackingRequestIds.remove(id)
             throw GatewayException("Failed to send WebSocket message")
         }
 
@@ -238,10 +248,12 @@ class OkHttpGatewayClient @Inject constructor(
                 deferred.await()
             } ?: run {
                 pendingRequests.remove(id)
+                nonTrackingRequestIds.remove(id)
                 throw GatewayException("Request $method timed out after ${timeoutMs}ms")
             }
         } catch (e: Exception) {
             pendingRequests.remove(id)
+            nonTrackingRequestIds.remove(id)
             if (e is GatewayException) throw e
             throw GatewayException("Request $method failed: ${e.message}", e)
         }
@@ -277,6 +289,7 @@ class OkHttpGatewayClient @Inject constructor(
         // Fail all pending requests
         pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected: $reason")) }
         pendingRequests.clear()
+        nonTrackingRequestIds.clear()
 
         if (_connectionState.value is ConnectionState.Disconnected ||
             _connectionState.value is ConnectionState.Failed) {
@@ -449,18 +462,22 @@ class OkHttpGatewayClient @Inject constructor(
         val response = json.decodeFromJsonElement(GatewayResponse.serializer(), obj)
 
         val deferred = pendingRequests.remove(id) ?: run {
+            nonTrackingRequestIds.remove(id)
             Timber.w("[Gateway] no pending request for id=$id")
             return
         }
+        val skipSessionTracking = nonTrackingRequestIds.remove(id)
 
         if (response.error != null) {
             deferred.completeExceptionally(
                 GatewayException("RPC error ${response.error.code}: ${response.error.message}")
             )
         } else if (response.result != null) {
-            (response.result as? JsonObject)?.get("session_id")?.let { sidEl ->
-                (sidEl as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { sid ->
-                    lastSessionId = sid
+            if (!skipSessionTracking) {
+                (response.result as? JsonObject)?.get("session_id")?.let { sidEl ->
+                    (sidEl as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { sid ->
+                        lastSessionId = sid
+                    }
                 }
             }
             deferred.complete(response.result)
