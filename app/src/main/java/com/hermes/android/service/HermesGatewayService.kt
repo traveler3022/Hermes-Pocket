@@ -36,6 +36,9 @@ class HermesGatewayService : Service() {
     @Inject
     lateinit var hermesRuntime: com.hermes.android.runtime.HermesRuntime
 
+    @Inject
+    lateinit var agentEventObserver: AgentEventObserver
+
     private val scope = CoroutineScope(SupervisorJob())
     private var connectionWatchJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -51,6 +54,11 @@ class HermesGatewayService : Service() {
         Timber.i("[GatewayService] onStartCommand")
         startForeground(NOTIFICATION_ID, buildNotification("Connecting to Hermes gateway…"))
 
+        // Proactive notifications: watch gateway events for the whole life of
+        // the background connection (ChatViewModel's collector dies with the
+        // UI; this one doesn't). Idempotent across restarts.
+        agentEventObserver.start(scope)
+
         connectionWatchJob?.cancel()
         connectionWatchJob = scope.launch {
             launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
@@ -59,8 +67,11 @@ class HermesGatewayService : Service() {
                         is ConnectionState.Disconnected -> "Disconnected"
                         is ConnectionState.Connecting -> "Connecting…"
                         is ConnectionState.Connected -> "Gateway running"
+                        // Show WHY — an endless "attempt N" with no reason is
+                        // undebuggable from the phone.
                         is ConnectionState.Reconnecting ->
-                            "Reconnecting (attempt ${state.attempt})…"
+                            "Reconnecting (attempt ${state.attempt})" +
+                                (state.lastError?.let { ": $it" } ?: "…")
                         is ConnectionState.Failed -> "Connection failed: ${state.reason}"
                     }
                     updateNotification(text)

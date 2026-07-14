@@ -21,6 +21,12 @@
     <!-- Boot receiver (Step 6) -->
     <string name="boot_notification_text">Starting Hermes gateway…</string>
 
+    <!-- Agent activity notifications (delegation v1) -->
+    <string name="notification_channel_agent_name">Agent Activity</string>
+    <string name="notification_channel_agent_desc">Results of tasks and replies that finish while the app is in the background</string>
+    <string name="notification_agent_reply_title">Hermes finished a reply</string>
+    <string name="notification_task_done_title">Background task finished</string>
+
     <!-- Placeholder strings for Step 4 (Chat UI) -->
     <string name="chat_send">Send</string>
     <string name="chat_stop">Stop</string>

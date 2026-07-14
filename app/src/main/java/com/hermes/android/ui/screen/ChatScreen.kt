@@ -38,10 +38,12 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -155,6 +157,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSessions: () -> Unit = {},
+    onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     sharedText: String? = null,
     resumeSessionId: String? = null,
@@ -172,6 +175,7 @@ fun ChatScreen(
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
+    var showChanges by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -368,6 +372,17 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
                     Text(t("New conversation", "گفتگوی جدید"))
+                }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToTasks()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Text(t("Task Desk", "میز کار"))
                 }
                 // ── Drawer search + sort bar ───────────────────────────────
                 Row(
@@ -638,6 +653,14 @@ fun ChatScreen(
                             }
                         },
                         actions = {
+                            if (uiState.activeSessionId != null) {
+                                IconButton(onClick = { showChanges = true }) {
+                                    Icon(
+                                        Icons.Default.Undo,
+                                        contentDescription = t("Changes", "تغییرات"),
+                                    )
+                                }
+                            }
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
@@ -978,6 +1001,16 @@ fun ChatScreen(
             approval = approval,
             onRespond = viewModel::respondToApproval,
         )
+    }
+
+    if (showChanges) {
+        uiState.activeSessionId?.let { sid ->
+            ChangesSheet(
+                sessionId = sid,
+                snackbarHostState = snackbarHostState,
+                onDismiss = { showChanges = false },
+            )
+        }
     }
 
     // Rename dialog — client-side display name only (top bar / drawer header).

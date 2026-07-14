@@ -133,13 +133,26 @@ fun SessionsScreen(
             onDismissRequest = { viewModel.hideRenameDialog() },
             title = { Text(t("Rename session", "تغییر نام گفتگو")) },
             text = {
-                OutlinedTextField(
-                    value = newTitle,
-                    onValueChange = { newTitle = it },
-                    label = { Text(t("Title", "عنوان")) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Column {
+                    OutlinedTextField(
+                        value = newTitle,
+                        onValueChange = { newTitle = it },
+                        label = { Text(t("Title", "عنوان")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (!renameState.preview.isNullOrBlank()) {
+                        TextButton(
+                            onClick = {
+                                viewModel.suggestTitle(renameState.preview) { suggestion ->
+                                    newTitle = suggestion
+                                }
+                            },
+                        ) {
+                            Text(t("Suggest title", "پیشنهاد عنوان"))
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(

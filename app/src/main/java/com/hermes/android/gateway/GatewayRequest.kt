@@ -48,6 +48,7 @@ object GatewayMethods {
     const val MODEL_DISCONNECT = "model.disconnect"
 
     const val CONFIG_SET = "config.set"
+    const val CONFIG_GET = "config.get"
     const val CONFIG_SHOW = "config.show"
 
     const val COMMANDS_CATALOG = "commands.catalog"
@@ -76,4 +77,46 @@ object GatewayMethods {
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
     const val CREDITS_VIEW = "credits.view"
+
+    // Delegation v1 (Task Desk)
+    const val SESSION_ACTIVE_LIST = "session.active_list"
+    const val SESSION_ACTIVATE = "session.activate"
+    const val SESSION_CLOSE = "session.close"
+
+    // Changes / rollback (Milestone D slice)
+    const val ROLLBACK_LIST = "rollback.list"
+    const val ROLLBACK_DIFF = "rollback.diff"
+    const val ROLLBACK_RESTORE = "rollback.restore"
+    const val SESSION_UNDO = "session.undo"
+
+    // Projects (read-only browser; projects.discover_repos/record_repos need a
+    // client-side filesystem crawl the desktop does and mobile has no
+    // equivalent for, so they're deliberately not wired)
+    const val PROJECTS_TREE = "projects.tree"
+    const val PROJECT_FACTS = "project.facts"
+    const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
+
+    // Task Desk: delegation control
+    const val DELEGATION_STATUS = "delegation.status"
+    const val DELEGATION_PAUSE = "delegation.pause"
+
+    // Chat completion. session.save (server-side JSON dump) and toolsets.list/
+    // tools.show (near-duplicates of the already-wired tools.list) evaluated
+    // and deliberately not wired — see commit history for why.
+    const val PDF_ATTACH = "pdf.attach"
+    const val LLM_ONESHOT = "llm.oneshot"
+
+    // Billing (read + auto-reload only; charge/step_up deliberately not wired
+    // from mobile — see BillingRepository kdoc)
+    const val BILLING_STATE = "billing.state"
+    const val BILLING_AUTO_RELOAD = "billing.auto_reload"
+
+    // Pet
+    const val PET_GALLERY = "pet.gallery"
+    const val PET_THUMB = "pet.thumb"
+    const val PET_SELECT = "pet.select"
+    const val PET_REMOVE = "pet.remove"
+    const val PET_RENAME = "pet.rename"
+    const val PET_DISABLE = "pet.disable"
+    const val PET_SCALE = "pet.scale"
 }
