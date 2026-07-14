@@ -39,10 +39,27 @@ import javax.inject.Inject
 @HiltViewModel
 class TasksViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
 ) : ViewModel() {
+
+    /**
+     * The desk shows ONLY sessions launched from here — session.active_list
+     * returns every live session (the open chat included), and dumping that
+     * raw would turn the desk into a noisy session monitor instead of "the
+     * work I delegated". active_list rows carry no `source` field, so the app
+     * remembers its own launches: stored db keys persist across restarts
+     * (live ids rotate; keys don't), live ids cover the current process.
+     */
+    private val prefs = context.getSharedPreferences("hermes_tasks", android.content.Context.MODE_PRIVATE)
+    private val taskKeys: MutableSet<String> = java.util.Collections.synchronizedSet(
+        (prefs.getStringSet(KEY_TASK_KEYS, emptySet()) ?: emptySet()).toMutableSet()
+    )
+    private val taskLiveIds: MutableSet<String> =
+        java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     data class TaskItem(
         val id: String,
+        val sessionKey: String,
         val title: String,
         /** Server live status: e.g. "streaming" (running) or "idle". */
         val status: String,
@@ -104,7 +121,9 @@ class TasksViewModel @Inject constructor(
             try {
                 val result = gatewayClient.request(GatewayMethods.SESSION_ACTIVE_LIST)
                 val rows = (result as? JsonObject)?.get("sessions") as? JsonArray
-                val tasks = rows?.mapNotNull { parseTask(it) } ?: emptyList()
+                val tasks = rows?.mapNotNull { parseTask(it) }
+                    ?.filter { it.id in taskLiveIds || (it.sessionKey.isNotBlank() && it.sessionKey in taskKeys) }
+                    ?: emptyList()
                 _uiState.value = _uiState.value.copy(
                     tasks = tasks.sortedByDescending { it.lastActive },
                     isLoading = false,
@@ -147,6 +166,17 @@ class TasksViewModel @Inject constructor(
                 val sessionId = (created as? JsonObject)?.get("session_id")
                     ?.let { (it as? JsonPrimitive)?.content }
                     ?: throw IllegalStateException("session.create returned no session_id")
+
+                // Register this launch so the desk can tell its own tasks
+                // apart from every other live session (see class kdoc).
+                taskLiveIds.add(sessionId)
+                (created as? JsonObject)?.get("stored_session_id")
+                    ?.let { (it as? JsonPrimitive)?.content }
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { storedKey ->
+                        taskKeys.add(storedKey)
+                        prefs.edit().putStringSet(KEY_TASK_KEYS, taskKeys.toSet()).apply()
+                    }
 
                 gatewayClient.request(
                     GatewayMethods.PROMPT_SUBMIT,
@@ -210,6 +240,7 @@ class TasksViewModel @Inject constructor(
         val id = str("id").ifEmpty { return null }
         return TaskItem(
             id = id,
+            sessionKey = str("session_key"),
             title = str("title").ifEmpty { str("session_key").ifEmpty { id } },
             status = str("status"),
             preview = str("preview"),
@@ -225,5 +256,6 @@ class TasksViewModel @Inject constructor(
 
     private companion object {
         const val POLL_INTERVAL_MS = 4_000L
+        const val KEY_TASK_KEYS = "task_session_keys"
     }
 }
