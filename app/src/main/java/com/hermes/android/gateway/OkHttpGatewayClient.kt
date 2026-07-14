@@ -54,9 +54,17 @@ import kotlin.math.min
 class OkHttpGatewayClient @Inject constructor(
     private val httpClient: OkHttpClient,
     private val json: Json,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : GatewayClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // Telegram-style: the moment ANY network comes back, dial immediately
+        // instead of sleeping out a backoff window. Registered once for the
+        // process lifetime (this is a @Singleton).
+        registerNetworkCallback()
+    }
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -127,7 +135,18 @@ class OkHttpGatewayClient @Inject constructor(
         }
 
         return try {
-            connectDeferred.await()
+            val result = connectDeferred.await()
+            // Self-heal: a failed dial must never be terminal. As long as the
+            // user hasn't explicitly disconnect()ed, keep a background retry
+            // loop alive — this is the fix for the "first failed reconnect
+            // set Failed and everything stopped forever until a force-stop"
+            // trap (the reconnect loop refused to run while state was Failed).
+            if (result !is ConnectionState.Connected &&
+                _connectionState.value !is ConnectionState.Disconnected
+            ) {
+                scheduleReconnect()
+            }
+            result
         } finally {
             if (pendingConnect === connectDeferred) pendingConnect = null
         }
@@ -137,6 +156,10 @@ class OkHttpGatewayClient @Inject constructor(
         url: String,
         deferred: kotlinx.coroutines.CompletableDeferred<ConnectionState>,
         timeoutMs: Long,
+        // From the reconnect loop: report the failure via the deferred only,
+        // without stamping the terminal-looking Failed state — the loop shows
+        // Reconnecting and keeps going.
+        quietFailure: Boolean = false,
     ) {
         try {
             // Always close any existing socket before opening a new one. Both
@@ -187,14 +210,16 @@ class OkHttpGatewayClient @Inject constructor(
                 deferred.await()
             }
             if (!deferred.isCompleted) {
-                _connectionState.value = ConnectionState.Failed("Connect timeout after ${timeoutMs}ms")
-                deferred.complete(_connectionState.value)
+                val failed = ConnectionState.Failed("Connect timeout after ${timeoutMs}ms")
+                if (!quietFailure) _connectionState.value = failed
+                deferred.complete(failed)
             }
         } catch (e: Exception) {
             Timber.e(e, "[Gateway] connect() failed")
-            _connectionState.value = ConnectionState.Failed(e.message ?: "Connect failed")
+            val failed = ConnectionState.Failed(e.message ?: "Connect failed")
+            if (!quietFailure) _connectionState.value = failed
             if (!deferred.isCompleted) {
-                deferred.complete(_connectionState.value)
+                deferred.complete(failed)
             }
         }
     }
@@ -217,9 +242,17 @@ class OkHttpGatewayClient @Inject constructor(
         timeoutMs: Long,
         trackSession: Boolean,
     ): JsonElement {
-        val state = _connectionState.value
+        var state = _connectionState.value
         if (state !is ConnectionState.Connected) {
-            throw GatewayException("Not connected (state: $state)")
+            // Dial-on-demand (v2ray model): a user action is the strongest
+            // possible "we need a connection NOW" signal — dial instead of
+            // failing or waiting out a backoff window. connect() joins any
+            // in-flight attempt, so concurrent requests share one dial.
+            val url = currentUrl ?: throw GatewayException("Not connected (state: $state)")
+            state = connect(url)
+            if (state !is ConnectionState.Connected) {
+                throw GatewayException("Not connected (state: $state)")
+            }
         }
 
         val id = nextRequestId.getAndIncrement()
@@ -291,45 +324,91 @@ class OkHttpGatewayClient @Inject constructor(
         pendingRequests.clear()
         nonTrackingRequestIds.clear()
 
-        if (_connectionState.value is ConnectionState.Disconnected ||
-            _connectionState.value is ConnectionState.Failed) {
-            return // User-initiated disconnect, don't reconnect
-        }
+        // Only a user-initiated disconnect() stops the machine. Failed is NOT
+        // terminal — treating it as terminal is what used to strand the app
+        // offline until a force-stop.
+        if (_connectionState.value is ConnectionState.Disconnected) return
 
-        reconnectJob?.cancel()
+        // Do NOT cancel-and-restart here: the reconnect loop's own failed
+        // sockets fire onFailure → handleDisconnect too, and restarting the
+        // loop from inside its own failure resets the backoff to zero — a
+        // 1-second retry storm. Just make sure a loop exists.
+        scheduleReconnect()
+    }
+
+    /** Idempotent: keeps exactly one retry loop alive. */
+    private fun scheduleReconnect() {
+        if (reconnectJob?.isActive == true) return
         reconnectJob = scope.launch { reconnect() }
     }
 
-    private suspend fun reconnect() {
+    /**
+     * Retry until Connected or user disconnect(). NEVER gives up on failure —
+     * the connection is disposable, the server state is the source of truth,
+     * so the only job here is to get a fresh pipe as soon as one is possible
+     * (Telegram model). Backoff is capped low; the network callback and
+     * dial-on-demand cut the wait entirely when there's a better signal.
+     */
+    private suspend fun reconnect(startImmediately: Boolean = false) {
         var attempt = 0
-        while (_connectionState.value !is ConnectionState.Connected &&
-            _connectionState.value !is ConnectionState.Disconnected &&
-            _connectionState.value !is ConnectionState.Failed) {
-
+        while (true) {
+            when (_connectionState.value) {
+                is ConnectionState.Connected -> return
+                is ConnectionState.Disconnected -> return // user asked to stop
+                else -> Unit
+            }
             attempt++
-            val delayMs = min(MAX_RECONNECT_DELAY_MS, INITIAL_RECONNECT_DELAY_MS * (1L shl (attempt - 1)))
+            // Exponent clamped BEFORE shifting: the old `1L shl (attempt-1)`
+            // wrapped negative past attempt 63.
+            val delayMs = if (attempt == 1 && startImmediately) 0L else min(
+                MAX_RECONNECT_DELAY_MS,
+                INITIAL_RECONNECT_DELAY_MS shl min(attempt - 1, RECONNECT_BACKOFF_MAX_EXP),
+            )
             _connectionState.value = ConnectionState.Reconnecting(
                 attempt = attempt,
                 nextAttemptInMs = delayMs,
                 lastError = null,
             )
-
             Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms")
-            delay(delayMs)
+            if (delayMs > 0) delay(delayMs)
 
             val url = currentUrl ?: return
             val deferred = kotlinx.coroutines.CompletableDeferred<ConnectionState>()
-            connectJob = scope.launch { doConnect(url, deferred, 15_000) }
-
             try {
-                val result = deferred.await()
-                if (result is ConnectionState.Connected) {
+                doConnect(url, deferred, 15_000, quietFailure = true)
+                if (deferred.await() is ConnectionState.Connected) {
                     Timber.i("[Gateway] reconnected on attempt $attempt")
                     return
                 }
             } catch (e: Exception) {
                 Timber.w("[Gateway] reconnect attempt $attempt failed: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * Network came back (or changed) — dial NOW instead of waiting out a
+     * backoff window. Cancelling the sleeping loop and starting a fresh one
+     * with an immediate first attempt is what makes recovery feel instant
+     * the moment the screen turns on / Wi-Fi reattaches.
+     */
+    private fun registerNetworkCallback() {
+        try {
+            val cm = appContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    if (currentUrl == null) return
+                    val state = _connectionState.value
+                    if (state is ConnectionState.Connected || state is ConnectionState.Disconnected) return
+                    Timber.i("[Gateway] network available — dialing immediately")
+                    reconnectJob?.cancel()
+                    reconnectJob = scope.launch { reconnect(startImmediately = true) }
+                }
+            })
+        } catch (e: Exception) {
+            // Missing permission / restricted context — degrade to backoff-only.
+            Timber.w(e, "[Gateway] network callback unavailable")
         }
     }
 
@@ -694,6 +773,13 @@ class OkHttpGatewayClient @Inject constructor(
 
     companion object {
         private const val INITIAL_RECONNECT_DELAY_MS = 1_000L
-        private const val MAX_RECONNECT_DELAY_MS = 30_000L
+
+        // Capped LOW (Telegram-grade): with the network callback and
+        // dial-on-demand carrying the fast paths, the loop is only a safety
+        // net — but a 30s ceiling made "it eventually comes back" feel broken.
+        private const val MAX_RECONNECT_DELAY_MS = 15_000L
+
+        /** Clamp for the backoff shift: 1s,2s,4s,8s then the 15s ceiling. */
+        private const val RECONNECT_BACKOFF_MAX_EXP = 4
     }
 }
