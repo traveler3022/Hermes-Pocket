@@ -429,7 +429,17 @@ class OkHttpGatewayClient @Inject constructor(
     private suspend fun resumeSession(sessionId: String) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }
-            val result = request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+            // lastSessionId is a LIVE id (that's what responses/events carry),
+            // but session.resume resolves STORED db ids and 4007s on live ones
+            // — so this auto-resume was silently failing every time. Attach to
+            // the still-live session via session.activate first; fall back to
+            // resume for the (stored-id / reaped-session) cases.
+            val result = try {
+                request(GatewayMethods.SESSION_ACTIVATE, jsonToElementMap(params))
+            } catch (activateError: Exception) {
+                Timber.w("[Gateway] activate failed (${activateError.message}); trying session.resume")
+                request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+            }
             val liveId = (result as? JsonObject)?.get("session_id")?.jsonPrimitive?.content
                 ?.takeIf { it.isNotBlank() } ?: sessionId
             lastSessionId = liveId

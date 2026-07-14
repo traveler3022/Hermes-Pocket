@@ -388,7 +388,18 @@ class ChatViewModel @Inject constructor(
                 // We MUST adopt the returned `session_id` as the active session —
                 // sending prompt.submit with the old id fails "session not found".
                 val params = buildJsonObject { put("session_id", sessionId) }
-                val result = gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                val result = try {
+                    gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                } catch (resumeError: Exception) {
+                    // session.resume only knows STORED db ids — handing it a
+                    // LIVE id (what Task Desk rows and notification taps carry,
+                    // since events/active_list speak live ids) fails with 4007
+                    // "session not found" BEFORE its live fast-path is reached.
+                    // session.activate is the server's attach-to-a-live-session
+                    // RPC and returns the same payload shape; fall back to it.
+                    Timber.w("[Chat] resume failed (${resumeError.message}); trying session.activate for $sessionId")
+                    gatewayClient.request(GatewayMethods.SESSION_ACTIVATE, jsonToElementMap(params))
+                }
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
                 val liveSessionId = (result as? JsonObject)

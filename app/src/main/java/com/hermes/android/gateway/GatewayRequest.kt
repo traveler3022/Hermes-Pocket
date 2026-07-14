@@ -80,5 +80,6 @@ object GatewayMethods {
 
     // Delegation v1 (Task Desk)
     const val SESSION_ACTIVE_LIST = "session.active_list"
+    const val SESSION_ACTIVATE = "session.activate"
     const val SESSION_CLOSE = "session.close"
 }
