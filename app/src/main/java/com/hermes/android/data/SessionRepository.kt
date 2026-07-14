@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -316,7 +317,115 @@ class SessionRepository @Inject constructor(
         return level
     }
 
+    // ── Delegation control (subagent spawning, process-wide not per-session) ─
+
+    data class SubagentRow(
+        val subagentId: String,
+        val goal: String,
+        val model: String,
+        val depth: Int,
+        val toolCount: Int,
+        val status: String,
+    )
+
+    data class DelegationStatus(
+        val active: List<SubagentRow>,
+        val paused: Boolean,
+        val maxSpawnDepth: Int,
+        val maxConcurrentChildren: Int,
+    )
+
+    suspend fun delegationStatus(): DelegationStatus {
+        val result = gatewayClient.request(GatewayMethods.DELEGATION_STATUS) as? JsonObject
+            ?: return DelegationStatus(emptyList(), false, 0, 0)
+        val rows = (result["active"] as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            ?.map {
+                SubagentRow(
+                    subagentId = it.str("subagent_id"),
+                    goal = it.str("goal"),
+                    model = it.str("model"),
+                    depth = it.str("depth").toIntOrNull() ?: 0,
+                    toolCount = it.str("tool_count").toIntOrNull() ?: 0,
+                    status = it.str("status"),
+                )
+            } ?: emptyList()
+        return DelegationStatus(
+            active = rows,
+            paused = result.bool("paused") ?: false,
+            maxSpawnDepth = result.str("max_spawn_depth").toIntOrNull() ?: 0,
+            maxConcurrentChildren = result.str("max_concurrent_children").toIntOrNull() ?: 0,
+        )
+    }
+
+    /** Returns the new paused state. */
+    suspend fun setDelegationPaused(paused: Boolean): Boolean {
+        val result = gatewayClient.request(
+            GatewayMethods.DELEGATION_PAUSE,
+            buildJsonObject { put("paused", paused) }.toElementMap(),
+        ) as? JsonObject
+        return result?.bool("paused") ?: paused
+    }
+
+    // ── Rollback / undo (git-checkpoint diff + restore) ────────────────────
+
+    data class Checkpoint(val hash: String, val timestamp: String, val message: String)
+    data class CheckpointDiff(val stat: String, val diff: String, val rendered: String?)
+    data class RestoreResult(val success: Boolean, val historyRemoved: Int)
+
+    /** Checkpoints for a LIVE session's cwd; empty when rollback tracking is off. */
+    suspend fun checkpoints(liveSessionId: String): List<Checkpoint> {
+        val result = gatewayClient.request(
+            GatewayMethods.ROLLBACK_LIST,
+            buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
+        ) as? JsonObject ?: return emptyList()
+        if (result.bool("enabled") != true) return emptyList()
+        val rows = result["checkpoints"] as? JsonArray ?: return emptyList()
+        return rows.mapNotNull { it as? JsonObject }.map {
+            Checkpoint(it.str("hash"), it.str("timestamp"), it.str("message"))
+        }
+    }
+
+    suspend fun checkpointDiff(liveSessionId: String, hash: String): CheckpointDiff {
+        val result = gatewayClient.request(
+            GatewayMethods.ROLLBACK_DIFF,
+            buildJsonObject {
+                put("session_id", liveSessionId)
+                put("hash", hash)
+            }.toElementMap(),
+        ) as? JsonObject ?: return CheckpointDiff("", "", null)
+        return CheckpointDiff(result.str("stat"), result.str("diff"), result.str("rendered").ifBlank { null })
+    }
+
+    /** [filePath] null = full-session restore (rejected server-side mid-turn). */
+    suspend fun restoreCheckpoint(liveSessionId: String, hash: String, filePath: String? = null): RestoreResult {
+        val result = gatewayClient.request(
+            GatewayMethods.ROLLBACK_RESTORE,
+            buildJsonObject {
+                put("session_id", liveSessionId)
+                put("hash", hash)
+                filePath?.let { put("file_path", it) }
+            }.toElementMap(),
+        ) as? JsonObject ?: return RestoreResult(false, 0)
+        return RestoreResult(
+            result.bool("success") ?: false,
+            result.str("history_removed").toIntOrNull() ?: 0,
+        )
+    }
+
+    /** Pops the last user+assistant/tool turn from a LIVE session. Returns count removed. */
+    suspend fun undoLastTurn(liveSessionId: String): Int {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_UNDO,
+            buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
+        ) as? JsonObject ?: return 0
+        return result.str("removed").toIntOrNull() ?: 0
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
+
+    private fun JsonObject.bool(key: String): Boolean? =
+        (this[key] as? JsonPrimitive)?.booleanOrNull
 
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.content ?: ""
