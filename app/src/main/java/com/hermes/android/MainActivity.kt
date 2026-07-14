@@ -46,6 +46,11 @@ class MainActivity : ComponentActivity() {
         requestBatteryOptimizationExemption()
 
         val sharedText = extractSharedText(intent)
+        // Set when the user taps an agent-activity notification ("task done"):
+        // opens the app straight into the session the result belongs to.
+        val notificationSessionId = intent?.getStringExtra(
+            com.hermes.android.service.AgentActivityNotifier.EXTRA_SESSION_ID
+        )
 
         // Keep the gateway connection alive when the app is backgrounded.
         // Started unconditionally on every launch; onStartCommand() handles
@@ -70,6 +75,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         HermesNavHost(
                             sharedText = sharedText,
+                            notificationSessionId = notificationSessionId,
                             themeModeState = themeModeState,
                             appLanguageState = appLanguageState,
                         )
@@ -116,6 +122,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HermesNavHost(
     sharedText: String? = null,
+    notificationSessionId: String? = null,
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -133,14 +140,29 @@ private fun HermesNavHost(
             ),
         ) { backStackEntry ->
             val shared = backStackEntry.arguments?.getString("sharedText") ?: sharedText
+            // Route arg (in-app navigation) wins; the notification extra only
+            // seeds the initial destination on a cold notification tap.
             val resumeId = backStackEntry.arguments?.getString("resumeSessionId")
+                ?: notificationSessionId
             com.hermes.android.ui.screen.ChatScreen(
                 onNavigateToSettings = { navController.navigate("config") },
                 onNavigateToSessions = { navController.navigate("sessions") },
+                onNavigateToTasks = { navController.navigate("tasks") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 sharedText = shared,
                 resumeSessionId = resumeId,
                 themeModeState = themeModeState,
+            )
+        }
+
+        composable("tasks") {
+            com.hermes.android.ui.screen.TasksScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenInChat = { sessionId ->
+                    navController.navigate("chat?resumeSessionId=$sessionId") {
+                        popUpTo("chat") { inclusive = true }
+                    }
+                },
             )
         }
 

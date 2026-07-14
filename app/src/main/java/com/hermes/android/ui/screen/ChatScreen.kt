@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -155,6 +156,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSessions: () -> Unit = {},
+    onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     sharedText: String? = null,
     resumeSessionId: String? = null,
@@ -368,6 +370,17 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
                     Text(t("New conversation", "گفتگوی جدید"))
+                }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToTasks()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Text(t("Task Desk", "میز کار"))
                 }
                 // ── Drawer search + sort bar ───────────────────────────────
                 Row(

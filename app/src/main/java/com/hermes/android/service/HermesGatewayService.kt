@@ -36,6 +36,9 @@ class HermesGatewayService : Service() {
     @Inject
     lateinit var hermesRuntime: com.hermes.android.runtime.HermesRuntime
 
+    @Inject
+    lateinit var agentEventObserver: AgentEventObserver
+
     private val scope = CoroutineScope(SupervisorJob())
     private var connectionWatchJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -50,6 +53,11 @@ class HermesGatewayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("[GatewayService] onStartCommand")
         startForeground(NOTIFICATION_ID, buildNotification("Connecting to Hermes gateway…"))
+
+        // Proactive notifications: watch gateway events for the whole life of
+        // the background connection (ChatViewModel's collector dies with the
+        // UI; this one doesn't). Idempotent across restarts.
+        agentEventObserver.start(scope)
 
         connectionWatchJob?.cancel()
         connectionWatchJob = scope.launch {
