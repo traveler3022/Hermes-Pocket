@@ -1129,6 +1129,29 @@ class ChatViewModel @Inject constructor(
     // ── Event handling ────────────────────────────────────────────────────
 
     private fun handleEvent(event: GatewayEvent) {
+        // Multi-session isolation: every live session shares this ONE
+        // WebSocket, so a background task streaming its turn used to pour
+        // its message.start/delta/complete into whatever chat was open —
+        // tokens from another conversation appearing mid-screen, and the
+        // task's message.complete finalizing the CHAT's in-flight bubble
+        // (which read as "the chat got cut off"). Render only the active
+        // session's traffic here. Interactive prompts (approval/clarify/
+        // sudo/secret) must pass from ANY session — dropping them would
+        // hang a background task waiting for an answer — and SessionEnd
+        // already checks its own session id in its handler.
+        val eventSid = event.sessionId
+        val activeSid = _uiState.value.activeSessionId
+        if (eventSid != null && activeSid != null && eventSid != activeSid &&
+            event !is GatewayEvent.ApprovalRequest &&
+            event !is GatewayEvent.ClarifyRequest &&
+            event !is GatewayEvent.SudoRequest &&
+            event !is GatewayEvent.SecretRequest &&
+            event !is GatewayEvent.SessionEnd &&
+            event !is GatewayEvent.BackgroundComplete
+        ) {
+            return
+        }
+
         when (event) {
             is GatewayEvent.MessageStart -> {
                 // Start a new assistant message (streaming). Use a unique
