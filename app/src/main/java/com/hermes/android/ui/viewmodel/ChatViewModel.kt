@@ -55,6 +55,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val sessionRepository: com.hermes.android.data.SessionRepository,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
     @ApplicationContext private val context: Context,
@@ -91,26 +92,14 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Reasoning effort, quick-switchable from the input bar.
-     *
-     * Fix: this used to shell out to python/yaml and read the GLOBAL
-     * config.yaml value — but setReasoningLevel writes session-scoped, so
-     * the control showed the global default instead of what the live chat
-     * actually runs at. The server's `config.get key="reasoning"` (see
-     * tui_gateway/server.py) prefers the session's live reasoning_config
-     * (create_reasoning_override included) and only falls back to
-     * config.yaml — use that, with our live session id when we have one.
+     * Reasoning effort, quick-switchable from the input bar. Scope semantics
+     * (live-session value preferred over the global default) live in
+     * [SessionRepository.reasoningLevel].
      */
     private fun loadReasoningLevel() {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
-                    put("key", "reasoning")
-                    _uiState.value.activeSessionId?.let { put("session_id", it) }
-                }
-                val result = gatewayClient.request(GatewayMethods.CONFIG_GET, jsonToElementMap(params))
-                val level = (result as? JsonObject)?.get("value")?.let { (it as? JsonPrimitive)?.content }
-                    ?.trim()?.takeIf { it.isNotBlank() } ?: "medium"
+                val level = sessionRepository.reasoningLevel(_uiState.value.activeSessionId)
                 _uiState.update { it.copy(reasoningLevel = level) }
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] Failed to load reasoning level")
@@ -127,31 +116,14 @@ class ChatViewModel @Inject constructor(
      * Passing our own activeSessionId is exactly that live-session path.
      */
     fun setReasoningLevel(rawLevel: String) {
-        val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
-                    put("key", "reasoning")
-                    put("value", level)
-                    _uiState.value.activeSessionId?.let { put("session_id", it) }
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(params))
+                val level = sessionRepository.setReasoningLevel(
+                    rawLevel,
+                    _uiState.value.activeSessionId,
+                )
                 _uiState.update { it.copy(reasoningLevel = level) }
                 Timber.i("[Chat] reasoning set to $level (session=${_uiState.value.activeSessionId})")
-                // The session-scoped write above deliberately never touches
-                // config.yaml (server-side design), so on its own the choice
-                // dies with this session and every new chat reverts to the
-                // old global default. Persist it as the global default too —
-                // best-effort, the live change already landed.
-                try {
-                    val globalParams = buildJsonObject {
-                        put("key", "reasoning")
-                        put("value", level)
-                    }
-                    gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(globalParams))
-                } catch (e: Exception) {
-                    Timber.w(e, "[Chat] reasoning global persist failed (live change applied)")
-                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to set reasoning level")
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Failed to set reasoning: ${e.message}")) }
@@ -387,25 +359,13 @@ class ChatViewModel @Inject constructor(
                 //   { session_id, resumed, message_count, messages: [...] }
                 // We MUST adopt the returned `session_id` as the active session —
                 // sending prompt.submit with the old id fails "session not found".
-                val params = buildJsonObject { put("session_id", sessionId) }
-                val result = try {
-                    gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
-                } catch (resumeError: Exception) {
-                    // session.resume only knows STORED db ids — handing it a
-                    // LIVE id (what Task Desk rows and notification taps carry,
-                    // since events/active_list speak live ids) fails with 4007
-                    // "session not found" BEFORE its live fast-path is reached.
-                    // session.activate is the server's attach-to-a-live-session
-                    // RPC and returns the same payload shape; fall back to it.
-                    Timber.w("[Chat] resume failed (${resumeError.message}); trying session.activate for $sessionId")
-                    gatewayClient.request(GatewayMethods.SESSION_ACTIVATE, jsonToElementMap(params))
-                }
+                // Stored-vs-live id semantics (resume vs activate) live in
+                // SessionRepository.attach — Milestone A, پیمان ۵.
+                val attached = sessionRepository.attach(sessionId)
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
-                val liveSessionId = (result as? JsonObject)
-                    ?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-                    ?.takeIf { it.isNotBlank() } ?: sessionId
-                val history = parseSessionHistory(result)
+                val liveSessionId = attached.liveId
+                val history = parseSessionHistory(attached.raw)
                 _uiState.update { it.copy(
                     activeSessionId = liveSessionId,
                     messages = history,

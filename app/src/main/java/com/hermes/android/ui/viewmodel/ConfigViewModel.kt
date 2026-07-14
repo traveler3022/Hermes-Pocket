@@ -43,6 +43,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val sessionRepository: com.hermes.android.data.SessionRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -215,25 +216,14 @@ class ConfigViewModel @Inject constructor(
 
     /** agent.reasoning_effort: none | minimal | low | medium | high | xhigh. */
     /**
-     * Fix: this used to pass session.most_recent's id as config.set's
-     * session_id — but that RPC returns the STORED db row id, while
-     * config.set resolves sessions by their LIVE key (session.resume mints a
-     * fresh uuid4().hex[:8] and _sessions is keyed by that). The lookup
-     * missed every time, and config.set's no-session fallback silently wrote
-     * the global config.yaml — the write "succeeded" while the live chat
-     * never changed. Settings is the global-default control anyway, so write
-     * global explicitly (applies to new chats); the live-chat switch is the
-     * reasoning control in the chat input bar, which owns the real live id.
+     * Settings is the global-default control (applies to new chats); the
+     * live-chat switch is the chat input bar's control. Scope semantics live
+     * in SessionRepository.setReasoningLevel (Milestone A).
      */
     fun setReasoning(rawLevel: String) {
         viewModelScope.launch {
             try {
-                val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
-                val params = buildJsonObject {
-                    put("key", "reasoning")
-                    put("value", level)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
+                val level = sessionRepository.setReasoningLevel(rawLevel, liveSessionId = null)
                 _uiState.value = _uiState.value.copy(reasoning = level)
                 Timber.i("[Config] reasoning set to $level (global default)")
             } catch (e: Exception) {
