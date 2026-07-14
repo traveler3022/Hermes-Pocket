@@ -67,8 +67,11 @@ class HermesGatewayService : Service() {
                         is ConnectionState.Disconnected -> "Disconnected"
                         is ConnectionState.Connecting -> "Connecting…"
                         is ConnectionState.Connected -> "Gateway running"
+                        // Show WHY — an endless "attempt N" with no reason is
+                        // undebuggable from the phone.
                         is ConnectionState.Reconnecting ->
-                            "Reconnecting (attempt ${state.attempt})…"
+                            "Reconnecting (attempt ${state.attempt})" +
+                                (state.lastError?.let { ": $it" } ?: "…")
                         is ConnectionState.Failed -> "Connection failed: ${state.reason}"
                     }
                     updateNotification(text)
