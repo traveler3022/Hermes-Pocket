@@ -85,6 +85,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Foreground = the strongest reconnect signal there is. onStartCommand
+        // re-runs the connect path; it's a cheap no-op when already connected,
+        // and it cuts any pending backoff wait when we're offline.
+        com.hermes.android.service.HermesGatewayService.start(this)
+    }
+
     @Suppress("BatteryLife")
     private fun requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
