@@ -93,17 +93,33 @@ class SessionRepository @Inject constructor(
         val isRunning: Boolean get() = status == "streaming" || status == "running"
     }
 
+    /** A finished/idle task from the server's session store (history tab). */
+    data class TaskHistoryRow(
+        val id: String,
+        val title: String,
+        val preview: String,
+        val messageCount: Int,
+    )
+
+    /** One transcript line for the result sheet. */
+    data class TranscriptEntry(
+        val role: String,
+        val text: String,
+    )
+
     /**
      * Launch delegated work: a titled session + one prompt, registered so the
      * Task Desk can tell it apart from every other live session. The created
      * session is deliberately NOT tracked as the reconnect auto-resume target
-     * (that belongs to the user's chat).
+     * (that belongs to the user's chat). [reasoningEffort] is a per-session
+     * override (none/minimal/low/medium/high/xhigh); blank leaves the default.
      */
-    suspend fun launchTask(title: String, prompt: String): String {
+    suspend fun launchTask(title: String, prompt: String, reasoningEffort: String? = null): String {
         val createParams = buildJsonObject {
             val cleanTitle = title.trim()
             if (cleanTitle.isNotEmpty()) put("title", cleanTitle)
             put("source", TASK_SOURCE)
+            reasoningEffort?.trim()?.takeIf { it.isNotEmpty() }?.let { put("reasoning_effort", it) }
         }.toElementMap()
         val created = gatewayClient.request(
             GatewayMethods.SESSION_CREATE, createParams, trackSession = false,
@@ -145,6 +161,53 @@ class SessionRepository @Inject constructor(
                 lastActive = row.str("last_active").toDoubleOrNull() ?: 0.0,
             )
         }.sortedByDescending { it.lastActive }
+    }
+
+    /**
+     * Tasks launched from this app that are no longer live — read from the
+     * server's persistent session store (session.list), filtered to our
+     * source AND the local registry (a shared server could hold pocket_task
+     * rows this device never created). Newest first.
+     */
+    suspend fun taskHistory(): List<TaskHistoryRow> {
+        val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
+        val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
+            ?.mapNotNull { it as? JsonObject } ?: return emptyList()
+        return rows.mapNotNull { row ->
+            val id = row.str("id")
+            if (id.isEmpty()) return@mapNotNull null
+            val isOurs = row.str("source") == TASK_SOURCE && taskRegistry.isTask(id, id)
+            if (!isOurs) return@mapNotNull null
+            TaskHistoryRow(
+                id = id,
+                title = row.str("title").ifEmpty { id },
+                preview = row.str("preview"),
+                messageCount = row.str("message_count").toIntOrNull() ?: 0,
+            )
+        }
+    }
+
+    /**
+     * Full transcript of a task for the result sheet. Attaches first (server
+     * lazily rebuilds a reaped session from its db row), so it works for both
+     * live and finished tasks.
+     */
+    suspend fun transcript(sessionId: String): List<TranscriptEntry> {
+        val attached = attach(sessionId)
+        val messages = attached.raw["messages"] as? JsonArray
+            ?: run {
+                val hist = gatewayClient.request(
+                    GatewayMethods.SESSION_HISTORY,
+                    buildJsonObject { put("session_id", attached.liveId) }.toElementMap(),
+                )
+                (hist as? JsonObject)?.get("messages") as? JsonArray
+            }
+            ?: return emptyList()
+        return messages.mapNotNull { it as? JsonObject }.mapNotNull { m ->
+            val role = m.str("role").ifEmpty { return@mapNotNull null }
+            val text = m.str("content").ifEmpty { m.str("text") }
+            if (text.isBlank()) null else TranscriptEntry(role, text)
+        }
     }
 
     suspend fun interrupt(liveId: String) {

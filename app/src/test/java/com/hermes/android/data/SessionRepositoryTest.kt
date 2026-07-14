@@ -232,4 +232,83 @@ class SessionRepositoryTest {
         gateway.handler = { _, _ -> buildJsonObject { put("value", "") } }
         assertEquals("medium", repo.reasoningLevel(null))
     }
+
+    // ── Milestone B ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `launchTask forwards a per-task reasoning effort`() = runTest {
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_CREATE -> buildJsonObject {
+                    put("session_id", "liveT"); put("stored_session_id", "storedT")
+                }
+                else -> buildJsonObject { put("status", "streaming") }
+            }
+        }
+        repo.launchTask("deep", "analyze logs", reasoningEffort = "high")
+        val create = gateway.calls.first { it.method == GatewayMethods.SESSION_CREATE }
+        assertEquals("high", create.params.str("reasoning_effort"))
+    }
+
+    @Test
+    fun `taskHistory returns only our source AND registered rows`() = runTest {
+        registry.register("mine", "mine")
+        gateway.handler = { _, _ ->
+            buildJsonObject {
+                put(
+                    "sessions",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("id", "mine"); put("title", "my task")
+                                put("preview", "done"); put("message_count", 4)
+                                put("source", SessionRepository.TASK_SOURCE)
+                            }
+                        )
+                        // right source, but this device never launched it
+                        add(
+                            buildJsonObject {
+                                put("id", "someone-else"); put("title", "x")
+                                put("source", SessionRepository.TASK_SOURCE)
+                            }
+                        )
+                        // our registry but a normal chat source → not a task
+                        add(
+                            buildJsonObject {
+                                put("id", "mine"); put("title", "chat"); put("source", "tui")
+                            }
+                        )
+                    }
+                )
+            }
+        }
+        val history = repo.taskHistory()
+        assertEquals(listOf("mine"), history.map { it.id })
+        assertEquals(4, history.single().messageCount)
+    }
+
+    @Test
+    fun `transcript attaches then flattens roles and text`() = runTest {
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_RESUME, GatewayMethods.SESSION_ACTIVATE -> buildJsonObject {
+                    put("session_id", "liveX")
+                    put(
+                        "messages",
+                        buildJsonArray {
+                            add(buildJsonObject { put("role", "user"); put("content", "hi") })
+                            add(buildJsonObject { put("role", "assistant"); put("text", "hello") })
+                            add(buildJsonObject { put("role", "assistant"); put("content", "  ") })
+                        }
+                    )
+                }
+                else -> JsonObject(emptyMap())
+            }
+        }
+        val t = repo.transcript("storedX")
+        assertEquals(2, t.size) // blank-only message dropped
+        assertEquals("user", t[0].role)
+        assertEquals("hi", t[0].text)
+        assertEquals("hello", t[1].text)
+    }
 }
