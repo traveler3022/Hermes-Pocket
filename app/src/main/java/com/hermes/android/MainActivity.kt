@@ -182,8 +182,34 @@ private fun HermesNavHost(
                 onNavigateToSkills = { navController.navigate("skills") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
+                onNavigateToProjects = { navController.navigate("projects") },
+                onNavigateToPet = { navController.navigate("pet") },
+                onNavigateToBilling = { navController.navigate("billing") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
+            )
+        }
+
+        composable("projects") {
+            com.hermes.android.ui.screen.ProjectsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenSession = { sessionId ->
+                    navController.navigate("chat?resumeSessionId=$sessionId") {
+                        popUpTo("chat") { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable("pet") {
+            com.hermes.android.ui.screen.PetScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("billing") {
+            com.hermes.android.ui.screen.BillingScreen(
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 

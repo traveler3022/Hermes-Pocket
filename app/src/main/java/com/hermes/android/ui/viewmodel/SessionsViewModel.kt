@@ -281,13 +281,34 @@ class SessionsViewModel @Inject constructor(
     // ── Rename session (#6) ───────────────────────────────────────────────
 
     fun showRenameDialog(sessionId: String, currentTitle: String) {
+        val preview = _uiState.value.sessions.find { it.id == sessionId }?.lastMessagePreview
         _uiState.value = _uiState.value.copy(
-            showRenameDialog = SessionRenameDialog(sessionId, currentTitle),
+            showRenameDialog = SessionRenameDialog(sessionId, currentTitle, preview),
         )
     }
 
     fun hideRenameDialog() {
         _uiState.value = _uiState.value.copy(showRenameDialog = null)
+    }
+
+    /** llm.oneshot: a short title suggestion from the session's last preview. */
+    fun suggestTitle(preview: String, onSuggestion: (String) -> Unit) {
+        if (preview.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject {
+                    put("instructions", "Suggest a short, descriptive title (max 6 words, no quotes) for a chat that most recently said this. Reply with ONLY the title.")
+                    put("input", preview.take(500))
+                    put("max_tokens", 32)
+                }
+                val result = gatewayClient.request(GatewayMethods.LLM_ONESHOT, params.toMap())
+                val text = (result as? JsonObject)?.get("text")?.let { (it as? JsonPrimitive)?.content }
+                    ?.trim()?.trim('"')
+                if (!text.isNullOrBlank()) onSuggestion(text)
+            } catch (e: Exception) {
+                Timber.w(e, "[Sessions] suggestTitle failed")
+            }
+        }
     }
 
     fun renameSession(sessionId: String, newTitle: String) {
@@ -546,6 +567,7 @@ enum class SessionSortOrder {
 data class SessionRenameDialog(
     val sessionId: String,
     val currentTitle: String,
+    val preview: String? = null,
 )
 
 data class SessionsUiState(

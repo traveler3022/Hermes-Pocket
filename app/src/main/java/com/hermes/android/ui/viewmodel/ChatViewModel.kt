@@ -564,7 +564,31 @@ class ChatViewModel @Inject constructor(
                     throw IllegalStateException("File is empty")
                 }
 
-                val attachment = if (mime.startsWith("image/")) {
+                val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
+                    // pdf.attach renders each page to PNG server-side (the
+                    // vision pipeline takes images, not PDFs) and queues every
+                    // page the same way image.attach_bytes does — represent
+                    // each queued page as its own chip, same as multi-image.
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        put("content_base64", b64.toString())
+                        put("filename", name)
+                    }
+                    val result = gatewayClient.request(GatewayMethods.PDF_ATTACH, jsonToElementMap(params))
+                        as? JsonObject ?: throw IllegalStateException("Gateway returned no result")
+                    val pages = result["pages"] as? kotlinx.serialization.json.JsonArray
+                        ?: throw IllegalStateException("PDF attach returned no pages")
+                    pages.mapIndexedNotNull { idx, pageEl ->
+                        val page = pageEl as? JsonObject ?: return@mapIndexedNotNull null
+                        val path = (page["path"] as? JsonPrimitive)?.content
+                        PendingAttachment(
+                            name = "$name (p.${idx + 1})",
+                            isImage = true,
+                            gatewayPath = path,
+                            localUri = uri.toString(),
+                        )
+                    }
+                } else if (mime.startsWith("image/")) {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
                         put("content_base64", b64.toString())
@@ -572,7 +596,7 @@ class ChatViewModel @Inject constructor(
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
-                    PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
+                    listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
@@ -582,13 +606,13 @@ class ChatViewModel @Inject constructor(
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
                     val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
                         ?: throw IllegalStateException("Gateway returned no file reference")
-                    PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
+                    listOf(PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString()))
                 }
                 _uiState.update { it.copy(
-                    pendingAttachments = _uiState.value.pendingAttachments + attachment,
+                    pendingAttachments = _uiState.value.pendingAttachments + newAttachments,
                     isAttaching = false,
                 ) }
-                Timber.i("[Chat] Attached ${attachment.name} (image=${attachment.isImage}, size=${totalSize})")
+                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (size=${totalSize})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Attach failed")
                 _uiState.update { it.copy(

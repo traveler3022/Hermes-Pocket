@@ -36,12 +36,14 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
@@ -125,6 +127,9 @@ fun ConfigScreen(
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    onNavigateToProjects: () -> Unit = {},
+    onNavigateToPet: () -> Unit = {},
+    onNavigateToBilling: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
@@ -173,6 +178,9 @@ fun ConfigScreen(
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
+                    onNavigateToProjects = onNavigateToProjects,
+                    onNavigateToPet = onNavigateToPet,
+                    onNavigateToBilling = onNavigateToBilling,
                 )
                 SettingsSection.GENERAL -> GeneralTab(
                     state = uiState,
@@ -218,6 +226,9 @@ private fun SettingsMenu(
     onNavigateToPlugins: () -> Unit,
     onNavigateToSkills: () -> Unit,
     onNavigateToCron: () -> Unit,
+    onNavigateToProjects: () -> Unit,
+    onNavigateToPet: () -> Unit,
+    onNavigateToBilling: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -347,6 +358,24 @@ private fun SettingsMenu(
                 subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
+            ),
+            DomainSpec(
+                title = t("Projects", "پروژه‌ها"),
+                subtitle = t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
+                icon = Icons.Default.Folder,
+                onClick = onNavigateToProjects,
+            ),
+            DomainSpec(
+                title = t("Billing", "صورتحساب"),
+                subtitle = t("Balance and auto-reload", "موجودی و شارژ خودکار"),
+                icon = Icons.Default.AccountBalanceWallet,
+                onClick = onNavigateToBilling,
+            ),
+            DomainSpec(
+                title = t("Pet", "پت"),
+                subtitle = t("Adopt and manage your pet", "انتخاب و مدیریت پت"),
+                icon = Icons.Default.Pets,
+                onClick = onNavigateToPet,
             ),
             DomainSpec(
                 title = t("Advanced", "پیشرفته"),

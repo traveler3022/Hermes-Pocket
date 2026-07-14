@@ -42,6 +42,8 @@ class TasksViewModel @Inject constructor(
         val isLoadingResult: Boolean = false,
         /** Models available for the per-task picker (loaded lazily). */
         val models: List<SessionRepository.ModelChoice> = emptyList(),
+        /** Process-wide subagent spawn control (delegation.status/pause). */
+        val delegation: SessionRepository.DelegationStatus? = null,
     )
 
     data class ResultSheet(
@@ -72,6 +74,7 @@ class TasksViewModel @Inject constructor(
     /** Poll while the screen is visible; live statuses go stale otherwise. */
     fun startPolling() {
         if (pollJob?.isActive == true) return
+        loadDelegationStatus()
         pollJob = viewModelScope.launch {
             refresh(showSpinner = true)
             while (isActive) {
@@ -98,6 +101,32 @@ class TasksViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.w(e, "[Tasks] refresh failed")
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+            }
+        }
+    }
+
+    /** Subagent spawn control — separate load so a failure never blocks the board. */
+    fun loadDelegationStatus() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(delegation = repository.delegationStatus())
+            } catch (e: Exception) {
+                Timber.w(e, "[Tasks] delegation status failed")
+            }
+        }
+    }
+
+    fun toggleDelegationPaused() {
+        val current = _uiState.value.delegation ?: return
+        viewModelScope.launch {
+            try {
+                val paused = repository.setDelegationPaused(!current.paused)
+                _uiState.value = _uiState.value.copy(
+                    delegation = current.copy(paused = paused),
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Tasks] toggle delegation pause failed")
+                _uiState.value = _uiState.value.copy(error = e.message)
             }
         }
     }

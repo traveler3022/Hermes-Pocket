@@ -2,6 +2,7 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -129,14 +130,24 @@ fun TasksScreen(
             }
 
             when (selectedTab) {
-                0 -> LiveTab(
-                    uiState = uiState,
-                    onOpenResult = { viewModel.openResult(it.id, it.title) },
-                    onOpenInChat = { onOpenInChat(it.id) },
-                    onInterrupt = { viewModel.interrupt(it.id) },
-                    onClose = { viewModel.close(it.id) },
-                    onStart = { showNewTaskDialog = true },
-                )
+                0 -> Column(modifier = Modifier.fillMaxSize()) {
+                    uiState.delegation?.let { delegation ->
+                        DelegationRow(
+                            delegation = delegation,
+                            onTogglePaused = { viewModel.toggleDelegationPaused() },
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        LiveTab(
+                            uiState = uiState,
+                            onOpenResult = { viewModel.openResult(it.id, it.title) },
+                            onOpenInChat = { onOpenInChat(it.id) },
+                            onInterrupt = { viewModel.interrupt(it.id) },
+                            onClose = { viewModel.close(it.id) },
+                            onStart = { showNewTaskDialog = true },
+                        )
+                    }
+                }
                 else -> HistoryTab(
                     uiState = uiState,
                     onOpenResult = { viewModel.openResult(it.id, it.title) },
@@ -265,6 +276,45 @@ private fun HistoryTab(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Process-wide subagent spawn control (delegation.status/pause). */
+@Composable
+private fun DelegationRow(
+    delegation: SessionRepository.DelegationStatus,
+    onTogglePaused: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(HxRadius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
+    ) {
+        Row(
+            modifier = Modifier.padding(HxSpace.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (delegation.active.isEmpty()) {
+                    t("No subagents running", "ساب‌ایجنتی در حال اجرا نیست")
+                } else {
+                    t(
+                        "${delegation.active.size} subagent(s) running",
+                        "${delegation.active.size} ساب‌ایجنت در حال اجرا",
+                    )
+                },
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onTogglePaused) {
+                Text(
+                    if (delegation.paused) t("Resume spawning", "ازسرگیری spawn")
+                    else t("Pause spawning", "توقف spawn"),
+                )
             }
         }
     }

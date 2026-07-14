@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -174,6 +175,7 @@ fun ChatScreen(
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
+    var showChanges by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -651,6 +653,14 @@ fun ChatScreen(
                             }
                         },
                         actions = {
+                            if (uiState.activeSessionId != null) {
+                                IconButton(onClick = { showChanges = true }) {
+                                    Icon(
+                                        Icons.Default.Undo,
+                                        contentDescription = t("Changes", "تغییرات"),
+                                    )
+                                }
+                            }
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
@@ -991,6 +1001,16 @@ fun ChatScreen(
             approval = approval,
             onRespond = viewModel::respondToApproval,
         )
+    }
+
+    if (showChanges) {
+        uiState.activeSessionId?.let { sid ->
+            ChangesSheet(
+                sessionId = sid,
+                snackbarHostState = snackbarHostState,
+                onDismiss = { showChanges = false },
+            )
+        }
     }
 
     // Rename dialog — client-side display name only (top bar / drawer header).
