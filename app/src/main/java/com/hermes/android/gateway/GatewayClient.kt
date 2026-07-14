@@ -75,6 +75,11 @@ interface GatewayClient {
      * @param method RPC method name (see [GatewayMethods])
      * @param params request parameters
      * @param timeoutMs max time to wait for response
+     * @param trackSession when true (default), a `session_id` in the response
+     *   is adopted as the client's auto-resume target on reconnect. Pass
+     *   false for requests whose sessions are NOT the user's focused chat —
+     *   e.g. Task Desk launches — so a mid-chat reconnect doesn't silently
+     *   jump the chat screen onto a background task's session.
      * @return the response result on success
      * @throws GatewayException on error response or timeout
      */
@@ -82,6 +87,7 @@ interface GatewayClient {
         method: String,
         params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
         timeoutMs: Long = 120_000,
+        trackSession: Boolean = true,
     ): kotlinx.serialization.json.JsonElement
 
     /**

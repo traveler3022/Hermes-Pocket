@@ -43,6 +43,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val sessionRepository: com.hermes.android.data.SessionRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -215,33 +216,16 @@ class ConfigViewModel @Inject constructor(
 
     /** agent.reasoning_effort: none | minimal | low | medium | high | xhigh. */
     /**
-     * Fix: this used to write agent.reasoning_effort to config.yaml directly
-     * via shell.exec — that only takes effect for future sessions, never the
-     * one currently open. Verified against tui_gateway/server.py's
-     * config.set: it has a dedicated `key="reasoning"` case that, when given
-     * a session_id, sets session["create_reasoning_override"] AND updates
-     * the live agent's reasoning_config directly (immediate effect on the
-     * current chat), and only falls back to writing config.yaml when no
-     * session is passed. Use that RPC instead of hand-editing the file.
+     * Settings is the global-default control (applies to new chats); the
+     * live-chat switch is the chat input bar's control. Scope semantics live
+     * in SessionRepository.setReasoningLevel (Milestone A).
      */
     fun setReasoning(rawLevel: String) {
         viewModelScope.launch {
             try {
-                val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
-                val sid = try {
-                    val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-                } catch (e: Exception) {
-                    null
-                }
-                val params = buildJsonObject {
-                    put("key", "reasoning")
-                    put("value", level)
-                    if (!sid.isNullOrBlank()) put("session_id", sid)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
+                val level = sessionRepository.setReasoningLevel(rawLevel, liveSessionId = null)
                 _uiState.value = _uiState.value.copy(reasoning = level)
-                Timber.i("[Config] reasoning set to $level (session=$sid)")
+                Timber.i("[Config] reasoning set to $level (global default)")
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to set reasoning")
                 _uiState.value = _uiState.value.copy(

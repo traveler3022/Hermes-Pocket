@@ -55,6 +55,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val sessionRepository: com.hermes.android.data.SessionRepository,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
     @ApplicationContext private val context: Context,
@@ -86,33 +87,19 @@ class ChatViewModel @Inject constructor(
         loadAssistantAvatar()
         connectAndCollect()
         loadCommandCatalog()
-        loadReasoningLevel()
+        // reasoning level is loaded from the Connected branch of
+        // connectAndCollect — calling it here would race the WS handshake.
     }
 
     /**
-     * Reasoning effort (agent.reasoning_effort), quick-switchable from the
-     * input bar — mirrors ConfigViewModel's setting under Settings > General
-     * so both stay in sync (both read/write the same config.yaml key).
+     * Reasoning effort, quick-switchable from the input bar. Scope semantics
+     * (live-session value preferred over the global default) live in
+     * [SessionRepository.reasoningLevel].
      */
     private fun loadReasoningLevel() {
         viewModelScope.launch {
             try {
-                val result = gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf(
-                        "command" to JsonPrimitive(
-                            "python3 - <<'H2PYEOF'\n" +
-                                "import yaml, pathlib\n" +
-                                "p = pathlib.Path.home() / '.hermes' / 'config.yaml'\n" +
-                                "d = yaml.safe_load(p.read_text()) if p.exists() else {}\n" +
-                                "d = d or {}\n" +
-                                "print(str((d.get('agent') or {}).get('reasoning_effort', '') or 'medium'))\n" +
-                                "H2PYEOF"
-                        ),
-                    ),
-                )
-                val level = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content }
-                    ?.trim()?.takeIf { it.isNotBlank() } ?: "medium"
+                val level = sessionRepository.reasoningLevel(_uiState.value.activeSessionId)
                 _uiState.update { it.copy(reasoningLevel = level) }
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] Failed to load reasoning level")
@@ -129,15 +116,12 @@ class ChatViewModel @Inject constructor(
      * Passing our own activeSessionId is exactly that live-session path.
      */
     fun setReasoningLevel(rawLevel: String) {
-        val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
-                    put("key", "reasoning")
-                    put("value", level)
-                    _uiState.value.activeSessionId?.let { put("session_id", it) }
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, jsonToElementMap(params))
+                val level = sessionRepository.setReasoningLevel(
+                    rawLevel,
+                    _uiState.value.activeSessionId,
+                )
                 _uiState.update { it.copy(reasoningLevel = level) }
                 Timber.i("[Chat] reasoning set to $level (session=${_uiState.value.activeSessionId})")
             } catch (e: Exception) {
@@ -237,6 +221,12 @@ class ChatViewModel @Inject constructor(
                             // worst, not destructive.
                             createOrResumeSession()
                         }
+                        // Now that a live session id is (or is about to be)
+                        // settled, read the effort the chat actually runs at.
+                        // The init-time call races the WebSocket handshake and
+                        // silently fails on a cold start, leaving the control
+                        // stuck on the "medium" default.
+                        loadReasoningLevel()
                     }
                 }
             }
@@ -369,14 +359,13 @@ class ChatViewModel @Inject constructor(
                 //   { session_id, resumed, message_count, messages: [...] }
                 // We MUST adopt the returned `session_id` as the active session —
                 // sending prompt.submit with the old id fails "session not found".
-                val params = buildJsonObject { put("session_id", sessionId) }
-                val result = gatewayClient.request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                // Stored-vs-live id semantics (resume vs activate) live in
+                // SessionRepository.attach — Milestone A, پیمان ۵.
+                val attached = sessionRepository.attach(sessionId)
                 activeAssistantMessageId = null
                 resetStreamingBuffer()
-                val liveSessionId = (result as? JsonObject)
-                    ?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-                    ?.takeIf { it.isNotBlank() } ?: sessionId
-                val history = parseSessionHistory(result)
+                val liveSessionId = attached.liveId
+                val history = parseSessionHistory(attached.raw)
                 _uiState.update { it.copy(
                     activeSessionId = liveSessionId,
                     messages = history,
@@ -386,6 +375,9 @@ class ChatViewModel @Inject constructor(
                     activeTodos = emptyList(),
                     pendingApproval = null,
                 ) }
+                // The resumed session may carry its own reasoning override —
+                // re-read against the new live id so the control matches it.
+                loadReasoningLevel()
                 if (history.isNotEmpty()) {
                     Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
                 } else {
@@ -572,7 +564,31 @@ class ChatViewModel @Inject constructor(
                     throw IllegalStateException("File is empty")
                 }
 
-                val attachment = if (mime.startsWith("image/")) {
+                val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
+                    // pdf.attach renders each page to PNG server-side (the
+                    // vision pipeline takes images, not PDFs) and queues every
+                    // page the same way image.attach_bytes does — represent
+                    // each queued page as its own chip, same as multi-image.
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        put("content_base64", b64.toString())
+                        put("filename", name)
+                    }
+                    val result = gatewayClient.request(GatewayMethods.PDF_ATTACH, jsonToElementMap(params))
+                        as? JsonObject ?: throw IllegalStateException("Gateway returned no result")
+                    val pages = result["pages"] as? kotlinx.serialization.json.JsonArray
+                        ?: throw IllegalStateException("PDF attach returned no pages")
+                    pages.mapIndexedNotNull { idx, pageEl ->
+                        val page = pageEl as? JsonObject ?: return@mapIndexedNotNull null
+                        val path = (page["path"] as? JsonPrimitive)?.content
+                        PendingAttachment(
+                            name = "$name (p.${idx + 1})",
+                            isImage = true,
+                            gatewayPath = path,
+                            localUri = uri.toString(),
+                        )
+                    }
+                } else if (mime.startsWith("image/")) {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
                         put("content_base64", b64.toString())
@@ -580,7 +596,7 @@ class ChatViewModel @Inject constructor(
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
-                    PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
+                    listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
@@ -590,13 +606,13 @@ class ChatViewModel @Inject constructor(
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
                     val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
                         ?: throw IllegalStateException("Gateway returned no file reference")
-                    PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
+                    listOf(PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString()))
                 }
                 _uiState.update { it.copy(
-                    pendingAttachments = _uiState.value.pendingAttachments + attachment,
+                    pendingAttachments = _uiState.value.pendingAttachments + newAttachments,
                     isAttaching = false,
                 ) }
-                Timber.i("[Chat] Attached ${attachment.name} (image=${attachment.isImage}, size=${totalSize})")
+                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (size=${totalSize})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Attach failed")
                 _uiState.update { it.copy(
@@ -1137,6 +1153,28 @@ class ChatViewModel @Inject constructor(
     // ── Event handling ────────────────────────────────────────────────────
 
     private fun handleEvent(event: GatewayEvent) {
+        // Multi-session isolation: every live session shares this ONE
+        // WebSocket, so a background task streaming its turn used to pour
+        // its message.start/delta/complete into whatever chat was open —
+        // tokens from another conversation appearing mid-screen, and the
+        // task's message.complete finalizing the CHAT's in-flight bubble
+        // (which read as "the chat got cut off"). Render only the active
+        // session's traffic here. Interactive prompts (approval/clarify/
+        // sudo/secret) must pass from ANY session — dropping them would
+        // hang a background task waiting for an answer — and
+        // BackgroundComplete is a cross-session completion signal.
+        val eventSid = event.sessionId
+        val activeSid = _uiState.value.activeSessionId
+        if (eventSid != null && activeSid != null && eventSid != activeSid &&
+            event !is GatewayEvent.ApprovalRequest &&
+            event !is GatewayEvent.ClarifyRequest &&
+            event !is GatewayEvent.SudoRequest &&
+            event !is GatewayEvent.SecretRequest &&
+            event !is GatewayEvent.BackgroundComplete
+        ) {
+            return
+        }
+
         when (event) {
             is GatewayEvent.MessageStart -> {
                 // Start a new assistant message (streaming). Use a unique

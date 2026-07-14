@@ -303,6 +303,53 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
         title = { Text(if (isEdit) t("Edit Cron Job", "ویرایش کار") else t("Create Cron Job", "ساخت کار جدید")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                if (!isEdit) {
+                    // One-tap routine templates (delegation v1). The morning
+                    // digest is the flagship proactive routine: the agent
+                    // opens the day with a report instead of waiting to be
+                    // asked. Fields stay editable after applying.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(
+                            Triple(
+                                t("☀️ Morning digest", "☀️ گزارش صبحگاهی"),
+                                "morning-digest" to "0 8 * * *",
+                                t(
+                                    "Good morning! Give me a short digest: server health and disk space, " +
+                                        "anything notable in logs since yesterday, unfinished tasks from our " +
+                                        "recent sessions, and 3 suggestions for today. Keep it brief.",
+                                    "صبح بخیر! یک گزارش کوتاه بده: وضعیت سرور و فضای دیسک، " +
+                                        "نکات مهم لاگ‌ها از دیروز تا الان، کارهای نیمه‌تمام سشن‌های اخیر، " +
+                                        "و ۳ پیشنهاد برای امروز. خلاصه بنویس.",
+                                ),
+                            ),
+                            Triple(
+                                t("🩺 Nightly check", "🩺 چک شبانه"),
+                                "nightly-check" to "0 23 * * *",
+                                t(
+                                    "Run a quick health check of the server (services, disk, errors in logs) " +
+                                        "and summarize anything that needs my attention.",
+                                    "یک بررسی سریع سلامت سرور انجام بده (سرویس‌ها، دیسک، خطاهای لاگ) " +
+                                        "و هرچیزی که نیاز به توجه من داره رو خلاصه کن.",
+                                ),
+                            ),
+                        ).forEach { (label, idAndSchedule, promptText) ->
+                            FilterChip(
+                                selected = name == idAndSchedule.first,
+                                onClick = {
+                                    name = idAndSchedule.first
+                                    schedule = idAndSchedule.second
+                                    prompt = promptText
+                                },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
