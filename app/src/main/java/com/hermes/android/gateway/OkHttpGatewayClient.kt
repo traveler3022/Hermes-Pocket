@@ -84,14 +84,6 @@ class OkHttpGatewayClient @Inject constructor(
     private var webSocket: WebSocket? = null
     private var currentUrl: String? = null
     private var reconnectJob: Job? = null
-    private var connectJob: Job? = null
-
-    // The single in-flight connect attempt. Concurrent/looping callers join
-    // this instead of each opening their own WebSocket — otherwise every extra
-    // open orphans the previous socket, which the gateway logs as a dead
-    // connection (messages=0, reason=client_disconnect code=1006).
-    @Volatile
-    private var pendingConnect: kotlinx.coroutines.CompletableDeferred<ConnectionState>? = null
 
     private val nextRequestId = AtomicLong(1)
     private val pendingRequests = ConcurrentHashMap<Long, kotlinx.coroutines.CompletableDeferred<JsonElement>>()
@@ -114,45 +106,59 @@ class OkHttpGatewayClient @Inject constructor(
             if (webSocket != null) return _connectionState.value
             Timber.w("[Gateway] state=Connected but socket is null — re-dialing")
         }
-        // A connect attempt is already in flight — join it instead of opening a
-        // second WebSocket. Without this, callers that race (ChatViewModel, the
-        // foreground service) or poll (TermuxBridge.waitForGatewayReady, which
-        // calls connect() every 500ms) each open a fresh socket and orphan the
-        // previous one, producing the messages=0 / code=1006 ghost connections
-        // seen in the gateway log.
-        pendingConnect?.let { existing ->
-            if (!existing.isCompleted) return existing.await()
-        }
-
-        // Cancel any pending reconnect
-        reconnectJob?.cancel()
-        connectJob?.cancel()
 
         currentUrl = url
-        _connectionState.value = ConnectionState.Connecting
-
-        val connectDeferred = kotlinx.coroutines.CompletableDeferred<ConnectionState>()
-        pendingConnect = connectDeferred
-        connectJob = scope.launch {
-            doConnect(url, connectDeferred, connectTimeoutMs)
+        if (_connectionState.value !is ConnectionState.Reconnecting) {
+            _connectionState.value = ConnectionState.Connecting
         }
 
-        return try {
-            val result = connectDeferred.await()
-            // Self-heal: a failed dial must never be terminal. As long as the
-            // user hasn't explicitly disconnect()ed, keep a background retry
-            // loop alive — this is the fix for the "first failed reconnect
-            // set Failed and everything stopped forever until a force-stop"
-            // trap (the reconnect loop refused to run while state was Failed).
-            if (result !is ConnectionState.Connected &&
-                _connectionState.value !is ConnectionState.Disconnected
-            ) {
-                scheduleReconnect()
+        val result = startDial(url, connectTimeoutMs).await()
+        // Self-heal: a failed dial must never be terminal. As long as the
+        // user hasn't explicitly disconnect()ed, keep a background retry
+        // loop alive.
+        if (result !is ConnectionState.Connected &&
+            _connectionState.value !is ConnectionState.Disconnected
+        ) {
+            scheduleReconnect()
+        }
+        return result
+    }
+
+    /**
+     * SINGLE-FLIGHT dialing — the fix for the "218 connection attempts, none
+     * ever completes" storm. Multiple dial sources exist (the reconnect loop,
+     * the network callback, foreground onStart, and every request()'s
+     * dial-on-demand); when each opened its own socket, every new attempt
+     * CLOSED the previous attempt's still-handshaking socket (doConnect closes
+     * webSocket first), so on any link where the handshake takes longer than
+     * the gap between dial triggers, no attempt ever survived to
+     * gateway.ready. Now there is at most ONE dial in flight, it runs on the
+     * client's own scope (cancelling a caller never kills the dial), and
+     * every other path joins its result.
+     */
+    @Volatile
+    private var inFlightDial: kotlinx.coroutines.CompletableDeferred<ConnectionState>? = null
+
+    private fun startDial(
+        url: String,
+        timeoutMs: Long = 15_000,
+    ): kotlinx.coroutines.CompletableDeferred<ConnectionState> = synchronized(this) {
+        inFlightDial?.let { existing ->
+            if (!existing.isCompleted) return existing
+        }
+        val deferred = kotlinx.coroutines.CompletableDeferred<ConnectionState>()
+        inFlightDial = deferred
+        scope.launch {
+            try {
+                doConnect(url, deferred, timeoutMs, quietFailure = true)
+            } finally {
+                if (inFlightDial === deferred) inFlightDial = null
+                if (!deferred.isCompleted) {
+                    deferred.complete(ConnectionState.Failed("dial cancelled"))
+                }
             }
-            result
-        } finally {
-            if (pendingConnect === connectDeferred) pendingConnect = null
         }
+        deferred
     }
 
     private suspend fun doConnect(
@@ -217,6 +223,11 @@ class OkHttpGatewayClient @Inject constructor(
                 if (!quietFailure) _connectionState.value = failed
                 deferred.complete(failed)
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // NEVER swallow cancellation into a Failed state — that turned a
+            // routine job cancel into a phantom connection failure.
+            if (!deferred.isCompleted) deferred.complete(ConnectionState.Failed("dial cancelled"))
+            throw ce
         } catch (e: Exception) {
             Timber.e(e, "[Gateway] connect() failed")
             val failed = ConnectionState.Failed(e.message ?: "Connect failed")
@@ -229,7 +240,8 @@ class OkHttpGatewayClient @Inject constructor(
 
     override suspend fun disconnect() {
         reconnectJob?.cancel()
-        connectJob?.cancel()
+        // Setting Disconnected FIRST makes any in-flight dial's success moot;
+        // startDial's finally also resolves its deferred for joiners.
         webSocket?.close(1000, "client disconnect")
         webSocket = null
         _connectionState.value = ConnectionState.Disconnected
@@ -380,8 +392,9 @@ class OkHttpGatewayClient @Inject constructor(
      * (Telegram model). Backoff is capped low; the network callback and
      * dial-on-demand cut the wait entirely when there's a better signal.
      */
-    private suspend fun reconnect(startImmediately: Boolean = false) {
+    private suspend fun reconnect() {
         var attempt = 0
+        var lastReason: String? = null
         while (true) {
             when (_connectionState.value) {
                 is ConnectionState.Connected -> return
@@ -391,27 +404,33 @@ class OkHttpGatewayClient @Inject constructor(
             attempt++
             // Exponent clamped BEFORE shifting: the old `1L shl (attempt-1)`
             // wrapped negative past attempt 63.
-            val delayMs = if (attempt == 1 && startImmediately) 0L else min(
+            val delayMs = min(
                 MAX_RECONNECT_DELAY_MS,
                 INITIAL_RECONNECT_DELAY_MS shl min(attempt - 1, RECONNECT_BACKOFF_MAX_EXP),
             )
+            // Carry the previous attempt's failure REASON into the state so
+            // the UI/notification can show WHY it keeps reconnecting — the
+            // difference between debuggable and "it just spins forever".
             _connectionState.value = ConnectionState.Reconnecting(
                 attempt = attempt,
                 nextAttemptInMs = delayMs,
-                lastError = null,
+                lastError = lastReason,
             )
-            Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms")
-            if (delayMs > 0) delay(delayMs)
+            Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms (last: $lastReason)")
+            delay(delayMs)
 
             val url = currentUrl ?: return
-            val deferred = kotlinx.coroutines.CompletableDeferred<ConnectionState>()
             try {
-                doConnect(url, deferred, 15_000, quietFailure = true)
-                if (deferred.await() is ConnectionState.Connected) {
-                    Timber.i("[Gateway] reconnected on attempt $attempt")
-                    return
+                when (val result = startDial(url).await()) {
+                    is ConnectionState.Connected -> {
+                        Timber.i("[Gateway] reconnected on attempt $attempt")
+                        return
+                    }
+                    is ConnectionState.Failed -> lastReason = result.reason
+                    else -> Unit
                 }
             } catch (e: Exception) {
+                lastReason = e.message
                 Timber.w("[Gateway] reconnect attempt $attempt failed: ${e.message}")
             }
         }
@@ -419,9 +438,9 @@ class OkHttpGatewayClient @Inject constructor(
 
     /**
      * Network came back (or changed) — dial NOW instead of waiting out a
-     * backoff window. Cancelling the sleeping loop and starting a fresh one
-     * with an immediate first attempt is what makes recovery feel instant
-     * the moment the screen turns on / Wi-Fi reattaches.
+     * backoff window. Single-flight makes this safe: if a dial is already in
+     * flight we join it; the sleeping loop discovers the result on its own
+     * schedule. Nothing gets cancelled mid-handshake anymore.
      */
     private fun registerNetworkCallback() {
         try {
@@ -429,12 +448,12 @@ class OkHttpGatewayClient @Inject constructor(
                 as android.net.ConnectivityManager
             cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
-                    if (currentUrl == null) return
+                    val url = currentUrl ?: return
                     val state = _connectionState.value
                     if (state is ConnectionState.Connected || state is ConnectionState.Disconnected) return
                     Timber.i("[Gateway] network available — dialing immediately")
-                    reconnectJob?.cancel()
-                    reconnectJob = scope.launch { reconnect(startImmediately = true) }
+                    startDial(url)
+                    scheduleReconnect() // safety net if this dial fails
                 }
             })
         } catch (e: Exception) {
