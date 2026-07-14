@@ -242,6 +242,17 @@ class SessionRepository @Inject constructor(
         }
     }
 
+    /**
+     * Tasks that have finished (a stored transcript with content, not
+     * currently streaming) — the completion set the notifier drives from.
+     * Cross-references session.list (persistent; survives session reaping)
+     * against the live running set so a task mid-turn is never reported done.
+     */
+    suspend fun finishedTasks(): List<TaskHistoryRow> {
+        val running = activeTasks().filter { it.isRunning }.map { it.id }.toSet()
+        return taskHistory().filter { it.id !in running && it.messageCount > 0 }
+    }
+
     suspend fun interrupt(liveId: String) {
         gatewayClient.request(
             GatewayMethods.SESSION_INTERRUPT,

@@ -36,6 +36,10 @@ class HermesApplication : Application(), Configuration.Provider {
         // Foreground tracking for proactive notifications: the event observer
         // only notifies when no Activity is visible.
         registerActivityLifecycleCallbacks(appForegroundState)
+        // Zero-config completion delivery (Milestone C): a periodic sync that
+        // catches task completions the live socket missed in Doze. Idempotent
+        // (KEEP), so this every-launch call never resets the cadence.
+        com.hermes.android.work.TaskSyncWorker.schedule(this)
         Timber.i("HermesApplication initializing")
     }
 

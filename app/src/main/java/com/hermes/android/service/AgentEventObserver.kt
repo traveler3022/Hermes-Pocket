@@ -43,6 +43,7 @@ class AgentEventObserver @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val foregroundState: AppForegroundState,
     private val notifier: AgentActivityNotifier,
+    private val completionTracker: com.hermes.android.data.TaskCompletionTracker,
 ) {
 
     private val started = AtomicBoolean(false)
@@ -69,7 +70,11 @@ class AgentEventObserver @Inject constructor(
                         }
                     }
                     is GatewayEvent.BackgroundComplete -> {
-                        if (!foregroundState.isForeground) {
+                        // claim() so the periodic worker won't re-notify the
+                        // same completion on its next window.
+                        if (!foregroundState.isForeground &&
+                            completionTracker.claim(event.taskId)
+                        ) {
                             notifier.showBackgroundTaskComplete(
                                 taskId = event.taskId,
                                 sessionId = event.sessionId,
