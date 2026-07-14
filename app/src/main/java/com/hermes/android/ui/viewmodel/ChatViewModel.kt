@@ -1137,8 +1137,8 @@ class ChatViewModel @Inject constructor(
         // (which read as "the chat got cut off"). Render only the active
         // session's traffic here. Interactive prompts (approval/clarify/
         // sudo/secret) must pass from ANY session — dropping them would
-        // hang a background task waiting for an answer — and SessionEnd
-        // already checks its own session id in its handler.
+        // hang a background task waiting for an answer — and
+        // BackgroundComplete is a cross-session completion signal.
         val eventSid = event.sessionId
         val activeSid = _uiState.value.activeSessionId
         if (eventSid != null && activeSid != null && eventSid != activeSid &&
@@ -1146,7 +1146,6 @@ class ChatViewModel @Inject constructor(
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
             event !is GatewayEvent.SecretRequest &&
-            event !is GatewayEvent.SessionEnd &&
             event !is GatewayEvent.BackgroundComplete
         ) {
             return
