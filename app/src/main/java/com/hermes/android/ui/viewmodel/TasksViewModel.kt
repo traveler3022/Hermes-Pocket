@@ -40,6 +40,8 @@ class TasksViewModel @Inject constructor(
         /** Open result sheet: title + transcript, or null when closed. */
         val openResult: ResultSheet? = null,
         val isLoadingResult: Boolean = false,
+        /** Models available for the per-task picker (loaded lazily). */
+        val models: List<SessionRepository.ModelChoice> = emptyList(),
     )
 
     data class ResultSheet(
@@ -116,17 +118,30 @@ class TasksViewModel @Inject constructor(
         }
     }
 
+    /** Load models for the per-task picker (called when the dialog opens). */
+    fun loadModels() {
+        if (_uiState.value.models.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(models = repository.availableModels())
+            } catch (e: Exception) {
+                Timber.w(e, "[Tasks] models failed")
+            }
+        }
+    }
+
     fun launchTask(
         title: String,
         prompt: String,
         reasoningEffort: String? = null,
+        model: SessionRepository.ModelChoice? = null,
         onLaunched: (String) -> Unit = {},
     ) {
         if (prompt.isBlank()) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLaunching = true)
             try {
-                val liveId = repository.launchTask(title, prompt, reasoningEffort)
+                val liveId = repository.launchTask(title, prompt, reasoningEffort, model)
                 _uiState.value = _uiState.value.copy(isLaunching = false)
                 refresh(showSpinner = false)
                 onLaunched(liveId)

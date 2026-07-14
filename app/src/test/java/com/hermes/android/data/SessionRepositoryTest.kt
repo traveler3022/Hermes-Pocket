@@ -236,7 +236,7 @@ class SessionRepositoryTest {
     // ── Milestone B ─────────────────────────────────────────────────────────
 
     @Test
-    fun `launchTask forwards a per-task reasoning effort`() = runTest {
+    fun `launchTask forwards per-task reasoning effort and model`() = runTest {
         gateway.handler = { method, _ ->
             when (method) {
                 GatewayMethods.SESSION_CREATE -> buildJsonObject {
@@ -245,9 +245,44 @@ class SessionRepositoryTest {
                 else -> buildJsonObject { put("status", "streaming") }
             }
         }
-        repo.launchTask("deep", "analyze logs", reasoningEffort = "high")
+        repo.launchTask(
+            "deep", "analyze logs",
+            reasoningEffort = "high",
+            model = SessionRepository.ModelChoice(provider = "anthropic", modelId = "claude-x"),
+        )
         val create = gateway.calls.first { it.method == GatewayMethods.SESSION_CREATE }
         assertEquals("high", create.params.str("reasoning_effort"))
+        assertEquals("claude-x", create.params.str("model"))
+        assertEquals("anthropic", create.params.str("provider"))
+    }
+
+    @Test
+    fun `availableModels flattens providers into provider+model pairs`() = runTest {
+        gateway.handler = { _, _ ->
+            buildJsonObject {
+                put(
+                    "providers",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("slug", "anthropic")
+                                put("models", buildJsonArray { add(JsonPrimitive("claude-x")); add(JsonPrimitive("claude-y")) })
+                            }
+                        )
+                        add(
+                            buildJsonObject {
+                                put("slug", "openai")
+                                put("models", buildJsonArray { add(JsonPrimitive("gpt-z")) })
+                            }
+                        )
+                    }
+                )
+            }
+        }
+        val models = repo.availableModels()
+        assertEquals(3, models.size)
+        assertEquals(SessionRepository.ModelChoice("anthropic", "claude-x"), models[0])
+        assertEquals(SessionRepository.ModelChoice("openai", "gpt-z"), models[2])
     }
 
     @Test

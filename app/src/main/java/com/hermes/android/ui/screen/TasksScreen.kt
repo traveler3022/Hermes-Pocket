@@ -86,6 +86,9 @@ fun TasksScreen(
         viewModel.startPolling()
         onDispose { viewModel.stopPolling() }
     }
+    LaunchedEffect(showNewTaskDialog) {
+        if (showNewTaskDialog) viewModel.loadModels()
+    }
     LaunchedEffect(selectedTab) {
         if (selectedTab == 1) viewModel.loadHistory()
     }
@@ -145,9 +148,10 @@ fun TasksScreen(
         if (showNewTaskDialog) {
             NewTaskDialog(
                 isLaunching = uiState.isLaunching,
+                models = uiState.models,
                 onDismiss = { showNewTaskDialog = false },
-                onLaunch = { title, prompt, effort ->
-                    viewModel.launchTask(title, prompt, effort) { showNewTaskDialog = false }
+                onLaunch = { title, prompt, effort, model ->
+                    viewModel.launchTask(title, prompt, effort, model) { showNewTaskDialog = false }
                 },
             )
         }
@@ -393,13 +397,16 @@ private fun ResultSheet(
 @Composable
 private fun NewTaskDialog(
     isLaunching: Boolean,
+    models: List<SessionRepository.ModelChoice>,
     onDismiss: () -> Unit,
-    onLaunch: (title: String, prompt: String, effort: String?) -> Unit,
+    onLaunch: (title: String, prompt: String, effort: String?, model: SessionRepository.ModelChoice?) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     // "" = use the default effort; otherwise a per-task override.
     var effort by remember { mutableStateOf("") }
+    // null = use the default model; otherwise a per-task override.
+    var model by remember { mutableStateOf<SessionRepository.ModelChoice?>(null) }
     val effortOptions = listOf("", "low", "medium", "high", "xhigh")
 
     AlertDialog(
@@ -446,11 +453,31 @@ private fun NewTaskDialog(
                         )
                     }
                 }
+                if (models.isNotEmpty()) {
+                    Text(t("Model", "مدل"), style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FilterChip(
+                            selected = model == null,
+                            onClick = { model = null },
+                            label = { Text(t("default", "پیش‌فرض"), style = MaterialTheme.typography.labelSmall) },
+                        )
+                        models.forEach { choice ->
+                            FilterChip(
+                                selected = model == choice,
+                                onClick = { model = choice },
+                                label = { Text(choice.modelId, style = MaterialTheme.typography.labelSmall) },
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onLaunch(title, prompt, effort.ifEmpty { null }) },
+                onClick = { onLaunch(title, prompt, effort.ifEmpty { null }, model) },
                 enabled = !isLaunching && prompt.isNotBlank(),
             ) { Text(if (isLaunching) t("Starting…", "در حال شروع…") else t("Start", "شروع")) }
         },
