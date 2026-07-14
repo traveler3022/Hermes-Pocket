@@ -372,7 +372,7 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun saveApiKey(provider: String, apiKey: *** {
+    fun saveApiKey(provider: String, apiKey: String) {
         viewModelScope.launch {
             try {
                 // Fix S5F04: model.save_key uses "slug" param, not "provider"
