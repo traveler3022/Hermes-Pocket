@@ -1231,19 +1231,6 @@ class ConfigViewModel @Inject constructor(
         return "'" + s.replace("'", "'\\''") + "'"
     }
 
-    /** Base64 (no-wrap) for smuggling arbitrary values into embedded python. */
-    private fun b64(s: String): String =
-        Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-
-    /**
-     * Slugs are interpolated straight into the python source, so they must
-     * never carry a quote, newline or shell metacharacter. Provider slugs are
-     * always `[a-z0-9._-]` in practice; strip anything else as defense-in-depth
-     * (the value may originate from a hand-edited config.yaml).
-     */
-    private fun safeSlug(s: String): String =
-        s.filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
-
     /**
      * Run a python snippet in Termux via the gateway's shell.exec RPC and
      * return its stdout. Throws with stderr when the script fails — callers
