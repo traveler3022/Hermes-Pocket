@@ -156,7 +156,7 @@ fun TasksScreen(
 
 @Composable
 private fun TaskRow(
-    task: TasksViewModel.TaskItem,
+    task: com.hermes.android.data.SessionRepository.TaskRow,
     onOpen: () -> Unit,
     onInterrupt: () -> Unit,
     onClose: () -> Unit,
