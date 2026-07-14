@@ -107,6 +107,29 @@ class SessionRepository @Inject constructor(
         val text: String,
     )
 
+    /** A selectable model for a new task (provider slug + model id). */
+    data class ModelChoice(
+        val provider: String,
+        val modelId: String,
+    )
+
+    /**
+     * Flat list of available models across authenticated providers, for the
+     * per-task model picker. Shape mirrors ConfigViewModel.parseModelOptions
+     * (build_models_payload → {providers:[{slug, models:[str]}]}).
+     */
+    suspend fun availableModels(): List<ModelChoice> {
+        val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
+        val providers = ((result as? JsonObject)?.get("providers") as? JsonArray) ?: return emptyList()
+        return providers.mapNotNull { it as? JsonObject }.flatMap { p ->
+            val slug = p.str("slug")
+            (p["models"] as? JsonArray).orEmptyStrings().map { ModelChoice(slug, it) }
+        }
+    }
+
+    private fun JsonArray?.orEmptyStrings(): List<String> =
+        this?.mapNotNull { (it as? JsonPrimitive)?.content }?.filter { it.isNotBlank() } ?: emptyList()
+
     /**
      * Launch delegated work: a titled session + one prompt, registered so the
      * Task Desk can tell it apart from every other live session. The created
@@ -114,12 +137,21 @@ class SessionRepository @Inject constructor(
      * (that belongs to the user's chat). [reasoningEffort] is a per-session
      * override (none/minimal/low/medium/high/xhigh); blank leaves the default.
      */
-    suspend fun launchTask(title: String, prompt: String, reasoningEffort: String? = null): String {
+    suspend fun launchTask(
+        title: String,
+        prompt: String,
+        reasoningEffort: String? = null,
+        model: ModelChoice? = null,
+    ): String {
         val createParams = buildJsonObject {
             val cleanTitle = title.trim()
             if (cleanTitle.isNotEmpty()) put("title", cleanTitle)
             put("source", TASK_SOURCE)
             reasoningEffort?.trim()?.takeIf { it.isNotEmpty() }?.let { put("reasoning_effort", it) }
+            model?.let {
+                put("model", it.modelId)
+                if (it.provider.isNotBlank()) put("provider", it.provider)
+            }
         }.toElementMap()
         val created = gatewayClient.request(
             GatewayMethods.SESSION_CREATE, createParams, trackSession = false,
