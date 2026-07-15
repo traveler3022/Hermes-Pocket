@@ -4,8 +4,8 @@
 
 ### Native Android chat client for a self-hosted Hermes Agent 🤖📱
 
-[![Build](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/hermes-android-vps-/actions/workflows/build-apk.yml)
-[![Download APK](https://img.shields.io/badge/⬇_Debug_APK-latest-0EA5E9?style=flat-square&logo=android)](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
+[![Build](https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml/badge.svg)](https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml)
+[![Download APK](https://img.shields.io/badge/⬇_Debug_APK-latest-0EA5E9?style=flat-square&logo=android)](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0EA5E9?style=flat-square)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material_3-0EA5E9?style=flat-square)](https://developer.android.com/jetpack/compose)
@@ -62,11 +62,22 @@ and scheduled jobs. Carry your agent in your pocket, reach it from anywhere over
 - Downloadable artifacts (PDFs, videos, files) — routed through the gateway HTTP client so they work on
   self-hosted `http://` setups where the system DownloadManager would silently fail
 
-### 🗂️ Sessions
+### 🗂️ Sessions & projects
 - Search, pin, rename, branch, and resume any past conversation
 - Auto-resume of the last session on reconnect
 - Draft auto-save (debounced)
 - Live history sync with the server
+- **Multiple sessions at once** — each session's event stream is isolated, so you can juggle several chats
+- **Project-linked sessions** — spin up a session tied to a project straight from the Projects screen
+
+### 🤖 Delegation & tasks (Task Desk)
+- **Task Desk** — a dedicated workspace for delegated work: run tasks, watch history, view results, re-run
+- **Per-task model picker** — give each task its own model instead of the global default
+- **Routine templates** — save reusable task recipes
+- **Proactive completion notifications** — get pinged when a background task finishes (via WorkManager,
+  zero-config delivery)
+- 12 more RPCs wired up: changes/rollback, projects, delegation control, pdf/title-suggest, billing, pet,
+  and more
 
 ### 🎨 Personalization
 - **Top bar identity** — show the assistant's name OR a custom avatar image (your choice)
@@ -84,6 +95,8 @@ and scheduled jobs. Carry your agent in your pocket, reach it from anywhere over
 - Add custom OpenAI-compatible providers (base URL + API key)
 - Auto-detect available models on provider add
 - **"All providers"** view — every model from every provider in one searchable list
+- **Active-model hero card** — see and switch your current model at a glance
+- **Cross-provider model search** — find any model across all providers
 - Fallback chain — pick an ordering; auto-failover across providers on errors
 - One-tap live model switch on the active session
 
@@ -91,7 +104,8 @@ and scheduled jobs. Carry your agent in your pocket, reach it from anywhere over
 - **Tool toggles** — enable/disable tool categories live on the current session
 - **Plugins manager** — see installed Hermes plugins, enable/disable
 - **Skills catalog** — browse the agent's available skills
-- **Cron jobs** — view and manage the agent's scheduled tasks
+- **Cron jobs** — human-readable schedules, last-run status, and presets
+- **Control Center hub** — Agent Behavior + Advanced settings in one place
 - **Command approval** — manual / smart / off modes for risky actions
 - **Platforms** — connect the agent to Telegram, Discord, or Slack bot tokens
 - **Memory** — view and edit the agent's persistent memory
@@ -116,7 +130,7 @@ See [Hermes Agent](https://github.com/NousResearch/hermes_agent) for full server
 
 ### 2. Install the app
 
-[⬇ **Download the latest debug APK**](https://github.com/traveler3022/hermes-android-vps-/releases/tag/debug-latest)
+[⬇ **Download the latest debug APK**](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest)
 → open the APK → allow "install from unknown sources" → install.
 
 ### 3. Connect
@@ -136,12 +150,14 @@ That's it — you're chatting with your agent.
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  UI (Jetpack Compose, Material 3)                    │  │
 │  │  ├── ChatScreen   ConfigScreen   SessionsScreen      │  │
-│  │  └── CronScreen   PluginsScreen  SkillsScreen        │  │
+│  │  ├── CronScreen   PluginsScreen  SkillsScreen        │  │
+│  │  └── ProjectsScreen  TaskDeskScreen                   │  │
 │  │                       │                              │  │
 │  │                       ▼                              │  │
 │  │  ViewModel (Hilt, StateFlow)                         │  │
 │  │  ├── ChatViewModel    ConfigViewModel                │  │
-│  │  └── SessionsViewModel CronViewModel                 │  │
+│  │  ├── SessionsViewModel CronViewModel                 │  │
+│  │  └── ProjectsViewModel TaskDeskViewModel             │  │
 │  │                       │                              │  │
 │  │                       ▼                              │  │
 │  │  GatewayClient (interface)                           │  │
@@ -159,12 +175,11 @@ That's it — you're chatting with your agent.
               │  ┌──────────────────┐  │
               │  │  hermes dashboard│  │
               │  │  behind TLS proxy│  │
-              │  └──────────────────┘  │
               └────────────────────────┘
 ```
 
 All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation
-(e.g. for tests) is one Hilt module change. Design docs live in [`docs/`](docs/).
+(e.g. for tests) is one Hilt module change. Design docs and mockups live in [`docs/`](docs/).
 
 ### Tech stack
 
@@ -193,10 +208,11 @@ app/src/main/java/com/hermes/android/
 ├── service/                     # Foreground service, approval notifications
 ├── ui/
 │   ├── component/               # Reusable composables (HermesMarkdown, etc.)
+│   ├── design/                  # Shared design system (colors, shapes, spacing)
 │   ├── i18n/                    # t() translation function, AppLanguage
 │   ├── screen/                  # All screens (Chat, Config, Sessions, etc.)
 │   ├── theme/                   # ColorTheme, Typography, ThemeModeState
-│   └── viewmodel/               # All ViewModels
+│   └── viewmodel/               # All ViewModels (incl. ConfigParsers/ConfigUiState/ConfigUtils)
 └── ...
 ```
 
@@ -205,8 +221,8 @@ app/src/main/java/com/hermes/android/
 ## 🛠️ Build from source
 
 ```bash
-git clone https://github.com/traveler3022/hermes-android-vps-.git
-cd hermes-android-vps-
+git clone https://github.com/traveler3022/Hermes-Pocket.git
+cd Hermes-Pocket
 ./gradlew :app:assembleDebug        # APK → app/build/outputs/apk/debug/
 ./gradlew :app:testDebugUnitTest    # unit tests (when present)
 ```
@@ -228,7 +244,7 @@ KEY_PASSWORD       key password
 Cut a release by pushing a version tag:
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+git tag v2.0.0 && git push origin v2.0.0
 ```
 
 CI builds a signed release APK and publishes it as a GitHub Release automatically. Locally, the same
@@ -307,6 +323,14 @@ WebSocket and renders the conversation.
 
 The app speaks the Hermes Agent gateway protocol (JSON-RPC over WebSocket). Any server implementing the
 same protocol would work, but the app is designed and tested against Hermes Agent specifically.
+</details>
+
+<details>
+<summary><b>What is Task Desk?</b></summary>
+
+Task Desk is the home for delegated work. Instead of chatting back and forth, you hand the agent a task
+(with its own model and effort level), and it runs in the background. When it's done, you get a
+notification and can open the result sheet, re-run it, or save it as a routine template.
 </details>
 
 <details>
