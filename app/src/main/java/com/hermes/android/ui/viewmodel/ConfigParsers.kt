@@ -84,3 +84,25 @@ fun parseConfigSections(result: JsonElement): String {
         "(parse error: ${e.message})"
     }
 }
+
+fun parseCredentialEntries(json: String): List<CredentialEntry> {
+    return try {
+        val arr = kotlinx.serialization.json.Json.parseToJsonElement(json) as? JsonArray
+        arr?.mapNotNull { el ->
+            val obj = el as? JsonObject ?: return@mapNotNull null
+            CredentialEntry(
+                index = (obj["index"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                id = (obj["id"] as? JsonPrimitive)?.content,
+                label = (obj["label"] as? JsonPrimitive)?.content,
+                authType = (obj["auth_type"] as? JsonPrimitive)?.content,
+                tokenPreview = (obj["token_preview"] as? JsonPrimitive)?.content ?: "***",
+                priority = (obj["priority"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                lastStatus = (obj["last_status"] as? JsonPrimitive)?.content,
+                requestCount = (obj["request_count"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            )
+        } ?: emptyList()
+    } catch (e: Exception) {
+        Timber.w(e, "[Config] Failed to parse credentials")
+        emptyList()
+    }
+}
