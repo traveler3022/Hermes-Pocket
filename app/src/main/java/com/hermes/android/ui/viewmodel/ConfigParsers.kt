@@ -60,3 +60,27 @@ fun parseToolList(result: JsonElement): List<ToolOption> {
         emptyList()
     }
 }
+
+fun parseConfigSections(result: JsonElement): String {
+    return try {
+        val obj = result as? JsonObject ?: return "(empty)"
+        val sections = obj["sections"] as? kotlinx.serialization.json.JsonArray ?: return "(empty)"
+        buildString {
+            for (sectionEl in sections) {
+                val section = sectionEl as? JsonObject ?: continue
+                val title = section["title"]?.let { (it as? JsonPrimitive)?.content } ?: ""
+                appendLine("## $title")
+                val rows = section["rows"] as? kotlinx.serialization.json.JsonArray ?: continue
+                for (rowEl in rows) {
+                    val row = rowEl as? kotlinx.serialization.json.JsonArray ?: continue
+                    val label = row.getOrNull(0)?.let { (it as? JsonPrimitive)?.content } ?: ""
+                    val value = row.getOrNull(1)?.let { (it as? JsonPrimitive)?.content } ?: ""
+                    appendLine("  $label: $value")
+                }
+                appendLine()
+            }
+        }
+    } catch (e: Exception) {
+        "(parse error: ${e.message})"
+    }
+}
