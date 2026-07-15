@@ -540,31 +540,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    private fun parseToolList(result: JsonElement): List<ToolOption> {
-        return try {
-            // Fix S5F02: tools.list returns {toolsets: [{name, description, tool_count, enabled, tools}]}
-            val obj = result as? JsonObject ?: return emptyList()
-            val toolsets = obj["toolsets"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
-            toolsets.mapNotNull { tsEl ->
-                val ts = tsEl as? JsonObject ?: return@mapNotNull null
-                val tools = (ts["tools"] as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.content }
-                    ?: emptyList()
-                ToolOption(
-                    name = ts["name"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    description = ts["description"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    enabled = ts["enabled"]?.let { (it as? JsonPrimitive)?.content } != "false",
-                    toolset = null,
-                    toolCount = ts["tool_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
-                        ?: tools.size,
-                    tools = tools,
-                )
-            }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
     fun toggleTool(toolName: String, enabled: Boolean) {
         viewModelScope.launch {
             try {
