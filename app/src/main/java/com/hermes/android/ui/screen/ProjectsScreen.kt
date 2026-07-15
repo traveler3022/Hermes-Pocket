@@ -10,8 +10,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -34,14 +37,11 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ProjectsViewModel
 
-/**
- * Read-only project browser (projects.tree / projects.project_sessions /
- * project.facts). Depends ONLY on [ProjectsViewModel].
- */
 @Composable
 fun ProjectsScreen(
     onNavigateBack: () -> Unit = {},
     onOpenSession: (String) -> Unit = {},
+    onNewSession: (String) -> Unit = {},
     viewModel: ProjectsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -54,11 +54,24 @@ fun ProjectsScreen(
             viewModel.clearError()
         }
     }
+    LaunchedEffect(uiState.createdSessionId) {
+        uiState.createdSessionId?.let { sid ->
+            viewModel.clearCreatedSessionId()
+            onNewSession(sid)
+        }
+    }
 
     val detail = uiState.selectedProject
     HermesScaffold(
         title = detail?.label ?: t("Projects", "پروژه‌ها"),
         onBack = if (detail != null) { { viewModel.closeProject() } } else onNavigateBack,
+        actions = if (detail != null && uiState.selectedProjectPath != null) {
+            {
+                IconButton(onClick = { viewModel.createProjectSession(uiState.selectedProjectPath!!) }) {
+                    Icon(Icons.Default.Add, contentDescription = t("New chat", "چت جدید"))
+                }
+            }
+        } else { {} },
         snackbarHostState = snackbarHostState,
     ) { padding ->
         when {
