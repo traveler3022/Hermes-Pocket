@@ -198,6 +198,11 @@ private fun HermesNavHost(
                         popUpTo("chat") { inclusive = true }
                     }
                 },
+                onNewSession = { sessionId ->
+                    navController.navigate("chat?resumeSessionId=$sessionId") {
+                        popUpTo("chat") { inclusive = true }
+                    }
+                },
             )
         }
 
