@@ -1,30 +1,26 @@
-<div dir="rtl">
+# Setting up Hermes Agent on a VPS
 
-# راه‌اندازی Hermes Agent روی VPS
-
-این راهنما نصب و راه‌اندازی **Hermes Agent** روی یک سرور (VPS) رو قدم‌به‌قدم پوشش میده. چون Hermes Pocket یه کلاینت اندرویده که به سرور وصل میشه، بدون سرور عملاً بی‌استفاده‌ست.
-
-</div>
+This guide walks through installing and running **Hermes Agent** on a server (VPS), step by step. Since Hermes Pocket is an Android client that connects to your server, it is essentially useless without one.
 
 ---
 
-## پیش‌نیازها
+## Prerequisites
 
-| مورد | حداقل واقعی | پیشنهادی |
-|------|---------------|----------|
-| سیستم‌عامل | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 LTS |
-| RAM | ۲ گیگابایت (همراه ۱-۲ گیگ swap) | ۴ گیگابایت |
-| CPU | ۱ هسته | ۲ هسته |
-| فضای دیسک | ۵ گیگابایت آزاد | ۱۰ گیگابایت |
-| دسترسی | SSH sudo user | sudo user |
-| دامنه | اختیاری (برای TLS) | اجباری برای امنیت کامل |
+| Item | Realistic minimum | Recommended |
+|------|-------------------|-------------|
+| OS | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 LTS |
+| RAM | 2 GB (with 1-2 GB swap) | 4 GB |
+| CPU | 1 core | 2 cores |
+| Disk | 5 GB free | 10 GB |
+| Access | SSH sudo user | sudo user |
+| Domain | Optional (for TLS) | Required for full security |
 
 > [!WARNING]
-> **۱ گیگابایت RAM کافی نیست.** Hermes Agent همراه با سیستم‌عامل و پراکسی معکوس، حدود ۶۰۰-۹۰۰ مگابایت رم اشغال می‌کنه. روی ۱ گیگ یا OOM killer برنامه رو می‌کشه یا مدام swap می‌کنه (بسیار کند). حداقل ۲ گیگابایت همراه با swap توصیه میشه.
+> **1 GB of RAM is not enough.** Hermes Agent, together with the OS and a reverse proxy, uses roughly 600-900 MB of RAM. On 1 GB the OOM killer will kill the process or it will constantly swap (very slow). At least 2 GB with swap is recommended.
 
 ---
 
-## ۱ — اتصال به سرور و به‌روزرسانی
+## 1 — Connect to the server and update
 
 ```bash
 ssh user@your-server-ip
@@ -37,7 +33,7 @@ sudo apt install -y python3 python3-pip python3-venv git curl ufw
 
 ---
 
-## ۲ — نصب Hermes Agent
+## 2 — Install Hermes Agent
 
 ```bash
 git clone https://github.com/NousResearch/hermes_agent.git
@@ -48,13 +44,13 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-بعد از نصب چک کن که دستور کار می‌کنه:
+After installing, verify the command works:
 
 ```bash
 hermes --version
 ```
 
-خروجی باید شبیه این باشه:
+Expected output is similar to:
 
 ```
 Hermes Agent v0.17.0
@@ -63,45 +59,45 @@ Python: 3.12.x
 
 ---
 
-## ۳ — اجرای ویزارد راه‌اندازی اولیه
+## 3 — Run the initial setup wizard
 
-اولین بار که `hermes` رو اجرا می‌کنی، یه ویزارد تعاملی باز میشه:
+The first time you run `hermes`, an interactive wizard opens:
 
 ```bash
 hermes
 ```
 
-گزینه‌های ویزارد:
+Wizard options:
 
-| مرحله | گزینه پیشنهادی | توضیح |
-|------|---------------|-------|
-| Setup mode | **Full setup** | همه‌چیز دستی؛ برای کنترل کامل |
-| Provider | هر ارائه‌دهنده‌ای که ترجیح می‌دی | کلید API خودت رو وارد کن |
-| Terminal backend | **Local** | اجرا روی همین سرور |
-| Platforms | هیچ‌کدام (ENTER) | بعداً از اپ تنظیم میشن |
-| Tools | همه به‌جز Browser/Computer Use | روی سرور کار می‌کنن |
-| Search provider | هر کدوم که دوست داری | بعضی رایگان و بدون کلیدن |
+| Step | Suggested choice | Notes |
+|------|------------------|-------|
+| Setup mode | **Full setup** | Everything manual; for full control |
+| Provider | whichever provider you prefer | enter your own API key |
+| Terminal backend | **Local** | runs on this same server |
+| Platforms | none (press ENTER) | configured later from the app |
+| Tools | all except Browser/Computer Use | work on the server |
+| Search provider | whichever you like | some are free and keyless |
 
-وقتی کلید API خواست، اونو وارد کن (نام متغیر محیطی بستگی به ارائه‌دهنده داره، مثلاً `YOUR_PROVIDER_API_KEY`).
+When it asks for an API key, enter it (the env var name depends on the provider, e.g. `YOUR_PROVIDER_API_KEY`).
 
-ویزارد که تموم شد، مدل رو تست کن:
+When the wizard finishes, test the model:
 
 ```bash
 hermes doctor --fix
-hermes -q "سلام، فقط در یک جمله بگو با چه مدلی جواب می‌دهی."
+hermes -q "Hello, in one sentence tell me which model you answer with."
 ```
 
-اگر جواب گرفتی، هرمس آماده‌ست.
+If you get a reply, Hermes is ready.
 
 ---
 
-## ۴ — تنظیم TLS reverse proxy
+## 4 — Set up a TLS reverse proxy
 
-اپ موبایل فقط از `wss://` (WebSocket رمزنگاری‌شده) پشتیبانی می‌کنه. پس **حتماً** باید یه پراکسی معکوس داشته باشی که ترافیک رو از HTTPS به پورت محلی هرمس برسونه.
+The mobile app only supports `wss://` (encrypted WebSocket). So you **must** have a reverse proxy that forwards HTTPS traffic to the local Hermes port.
 
-### گزینه الف — Caddy (ساده‌ترین، گواهی خودکار)
+### Option A — Caddy (simplest, automatic certs)
 
-نصب Caddy:
+Install Caddy:
 
 ```bash
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -110,7 +106,7 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt update && sudo apt install -y caddy
 ```
 
-فایل `/etc/caddy/Caddyfile` رو اینطوری بنویس (پورت هرمس رو ۸۰۰۰ فرض می‌کنیم):
+Write `/etc/caddy/Caddyfile` like this (assuming Hermes runs on port 8000):
 
 ```
 hermes.example.com {
@@ -123,23 +119,23 @@ sudo systemctl reload caddy
 sudo systemctl enable caddy
 ```
 
-حالا هرمس رو اجرا کن (روی لوکال‌هاست، نه روی IP عمومی):
+Now run Hermes (on localhost, not the public IP):
 
 ```bash
 hermes dashboard --host 127.0.0.1 --port 8000
 ```
 
-Caddy خودش گواهی Let's Encrypt رو می‌گیره و HTTPS می‌سازه. حالا آدرس `wss://hermes.example.com` در دسترسه.
+Caddy automatically obtains a Let's Encrypt certificate and serves HTTPS. The address `wss://hermes.example.com` is now available.
 
-### گزینه ب — nginx + Certbot
+### Option B — nginx + Certbot
 
-نصب:
+Install:
 
 ```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
-فایل `/etc/nginx/sites-available/hermes`:
+File `/etc/nginx/sites-available/hermes`:
 
 ```nginx
 server {
@@ -170,37 +166,37 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## ۵ — تنظیم Session Token
+## 5 — Configure the session token
 
-توی فایل کانفیگ هرمس (معمولاً `~/.hermes/config.yaml`):
+In the Hermes config file (usually `~/.hermes/config.yaml`):
 
 ```yaml
 dashboard:
-  session_token: "یک-توکن-تصادفی-و-امن-بساز"
+  session_token: "generate-a-random-secure-token"
 ```
 
-یا به‌صورت متغیر محیطی (پیشنهادی برای systemd):
+Or as an environment variable (recommended for systemd):
 
 ```bash
-export HERMES_DASHBOARD_SESSION_TOKEN="یک-توکن-تصادفی-و-امن-بساز"
+export HERMES_DASHBOARD_SESSION_TOKEN="generate-a-random-secure-token"
 ```
 
-توکن رو با این دستور بساز:
+Generate the token with:
 
 ```bash
 openssl rand -hex 32
 ```
 
 > [!CAUTION]
-> این توکن دقیقاً مثل پسورده — هر کی داشته باشه می‌تونه ایجنتت رو کنترل کنه. از متغیر محیطی یا فایل کانفیگ محافظت کن.
+> This token is exactly like a password — whoever has it can control your agent. Protect it via the env var or config file.
 
 ---
 
-## ۶ — اجرای دائمی با systemd
+## 6 — Run persistently with systemd
 
-که هرمس بعد از ری‌بوت یا قطع شدن خودکار دوباره بالا بیاد:
+So Hermes comes back up after a reboot or crash:
 
-فایل `/etc/systemd/system/hermes.service`:
+File `/etc/systemd/system/hermes.service`:
 
 ```ini
 [Unit]
@@ -211,7 +207,7 @@ After=network.target
 Type=simple
 User=youruser
 WorkingDirectory=/home/youruser/hermes_agent
-Environment=HERMES_DASHBOARD_SESSION_TOKEN=توکنی-که-ساختی
+Environment=HERMES_DASHBOARD_SESSION_TOKEN=the-token-you-generated
 ExecStart=/home/youruser/hermes_agent/.venv/bin/hermes dashboard --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
@@ -226,13 +222,13 @@ sudo systemctl enable --now hermes
 sudo systemctl status hermes
 ```
 
-خروجی باید `active (running)` رو نشون بده.
+The output should show `active (running)`.
 
 ---
 
-## ۷ — فایروال
+## 7 — Firewall
 
-اگر `ufw` فعاله، فقط پورت‌های ۸۰ و ۴۴۳ رو باز کن (نه ۸۰۰۰):
+If `ufw` is active, only open ports 80 and 443 (not 8000):
 
 ```bash
 sudo ufw allow 22/tcp
@@ -243,38 +239,38 @@ sudo ufw enable
 
 ---
 
-## ۸ — اتصال از اپ Hermes Pocket
+## 8 — Connect from the Hermes Pocket app
 
-۱. اپ رو باز کن
-۲. برو به **Runtime**
-۳. آدرس سرور رو بنویس: `wss://hermes.example.com`
-۴. همون session token که ست کردی رو وارد کن
-۵. **Save & Connect** بزن
+1. Open the app
+2. Go to **Runtime**
+3. Enter the server address: `wss://hermes.example.com`
+4. Enter the same session token you set
+5. Tap **Save & Connect**
 
-از این به بعد هر بار اپ رو باز کنی خودکار وصل میشه.
+From then on, every time you open the app it connects automatically.
 
 ---
 
-## اتصال با IP (بدون دامنه)
+## Connecting via IP (no domain)
 
-اگر دامنه نداری، **باز هم میشه** وصل شد ولی با محدودیت — چون CAهای عمومی (مثل Let's Encrypt) به آدرس IP گواهی **نمی‌دن** و فقط نام دامنه رو امضا می‌کنن. پس با IP فقط دو تا راه داری:
+If you don't have a domain, **you can still connect** but with a limitation — because public CAs (like Let's Encrypt) do **not** issue certificates to an IP address; they only sign a domain name. So with an IP you have two options:
 
-### روش ۱ — استفاده از `ws://` (بدون رمزنگاری)
+### Option 1 — Use `ws://` (no encryption)
 
-توی فایل کانفیگ هرمس، پورت رو روی IP عمومی باز کن:
+In the Hermes config, open the port on the public IP:
 
 ```bash
 hermes dashboard --host 0.0.0.0 --port 8000
 ```
 
-و توی اپ آدرس رو `ws://your-server-ip:8000` بنویس.
+And in the app enter the address `ws://your-server-ip:8000`.
 
 > [!WARNING]
-> این روش توکن رو **plaintext** میفرسته. فقط برای تست در شبکه امن استفاده کن. هرگز در محیط عمومی پیشنهاد نمیشه.
+> This method sends the token in **plaintext**. Use it only for testing on a trusted network. Never recommended in a public environment.
 
-### روش ۲ — گواهی self-signed (پیشنهادی‌تر)
+### Option 2 — Self-signed certificate (preferred)
 
-یه گواهی self-signed با openssl می‌سازی که روی خودِ سرورت امضا میشه (نیازی به هیچ سرویس خارجی نداره):
+You generate a self-signed certificate with openssl that is signed on your own server (no external service needed):
 
 ```bash
 sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -283,151 +279,147 @@ sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/CN=your-server-ip"
 ```
 
-بعد توی nginx/Caddy تنظیمش کن و آدرس `wss://your-server-ip` رو توی اپ وارد کن. چون گواهی توسط CA معتبری امضا نشده، اپ هشدار میده — باید بهش اعتماد کنی (یا گواهی رو به صورت دستی روی گوشی نصب کنی).
+Then configure it in nginx/Caddy and enter the address `wss://your-server-ip` in the app. Because the certificate is not signed by a trusted CA, the app shows a warning — you must trust it (or install the certificate manually on the phone).
 
-### روش ۳ — دامنه + گواهی معتبر (امن‌ترین راه)
+### Option 3 — Domain + valid certificate (most secure)
 
-اگر می‌خوای اتصال کاملاً معتبر و بدون هشدار باشه، باید یه نام دامنه داشته باشی که به IP سرورت اشاره کنه. مراحل کلی:
+If you want a fully valid connection with no warnings, you need a domain name that points to your server's IP. General steps:
 
-**۱. تهیه دامنه**
-یه نام دامنه از هر ارائه‌دهنده‌ای که دوست داری بخر (یا از سرویس‌هایی که زیرمجموعه رایگان می‌دن استفاده کن). انتخابش کاملاً سلیقه خودته.
+**1. Get a domain**
+Buy a domain name from whatever provider you like (or use a service that gives free subdomains). The choice is entirely yours.
 
-**۲. اشاره دامنه به IP سرور**
-توی پنل مدیریت دامنه، یه رکورد **A** بساز که نام دامنه‌ت (مثلاً `hermes.example.com`) رو به آدرس IP سرورت هدایت کنه:
+**2. Point the domain to your server IP**
+In the domain's management panel, create an **A record** that directs your domain name (e.g. `hermes.example.com`) to your server's IP:
 
 ```
 Type: A
-Name: hermes (یا @)
+Name: hermes (or @)
 Value: your-server-ip
-TTL: 300 (یا پیش‌فرض)
+TTL: 300 (or default)
 ```
 
-بعد از چند دقیقه (تا یک ساعت)، دامنه به سرورت اشاره می‌کنه. چک کن:
+After a few minutes (up to an hour), the domain points to your server. Check:
 
 ```bash
 dig +short hermes.example.com
-# باید IP سرورت رو برگردونه
+# should return your server IP
 ```
 
-**۳. دریافت گواهی رایگان**
-وقتی دامنه به IP اشاره کرد، با ابزارهای مدیریت گواهی (مثل certbot یا Caddy) یه گواهی رایگان از یه CA عمومی می‌گیری. این ابزارها خودشون فرآیند اثبات مالکیت دامنه رو انجام می‌دن و گواهی رو صادر می‌کنن.
+**3. Obtain a free certificate**
+Once the domain points to the IP, use a certificate management tool (like certbot or Caddy) to get a free certificate from a public CA. These tools perform the domain ownership proof themselves and issue the certificate.
 
-**۴. تنظیم پراکسی**
-توی nginx/Caddy آدرس دامنه رو بذار و فایل‌های گواهی (fullchain + private key) رو که ابزار مدیریت گواهی ساخته معرفی کن.
+**4. Configure the proxy**
+In nginx/Caddy set the domain address and point to the certificate files (fullchain + private key) that the certificate tool created.
 
-**۵. اتصال از اپ**
-توی اپ آدرس رو `wss://hermes.example.com` بنویس. چون گواهی توسط CA معتبر امضا شده، اپ بدون هیچ هشداری وصل میشه.
+**5. Connect from the app**
+In the app enter the address `wss://hermes.example.com`. Since the certificate is signed by a trusted CA, the app connects with no warning.
 
 > [!NOTE]
-> انتخاب ارائه‌دهنده دامنه، ابزار مدیریت گواهی، و نحوه تنظیم رکوردهای DNS کاملاً سلیقه‌ خودته — اینجا فقط مراحل کلی توضیح داده شد تا بدونی چه مسیری رو باید بری.
+> The choice of domain provider, certificate management tool, and how to set DNS records is entirely yours — only the general steps are described here so you know which path to take.
 
 ---
 
-## عیب‌یابی (Troubleshooting)
+## Troubleshooting
 
-### مشکل ۱ — اپ وصل نمیشه (Connection failed)
+### Problem 1 — App won't connect (Connection failed)
 
-**علامت:** توی اپ خطای «Connection failed» یا timeout.
+**Symptom:** App shows "Connection failed" or timeout.
 
-**دلایل محتمل:**
-- هرمس روی سرور اجرا نمیشه → چک کن: `sudo systemctl status hermes`
-- پورت ۸۰۰۰ بسته‌ست → چک کن فایروال: `sudo ufw status`
-- دامنه به IP اشاره نمی‌کنه → چک کن: `dig hermes.example.com`
-- گواهی منقضی شده → چک کن: `sudo certbot renew`
+**Possible causes:**
+- Hermes not running on the server → check: `sudo systemctl status hermes`
+- Port 8000 closed → check firewall: `sudo ufw status`
+- Domain not pointing to IP → check: `dig hermes.example.com`
+- Certificate expired → check: `sudo certbot renew`
 
-**راه‌حل:**
+**Fix:**
 ```bash
-# لاگ هرمس رو ببین
+# view Hermes logs
 journalctl -u hermes -f
 
-# تست دستی اتصال
+# test connection manually
 curl -v https://hermes.example.com
 ```
 
 ---
 
-### مشکل ۲ — خطای احراز هویت (Auth failed)
+### Problem 2 — Authentication error (Auth failed)
 
-**علامت:** اپ وصل میشه ولی پیام «Invalid session token» میده.
+**Symptom:** App connects but says "Invalid session token".
 
-**دلیل:** توکنی که توی اپ وارد کردی با توکن سرور یکی نیست.
+**Cause:** The token entered in the app differs from the server's token.
 
-**راه‌حل:**
+**Fix:**
 ```bash
-# توکن فعلی رو ببین
+# view current token
 grep session_token ~/.hermes/config.yaml
 
-# یا از متغیر محیطی
+# or from the environment variable
 systemctl show hermes --property=Environment
 ```
 
-مطمئن شو همون توکن دقیقاً توی اپ وارد شده.
+Make sure the exact same token is entered in the app.
 
 ---
 
-### مشکل ۳ — WebSocket upgrade نمیشه
+### Problem 3 — WebSocket upgrade fails
 
-**علامت:** اتصال شروع میشه ولی بلافاصله قطع میشه.
+**Symptom:** Connection starts but drops immediately.
 
-**دلیل:** پراکسی `Upgrade` header رو درست فوروارد نمی‌کنه.
+**Cause:** The proxy is not forwarding the `Upgrade` header correctly.
 
-**راه‌حل (nginx):**
-مطمئن شو این خطوط تو تنظیمات هست:
+**Fix (nginx):**
+Make sure these lines are in the config:
 ```nginx
 proxy_set_header Upgrade $http_upgrade;
 proxy_set_header Connection "upgrade";
 ```
 
-برای Caddy این خطوط به‌صورت پیش‌فرض هستن.
+For Caddy these lines are present by default.
 
 ---
 
-### مشکل ۴ — هرمس بعد از ری‌بوت بالا نمیاد
+### Problem 4 — Hermes doesn't start after reboot
 
-**علامت:** سرور رو ری‌بوت می‌کنی، اپ وصل نمیشه.
+**Symptom:** You reboot the server, the app can't connect.
 
-**دلیل:** سرویس systemd enable نشده یا خطایی توی فایل سرویس هست.
+**Cause:** The systemd service isn't enabled, or there's an error in the service file.
 
-**راه‌حل:**
+**Fix:**
 ```bash
 sudo systemctl enable hermes
 sudo systemctl status hermes
-# اگه failed بود:
+# if failed:
 journalctl -u hermes -n 50
 ```
 
 ---
 
-### مشکل ۵ — خطای Rust/build موقع نصب
+### Problem 5 — Rust/build error during install
 
-**علامت:** `pip install -e .` با خطای rustc crash میشه.
+**Symptom:** `pip install -e .` crashes with a rustc error.
 
-**دلیل:** این فقط روی Termux/اندروید اتفاق میفته. روی VPS معمولی نباید ببینی.
+**Cause:** This only happens on Termux/Android. On a normal VPS you shouldn't see it.
 
-**راه‌حل:** مطمئن شو روی سرور اوبونتو/دبیان هستی نه Termux. اگر روی VPS داری این خطا رو می‌بینی، `build-essential` رو نصب کن:
+**Fix:** Make sure you're on Ubuntu/Debian server, not Termux. If you see this on a VPS, install `build-essential`:
 ```bash
 sudo apt install -y build-essential
 ```
 
 ---
 
-### مشکل ۶ — مدل جواب نمیده
+### Problem 6 — Model doesn't answer
 
-**علامت:** `hermes doctor` میگه کلید ست نشده.
+**Symptom:** `hermes doctor` says the key isn't set.
 
-**راه‌حل:**
+**Fix:**
 ```bash
 hermes config set model.provider <provider-name>
 hermes config set model.default <model-id>
 hermes doctor
 ```
 
-باید `✓ <provider> (key configured)` ببینی.
+You should see `✓ <provider> (key configured)`.
 
 ---
 
-<div dir="rtl">
-
-> نکته نهایی: ارائه‌دهنده مدل رو خودت انتخاب کن و کلید API‌اش رو از پنل مربوطه بگیر و تو ویزارد وارد کن. بعضی ارائه‌دهنده‌ها ورود با OAuth دارن (نیاز به کلید جداگانه ندارن)، بقیه کلید مستقیم می‌خوان.
-
-</div>
+> Final note: choose the model provider yourself and get its API key from the relevant panel, then enter it in the wizard. Some providers use OAuth login (no separate key needed), others require a direct key.
