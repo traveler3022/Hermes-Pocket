@@ -124,7 +124,7 @@ English · [فارسی](README.fa.md)
 
 ## Quick start
 
-1. **Have a Hermes Agent server running** — `hermes dashboard --host 127.0.0.1 --port <port>` behind a TLS reverse proxy, with `HERMES_DASHBOARD_SESSION_TOKEN` set. → [📡 VPS setup guide](docs/VPS_SETUP.md)
+1. **Have a Hermes Agent server running** — `hermes dashboard --host 127.0.0.1 --port <port>` behind a TLS reverse proxy, with `HERMES_DASHBOARD_SESSION_TOKEN` set. → [📡 VPS setup guide (EN)](docs/VPS_SETUP.md) · [راهنمای فارسی](docs/VPS_SETUP.fa.md)
 
 2. **Install the app** — [⬇ Download the latest APK](https://github.com/traveler3022/Hermes-Pocket/releases/latest)
 
@@ -181,7 +181,7 @@ cd Hermes-Pocket
               └────────────────────────┘
 ```
 
-All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation (e.g. for tests) is one Hilt module change. See the [VPS setup guide](docs/VPS_SETUP.md) to run your own Hermes Agent server.
+All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation (e.g. for tests) is one Hilt module change. See the [VPS setup guide](docs/VPS_SETUP.md) (also in [فارسی](docs/VPS_SETUP.fa.md)) to run your own Hermes Agent server.
 
 ---
 
