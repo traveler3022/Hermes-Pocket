@@ -76,13 +76,13 @@ hermes
 | مرحله | گزینه پیشنهادی | توضیح |
 |------|---------------|-------|
 | Setup mode | **Full setup** | همه‌چیز دستی؛ برای کنترل کامل |
-| Provider | **Gemini** یا **OpenRouter** | ارزان و سریع |
+| Provider | هر ارائه‌دهنده‌ای که ترجیح می‌دی | کلید API خودت رو وارد کن |
 | Terminal backend | **Local** | اجرا روی همین سرور |
 | Platforms | هیچ‌کدام (ENTER) | بعداً از اپ تنظیم میشن |
 | Tools | همه به‌جز Browser/Computer Use | روی سرور کار می‌کنن |
-| Search provider | **DuckDuckGo** | رایگان، بدون کلید |
+| Search provider | هر کدوم که دوست داری | بعضی رایگان و بدون کلیدن |
 
-وقتی کلید API خواست، اونو وارد کن (مثلاً `GEMINI_API_KEY`).
+وقتی کلید API خواست، اونو وارد کن (نام متغیر محیطی بستگی به ارائه‌دهنده داره، مثلاً `YOUR_PROVIDER_API_KEY`).
 
 ویزارد که تموم شد، مدل رو تست کن:
 
@@ -384,17 +384,17 @@ sudo apt install -y build-essential
 
 **راه‌حل:**
 ```bash
-hermes config set model.provider gemini
-hermes config set model.default gemini-2.5-flash
+hermes config set model.provider <provider-name>
+hermes config set model.default <model-id>
 hermes doctor
 ```
 
-باید `✓ gemini (key configured)` ببینی.
+باید `✓ <provider> (key configured)` ببینی.
 
 ---
 
 <div dir="rtl">
 
-> نکته نهایی: اگر ارائه‌دهنده مدل رو OAuth (Nous Portal) ست کردی، نیازی به کلید API جداگانه نداری. برای ارائه‌دهنده‌های دیگه کلید رو از پنل مربوطه بگیر و تو ویزارد وارد کن.
+> نکته نهایی: ارائه‌دهنده مدل رو خودت انتخاب کن و کلید API‌اش رو از پنل مربوطه بگیر و تو ویزارد وارد کن. بعضی ارائه‌دهنده‌ها ورود با OAuth دارن (نیاز به کلید جداگانه ندارن)، بقیه کلید مستقیم می‌خوان.
 
 </div>
