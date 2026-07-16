@@ -2,7 +2,7 @@
 
 # راه‌اندازی Hermes Agent روی VPS
 
-این راهنما نصب و راه‌اندازی **Hermes Agent** روی یک سرور (VPS) رو پوشش میده. چون Hermes Pocket یه کلاینت اندرویده که به سرور وصل میشه، بدون سرور عملاً بی‌استفاده‌ست.
+این راهنما نصب و راه‌اندازی **Hermes Agent** روی یک سرور (VPS) رو قدم‌به‌قدم پوشش میده. چون Hermes Pocket یه کلاینت اندرویده که به سرور وصل میشه، بدون سرور عملاً بی‌استفاده‌ست.
 
 </div>
 
@@ -10,61 +10,98 @@
 
 ## پیش‌نیازها
 
-- یه VPS با **Ubuntu 22.04+** یا **Debian 12+**
-- یه **دامنه** (مثلاً `hermes.example.com`) که A record به IP سرور اشاره کنه
-- دسترسی **SSH**
-- حداقل **۱ گیگابایت RAM** (۲ گیگابایت پیشنهادی)
+| مورد | حداقل | پیشنهادی |
+|------|-------|----------|
+| سیستم‌عامل | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 LTS |
+| RAM | ۱ گیگابایت | ۲ گیگابایت |
+| CPU | ۱ هسته | ۲ هسته |
+| فضای دیسک | ۵ گیگابایت آزاد | ۱۰ گیگابایت |
+| دسترسی | SSH root یا sudo | sudo user |
+| دامنه | اختیاری (برای TLS) | اجباری برای امنیت کامل |
+
+> [!NOTE]
+> اگر دامنه نداری، بخش «اتصال با IP» رو بخون — ولی بدون دامنه امنیت کامل نخواهی داشت.
 
 ---
 
-## ۱ — نصب Hermes Agent
-
-SSH بزن به سرور:
+## ۱ — اتصال به سرور و به‌روزرسانی
 
 ```bash
 ssh user@your-server-ip
 ```
 
-پیش‌نیازهای سیستم:
-
 ```bash
-sudo apt update && sudo apt install -y python3 python3-pip python3-venv git curl
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3 python3-pip python3-venv git curl ufw
 ```
 
-کلون و نصب:
+---
+
+## ۲ — نصب Hermes Agent
 
 ```bash
 git clone https://github.com/NousResearch/hermes_agent.git
 cd hermes_agent
 python3 -m venv .venv
 source .venv/bin/activate
+pip install --upgrade pip
 pip install -e .
+```
+
+بعد از نصب چک کن که دستور کار می‌کنه:
+
+```bash
+hermes --version
+```
+
+خروجی باید شبیه این باشه:
+
+```
+Hermes Agent v0.17.0
+Python: 3.12.x
 ```
 
 ---
 
-## ۲ — اجرای ویزارد راه‌اندازی
+## ۳ — اجرای ویزارد راه‌اندازی اولیه
 
-اولین بار که `hermes` رو اجرا می‌کنی، یه ویزارد باز میشه:
+اولین بار که `hermes` رو اجرا می‌کنی، یه ویزارد تعاملی باز میشه:
 
 ```bash
 hermes
 ```
 
-تو ویزارد:
+گزینه‌های ویزارد:
 
-- **Quick Setup** (ورود با OAuth رایگان) یا **Full setup** (کانفیگ دستی) رو انتخاب کن
-- ارائه‌دهنده مدل (مثلاً Gemini یا OpenAI) رو ست کن
-- کلید API رو وارد کن
-- ابزارها (tools) رو طبق نیاز فعال کن
+| مرحله | گزینه پیشنهادی | توضیح |
+|------|---------------|-------|
+| Setup mode | **Full setup** | همه‌چیز دستی؛ برای کنترل کامل |
+| Provider | **Gemini** یا **OpenRouter** | ارزان و سریع |
+| Terminal backend | **Local** | اجرا روی همین سرور |
+| Platforms | هیچ‌کدام (ENTER) | بعداً از اپ تنظیم میشن |
+| Tools | همه به‌جز Browser/Computer Use | روی سرور کار می‌کنن |
+| Search provider | **DuckDuckGo** | رایگان، بدون کلید |
+
+وقتی کلید API خواست، اونو وارد کن (مثلاً `GEMINI_API_KEY`).
+
+ویزارد که تموم شد، مدل رو تست کن:
+
+```bash
+hermes doctor --fix
+hermes -q "سلام، فقط در یک جمله بگو با چه مدلی جواب می‌دهی."
+```
+
+اگر جواب گرفتی، هرمس آماده‌ست.
 
 ---
 
-## ۳ — تنظیم TLS reverse proxy
+## ۴ — تنظیم TLS reverse proxy
 
-اپ موبایل فقط از `wss://` پشتیبانی می‌کنه، پس **حتماً** باید یه پراکسی معکوس با TLS داشته باشی. هرمس رو روی `127.0.0.1` (فقط لوکال) اجرا می‌کنیم و پراکسی ترافیک رو بهش می‌رسونه.
+اپ موبایل فقط از `wss://` (WebSocket رمزنگاری‌شده) پشتیبانی می‌کنه. پس **حتماً** باید یه پراکسی معکوس داشته باشی که ترافیک رو از HTTPS به پورت محلی هرمس برسونه.
 
-### گزینه الف — Caddy (ساده‌ترین، گواهی‌نامه خودکار)
+### گزینه الف — Caddy (ساده‌ترین، گواهی خودکار)
+
+نصب Caddy:
 
 ```bash
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -83,21 +120,30 @@ hermes.example.com {
 
 ```bash
 sudo systemctl reload caddy
+sudo systemctl enable caddy
 ```
 
-حالا هرمس رو اجرا کن:
+حالا هرمس رو اجرا کن (روی لوکال‌هاست، نه روی IP عمومی):
 
 ```bash
 hermes dashboard --host 127.0.0.1 --port 8000
 ```
 
-### گزینه ب — nginx
+Caddy خودش گواهی Let's Encrypt رو می‌گیره و HTTPS می‌سازه. حالا آدرس `wss://hermes.example.com` در دسترسه.
+
+### گزینه ب — nginx + Certbot
+
+نصب:
+
+```bash
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
 
 فایل `/etc/nginx/sites-available/hermes`:
 
 ```nginx
 server {
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name hermes.example.com;
 
     ssl_certificate     /etc/letsencrypt/live/hermes.example.com/fullchain.pem;
@@ -110,18 +156,21 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/hermes /etc/nginx/sites-enabled/
+sudo certbot --nginx -d hermes.example.com
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
 
-## ۴ — تنظیم session token
+## ۵ — تنظیم Session Token
 
 توی فایل کانفیگ هرمس (معمولاً `~/.hermes/config.yaml`):
 
@@ -130,20 +179,26 @@ dashboard:
   session_token: "یک-توکن-تصادفی-و-امن-بساز"
 ```
 
-یا به‌صورت متغیر محیطی:
+یا به‌صورت متغیر محیطی (پیشنهادی برای systemd):
 
 ```bash
 export HERMES_DASHBOARD_SESSION_TOKEN="یک-توکن-تصادفی-و-امن-بساز"
 ```
 
+توکن رو با این دستور بساز:
+
+```bash
+openssl rand -hex 32
+```
+
 > [!CAUTION]
-> این توکن دقیقاً مثل پسورده — هر کی داشته باشه می‌تونه ایجنتت رو کنترل کنه. ازش توکن تصادفی بساز (مثلاً `openssl rand -hex 32`).
+> این توکن دقیقاً مثل پسورده — هر کی داشته باشه می‌تونه ایجنتت رو کنترل کنه. از متغیر محیطی یا فایل کانفیگ محافظت کن.
 
 ---
 
-## ۵ — اجرای دائمی با systemd
+## ۶ — اجرای دائمی با systemd
 
-که هرمس بعد از ری‌بوت یا قطع شدن خودکار دوباره بالا بیاد، یه سرویس systemd می‌سازیم:
+که هرمس بعد از ری‌بوت یا قطع شدن خودکار دوباره بالا بیاد:
 
 فایل `/etc/systemd/system/hermes.service`:
 
@@ -156,9 +211,10 @@ After=network.target
 Type=simple
 User=youruser
 WorkingDirectory=/home/youruser/hermes_agent
-Environment=HERMES_DASHBOARD_SESSION_TOKEN=یک-توکن-تصادفی-و-امن-بساز
+Environment=HERMES_DASHBOARD_SESSION_TOKEN=توکنی-که-ساختی
 ExecStart=/home/youruser/hermes_agent/.venv/bin/hermes dashboard --host 127.0.0.1 --port 8000
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -170,9 +226,24 @@ sudo systemctl enable --now hermes
 sudo systemctl status hermes
 ```
 
+خروجی باید `active (running)` رو نشون بده.
+
 ---
 
-## ۶ — اتصال از اپ Hermes Pocket
+## ۷ — فایروال
+
+اگر `ufw` فعاله، فقط پورت‌های ۸۰ و ۴۴۳ رو باز کن (نه ۸۰۰۰):
+
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+---
+
+## ۸ — اتصال از اپ Hermes Pocket
 
 ۱. اپ رو باز کن
 ۲. برو به **Runtime**
@@ -184,8 +255,147 @@ sudo systemctl status hermes
 
 ---
 
+## اتصال با IP (بدون دامنه)
+
+اگر دامنه نداری، **باز هم میشه** وصل شد ولی با محدودیت:
+
+### روش ۱ — استفاده از `ws://` (بدون رمزنگاری)
+
+توی فایل کانفیگ هرمس، پورت رو روی IP عمومی باز کن:
+
+```bash
+hermes dashboard --host 0.0.0.0 --port 8000
+```
+
+و توی اپ آدرس رو `ws://your-server-ip:8000` بنویس.
+
+> [!WARNING]
+> این روش توکن رو **plaintext** میفرسته. فقط برای تست در شبکه امن استفاده کن. هرگز در محیط عمومی پیشنهاد نمیشه.
+
+### روش ۲ — گواهی self-signed (پیشنهادی‌تر)
+
+یه گواهی self-signed بساز:
+
+```bash
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/hermes.key \
+  -out /etc/ssl/certs/hermes.crt \
+  -subj "/CN=your-server-ip"
+```
+
+بعد توی nginx/Caddy تنظیمش کن و آدرس `wss://your-server-ip` رو توی اپ وارد کن. اپ ممکنه هشدار بده که گواهی معتبر نیست — باید بهش اعتماد کنی.
+
+### روش ۳ — دامنه رایگان (بهترین)
+
+سرویس‌هایی مثل `duckdns.org` یا `freedns.afraid.org` یه زیرمجموعه رایگان می‌دن که به IP سرورت اشاره می‌کنه. بعد با Caddy گواهی رایگان می‌گیری.
+
+---
+
+## عیب‌یابی (Troubleshooting)
+
+### مشکل ۱ — اپ وصل نمیشه (Connection failed)
+
+**علامت:** توی اپ خطای «Connection failed» یا timeout.
+
+**دلایل محتمل:**
+- هرمس روی سرور اجرا نمیشه → چک کن: `sudo systemctl status hermes`
+- پورت ۸۰۰۰ بسته‌ست → چک کن فایروال: `sudo ufw status`
+- دامنه به IP اشاره نمی‌کنه → چک کن: `dig hermes.example.com`
+- گواهی منقضی شده → چک کن: `sudo certbot renew`
+
+**راه‌حل:**
+```bash
+# لاگ هرمس رو ببین
+journalctl -u hermes -f
+
+# تست دستی اتصال
+curl -v https://hermes.example.com
+```
+
+---
+
+### مشکل ۲ — خطای احراز هویت (Auth failed)
+
+**علامت:** اپ وصل میشه ولی پیام «Invalid session token» میده.
+
+**دلیل:** توکنی که توی اپ وارد کردی با توکن سرور یکی نیست.
+
+**راه‌حل:**
+```bash
+# توکن فعلی رو ببین
+grep session_token ~/.hermes/config.yaml
+
+# یا از متغیر محیطی
+systemctl show hermes --property=Environment
+```
+
+مطمئن شو همون توکن دقیقاً توی اپ وارد شده.
+
+---
+
+### مشکل ۳ — WebSocket upgrade نمیشه
+
+**علامت:** اتصال شروع میشه ولی بلافاصله قطع میشه.
+
+**دلیل:** پراکسی `Upgrade` header رو درست فوروارد نمی‌کنه.
+
+**راه‌حل (nginx):**
+مطمئن شو این خطوط تو تنظیمات هست:
+```nginx
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+```
+
+برای Caddy این خطوط به‌صورت پیش‌فرض هستن.
+
+---
+
+### مشکل ۴ — هرمس بعد از ری‌بوت بالا نمیاد
+
+**علامت:** سرور رو ری‌بوت می‌کنی، اپ وصل نمیشه.
+
+**دلیل:** سرویس systemd enable نشده یا خطایی توی فایل سرویس هست.
+
+**راه‌حل:**
+```bash
+sudo systemctl enable hermes
+sudo systemctl status hermes
+# اگه failed بود:
+journalctl -u hermes -n 50
+```
+
+---
+
+### مشکل ۵ — خطای Rust/build موقع نصب
+
+**علامت:** `pip install -e .` با خطای rustc crash میشه.
+
+**دلیل:** این فقط روی Termux/اندروید اتفاق میفته. روی VPS معمولی نباید ببینی.
+
+**راه‌حل:** مطمئن شو روی سرور اوبونتو/دبیان هستی نه Termux. اگر روی VPS داری این خطا رو می‌بینی، `build-essential` رو نصب کن:
+```bash
+sudo apt install -y build-essential
+```
+
+---
+
+### مشکل ۶ — مدل جواب نمیده
+
+**علامت:** `hermes doctor` میگه کلید ست نشده.
+
+**راه‌حل:**
+```bash
+hermes config set model.provider gemini
+hermes config set model.default gemini-2.5-flash
+hermes doctor
+```
+
+باید `✓ gemini (key configured)` ببینی.
+
+---
+
 <div dir="rtl">
 
-> نکته: اگه ارائه‌دهنده مدل رو OAuth (Nous Portal) ست کردی، نیازی به کلید API جداگانه نداری. برای ارائه‌دهنده‌های دیگه کلید رو از پنل مربوطه بگیر و تو ویزارد وارد کن.
+> نکته نهایی: اگر ارائه‌دهنده مدل رو OAuth (Nous Portal) ست کردی، نیازی به کلید API جداگانه نداری. برای ارائه‌دهنده‌های دیگه کلید رو از پنل مربوطه بگیر و تو ویزارد وارد کن.
 
 </div>
