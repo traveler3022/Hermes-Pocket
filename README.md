@@ -124,7 +124,7 @@ English · [فارسی](README.fa.md)
 
 ## Quick start
 
-1. **Have a Hermes Agent server running** — `hermes dashboard --host 127.0.0.1 --port <port>` behind a TLS reverse proxy, with `HERMES_DASHBOARD_SESSION_TOKEN` set.
+1. **Have a Hermes Agent server running** — `hermes dashboard --host 127.0.0.1 --port <port>` behind a TLS reverse proxy, with `HERMES_DASHBOARD_SESSION_TOKEN` set. → [📡 VPS setup guide](docs/VPS_SETUP.md)
 
 2. **Install the app** — [⬇ Download the latest APK](https://github.com/traveler3022/Hermes-Pocket/releases/latest)
 
