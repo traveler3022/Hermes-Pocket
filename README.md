@@ -181,7 +181,7 @@ cd Hermes-Pocket
               └────────────────────────┘
 ```
 
-All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation (e.g. for tests) is one Hilt module change. Design docs and mockups live in [`docs/`](docs/).
+All UI and ViewModel code depends only on the `GatewayClient` interface — swapping the implementation (e.g. for tests) is one Hilt module change. See the [VPS setup guide](docs/VPS_SETUP.md) to run your own Hermes Agent server.
 
 ---
 
