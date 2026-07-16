@@ -178,7 +178,7 @@ cd Hermes-Pocket
               └────────────────────────┘
 ```
 
-همهٔ کد UI و ViewModel فقط به اینترفیس `GatewayClient` وابسته‌ست. مستندات طراحی: [`docs/`](docs/).
+همهٔ کد UI و ViewModel فقط به اینترفیس `GatewayClient` وابسته‌ست. [راهنمای راه‌اندازی VPS](docs/VPS_SETUP.md) برای داشتن سرور Hermes Agent خودت.
 
 ---
 
