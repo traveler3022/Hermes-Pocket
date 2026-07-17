@@ -9,7 +9,7 @@ This guide walks through installing and running **Hermes Agent** on a server (VP
 | Item | Realistic minimum | Recommended |
 |------|-------------------|-------------|
 | OS | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 LTS |
-| RAM | 2 GB (with 1-2 GB swap) | 4 GB |
+| RAM | 1 GB (swap) | 2 GB |
 | CPU | 1 core | 2 cores |
 | Disk | 5 GB free | 10 GB |
 | Access | SSH sudo user | sudo user |
