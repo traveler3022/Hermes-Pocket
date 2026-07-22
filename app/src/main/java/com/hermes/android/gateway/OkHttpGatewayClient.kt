@@ -270,16 +270,19 @@ class OkHttpGatewayClient @Inject constructor(
     override suspend fun disconnect() {
         val ws = synchronized(this) {
             reconnectJob?.cancel()
-        // Setting Disconnected FIRST makes any in-flight dial's success moot;
-        // startDial's finally also resolves its deferred for joiners.
+            // Setting Disconnected FIRST makes any in-flight dial's success moot;
+            // startDial's finally also resolves its deferred for joiners.
             val socket = webSocket
             webSocket = null
-        webSocket = null
-        _connectionState.value = ConnectionState.Disconnected
-        // Fail all pending requests
-        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
-        pendingRequests.clear()
-        nonTrackingRequestIds.clear()
+            _connectionState.value = ConnectionState.Disconnected
+            // Fail all pending requests
+            pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
+            pendingRequests.clear()
+            nonTrackingRequestIds.clear()
+            socket
+        }
+        // Close outside the lock (network call)
+        ws?.close(1000, "client disconnect")
     }
 
     override suspend fun request(
@@ -402,46 +405,45 @@ class OkHttpGatewayClient @Inject constructor(
     // ── Reconnection ───────────────────────────────────────────────────────
 
     private fun handleDisconnect(reason: String) {
+        Timber.w("[Gateway] disconnected: $reason")
         synchronized(this) {
-            Timber.w("[Gateway] disconnected: $reason")
             webSocket = null
-        // Fail all pending requests
-        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected: $reason")) }
-        pendingRequests.clear()
-        nonTrackingRequestIds.clear()
+            // Fail all pending requests
+            pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected: $reason")) }
+            pendingRequests.clear()
+            nonTrackingRequestIds.clear()
 
-        // Only a user-initiated disconnect() stops the machine. Failed is NOT
-        // terminal — treating it as terminal is what used to strand the app
-        // offline until a force-stop.
-        if (_connectionState.value is ConnectionState.Disconnected) return
+            // Only a user-initiated disconnect() stops the machine. Failed is NOT
+            // terminal — treating it as terminal is what used to strand the app
+            // offline until a force-stop.
+            if (_connectionState.value is ConnectionState.Disconnected) return
 
-        // CRITICAL: downgrade the state. Nothing else does — and a live-drop
-        // used to leave state=Connected with webSocket=null, so the reconnect
-        // loop saw "Connected" and returned instantly, connect() early-returned
-        // "already connected", dial-on-demand never fired, and every request
-        // died with "WebSocket is null" until a force-stop. This one line is
-        // what actually arms the whole recovery machine.
-        if (_connectionState.value is ConnectionState.Connected ||
-            _connectionState.value is ConnectionState.Connecting
-        ) {
-            _connectionState.value = ConnectionState.Reconnecting(
-                attempt = 0,
-                nextAttemptInMs = 0,
-                lastError = reason,
-            )
+            // CRITICAL: downgrade the state. Nothing else does — and a live-drop
+            // used to leave state=Connected with webSocket=null, so the reconnect
+            // loop saw "Connected" and returned instantly, connect() early-returned
+            // "already connected", dial-on-demand never fired, and every request
+            // died with "WebSocket is null" until a force-stop. This one line is
+            // what actually arms the whole recovery machine.
+            if (_connectionState.value is ConnectionState.Connected ||
+                _connectionState.value is ConnectionState.Connecting
+            ) {
+                _connectionState.value = ConnectionState.Reconnecting(
+                    attempt = 0,
+                    nextAttemptInMs = 0,
+                    lastError = reason,
+                )
+            }
         }
-
-        // Do NOT cancel-and-restart here: the reconnect loop's own failed
-        // sockets fire onFailure → handleDisconnect too, and restarting the
-        // loop from inside its own failure resets the backoff to zero — a
-        // 1-second retry storm. Just make sure a loop exists.
+        // Schedule reconnect outside the lock (it acquires its own lock)
         scheduleReconnect()
     }
 
     /** Idempotent: keeps exactly one retry loop alive. */
     private fun scheduleReconnect() {
-        if (reconnectJob?.isActive == true) return
-        reconnectJob = scope.launch { reconnect() }
+        synchronized(this) {
+            if (reconnectJob?.isActive == true) return
+            reconnectJob = scope.launch { reconnect() }
+        }
     }
 
     /**
