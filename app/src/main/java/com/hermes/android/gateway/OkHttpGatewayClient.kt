@@ -387,8 +387,8 @@ class OkHttpGatewayClient @Inject constructor(
                         var bytesRead: Long = 0
                         while (true) {
                             val read = source.read(buffer)
-                            if (read == -1L) break
-                            output.write(buffer, 0, read.toInt())
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
                             bytesRead += read
                         }
                         Timber.d("[Gateway] Downloaded $bytesRead bytes to ${tempFile.absolutePath}")
