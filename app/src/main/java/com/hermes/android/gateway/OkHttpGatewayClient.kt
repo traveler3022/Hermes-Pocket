@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -81,14 +82,30 @@ class OkHttpGatewayClient @Inject constructor(
     )
     override val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
+    @Volatile
     private var webSocket: WebSocket? = null
+    @Volatile
     private var currentUrl: String? = null
+    @Volatile
     private var reconnectJob: Job? = null
 
     private val nextRequestId = AtomicLong(1)
     private val pendingRequests = ConcurrentHashMap<Long, kotlinx.coroutines.CompletableDeferred<JsonElement>>()
 
+    @Volatile
     private var lastSessionId: String? = null
+
+    /** HTTP status code from the last connection failure (for permanent error detection). */
+    @Volatile
+    private var lastHttpError: Int? = null
+
+    /** Timestamp of the first failure in the current reconnect window. */
+    @Volatile
+    private var firstFailureAt: Long? = null
+
+    /** Whether the last error was permanent (401/403/404). */
+    @Volatile
+    private var lastErrorPermanent: Boolean = false
 
     /** Request ids whose responses must NOT update [lastSessionId] (see
      *  GatewayClient.request's trackSession param). */
@@ -108,6 +125,9 @@ class OkHttpGatewayClient @Inject constructor(
         }
 
         currentUrl = url
+        // Reset the failure window on manual retry
+        firstFailureAt = null
+        lastErrorPermanent = false
         if (_connectionState.value !is ConnectionState.Reconnecting) {
             _connectionState.value = ConnectionState.Connecting
         }
@@ -175,8 +195,12 @@ class OkHttpGatewayClient @Inject constructor(
             // the initial connect() and the reconnect() loop funnel through
             // here, so this is the single place that guarantees we never leave
             // an orphaned WebSocket alive on the gateway.
-            webSocket?.close(1000, "reconnecting")
-            webSocket = null
+            val oldSocket = synchronized(this) {
+                val socket = webSocket
+                webSocket = null
+                socket
+            }
+            oldSocket?.close(1000, "reconnecting")
 
             val request = Request.Builder().url(url).build()
             val listener = GatewayWebSocketListener { state ->
@@ -185,15 +209,15 @@ class OkHttpGatewayClient @Inject constructor(
                         // Wait for gateway.ready event (handled in onMessage)
                     }
                     is WsState.Ready -> {
-                        _connectionState.value = ConnectionState.Connected(state.sessionId)
                         if (!deferred.isCompleted) {
+                            _connectionState.value = ConnectionState.Connected(state.sessionId)
                             deferred.complete(_connectionState.value)
-                        }
-                        // Session resume on reconnect. Capture into a local so
-                        // a concurrent write to lastSessionId can't null it out
-                        // between the check and the resume call.
-                        lastSessionId?.let { sid ->
-                            scope.launch { resumeSession(sid) }
+                            // Session resume on reconnect. Capture into a local so
+                            // a concurrent write to lastSessionId can't null it out
+                            // between the check and the resume call.
+                            lastSessionId?.let { sid ->
+                                scope.launch { resumeSession(sid) }
+                            }
                         }
                     }
                     is WsState.Closed -> {
@@ -211,7 +235,10 @@ class OkHttpGatewayClient @Inject constructor(
                 }
             }
 
-            webSocket = httpClient.newWebSocket(request, listener)
+            val newSocket = httpClient.newWebSocket(request, listener)
+            synchronized(this) {
+                webSocket = newSocket
+            }
 
             // Wait for ready or timeout
             withTimeoutOrNull(timeoutMs) {
@@ -222,6 +249,9 @@ class OkHttpGatewayClient @Inject constructor(
                 val failed = ConnectionState.Failed("Connect timeout after ${timeoutMs}ms")
                 if (!quietFailure) _connectionState.value = failed
                 deferred.complete(failed)
+                // Close the socket to prevent a late gateway.ready from flipping state
+                webSocket?.close(1000, "connect timeout")
+                webSocket = null
             }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             // NEVER swallow cancellation into a Failed state — that turned a
@@ -239,16 +269,21 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     override suspend fun disconnect() {
-        reconnectJob?.cancel()
-        // Setting Disconnected FIRST makes any in-flight dial's success moot;
-        // startDial's finally also resolves its deferred for joiners.
-        webSocket?.close(1000, "client disconnect")
-        webSocket = null
-        _connectionState.value = ConnectionState.Disconnected
-        // Fail all pending requests
-        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
-        pendingRequests.clear()
-        nonTrackingRequestIds.clear()
+        val ws = synchronized(this) {
+            reconnectJob?.cancel()
+            // Setting Disconnected FIRST makes any in-flight dial's success moot;
+            // startDial's finally also resolves its deferred for joiners.
+            val socket = webSocket
+            webSocket = null
+            _connectionState.value = ConnectionState.Disconnected
+            // Fail all pending requests
+            pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
+            pendingRequests.clear()
+            nonTrackingRequestIds.clear()
+            socket
+        }
+        // Close outside the lock (network call)
+        ws?.close(1000, "client disconnect")
     }
 
     override suspend fun request(
@@ -283,9 +318,10 @@ class OkHttpGatewayClient @Inject constructor(
         val requestJson = json.encodeToString(GatewayRequest.serializer(), request)
 
         val deferred = kotlinx.coroutines.CompletableDeferred<JsonElement>()
-        pendingRequests[id] = deferred
-
-        val ws = webSocket
+        val ws = synchronized(this) {
+            pendingRequests[id] = deferred
+            webSocket
+        }
         if (ws == null) {
             pendingRequests.remove(id)
             nonTrackingRequestIds.remove(id)
@@ -333,11 +369,37 @@ class OkHttpGatewayClient @Inject constructor(
 
     override suspend fun downloadFile(url: String): ByteArray = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get().build()
-        httpClient.newCall(request).execute().use { response ->
+        // Create a client with a read timeout for downloads (the shared httpClient
+        // has readTimeout=0 for WebSocket, which is wrong for one-shot downloads).
+        val downloadClient = httpClient.newBuilder()
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        downloadClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw GatewayException("Download failed: HTTP ${response.code}")
             }
-            response.body?.bytes() ?: throw GatewayException("Download failed: empty response")
+            val body = response.body ?: throw GatewayException("Download failed: empty response")
+            // Stream to a temp file to avoid OOM on large files
+            val tempFile = java.io.File.createTempFile("download", ".tmp")
+            try {
+                body.source().use { source ->
+                    tempFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Long = 0
+                        while (true) {
+                            val read = source.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            bytesRead += read
+                        }
+                        Timber.d("[Gateway] Downloaded $bytesRead bytes to ${tempFile.absolutePath}")
+                    }
+                }
+                // Read the file back into memory (caller expects ByteArray)
+                tempFile.readBytes()
+            } finally {
+                tempFile.delete()
+            }
         }
     }
 
@@ -345,44 +407,44 @@ class OkHttpGatewayClient @Inject constructor(
 
     private fun handleDisconnect(reason: String) {
         Timber.w("[Gateway] disconnected: $reason")
-        webSocket = null
-        // Fail all pending requests
-        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected: $reason")) }
-        pendingRequests.clear()
-        nonTrackingRequestIds.clear()
+        synchronized(this) {
+            webSocket = null
+            // Fail all pending requests
+            pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected: $reason")) }
+            pendingRequests.clear()
+            nonTrackingRequestIds.clear()
 
-        // Only a user-initiated disconnect() stops the machine. Failed is NOT
-        // terminal — treating it as terminal is what used to strand the app
-        // offline until a force-stop.
-        if (_connectionState.value is ConnectionState.Disconnected) return
+            // Only a user-initiated disconnect() stops the machine. Failed is NOT
+            // terminal — treating it as terminal is what used to strand the app
+            // offline until a force-stop.
+            if (_connectionState.value is ConnectionState.Disconnected) return
 
-        // CRITICAL: downgrade the state. Nothing else does — and a live-drop
-        // used to leave state=Connected with webSocket=null, so the reconnect
-        // loop saw "Connected" and returned instantly, connect() early-returned
-        // "already connected", dial-on-demand never fired, and every request
-        // died with "WebSocket is null" until a force-stop. This one line is
-        // what actually arms the whole recovery machine.
-        if (_connectionState.value is ConnectionState.Connected ||
-            _connectionState.value is ConnectionState.Connecting
-        ) {
-            _connectionState.value = ConnectionState.Reconnecting(
-                attempt = 0,
-                nextAttemptInMs = 0,
-                lastError = reason,
-            )
+            // CRITICAL: downgrade the state. Nothing else does — and a live-drop
+            // used to leave state=Connected with webSocket=null, so the reconnect
+            // loop saw "Connected" and returned instantly, connect() early-returned
+            // "already connected", dial-on-demand never fired, and every request
+            // died with "WebSocket is null" until a force-stop. This one line is
+            // what actually arms the whole recovery machine.
+            if (_connectionState.value is ConnectionState.Connected ||
+                _connectionState.value is ConnectionState.Connecting
+            ) {
+                _connectionState.value = ConnectionState.Reconnecting(
+                    attempt = 0,
+                    nextAttemptInMs = 0,
+                    lastError = reason,
+                )
+            }
         }
-
-        // Do NOT cancel-and-restart here: the reconnect loop's own failed
-        // sockets fire onFailure → handleDisconnect too, and restarting the
-        // loop from inside its own failure resets the backoff to zero — a
-        // 1-second retry storm. Just make sure a loop exists.
+        // Schedule reconnect outside the lock (it acquires its own lock)
         scheduleReconnect()
     }
 
     /** Idempotent: keeps exactly one retry loop alive. */
     private fun scheduleReconnect() {
-        if (reconnectJob?.isActive == true) return
-        reconnectJob = scope.launch { reconnect() }
+        synchronized(this) {
+            if (reconnectJob?.isActive == true) return
+            reconnectJob = scope.launch { reconnect() }
+        }
     }
 
     /**
@@ -395,19 +457,52 @@ class OkHttpGatewayClient @Inject constructor(
     private suspend fun reconnect() {
         var attempt = 0
         var lastReason: String? = null
+        
+        // Initialize the failure window on first entry
+        if (firstFailureAt == null) {
+            firstFailureAt = System.currentTimeMillis()
+        }
+        
         while (true) {
             when (_connectionState.value) {
-                is ConnectionState.Connected -> return
+                is ConnectionState.Connected -> {
+                    // Success — reset the failure window
+                    firstFailureAt = null
+                    lastErrorPermanent = false
+                    return
+                }
                 is ConnectionState.Disconnected -> return // user asked to stop
                 else -> Unit
             }
+            
+            // Check for permanent error (401/403/404)
+            if (lastErrorPermanent) {
+                val reason = "Permanent error: HTTP ${lastHttpError ?: "unknown"}"
+                Timber.e("[Gateway] $reason — stopping reconnect")
+                _connectionState.value = ConnectionState.Failed(reason)
+                return
+            }
+            
+            // Check if we've exceeded the reconnect window
+            val elapsed = System.currentTimeMillis() - (firstFailureAt ?: System.currentTimeMillis())
+            if (elapsed > MAX_RECONNECT_WINDOW_MS) {
+                val reason = "Reconnect timeout after ${elapsed / 1000}s (last: $lastReason)"
+                Timber.e("[Gateway] $reason — stopping reconnect")
+                _connectionState.value = ConnectionState.Failed(reason)
+                return
+            }
+            
             attempt++
             // Exponent clamped BEFORE shifting: the old `1L shl (attempt-1)`
             // wrapped negative past attempt 63.
-            val delayMs = min(
+            val baseDelayMs = min(
                 MAX_RECONNECT_DELAY_MS,
                 INITIAL_RECONNECT_DELAY_MS shl min(attempt - 1, RECONNECT_BACKOFF_MAX_EXP),
             )
+            // Add ±20% jitter to avoid thundering herd (though for a single-client
+            // personal app this is mostly theoretical).
+            val jitter = (baseDelayMs * 0.2 * (Math.random() * 2 - 1)).toLong()
+            val delayMs = baseDelayMs + jitter
             // Carry the previous attempt's failure REASON into the state so
             // the UI/notification can show WHY it keeps reconnecting — the
             // difference between debuggable and "it just spins forever".
@@ -416,7 +511,7 @@ class OkHttpGatewayClient @Inject constructor(
                 nextAttemptInMs = delayMs,
                 lastError = lastReason,
             )
-            Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms (last: $lastReason)")
+            Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms (last: $lastReason, elapsed: ${elapsed / 1000}s)")
             delay(delayMs)
 
             val url = currentUrl ?: return
@@ -424,6 +519,8 @@ class OkHttpGatewayClient @Inject constructor(
                 when (val result = startDial(url).await()) {
                     is ConnectionState.Connected -> {
                         Timber.i("[Gateway] reconnected on attempt $attempt")
+                        firstFailureAt = null
+                        lastErrorPermanent = false
                         return
                     }
                     is ConnectionState.Failed -> lastReason = result.reason
@@ -452,6 +549,9 @@ class OkHttpGatewayClient @Inject constructor(
                     val state = _connectionState.value
                     if (state is ConnectionState.Connected || state is ConnectionState.Disconnected) return
                     Timber.i("[Gateway] network available — dialing immediately")
+                    // Reset the failure window when network comes back
+                    firstFailureAt = null
+                    lastErrorPermanent = false
                     startDial(url)
                     scheduleReconnect() // safety net if this dial fails
                 }
@@ -569,6 +669,14 @@ class OkHttpGatewayClient @Inject constructor(
                 Timber.d("[Gateway] Ignoring onFailure from a stale/replaced socket: ${t.message}")
                 return
             }
+            // Capture HTTP status code for permanent error detection
+            response?.code?.let { code ->
+                lastHttpError = code
+                lastErrorPermanent = code in listOf(401, 403, 404)
+                if (lastErrorPermanent) {
+                    Timber.e("[Gateway] Permanent HTTP error: $code")
+                }
+            }
             Timber.e(t, "[Gateway] WebSocket failure")
             onState(WsState.Failure(t))
         }
@@ -646,7 +754,9 @@ class OkHttpGatewayClient @Inject constructor(
         } else if (event.sessionId != null) {
             lastSessionId = event.sessionId
         }
-        scope.launch { _events.emit(event) }
+        if (!_events.tryEmit(event)) {
+            Timber.w("[Gateway] Event buffer full, dropped: $eventType")
+        }
     }
 
     private fun parseEvent(
@@ -658,7 +768,7 @@ class OkHttpGatewayClient @Inject constructor(
         return when (eventType) {
             "gateway.ready" -> GatewayEvent.GatewayReady(
                 sessionId = sid,
-                skin = p["skin"]?.let { parseSkinMap(it) },
+                skin = p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) },
             )
             "gateway.stderr" -> GatewayEvent.GatewayStderr(sid, p["line"]?.jsonPrimitive?.content ?: "")
             "gateway.start_timeout" -> GatewayEvent.GatewayStartTimeout(
@@ -699,7 +809,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["name"]?.jsonPrimitive?.content,
                 p["args_text"]?.jsonPrimitive?.content,
                 p["context"]?.jsonPrimitive?.content,
-                todos = p["todos"]?.let { parseTodos(it) },
+                todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
             "tool.complete" -> GatewayEvent.ToolComplete(
                 sid,
@@ -711,7 +821,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull(),
                 p["inline_diff"]?.jsonPrimitive?.content,
                 error = p["error"]?.jsonPrimitive?.content,
-                todos = p["todos"]?.let { parseTodos(it) },
+                todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
             "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"]?.jsonPrimitive?.content)
             "tool.progress" -> GatewayEvent.ToolProgress(
@@ -723,7 +833,7 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["command"]?.jsonPrimitive?.content ?: "",
                 p["description"]?.jsonPrimitive?.content ?: "",
-                p["pattern_keys"]?.let { parseStringList(it) } ?: emptyList(),
+                p["pattern_keys"]?.let { GatewayEventHelpers.parseStringList(it) } ?: emptyList(),
                 // Absent means unrestricted — only an explicit false hides "always allow"
                 allowPermanent = p["allow_permanent"]?.jsonPrimitive?.content != "false",
             )
@@ -731,7 +841,7 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["request_id"]?.jsonPrimitive?.content ?: "",
                 p["question"]?.jsonPrimitive?.content ?: "",
-                p["choices"]?.let { parseStringList(it) },
+                p["choices"]?.let { GatewayEventHelpers.parseStringList(it) },
             )
             "sudo.request" -> GatewayEvent.SudoRequest(
                 sid,
@@ -781,7 +891,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["level"]?.jsonPrimitive?.content,
                 p["message"]?.jsonPrimitive?.content,
             )
-            "skin.changed" -> GatewayEvent.SkinChanged(sid, p["skin"]?.let { parseSkinMap(it) })
+            "skin.changed" -> GatewayEvent.SkinChanged(sid, p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) })
             "dashboard.new_session_requested" -> GatewayEvent.DashboardNewSessionRequested(
                 sid, p["reason"]?.jsonPrimitive?.content,
             )
@@ -831,6 +941,21 @@ class OkHttpGatewayClient @Inject constructor(
         }
     }
 
+    /**
+     * Release resources. For a @Singleton with process lifetime this is
+     * technically unnecessary (the process exit cleans up), but it makes
+     * the class testable and future-proof if the lifetime changes.
+     */
+    fun close() {
+        reconnectJob?.cancel()
+        webSocket?.close(1000, "client shutdown")
+        webSocket = null
+        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Client closed")) }
+        pendingRequests.clear()
+        nonTrackingRequestIds.clear()
+        scope.cancel()
+    }
+
     companion object {
         private const val INITIAL_RECONNECT_DELAY_MS = 1_000L
 
@@ -841,5 +966,6 @@ class OkHttpGatewayClient @Inject constructor(
 
         /** Clamp for the backoff shift: 1s,2s,4s,8s then the 15s ceiling. */
         private const val RECONNECT_BACKOFF_MAX_EXP = 4
+        private const val MAX_RECONNECT_WINDOW_MS = 120_000L // 2 minutes
     }
 }
