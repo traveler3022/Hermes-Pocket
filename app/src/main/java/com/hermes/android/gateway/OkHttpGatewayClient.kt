@@ -185,15 +185,15 @@ class OkHttpGatewayClient @Inject constructor(
                         // Wait for gateway.ready event (handled in onMessage)
                     }
                     is WsState.Ready -> {
-                        _connectionState.value = ConnectionState.Connected(state.sessionId)
                         if (!deferred.isCompleted) {
+                            _connectionState.value = ConnectionState.Connected(state.sessionId)
                             deferred.complete(_connectionState.value)
-                        }
-                        // Session resume on reconnect. Capture into a local so
-                        // a concurrent write to lastSessionId can't null it out
-                        // between the check and the resume call.
-                        lastSessionId?.let { sid ->
-                            scope.launch { resumeSession(sid) }
+                            // Session resume on reconnect. Capture into a local so
+                            // a concurrent write to lastSessionId can't null it out
+                            // between the check and the resume call.
+                            lastSessionId?.let { sid ->
+                                scope.launch { resumeSession(sid) }
+                            }
                         }
                     }
                     is WsState.Closed -> {
@@ -222,6 +222,9 @@ class OkHttpGatewayClient @Inject constructor(
                 val failed = ConnectionState.Failed("Connect timeout after ${timeoutMs}ms")
                 if (!quietFailure) _connectionState.value = failed
                 deferred.complete(failed)
+                // Close the socket to prevent a late gateway.ready from flipping state
+                webSocket?.close(1000, "connect timeout")
+                webSocket = null
             }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             // NEVER swallow cancellation into a Failed state — that turned a
@@ -646,7 +649,9 @@ class OkHttpGatewayClient @Inject constructor(
         } else if (event.sessionId != null) {
             lastSessionId = event.sessionId
         }
-        scope.launch { _events.emit(event) }
+        if (!_events.tryEmit(event)) {
+            Timber.w("[Gateway] Event buffer full, dropped: $eventType")
+        }
     }
 
     private fun parseEvent(
