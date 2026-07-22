@@ -365,11 +365,37 @@ class OkHttpGatewayClient @Inject constructor(
 
     override suspend fun downloadFile(url: String): ByteArray = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get().build()
-        httpClient.newCall(request).execute().use { response ->
+        // Create a client with a read timeout for downloads (the shared httpClient
+        // has readTimeout=0 for WebSocket, which is wrong for one-shot downloads).
+        val downloadClient = httpClient.newBuilder()
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        downloadClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw GatewayException("Download failed: HTTP ${response.code}")
             }
-            response.body?.bytes() ?: throw GatewayException("Download failed: empty response")
+            val body = response.body ?: throw GatewayException("Download failed: empty response")
+            // Stream to a temp file to avoid OOM on large files
+            val tempFile = java.io.File.createTempFile("download", ".tmp")
+            try {
+                body.source().use { source ->
+                    tempFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Long = 0
+                        while (true) {
+                            val read = source.read(buffer)
+                            if (read == -1L) break
+                            output.write(buffer, 0, read.toInt())
+                            bytesRead += read
+                        }
+                        Timber.d("[Gateway] Downloaded $bytesRead bytes to ${tempFile.absolutePath}")
+                    }
+                }
+                // Read the file back into memory (caller expects ByteArray)
+                tempFile.readBytes()
+            } finally {
+                tempFile.delete()
+            }
         }
     }
 
