@@ -768,7 +768,7 @@ class OkHttpGatewayClient @Inject constructor(
         return when (eventType) {
             "gateway.ready" -> GatewayEvent.GatewayReady(
                 sessionId = sid,
-                skin = p["skin"]?.let { parseSkinMap(it) },
+                skin = p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) },
             )
             "gateway.stderr" -> GatewayEvent.GatewayStderr(sid, p["line"]?.jsonPrimitive?.content ?: "")
             "gateway.start_timeout" -> GatewayEvent.GatewayStartTimeout(
@@ -809,7 +809,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["name"]?.jsonPrimitive?.content,
                 p["args_text"]?.jsonPrimitive?.content,
                 p["context"]?.jsonPrimitive?.content,
-                todos = p["todos"]?.let { parseTodos(it) },
+                todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
             "tool.complete" -> GatewayEvent.ToolComplete(
                 sid,
@@ -821,7 +821,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull(),
                 p["inline_diff"]?.jsonPrimitive?.content,
                 error = p["error"]?.jsonPrimitive?.content,
-                todos = p["todos"]?.let { parseTodos(it) },
+                todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
             "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"]?.jsonPrimitive?.content)
             "tool.progress" -> GatewayEvent.ToolProgress(
@@ -833,7 +833,7 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["command"]?.jsonPrimitive?.content ?: "",
                 p["description"]?.jsonPrimitive?.content ?: "",
-                p["pattern_keys"]?.let { parseStringList(it) } ?: emptyList(),
+                p["pattern_keys"]?.let { GatewayEventHelpers.parseStringList(it) } ?: emptyList(),
                 // Absent means unrestricted — only an explicit false hides "always allow"
                 allowPermanent = p["allow_permanent"]?.jsonPrimitive?.content != "false",
             )
@@ -841,7 +841,7 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["request_id"]?.jsonPrimitive?.content ?: "",
                 p["question"]?.jsonPrimitive?.content ?: "",
-                p["choices"]?.let { parseStringList(it) },
+                p["choices"]?.let { GatewayEventHelpers.parseStringList(it) },
             )
             "sudo.request" -> GatewayEvent.SudoRequest(
                 sid,
@@ -891,7 +891,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["level"]?.jsonPrimitive?.content,
                 p["message"]?.jsonPrimitive?.content,
             )
-            "skin.changed" -> GatewayEvent.SkinChanged(sid, p["skin"]?.let { parseSkinMap(it) })
+            "skin.changed" -> GatewayEvent.SkinChanged(sid, p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) })
             "dashboard.new_session_requested" -> GatewayEvent.DashboardNewSessionRequested(
                 sid, p["reason"]?.jsonPrimitive?.content,
             )
