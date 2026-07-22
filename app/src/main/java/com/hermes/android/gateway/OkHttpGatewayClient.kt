@@ -940,6 +940,21 @@ class OkHttpGatewayClient @Inject constructor(
         }
     }
 
+    /**
+     * Release resources. For a @Singleton with process lifetime this is
+     * technically unnecessary (the process exit cleans up), but it makes
+     * the class testable and future-proof if the lifetime changes.
+     */
+    fun close() {
+        reconnectJob?.cancel()
+        webSocket?.close(1000, "client shutdown")
+        webSocket = null
+        pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Client closed")) }
+        pendingRequests.clear()
+        nonTrackingRequestIds.clear()
+        scope.cancel()
+    }
+
     companion object {
         private const val INITIAL_RECONNECT_DELAY_MS = 1_000L
 
