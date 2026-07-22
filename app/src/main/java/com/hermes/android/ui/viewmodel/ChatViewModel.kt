@@ -195,7 +195,7 @@ class ChatViewModel @Inject constructor(
 
                     // When connected, create or resume a session.
                     //
-                    // OkHttpGatewayClient runs its OWN low-level auto-resume on
+                    // GatewayClient runs its OWN low-level auto-resume on
                     // reconnect (using its internally-tracked lastSessionId) and,
                     // once fixed, re-publishes the resulting live session id via
                     // this same connectionState — so if that already resolved a
@@ -232,7 +232,7 @@ class ChatViewModel @Inject constructor(
             }
 
             // Collect events. Must be attached BEFORE connect() is called, not
-            // after: events.replay is 0 (see OkHttpGatewayClient), so any
+            // after: events.replay is 0 (see GatewayClient), so any
             // message.start/delta/complete the gateway pushes right after the
             // handshake — e.g. as part of a session resume — would otherwise
             // race the collector attaching and be dropped forever, silently
