@@ -494,10 +494,14 @@ class OkHttpGatewayClient @Inject constructor(
             attempt++
             // Exponent clamped BEFORE shifting: the old `1L shl (attempt-1)`
             // wrapped negative past attempt 63.
-            val delayMs = min(
+            val baseDelayMs = min(
                 MAX_RECONNECT_DELAY_MS,
                 INITIAL_RECONNECT_DELAY_MS shl min(attempt - 1, RECONNECT_BACKOFF_MAX_EXP),
             )
+            // Add ±20% jitter to avoid thundering herd (though for a single-client
+            // personal app this is mostly theoretical).
+            val jitter = (baseDelayMs * 0.2 * (Math.random() * 2 - 1)).toLong()
+            val delayMs = baseDelayMs + jitter
             // Carry the previous attempt's failure REASON into the state so
             // the UI/notification can show WHY it keeps reconnecting — the
             // difference between debuggable and "it just spins forever".
