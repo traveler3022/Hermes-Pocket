@@ -405,10 +405,13 @@ internal fun NewTaskDialog(
                     }
                 }
 
-                // Assemble the final prompt from all steps
+                // Assemble the final prompt from all steps — formatted as a
+                // numbered plan so the agent understands the structure and
+                // can use its todo tool to track each step.
                 val prompt = steps
                     .filter { it.isNotBlank() }
-                    .joinToString("\n\n") { step -> step.trim() }
+                    .mapIndexed { i, step -> "${i + 1}. ${step.trim()}" }
+                    .joinToString("\n")
                 Text(
                     t("Thinking depth", "عمق تفکر"),
                     style = MaterialTheme.typography.labelMedium,
