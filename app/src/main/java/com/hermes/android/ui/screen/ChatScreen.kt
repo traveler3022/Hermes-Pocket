@@ -588,62 +588,12 @@ fun ChatScreen(
                 Column {
                     TopAppBar(
                         title = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                // Personalized identity (from Settings > General >
-                                // Top bar): either the assistant's name as text,
-                                // or the avatar image at the user-chosen size.
-                                // Tapping opens Settings so the user can change
-                                // either. Falls back to uiState.assistantName
-                                // when themeModeState is null (e.g. preview).
-                                val display = themeModeState?.topBarDisplay
-                                    ?: com.hermes.android.ui.theme.TopBarDisplay.NAME
-                                val displayName = themeModeState?.assistantName
-                                    ?: uiState.assistantName
-                                val avatarUri = uiState.assistantAvatarPath
-                                val sizeDp = (themeModeState?.avatarSizeDp ?: 36).dp
-                                Box(modifier = Modifier.clickable { onNavigateToSettings() }) {
-                                    when (display) {
-                                        com.hermes.android.ui.theme.TopBarDisplay.NAME -> {
-                                            Text(text = displayName)
-                                        }
-                                        com.hermes.android.ui.theme.TopBarDisplay.AVATAR -> {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(sizeDp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primary),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                if (avatarUri != null) {
-                                                    AsyncImage(
-                                                        model = avatarUri,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        contentScale = ContentScale.Crop,
-                                                    )
-                                                } else {
-                                                    // No avatar set yet — show the
-                                                    // first character of the assistant's
-                                                    // name as a placeholder.
-                                                    Text(
-                                                        text = displayName.take(1),
-                                                        style = MaterialTheme.typography.titleSmall,
-                                                        color = MaterialTheme.colorScheme.onPrimary,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
-                                    if (agentActivity != null) {
-                                        AgentWorkingIndicator(agentActivity)
-                                    } else {
-                                        ConnectionIndicator(uiState.connectionState)
-                                    }
+                            // Keep only the runtime/connection status in the top bar
+                            Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
+                                if (agentActivity != null) {
+                                    AgentWorkingIndicator(agentActivity)
+                                } else {
+                                    ConnectionIndicator(uiState.connectionState)
                                 }
                             }
                         },
