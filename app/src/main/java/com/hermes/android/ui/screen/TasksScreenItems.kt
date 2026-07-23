@@ -19,6 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
@@ -232,8 +235,7 @@ internal fun NewTaskDialog(
     onLaunch: (title: String, prompt: String, effort: String?, model: SessionRepository.ModelChoice?) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
-    var prompt by remember { mutableStateOf("") }
-    // "" = use the default effort; otherwise a per-task override.
+    // " " = use the default effort; otherwise a per-task override.
     var effort by remember { mutableStateOf("") }
     // null = use the default model; otherwise a per-task override.
     var model by remember { mutableStateOf<SessionRepository.ModelChoice?>(null) }
@@ -257,11 +259,156 @@ internal fun NewTaskDialog(
                     label = { Text(t("Title (optional)", "عنوان (اختیاری)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = prompt, onValueChange = { prompt = it },
-                    label = { Text(t("What should the agent do?", "ایجنت چی کار کنه؟")) },
-                    minLines = 3, maxLines = 6, modifier = Modifier.fillMaxWidth(),
-                )
+
+                // ── Plan builder ────────────────────────────────────────────
+                // Instead of one textarea for the whole prompt, the user builds
+                // a numbered list of steps. Only one step is "open" (being
+                // edited) at a time; the rest are collapsed cards the user can
+                // edit, delete, or reorder. The final prompt is assembled by
+                // joining all steps with newlines and a "Step N:" prefix.
+                var steps by remember { mutableStateOf(listOf("")) }
+                var openStep by remember { mutableStateOf(0) } // index of the step being edited
+
+                steps.forEachIndexed { index, stepText ->
+                    if (index == openStep) {
+                        // ── Open step: textarea + "Save & next" ──
+                        OutlinedTextField(
+                            value = stepText,
+                            onValueChange = { newVal ->
+                                steps = steps.toMutableList().also { it[index] = newVal }
+                            },
+                            label = { Text(t("Step ${index + 1}", "گام ${index + 1}")) },
+                            minLines = 2, maxLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (steps.size > 1) {
+                                TextButton(onClick = {
+                                    // Remove this step, move openStep back
+                                    steps = steps.toMutableList().also { it.removeAt(index) }
+                                    openStep = (openStep - 1).coerceAtLeast(0)
+                                }) { Text(t("Delete", "حذف")) }
+                            }
+                            TextButton(onClick = {
+                                if (stepText.isNotBlank()) {
+                                    steps = steps + ""
+                                    openStep = steps.lastIndex
+                                }
+                            }) { Text(t("Save & next", "ذخیره و بعدی")) }
+                        }
+                    } else {
+                        // ── Collapsed step: preview + edit/delete/reorder ──
+                        Surface(
+                            shape = RoundedCornerShape(HxRadius.sm),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = HxSpace.sm, vertical = HxSpace.xs),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "${index + 1}.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = HxSpace.xs),
+                                )
+                                Text(
+                                    text = stepText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                // Move up
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            steps = steps.toMutableList().also {
+                                                val tmp = it[index - 1]
+                                                it[index - 1] = it[index]
+                                                it[index] = tmp
+                                            }
+                                            if (openStep == index) openStep = index - 1
+                                            else if (openStep == index - 1) openStep = index
+                                        }
+                                    },
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowUp,
+                                        contentDescription = t("Move up", "بالا"),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                // Move down
+                                IconButton(
+                                    onClick = {
+                                        if (index < steps.size - 1) {
+                                            steps = steps.toMutableList().also {
+                                                val tmp = it[index + 1]
+                                                it[index + 1] = it[index]
+                                                it[index] = tmp
+                                            }
+                                            if (openStep == index) openStep = index + 1
+                                            else if (openStep == index + 1) openStep = index
+                                        }
+                                    },
+                                    enabled = index < steps.size - 1,
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = t("Move down", "پایین"),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                // Edit
+                                IconButton(
+                                    onClick = { openStep = index },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = t("Edit", "ویرایش"),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                // Delete
+                                IconButton(
+                                    onClick = {
+                                        steps = steps.toMutableList().also { it.removeAt(index) }
+                                        if (openStep > index) openStep--
+                                        if (steps.isEmpty()) {
+                                            steps = listOf("")
+                                            openStep = 0
+                                        } else if (openStep >= steps.size) {
+                                            openStep = steps.lastIndex
+                                        }
+                                    },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = t("Delete", "حذف"),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Assemble the final prompt from all steps
+                val prompt = steps
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n\n") { step -> step.trim() }
                 Text(
                     t("Thinking depth", "عمق تفکر"),
                     style = MaterialTheme.typography.labelMedium,
