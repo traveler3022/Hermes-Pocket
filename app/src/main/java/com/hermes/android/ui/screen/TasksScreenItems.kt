@@ -284,22 +284,100 @@ internal fun NewTaskDialog(
                     }
                 }
                 if (models.isNotEmpty()) {
+                    var modelMode by remember { mutableStateOf(0) } // 0=default, 1=custom
+                    var selectedProvider by remember { mutableStateOf<String?>(null) }
+                    val providers = remember(models) {
+                        models.map { it.provider }.distinct().sorted()
+                    }
+
                     Text(t("Model", "مدل"), style = MaterialTheme.typography.labelMedium)
                     Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         FilterChip(
-                            selected = model == null,
-                            onClick = { model = null },
-                            label = { Text(t("default", "پیش‌فرض"), style = MaterialTheme.typography.labelSmall) },
+                            selected = modelMode == 0,
+                            onClick = {
+                                modelMode = 0
+                                model = null
+                                selectedProvider = null
+                            },
+                            label = { Text(t("Default", "پیش‌فرض"), style = MaterialTheme.typography.labelSmall) },
                         )
-                        models.forEach { choice ->
-                            FilterChip(
-                                selected = model == choice,
-                                onClick = { model = choice },
-                                label = { Text(choice.modelId, style = MaterialTheme.typography.labelSmall) },
+                        FilterChip(
+                            selected = modelMode == 1,
+                            onClick = {
+                                modelMode = 1
+                                model = null
+                                selectedProvider = null
+                            },
+                            label = { Text(t("Custom", "کاستوم"), style = MaterialTheme.typography.labelSmall) },
+                        )
+                    }
+                    if (modelMode == 0) {
+                        Text(
+                            t(
+                                "Uses the current provider and model from settings",
+                                "از پرووایدر و مدل فعلی تنظیمات استفاده می‌کند",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        // Step 1: pick provider
+                        if (selectedProvider == null) {
+                            Text(
+                                t("Select provider", "پرووایدر را انتخاب کنید"),
+                                style = MaterialTheme.typography.labelSmall,
                             )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                providers.forEach { provider ->
+                                    val count = models.count { it.provider == provider }
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = { selectedProvider = provider },
+                                        label = {
+                                            Column {
+                                                Text(provider, style = MaterialTheme.typography.labelSmall)
+                                                Text(
+                                                    "$count model(s)",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        } else {
+                            // Step 2: pick model
+                            val modelsForProvider = models.filter { it.provider == selectedProvider }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                t("Select model", "مدل را انتخاب کنید"),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                modelsForProvider.forEach { choice ->
+                                    FilterChip(
+                                        selected = model == choice,
+                                        onClick = { model = choice },
+                                        label = { Text(choice.modelId, style = MaterialTheme.typography.labelSmall) },
+                                    )
+                                }
+                            }
+                            TextButton(onClick = { selectedProvider = null; model = null }) {
+                                Text(
+                                    t("← Change provider", "← تغییر پرووایدر"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
                     }
                 }
