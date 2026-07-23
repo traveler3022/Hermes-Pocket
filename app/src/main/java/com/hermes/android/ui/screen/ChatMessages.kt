@@ -551,12 +551,22 @@ internal fun MessageBubble(
                                     blocks.forEach { block ->
                                         when (block) {
                                             is ContentBlock.Text -> SelectionContainer {
-                                                HermesMarkdown(
-                                                    markdown = block.markdown,
-                                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                    ),
-                                                )
+                                                // During streaming, show plain text to avoid sudden markdown parsing
+                                                if (message.isStreaming) {
+                                                    Text(
+                                                        text = block.markdown,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                        ),
+                                                    )
+                                                } else {
+                                                    HermesMarkdown(
+                                                        markdown = block.markdown,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                        ),
+                                                    )
+                                                }
                                             }
                                             is ContentBlock.Image -> InlineImageBlock(
                                                 alt = block.alt,

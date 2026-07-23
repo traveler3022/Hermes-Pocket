@@ -152,6 +152,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun ConnectionIndicator(state: ChatConnectionState) {
+    // Hide the indicator when connected - only show when there's a problem
+    if (state == ChatConnectionState.Connected) return
+    
     val (color, label) = when (state) {
         ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
         ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting...", "◌ در حال اتصال...")
