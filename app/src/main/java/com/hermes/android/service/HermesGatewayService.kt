@@ -66,7 +66,8 @@ class HermesGatewayService : Service() {
                     val text = when (state) {
                         is ConnectionState.Disconnected -> "Disconnected"
                         is ConnectionState.Connecting -> "Connecting…"
-                        is ConnectionState.Connected -> "Gateway running"
+                        // Connected is normal - dont clutter notification
+                        is ConnectionState.Connected -> "‏"
                         // Show WHY — an endless "attempt N" with no reason is
                         // undebuggable from the phone.
                         is ConnectionState.Reconnecting ->

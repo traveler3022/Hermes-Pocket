@@ -224,7 +224,7 @@ internal fun ThinkingBlock(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (isStreaming) t("Thinking…", "در حال فکر…") else t("Thoughts", "افکار"),
+                text = if (isStreaming) t("‌", "‌") else t("Thoughts", "افکار"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),

@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -228,15 +227,8 @@ fun ChatScreen(
     val isToolRunning = uiState.messages.any { it is ChatMessage.ToolCall && it.isRunning }
     val streamingAssistant =
         uiState.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
-    val agentActivity: String? = when {
-        uiState.connectionState != ChatConnectionState.Connected -> null
-        isToolRunning -> t("Running tool…", "در حال اجرای ابزار…")
-        streamingAssistant?.isStreaming == true && streamingAssistant.text.isNotBlank() ->
-            t("Writing…", "در حال نوشتن…")
-        streamingAssistant?.isStreaming == true || uiState.isSending ->
-            t("Thinking…", "در حال فکر کردن…")
-        else -> null
-    }
+    // Removed: agent activity text was distracting - ConnectionIndicator handles it
+    val agentActivity: String? = null
 
     // Keep drawer state in sync with ViewModel state.
     LaunchedEffect(uiState.showSessionDrawer) {
@@ -603,14 +595,7 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            if (uiState.activeSessionId != null) {
-                                IconButton(onClick = { showChanges = true }) {
-                                    Icon(
-                                        Icons.Default.Undo,
-                                        contentDescription = t("Changes", "تغییرات"),
-                                    )
-                                }
-                            }
+
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
