@@ -47,7 +47,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -848,15 +847,6 @@ fun ChatScreen(
                 // permanent furniture, and the chat must stay uncluttered.
                 if (uiState.activeTodos.isNotEmpty() && agentActivity != null) {
                     AgentTodoCard(todos = uiState.activeTodos)
-                }
-
-                // Sending progress bar
-                if (uiState.isSending) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                    )
                 }
 
                 // Input bar
