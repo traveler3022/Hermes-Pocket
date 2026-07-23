@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -241,6 +242,18 @@ internal fun NewTaskDialog(
     var model by remember { mutableStateOf<SessionRepository.ModelChoice?>(null) }
     val effortOptions = listOf("", "low", "medium", "high", "xhigh")
 
+    // ── Plan builder state ─────────────────────────────────────────────
+    // Instead of one textarea for the whole prompt, the user builds a
+    // numbered list of steps. Only one step is "open" (being edited) at
+    // a time; the rest are collapsed cards the user can edit, delete, or
+    // reorder. The final prompt is assembled by joining all steps.
+    var steps by remember { mutableStateOf(listOf("")) }
+    var openStep by remember { mutableStateOf(0) }
+    val prompt = steps
+        .filter { it.isNotBlank() }
+        .mapIndexed { i, step -> "${i + 1}. ${step.trim()}" }
+        .joinToString("\n")
+
     AlertDialog(
         onDismissRequest = { if (!isLaunching) onDismiss() },
         title = { Text(t("New task", "تسک جدید")) },
@@ -259,15 +272,6 @@ internal fun NewTaskDialog(
                     label = { Text(t("Title (optional)", "عنوان (اختیاری)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
-
-                // ── Plan builder ────────────────────────────────────────────
-                // Instead of one textarea for the whole prompt, the user builds
-                // a numbered list of steps. Only one step is "open" (being
-                // edited) at a time; the rest are collapsed cards the user can
-                // edit, delete, or reorder. The final prompt is assembled by
-                // joining all steps with newlines and a "Step N:" prefix.
-                var steps by remember { mutableStateOf(listOf("")) }
-                var openStep by remember { mutableStateOf(0) } // index of the step being edited
 
                 steps.forEachIndexed { index, stepText ->
                     if (index == openStep) {
@@ -405,13 +409,6 @@ internal fun NewTaskDialog(
                     }
                 }
 
-                // Assemble the final prompt from all steps — formatted as a
-                // numbered plan so the agent understands the structure and
-                // can use its todo tool to track each step.
-                val prompt = steps
-                    .filter { it.isNotBlank() }
-                    .mapIndexed { i, step -> "${i + 1}. ${step.trim()}" }
-                    .joinToString("\n")
                 Text(
                     t("Thinking depth", "عمق تفکر"),
                     style = MaterialTheme.typography.labelMedium,
