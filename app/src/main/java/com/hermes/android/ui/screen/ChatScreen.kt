@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -603,14 +602,7 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            if (uiState.activeSessionId != null) {
-                                IconButton(onClick = { showChanges = true }) {
-                                    Icon(
-                                        Icons.Default.Undo,
-                                        contentDescription = t("Changes", "تغییرات"),
-                                    )
-                                }
-                            }
+
                             IconButton(onClick = { viewModel.toggleSearch() }) {
                                 Icon(
                                     if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
