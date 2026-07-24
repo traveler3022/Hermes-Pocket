@@ -323,7 +323,8 @@ internal fun ModelsTab(
                     onToggleExpand = { viewModel.toggleProviderExpanded(provider.slug) },
                     onRemove = { viewModel.removeProvider(provider.slug) },
                     onSetCredential = { key -> viewModel.setCredential(provider.slug, key) },
-                    onRemoveCredential = { viewModel.removeCredential(provider.slug) },
+                    onAddCredential = { key -> viewModel.addCredential(provider.slug, key) },
+                    onRemoveCredential = { credentialId -> viewModel.removeCredentialEntry(provider.slug, credentialId) },
                     onSetPrimary = { viewModel.setPrimaryProvider(provider) },
                 )
             }
@@ -416,6 +417,7 @@ internal fun ModelsTab(
     if (showAddProviderDialog) {
         AddProviderDialog(
             onDismiss = { showAddProviderDialog = false },
+            onFetchModels = { url, key -> viewModel.probeProviderModels(url, key) },
             onAdd = { slug, baseUrl, model, key ->
                 viewModel.addProvider(slug, baseUrl, model, key)
                 showAddProviderDialog = false

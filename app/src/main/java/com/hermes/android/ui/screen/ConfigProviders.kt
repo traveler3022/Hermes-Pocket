@@ -478,11 +478,13 @@ internal fun ProviderCard(
     onToggleExpand: () -> Unit,
     onRemove: () -> Unit,
     onSetCredential: (String) -> Unit,
-    onRemoveCredential: () -> Unit,
+    onAddCredential: (String) -> Unit,
+    onRemoveCredential: (credentialId: String) -> Unit,
     onSetPrimary: () -> Unit = {},
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSetKeyDialog by remember { mutableStateOf(false) }
+    var showAddKeyDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -609,7 +611,9 @@ internal fun ProviderCard(
                         }
                     }
 
-                    // API key — one per provider
+                    // API key pool — Hermes rotates between multiple keys
+                    // per provider automatically (fill_first by default);
+                    // see credential-pools.md. Show every entry, not just one.
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -617,17 +621,30 @@ internal fun ProviderCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = t("API Key", "کلید API"),
+                            text = if (credentials.size > 1) {
+                                t("API Keys (${credentials.size})", "کلیدهای API (${credentials.size})")
+                            } else {
+                                t("API Key", "کلید API")
+                            },
                             style = MaterialTheme.typography.labelMedium,
                         )
-                        TextButton(onClick = { showSetKeyDialog = true }) {
-                            Icon(Icons.Default.Key, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                if (credentials.isEmpty()) t("Set Key", "ثبت کلید")
-                                else t("Replace Key", "تعویض کلید"),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                        Row {
+                            if (credentials.isNotEmpty()) {
+                                TextButton(onClick = { showAddKeyDialog = true }) {
+                                    Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(t("Add Key", "افزودن کلید"), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            TextButton(onClick = { showSetKeyDialog = true }) {
+                                Icon(Icons.Default.Key, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    if (credentials.isEmpty()) t("Set Key", "ثبت کلید")
+                                    else t("Replace First Key", "تعویض کلید اول"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
                     }
 
@@ -638,15 +655,41 @@ internal fun ProviderCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
-                        CredentialRow(
-                            credential = credentials.first(),
-                            onRemove = onRemoveCredential,
-                        )
+                        if (credentials.size > 1) {
+                            Text(
+                                text = t(
+                                    "Tried in priority order — when the active key hits a rate limit, Hermes rotates to the next one automatically",
+                                    "به ترتیب اولویت امتحان می‌شن — وقتی کلید فعال به محدودیت بخوره، Hermes خودکار می‌ره سراغ بعدی",
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 2.dp),
+                            )
+                        }
+                        credentials.sortedBy { it.priority }.forEach { credential ->
+                            CredentialRow(
+                                credential = credential,
+                                onRemove = { onRemoveCredential(credential.id ?: credential.index.toString()) },
+                            )
+                        }
                     }
                 }
             }
         }
     }
+
+    // ── Add key dialog (append, doesn't disturb existing keys) ──
+    if (showAddKeyDialog) {
+        SetKeyDialog(
+            providerSlug = provider.slug,
+            onDismiss = { showAddKeyDialog = false },
+            onSet = { key ->
+                onAddCredential(key)
+                showAddKeyDialog = false
+            },
+        )
+    }
+
 
     // ── Delete confirmation ──
     if (showDeleteConfirm) {

@@ -802,6 +802,57 @@ class ConfigViewModel @Inject constructor(
         return sections
     }
 
+    /**
+     * Fetch-only probe of a provider's model list, used by [AddProviderDialog]
+     * so the user picks from what the endpoint actually reports instead of
+     * typing a model name blind. Does not touch config.yaml or credentials —
+     * [addProvider] does the actual write once a model is picked.
+     */
+    data class ProviderProbe(val models: List<String>, val error: String?)
+
+    suspend fun probeProviderModels(baseUrl: String, apiKey: String): ProviderProbe {
+        return try {
+            val out = execPython(
+                """
+                import base64, json, urllib.request
+                base = base64.b64decode('${b64(baseUrl.trim())}').decode().strip()
+                key = base64.b64decode('${b64(apiKey.trim())}').decode().strip()
+                b = base.rstrip('/')
+                cands = [b + '/models']
+                if not b.endswith('/v1'):
+                    cands.insert(0, b + '/v1/models')
+                ids = []
+                err = ''
+                for u in cands:
+                    try:
+                        hdr = {'Authorization': 'Bearer ' + key} if key else {}
+                        req = urllib.request.Request(u, headers=hdr)
+                        with urllib.request.urlopen(req, timeout=20) as r:
+                            body = r.read().decode('utf-8', 'replace')
+                        j = json.loads(body)
+                        rows = j.get('data') if isinstance(j, dict) else j
+                        if rows is None and isinstance(j, dict):
+                            rows = j.get('models') or []
+                        got = [ (m.get('id') or m.get('name')) for m in (rows or [])
+                                if isinstance(m, dict) and (m.get('id') or m.get('name')) ]
+                        if got:
+                            ids = got; err = ''; break
+                        err = 'endpoint returned no models'
+                    except Exception as e:
+                        err = str(e)[:200]
+                print(json.dumps({'models': ids, 'error': err}))
+                """.trimIndent(),
+            )
+            val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
+            val ids = (obj?.get("models") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+            val err = (obj?.get("error") as? JsonPrimitive)?.content.takeIf { ids.isEmpty() }
+            ProviderProbe(ids, err)
+        } catch (e: Exception) {
+            Timber.w(e, "[Config] probeProviderModels failed")
+            ProviderProbe(emptyList(), e.message ?: "probe failed")
+        }
+    }
+
     fun addProvider(slug: String, baseUrl: String, defaultModel: String, apiKey: String) {
         viewModelScope.launch {
             try {
@@ -869,10 +920,29 @@ class ConfigViewModel @Inject constructor(
                             err = 'endpoint returned no models'
                         except Exception as e:
                             err = str(e)[:200]
-                    chosen = hint or (ids[0] if ids else '')
+                    chosen = ''
+                    hint_ignored = False
+                    if ids:
+                        # Only trust the typed hint if it actually matches a
+                        # model the provider reported. A hand-typed name that
+                        # isn't real was being passed straight to the model
+                        # switch RPC and failing there instead of here, where
+                        # we can catch it and fall back to a real model.
+                        match = next((m for m in ids if m == hint), None)
+                        if match is None and hint:
+                            match = next((m for m in ids if m.lower() == hint.lower()), None)
+                        if match is not None:
+                            chosen = match
+                        else:
+                            chosen = ids[0]
+                            hint_ignored = bool(hint)
+                    else:
+                        # Nothing detected from the endpoint — fall back to
+                        # whatever the user typed, since it's all we have.
+                        chosen = hint
                     if chosen: entry['default_model'] = chosen
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print(json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands}))
+                    print(json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands, 'hint_ignored': hint_ignored, 'hint': hint}))
                     """.trimIndent()
                 )
                 // Save the provider's API key
@@ -885,10 +955,17 @@ class ConfigViewModel @Inject constructor(
                     val arr = obj?.get("models") as? JsonArray
                     val chosen = (obj?.get("chosen") as? JsonPrimitive)?.content ?: ""
                     val err = (obj?.get("error") as? JsonPrimitive)?.content ?: ""
+                    val hintIgnored = (obj?.get("hint_ignored") as? JsonPrimitive)?.content?.toBoolean() ?: false
+                    val typedHint = (obj?.get("hint") as? JsonPrimitive)?.content ?: ""
                     val ids = arr?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
-                    Triple(ids, chosen, err)
-                }.getOrDefault(Triple(emptyList<String>(), "", ""))
-                val (modelIds, chosen, detectError) = detected
+                    listOf(ids, chosen, err, hintIgnored, typedHint)
+                }.getOrDefault(listOf(emptyList<String>(), "", "", false, ""))
+                @Suppress("UNCHECKED_CAST")
+                val modelIds = detected[0] as List<String>
+                val chosen = detected[1] as String
+                val detectError = detected[2] as String
+                val hintIgnored = detected[3] as Boolean
+                val typedHint = detected[4] as String
                 if (modelIds.isNotEmpty()) {
                     val newModels = modelIds.map {
                         ModelOption(provider = s, modelId = it, name = it, requiresApiKey = true)
@@ -909,7 +986,11 @@ class ConfigViewModel @Inject constructor(
                         activeProvider = if (err == null) s else _uiState.value.activeProvider,
                         activeModel = if (err == null) chosen else _uiState.value.activeModel,
                         errorMessage = err
-                            ?: "Provider \"$s\" added — ${modelIds.size} models, using $chosen",
+                            ?: if (hintIgnored) {
+                                "Provider \"$s\" added — \"$typedHint\" isn't one of the ${modelIds.size} models this endpoint reports, so using $chosen instead"
+                            } else {
+                                "Provider \"$s\" added — ${modelIds.size} models, using $chosen"
+                            },
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -1019,9 +1100,20 @@ class ConfigViewModel @Inject constructor(
     }
 
     // ── Credentials (one key per provider) ──────────────────────────────
+    //
+    // This tab only ever deals with custom_providers entries (there is no
+    // built-in-provider list anywhere in this screen), so every pool key
+    // here must carry the "custom:" prefix. Verified against Hermes' own
+    // source (agent/credential_pool.py: get_custom_provider_pool_key()
+    // always returns f"custom:{normalized_name}", never the bare name —
+    // load_pool() is then called with that prefixed key). Writing to the
+    // bare slug, as this used to do, files the key under a pool key Hermes
+    // never looks at for a custom endpoint.
+    private fun customPoolKey(rawSlug: String): String = "custom:${safeSlug(rawSlug)}"
 
     fun loadCredentialPool(rawSlug: String) {
         val slug = safeSlug(rawSlug)
+        val poolKey = customPoolKey(rawSlug)
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingCredentials = true)
             try {
@@ -1029,7 +1121,7 @@ class ConfigViewModel @Inject constructor(
                     import json, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'auth.json'
                     d = json.loads(p.read_text()) if p.exists() else {}
-                    pool = d.get('credential_pool', {}).get('$slug', [])
+                    pool = d.get('credential_pool', {}).get('$poolKey', [])
                     out = []
                     for i, e in enumerate(pool, 1):
                         tok = e.get('access_token', '')
@@ -1076,39 +1168,94 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    private suspend fun setCredentialDirect(rawSlug: String, apiKey: String) {
-        val slug = safeSlug(rawSlug)
-        // The key travels base64-encoded — an API key containing a quote or
-        // backslash must never be able to break the embedded python. One key
-        // per provider: writing replaces whatever was there before.
+    /**
+     * Appends a credential to the pool instead of replacing it — matches
+     * Hermes' own `hermes auth add <provider> --api-key <key>` semantics
+     * (see credential-pools.md: "To benefit from pooling, add more keys").
+     * New entries get the next priority slot (highest number = tried last),
+     * mirroring credential_pool.py's `_next_priority()` helper, so a
+     * `fill_first` pool (the default strategy) keeps using the first key
+     * until it's exhausted, then rotates to this one automatically.
+     */
+    private suspend fun setCredentialDirect(rawSlug: String, apiKey: String, append: Boolean = false) {
+        val poolKey = customPoolKey(rawSlug)
         execPython(
             """
             import base64, json, uuid, pathlib
             p = pathlib.Path.home() / '.hermes' / 'auth.json'
             d = json.loads(p.read_text()) if p.exists() else {}
-            d.setdefault('credential_pool', {})['$slug'] = [{
+            pool = d.setdefault('credential_pool', {})
+            existing = pool.get('$poolKey', []) if ${if (append) "True" else "False"} else []
+            next_priority = (max((e.get('priority', 0) for e in existing), default=-1) + 1) if existing else 0
+            entry = {
                 'id': uuid.uuid4().hex[:6],
                 'label': 'key',
                 'auth_type': 'api_key',
-                'priority': 0,
+                'priority': next_priority,
                 'source': 'manual',
                 'access_token': base64.b64decode('${b64(apiKey)}').decode(),
-            }]
+            }
+            pool['$poolKey'] = existing + [entry]
             p.write_text(json.dumps(d, indent=2))
             print('OK')
             """.trimIndent()
         )
     }
 
-    fun removeCredential(rawSlug: String) {
+    /** Add an additional key to a provider's pool without disturbing existing ones. */
+    fun addCredential(slug: String, apiKey: String) {
+        viewModelScope.launch {
+            try {
+                setCredentialDirect(slug, apiKey, append = true)
+                loadCredentialPool(slug)
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Key added to $slug's pool"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to add key: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /** Remove one credential from a provider's pool by its `id` (not the whole pool). */
+    fun removeCredentialEntry(rawSlug: String, credentialId: String) {
         val slug = safeSlug(rawSlug)
+        val poolKey = customPoolKey(rawSlug)
         viewModelScope.launch {
             try {
                 val script = """
                     import json, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'auth.json'
                     d = json.loads(p.read_text()) if p.exists() else {}
-                    d.get('credential_pool', {}).pop('$slug', None)
+                    pool = d.get('credential_pool', {})
+                    entries = pool.get('$poolKey', [])
+                    pool['$poolKey'] = [e for e in entries if e.get('id') != '${safeSlug(credentialId)}']
+                    if not pool['$poolKey']:
+                        pool.pop('$poolKey', None)
+                    p.write_text(json.dumps(d, indent=2))
+                    print('OK')
+                """.trimIndent()
+                execPython(script)
+                loadCredentialPool(slug)
+                _uiState.value = _uiState.value.copy(errorMessage = "Key removed from $slug")
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to remove key: ${e.message}")
+            }
+        }
+    }
+
+    fun removeCredential(rawSlug: String) {
+        val slug = safeSlug(rawSlug)
+        val poolKey = customPoolKey(rawSlug)
+        viewModelScope.launch {
+            try {
+                val script = """
+                    import json, pathlib
+                    p = pathlib.Path.home() / '.hermes' / 'auth.json'
+                    d = json.loads(p.read_text()) if p.exists() else {}
+                    d.get('credential_pool', {}).pop('$poolKey', None)
                     p.write_text(json.dumps(d, indent=2))
                     print('OK')
                 """.trimIndent()
