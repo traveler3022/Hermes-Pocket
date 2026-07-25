@@ -54,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
@@ -89,69 +90,190 @@ import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
+import kotlinx.coroutines.launch
+
+private enum class AddProviderStep { CONNECT, LOADING, PICK, MANUAL }
 
 @Composable
 internal fun AddProviderDialog(
     onDismiss: () -> Unit,
+    onFetchModels: suspend (baseUrl: String, apiKey: String) -> ConfigViewModel.ProviderProbe,
     onAdd: (slug: String, baseUrl: String, defaultModel: String, apiKey: String) -> Unit,
 ) {
     var slug by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf("") }
-    var defaultModel by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
+
+    var step by remember { mutableStateOf(AddProviderStep.CONNECT) }
+    var models by remember { mutableStateOf(listOf<String>()) }
+    var probeError by remember { mutableStateOf<String?>(null) }
+    var selectedModel by remember { mutableStateOf<String?>(null) }
+    var manualModel by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    fun fetch() {
+        step = AddProviderStep.LOADING
+        scope.launch {
+            val probe = onFetchModels(baseUrl, apiKey)
+            if (probe.models.isNotEmpty()) {
+                models = probe.models
+                selectedModel = probe.models.first()
+                step = AddProviderStep.PICK
+            } else {
+                probeError = probe.error
+                step = AddProviderStep.MANUAL
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("Add Provider", "افزودن پرووایدر")) },
+        title = {
+            Text(
+                when (step) {
+                    AddProviderStep.CONNECT -> t("Add Provider", "افزودن پرووایدر")
+                    AddProviderStep.LOADING -> t("Connecting…", "در حال اتصال…")
+                    AddProviderStep.PICK -> t("Choose a Model", "انتخاب مدل")
+                    AddProviderStep.MANUAL -> t("Model Not Auto-Detected", "مدل خودکار پیدا نشد")
+                },
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = slug,
-                    onValueChange = { slug = it.lowercase().replace(" ", "_") },
-                    label = { Text(t("Provider Name (slug)", "نام پرووایدر")) },
-                    placeholder = { Text("openai, anthropic, xai...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text(t("Base URL", "آدرس سرور")) },
-                    placeholder = { Text("https://api.openai.com/v1") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Link, null) },
-                )
-                OutlinedTextField(
-                    value = defaultModel,
-                    onValueChange = { defaultModel = it },
-                    label = { Text(t("Default Model", "مدل پیشفرض")) },
-                    placeholder = { Text("gpt-4o, claude-sonnet-4-20250514...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Psychology, null) },
-                )
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(t("API Key", "کلید API")) },
-                    placeholder = { Text("sk-...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Security, null) },
-                )
+            when (step) {
+                AddProviderStep.CONNECT -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = slug,
+                        onValueChange = { slug = it.lowercase().replace(" ", "_") },
+                        label = { Text(t("Provider Name (slug)", "نام پرووایدر")) },
+                        placeholder = { Text("openai, anthropic, xai...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = baseUrl,
+                        onValueChange = { baseUrl = it },
+                        label = { Text(t("Base URL", "آدرس سرور")) },
+                        placeholder = { Text("https://api.openai.com/v1") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.Link, null) },
+                    )
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { apiKey = it },
+                        label = { Text(t("API Key", "کلید API")) },
+                        placeholder = { Text("sk-...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.Security, null) },
+                    )
+                    Text(
+                        t(
+                            "Next, we'll ask this endpoint for its real model list — same as connecting from Hermes itself.",
+                            "بعدش لیست واقعی مدل‌های این سرور رو می‌گیریم — دقیقاً مثل اتصال از خود Hermes.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                AddProviderStep.LOADING -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        t("Fetching model list from the endpoint…", "در حال گرفتن لیست مدل از سرور…"),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                AddProviderStep.PICK -> Column(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                ) {
+                    Text(
+                        t("${models.size} models found at this endpoint:", "${models.size} مدل در این سرور پیدا شد:"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(models) { m ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedModel = m }
+                                    .padding(vertical = 6.dp),
+                            ) {
+                                RadioButton(
+                                    selected = selectedModel == m,
+                                    onClick = { selectedModel = m },
+                                )
+                                Text(
+                                    m,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = FontFamily.Monospace,
+                                )
+                            }
+                        }
+                    }
+                    TextButton(onClick = { step = AddProviderStep.MANUAL }) {
+                        Text(t("My model isn't listed — type it manually", "مدلم لیست نیست — دستی وارد می‌کنم"))
+                    }
+                }
+                AddProviderStep.MANUAL -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!probeError.isNullOrBlank()) {
+                        Text(
+                            t("Couldn't fetch models: $probeError", "گرفتن لیست مدل ناموفق بود: $probeError"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = manualModel,
+                        onValueChange = { manualModel = it },
+                        label = { Text(t("Model Name", "نام مدل")) },
+                        placeholder = { Text("gpt-4o, claude-sonnet-4-20250514...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.Psychology, null) },
+                    )
+                    Text(
+                        t(
+                            "Warning: this name isn't verified against the endpoint — a typo will fail to connect.",
+                            "توجه: این اسم با سرور چک نشده — اگه اشتباه تایپ بشه، اتصال شکست می‌خوره.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { onAdd(slug, baseUrl, defaultModel, apiKey) },
-                enabled = slug.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank(),
-            ) {
-                Text(t("Add", "افزودن"))
+            when (step) {
+                AddProviderStep.CONNECT -> TextButton(
+                    onClick = { fetch() },
+                    enabled = slug.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank(),
+                ) { Text(t("Fetch Models", "گرفتن لیست مدل")) }
+                AddProviderStep.LOADING -> {}
+                AddProviderStep.PICK -> TextButton(
+                    onClick = { onAdd(slug, baseUrl, selectedModel.orEmpty(), apiKey) },
+                    enabled = !selectedModel.isNullOrBlank(),
+                ) { Text(t("Add", "افزودن")) }
+                AddProviderStep.MANUAL -> TextButton(
+                    onClick = { onAdd(slug, baseUrl, manualModel, apiKey) },
+                    enabled = manualModel.isNotBlank(),
+                ) { Text(t("Add Anyway", "افزودن به هر حال")) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+            when (step) {
+                AddProviderStep.CONNECT -> TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+                AddProviderStep.LOADING -> TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+                AddProviderStep.PICK, AddProviderStep.MANUAL -> TextButton(onClick = { step = AddProviderStep.CONNECT }) {
+                    Text(t("Back", "بازگشت"))
+                }
+            }
         },
     )
 }

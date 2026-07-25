@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material3.AlertDialog
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.HermesEmptyState
@@ -161,6 +163,20 @@ private fun AutoReloadDialog(
     var threshold by remember { mutableStateOf("10") }
     var reloadTo by remember { mutableStateOf("25") }
 
+    // The gateway's billing.auto_reload RPC does not validate its inputs
+    // (missing/negative/non-numeric values are accepted silently), so the
+    // app has to guard against bad input itself instead of relying on a
+    // server-side error.
+    fun parsePositiveAmount(raw: String): Double? =
+        raw.trim().toDoubleOrNull()?.takeIf { it > 0.0 }
+
+    val thresholdValue = parsePositiveAmount(threshold)
+    val reloadToValue = parsePositiveAmount(reloadTo)
+    val thresholdError = enabled && threshold.isNotBlank() && thresholdValue == null
+    val reloadToError = enabled && reloadTo.isNotBlank() && reloadToValue == null
+    val rangeError = enabled && thresholdValue != null && reloadToValue != null && reloadToValue <= thresholdValue
+    val canSave = !enabled || (thresholdValue != null && reloadToValue != null && !rangeError)
+
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
         title = { Text(t("Auto-reload", "شارژ خودکار")) },
@@ -176,6 +192,11 @@ private fun AutoReloadDialog(
                     label = { Text(t("Reload when balance drops below (USD)", "شارژ وقتی موجودی زیر این رفت (دلار)")) },
                     singleLine = true,
                     enabled = enabled,
+                    isError = thresholdError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    supportingText = if (thresholdError) {
+                        { Text(t("Enter a positive number", "یک عدد مثبت وارد کنید")) }
+                    } else null,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -184,6 +205,13 @@ private fun AutoReloadDialog(
                     label = { Text(t("Top up to (USD)", "شارژ تا (دلار)")) },
                     singleLine = true,
                     enabled = enabled,
+                    isError = reloadToError || rangeError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    supportingText = when {
+                        reloadToError -> { { Text(t("Enter a positive number", "یک عدد مثبت وارد کنید")) } }
+                        rangeError -> { { Text(t("Must be greater than the threshold", "باید بیشتر از حد آستانه باشد")) } }
+                        else -> null
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -191,7 +219,7 @@ private fun AutoReloadDialog(
         confirmButton = {
             TextButton(
                 onClick = { onSave(enabled, threshold, reloadTo) },
-                enabled = !isSaving,
+                enabled = !isSaving && canSave,
             ) { Text(if (isSaving) t("Saving…", "در حال ذخیره…") else t("Save", "ذخیره")) }
         },
         dismissButton = {
