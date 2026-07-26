@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -195,6 +196,33 @@ class OkHttpGatewayClient @Inject constructor(
         // Fail all pending requests
         pendingRequests.values.forEach { it.completeExceptionally(GatewayException("Disconnected")) }
         pendingRequests.clear()
+    }
+
+    override suspend fun downloadFile(url: String): ByteArray = withContext(Dispatchers.IO) {
+        val resolved = resolveDownloadUrl(url)
+        val request = Request.Builder().url(resolved).build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw GatewayException("File download failed: HTTP ${'$'}{response.code}")
+            }
+            response.body?.bytes() ?: throw GatewayException("File download failed: empty body")
+        }
+    }
+
+    /**
+     * Resolve a possibly-relative file URL against the gateway's HTTP origin.
+     * Absolute http(s) URLs pass through unchanged; relative paths are rooted
+     * at the same host/port as the active WebSocket and carry its `?token=`.
+     */
+    private fun resolveDownloadUrl(url: String): String {
+        if (url.startsWith("http://") || url.startsWith("https://")) return url
+        val ws = currentUrl ?: GatewayClient.DEFAULT_URL
+        val origin = ws.substringBefore("/api/")
+            .replaceFirst("wss://", "https://")
+            .replaceFirst("ws://", "http://")
+        val token = ws.substringAfter("token=", "").substringBefore("&")
+        val path = if (url.startsWith("/")) url else "/$url"
+        return if (token.isNotEmpty()) "$origin$path?token=$token" else "$origin$path"
     }
 
     override suspend fun request(

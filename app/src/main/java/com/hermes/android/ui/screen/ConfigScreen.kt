@@ -1,8 +1,11 @@
 package com.hermes.android.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,27 +23,36 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,6 +60,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Slider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -57,11 +70,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -73,12 +87,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.viewmodel.ConfigTab
+import coil.compose.AsyncImage
+import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
@@ -87,9 +105,11 @@ import com.hermes.android.ui.viewmodel.ToolOption
 import com.hermes.android.ui.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
+import com.hermes.android.ui.theme.TopBarDisplay
 
 /**
  * Configuration screen — model picker, tool toggles, config viewer.
@@ -103,15 +123,31 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    onNavigateToProjects: () -> Unit = {},
+    onNavigateToPet: () -> Unit = {},
+    onNavigateToBilling: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Live connection state for the hub's connection card — the same source
+    // the Server Connection screen uses (RuntimeViewModel maps the gateway's
+    // ConnectionState to the UI-facing type).
+    val runtimeViewModel: com.hermes.android.ui.viewmodel.RuntimeViewModel = hiltViewModel()
+    val connection by runtimeViewModel.connectionState.collectAsStateWithLifecycle()
+    val serverConfig by runtimeViewModel.serverConfig.collectAsStateWithLifecycle()
+
+    // Nested navigation: null = the top-level category menu; a value = drilled
+    // into that category. The back arrow pops one level (category -> menu ->
+    // out of Settings), so Settings can grow deep without one giant scroll.
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -120,68 +156,290 @@ fun ConfigScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(t("Settings", "تنظیمات")) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    com.hermes.android.ui.design.HermesScaffold(
+        title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Control Center", "میز فرمان"),
+        subtitle = if (section == null) t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه") else null,
+        onBack = { if (section != null) section = null else onNavigateBack() },
+        snackbarHostState = snackbarHostState,
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            TabRow(selectedTabIndex = uiState.selectedTab.ordinal) {
-                ConfigTab.entries.forEach { tab ->
-                    Tab(
-                        selected = uiState.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.label) },
-                    )
-                }
-            }
-
-            when (uiState.selectedTab) {
-                ConfigTab.GENERAL -> GeneralTab(
+            when (section) {
+                null -> SettingsMenu(
                     state = uiState,
-                    viewModel = viewModel,
+                    connection = connection,
+                    serverUrl = serverConfig.serverUrl,
+                    onOpen = { section = it },
+                    onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
-                    onNavigateToRuntime = onNavigateToRuntime,
+                    onNavigateToProjects = onNavigateToProjects,
+                    onNavigateToPet = onNavigateToPet,
+                    onNavigateToBilling = onNavigateToBilling,
+                )
+                SettingsSection.GENERAL -> GeneralTab(
+                    state = uiState,
+                    viewModel = viewModel,
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                ConfigTab.MODELS -> ModelsTab(uiState, viewModel)
-                ConfigTab.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.BEHAVIOR -> BehaviorSection(uiState, viewModel)
+                SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
+                SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
+                SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
             }
         }
     }
 }
 
+/** Top-level Settings categories (drill-down targets). */
+private enum class SettingsSection(val titleEn: String, val titleFa: String) {
+    GENERAL("General", "عمومی"),
+    BEHAVIOR("Agent Behavior", "رفتار عامل"),
+    MEMORY("Memory", "حافظه"),
+    MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    TOOLS("Tools", "ابزارها"),
+    ADVANCED("Advanced", "پیشرفته"),
+}
+
+/**
+ * The Settings root, restructured as the Control Center (approved design E):
+ * a live connection card, live stat tiles (active model / credits / 30-day
+ * usage — `credits.view` and `insights.get` were backend capabilities no UI
+ * ever surfaced), then the domain list with live values in the subtitles
+ * where the data is already loaded.
+ */
+@Composable
+private fun SettingsMenu(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    connection: com.hermes.android.ui.viewmodel.GatewayConnectionUi,
+    serverUrl: String,
+    onOpen: (SettingsSection) -> Unit,
+    onNavigateToRuntime: () -> Unit,
+    onNavigateToPlatforms: () -> Unit,
+    onNavigateToPlugins: () -> Unit,
+    onNavigateToSkills: () -> Unit,
+    onNavigateToCron: () -> Unit,
+    onNavigateToProjects: () -> Unit,
+    onNavigateToPet: () -> Unit,
+    onNavigateToBilling: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp),
+    ) {
+        // ── Connection card ────────────────────────────────────────────────
+        val (connColor, connLabel) = when (connection.state) {
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Connected ->
+                MaterialTheme.colorScheme.primary to t("Connected", "متصل")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Connecting ->
+                MaterialTheme.colorScheme.tertiary to t("Connecting…", "در حال اتصال…")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Reconnecting ->
+                MaterialTheme.colorScheme.tertiary to t("Reconnecting…", "اتصال دوباره…")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Failed ->
+                MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
+            com.hermes.android.ui.viewmodel.ChatConnectionState.Disconnected ->
+                MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
+        }
+        Spacer(Modifier.height(12.dp))
+        com.hermes.android.ui.design.SettingsGroup {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToRuntime)
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = serverUrl.ifBlank { t("No server configured", "سروری تنظیم نشده") },
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = t("Server & connection settings", "تنظیمات سرور و اتصال"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                com.hermes.android.ui.design.StatusChip(label = connLabel, color = connColor)
+            }
+        }
+
+        // ── Live stat tiles ────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StatTile(
+                value = state.activeModel ?: "—",
+                label = t("Active model", "مدل فعال"),
+            )
+            StatTile(
+                value = state.creditsSummary ?: "—",
+                label = t("Credits", "اعتبار"),
+            )
+            StatTile(
+                value = state.insights?.let { "${it.sessions}" } ?: "—",
+                label = t("Sessions / 30d", "جلسه / ۳۰ روز"),
+            )
+        }
+
+        // ── Domain grid (mockup E's dgrid: 2-per-row tiles, live subtitles) ─
+        val tiles = listOf(
+            DomainSpec(
+                title = t("Models", "مدل‌ها"),
+                subtitle = state.activeModel?.let { model ->
+                    "${state.activeProvider ?: "?"} / $model"
+                } ?: t("Model, API keys", "مدل، کلید API"),
+                icon = Icons.Default.SwapHoriz,
+                onClick = { onOpen(SettingsSection.MODELS) },
+            ),
+            DomainSpec(
+                title = t("Behavior", "رفتار"),
+                subtitle = t(
+                    "Approval: ${state.approvalMode} · ${state.reasoning}",
+                    "تأیید: ${approvalModeFa(state.approvalMode)} · تفکر: ${state.reasoning}",
+                ),
+                icon = Icons.Default.Security,
+                onClick = { onOpen(SettingsSection.BEHAVIOR) },
+            ),
+            DomainSpec(
+                title = t("Memory", "حافظه"),
+                subtitle = t("USER.md · MEMORY.md", "USER.md · MEMORY.md"),
+                icon = Icons.Default.Psychology,
+                onClick = { onOpen(SettingsSection.MEMORY) },
+            ),
+            DomainSpec(
+                title = t("Tools", "ابزارها"),
+                subtitle = if (state.availableTools.isNotEmpty()) {
+                    val enabled = state.availableTools.count { it.enabled }
+                    t(
+                        "$enabled of ${state.availableTools.size} toolsets on",
+                        "$enabled از ${state.availableTools.size} گروه فعال",
+                    )
+                } else {
+                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                },
+                icon = Icons.Default.Key,
+                onClick = { onOpen(SettingsSection.TOOLS) },
+            ),
+            DomainSpec(
+                title = t("Skills", "مهارت‌ها"),
+                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت‌ها"),
+                icon = Icons.Default.Star,
+                onClick = onNavigateToSkills,
+            ),
+            DomainSpec(
+                title = t("Plugins", "افزونه‌ها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه‌ها"),
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToPlugins,
+            ),
+            DomainSpec(
+                title = t("Scheduler", "زمان‌بندی"),
+                subtitle = t("Scheduled agent jobs", "کارهای زمان‌بندی‌شده"),
+                icon = Icons.Default.Schedule,
+                onClick = onNavigateToCron,
+            ),
+            DomainSpec(
+                title = t("Platforms", "پلتفرم‌ها"),
+                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
+                icon = Icons.Default.Link,
+                onClick = onNavigateToPlatforms,
+            ),
+            DomainSpec(
+                title = t("Projects", "پروژه‌ها"),
+                subtitle = t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
+                icon = Icons.Default.Folder,
+                onClick = onNavigateToProjects,
+            ),
+            DomainSpec(
+                title = t("Billing", "صورتحساب"),
+                subtitle = t("Balance and auto-reload", "موجودی و شارژ خودکار"),
+                icon = Icons.Default.AccountBalanceWallet,
+                onClick = onNavigateToBilling,
+            ),
+            DomainSpec(
+                title = t("Pet", "پت"),
+                subtitle = t("Adopt and manage your pet", "انتخاب و مدیریت پت"),
+                icon = Icons.Default.Pets,
+                onClick = onNavigateToPet,
+            ),
+            DomainSpec(
+                title = t("Advanced", "پیشرفته"),
+                subtitle = t("env · MCP · console · log", "env · MCP · کنسول · لاگ"),
+                icon = Icons.Default.Terminal,
+                onClick = { onOpen(SettingsSection.ADVANCED) },
+            ),
+            DomainSpec(
+                title = t("Appearance", "ظاهر"),
+                subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
+                icon = Icons.Default.Language,
+                onClick = { onOpen(SettingsSection.GENERAL) },
+            ),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            tiles.chunked(2).forEach { rowTiles ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowTiles.forEach { spec ->
+                        com.hermes.android.ui.design.DomainTile(
+                            title = spec.title,
+                            subtitle = spec.subtitle,
+                            icon = spec.icon,
+                            onClick = spec.onClick,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (rowTiles.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/** One entry of the Control Center domain grid. */
+private data class DomainSpec(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+)
+
+/** Persian labels for approvals.mode values (hub subtitle). */
+private fun approvalModeFa(mode: String): String = when (mode) {
+    "manual" -> "دستی"
+    "smart" -> "هوشمند"
+    "off" -> "خاموش"
+    else -> mode
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GeneralTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
-    onNavigateToPlatforms: () -> Unit = {},
-    onNavigateToSkills: () -> Unit = {},
-    onNavigateToCron: () -> Unit = {},
-    onNavigateToRuntime: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
-    if (state.isLoadingConfig) {
-        LoadingIndicator("Loading config…")
-        return
-    }
-
+    // Client-side appearance/identity/language only — everything that talks
+    // to the server moved to its own section (Behavior, Models, Advanced).
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -229,19 +487,186 @@ private fun GeneralTab(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    Row(
+                    // FlowRow (not Row) so chips wrap to the next line instead
+                    // of getting squeezed horizontally — 6 themes in a single
+                    // Row was forcing each chip too narrow and Persian labels
+                    // like "ایندیگو" were rendering one character per line.
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         ColorTheme.entries.forEach { theme ->
                             val label = t(theme.displayEn, theme.displayFa)
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.colorTheme == theme,
                                 onClick = { themeModeState.updateColorTheme(theme) },
-                                label = { Text(label) },
+                                label = { Text(label, maxLines = 1) },
                             )
                         }
                     }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = t("Warm / Night mode", "حالت گرم / شب"),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = t(
+                                    "Shifts screens toward a warm amber tint to reduce blue light for long sessions.",
+                                    "صفحات را به سمت رنگ کهربایی گرم متمایل می‌کند تا نور آبی در استفاده طولانی کمتر شود.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.warmMode,
+                            onCheckedChange = { themeModeState.updateWarmMode(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = t("Font", "فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppFont.entries.forEach { font ->
+                            androidx.compose.material3.FilterChip(
+                                selected = themeModeState.appFont == font,
+                                onClick = { themeModeState.updateAppFont(font) },
+                                label = { Text(t(font.displayEn, font.displayFa)) },
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    // Font size slider — scales the entire app typography
+                    // together (80%..140%). 100% = designer baseline.
+                    Text(
+                        text = t("Font size", "اندازه فونت"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = themeModeState.fontScalePct.toFloat(),
+                            onValueChange = { themeModeState.updateFontScalePct(it.toInt()) },
+                            valueRange = 80f..140f,
+                            steps = 11,  // 80,85,...,140 → 5% increments
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${themeModeState.fontScalePct}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    )
+                }
+            }
+        }
+
+        // -- Personalization: top bar identity --
+        // Lets the user pick what the chat top bar shows to represent the
+        // assistant (their chosen name, or the avatar image), set the name
+        // itself, and adjust the avatar size when shown. Tapping the
+        // identity in the top bar opens this section.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Top bar", "نوار بالا"),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = t("Display in top bar", "نمایش در نوار بالا"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    TopBarDisplay.entries.forEach { mode ->
+                        androidx.compose.material3.FilterChip(
+                            selected = themeModeState?.topBarDisplay == mode,
+                            onClick = { themeModeState?.updateTopBarDisplay(mode) },
+                            label = { Text(t(mode.displayEn, mode.displayFa), maxLines = 1) },
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                Text(
+                    text = t("Assistant name", "نام دستیار"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                OutlinedTextField(
+                    value = themeModeState?.assistantName ?: "Hermes",
+                    onValueChange = { themeModeState?.updateAssistantName(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(t("Hermes", "هرمس")) },
+                )
+                if (themeModeState?.topBarDisplay == TopBarDisplay.AVATAR) {
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = t("Avatar size", "اندازه آواتار"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = (themeModeState?.avatarSizeDp ?: 36).toFloat(),
+                            onValueChange = { themeModeState?.updateAvatarSizeDp(it.toInt()) },
+                            valueRange = 28f..48f,
+                            steps = 9,  // 28,30,...,48 → 2dp increments
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "A",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${themeModeState?.avatarSizeDp ?: 36} dp",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    )
                 }
             }
         }
@@ -281,113 +706,658 @@ private fun GeneralTab(
             }
         }
 
+        // -- Assistant avatar (client-side, shown next to agent replies) --
         Text(
-            text = "Backend & Capabilities",
+            text = t("Avatar", "آواتار"),
             style = MaterialTheme.typography.titleMedium,
         )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "Active backend",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = "Provider: ${state.activeProvider ?: "unknown"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    text = "Model: ${state.activeModel ?: "unknown"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        // Provider configuration placeholder
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Avatar shown next to agent replies in chat — a real
+                // uploaded image, not an emoji picker. Client-side only
+                // (local prefs), no gateway RPC.
+                Column {
+                    Text(
+                        text = t("Avatar", "آواتار"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    val avatarPicker = rememberLauncherForActivityResult(
+                        ActivityResultContracts.GetContent(),
+                    ) { uri -> uri?.let { viewModel.setAvatarUri(it) } }
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { avatarPicker.launch("image/*") },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (state.avatarUri != null) {
+                                AsyncImage(
+                                    model = state.avatarUri,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                Text(
+                                    text = "⚕",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            }
+                        }
+                        OutlinedButton(onClick = { avatarPicker.launch("image/*") }) {
+                            Text(t("Upload image", "آپلود عکس"))
+                        }
+                        if (state.avatarUri != null) {
+                            TextButton(onClick = { viewModel.clearAvatarUri() }) {
+                                Text(t("Reset", "بازنشانی"))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Agent Behavior (approved design G): approval mode with risk copy, the
+ * 7-level reasoning effort, the personality preset, and the SOUL.md
+ * identity editor. Every control maps to a real server write —
+ * approvals.mode / reasoning / display.personality via config.set,
+ * SOUL.md via the verified shell.exec pattern.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BehaviorSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // ── Command approval (approvals.mode) ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = t("Provider 1  ·  Provider 2", "پرووایدر ۱  ·  پرووایدر ۲"),
+                    text = t("Command Approval", "تأیید فرمان‌ها"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Segmented control, one piece per mode — the mockup-G shape.
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val modes = listOf(
+                        "manual" to t("Manual", "دستی"),
+                        "smart" to t("Smart", "هوشمند"),
+                        "off" to t("Off", "خاموش"),
+                    )
+                    modes.forEachIndexed { index, (mode, label) ->
+                        SegmentedButton(
+                            selected = state.approvalMode == mode,
+                            onClick = { viewModel.setApprovalMode(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                        ) { Text(label, maxLines = 1) }
+                    }
+                }
+                val approvalDescription = when (state.approvalMode) {
+                    "manual" -> t(
+                        "Every risky command asks for your permission before running — the safest mode.",
+                        "هر فرمان پرریسک قبل از اجرا از شما اجازه می‌گیرد — امن‌ترین حالت.",
+                    )
+                    "smart" -> t(
+                        "Low-risk commands run automatically; risky ones still ask.",
+                        "فرمان‌های کم‌خطر خودکار اجرا می‌شوند؛ پرریسک‌ها همچنان می‌پرسند.",
+                    )
+                    "off" -> t(
+                        "Nothing asks for permission (yolo). Only for servers you can afford to lose.",
+                        "هیچ‌چیز اجازه نمی‌گیرد (yolo). فقط برای سروری که از دست دادنش مهم نیست.",
+                    )
+                    else -> state.approvalMode
+                }
                 Text(
-                    text = t("Coming Soon", "به زودی"),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = approvalDescription,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state.approvalMode == "off") {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                )
+            }
+        }
+
+        // ── Reasoning effort (agent.reasoning_effort) ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t("Reasoning depth", "عمق تفکر"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                // 7-segment fill bar (mockup-G shape): tap a segment to set
+                // the level; segments up to the current level are filled.
+                val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+                val currentIdx = levels.indexOf(state.reasoning).let { if (it < 0) 3 else it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    levels.forEachIndexed { i, level ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.setReasoning(level) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (i <= currentIdx) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "none",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = state.reasoning,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "max",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = t(
+                        "Also switchable mid-session from the chat input bar.",
+                        "وسط جلسه هم از نوار ورودی چت قابل تغییر است.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
         }
 
-        // Link to Runtime Setup / Termux Connection
-        androidx.compose.material3.Button(
-            onClick = onNavigateToRuntime,
+        // ── Personality preset (display.personality) ──
+        Card(
             modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Text(t("Termux & Agent Connection", "اتصال ترموکس و عامل"))
-        }
-
-        // Link to Messaging Platforms
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToPlatforms,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Messaging Platforms", "پیام‌رسان‌ها"))
-        }
-
-        // Link to Skills
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToSkills,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(t("Skills Browser", "مهارت‌ها"))
-        }
-
-        // Reload config without restart (reload.mcp / reload.env)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.reloadMcp() },
-                modifier = Modifier.weight(1f),
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(t("Reload MCP", "بارگذاری MCP"))
-            }
-            androidx.compose.material3.OutlinedButton(
-                onClick = { viewModel.reloadEnv() },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(t("Reload env", "بارگذاری env"))
+                Text(
+                    text = t("Personality", "شخصیت"),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = t(
+                        "Preset name, e.g. helpful / kawaii / pirate",
+                        "اسم یک پریست، مثل helpful / kawaii / pirate",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
+                OutlinedTextField(
+                    value = personalityText,
+                    onValueChange = { personalityText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
+                    singleLine = true,
+                )
+                if (personalityText != state.personality) {
+                    TextButton(
+                        onClick = { viewModel.setPersonality(personalityText) },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text(t("Save", "ذخیره")) }
+                }
             }
         }
 
-        // Link to Cron Jobs
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNavigateToCron,
+        // ── SOUL.md — the agent's persistent identity (first slot of the
+        //    system prompt). Mockup-G shape: header row with an Edit action,
+        //    a monospace preview when collapsed, the editor when editing. ──
+        Card(
             modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Text(t("Cron Scheduler", "زمان‌بندی"))
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                var editingSoul by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("SOUL.md — persistent identity", "SOUL.md — هویت پایدار عامل"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingSoul = !editingSoul }) {
+                        Text(if (editingSoul) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
+                Text(
+                    text = t(
+                        "The agent's persistent voice & identity — first part of its system prompt",
+                        "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                when {
+                    state.isLoadingSoul -> CircularProgressIndicator(
+                        modifier = Modifier.padding(12.dp).size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    editingSoul -> {
+                        var soulText by remember(state.soulMd) { mutableStateOf(state.soulMd) }
+                        OutlinedTextField(
+                            value = soulText,
+                            onValueChange = { soulText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                            minLines = 4,
+                        )
+                        if (soulText != state.soulMd) {
+                            TextButton(
+                                onClick = { viewModel.saveSoul(soulText) },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        }
+                    }
+                    else -> Text(
+                        text = state.soulMd.ifBlank { t("(empty — tap Edit)", "(خالی — روی ویرایش بزنید)") },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Advanced (approved design I): env editor + reload, MCP servers editor +
+ * reload, a command console over shell.exec (with process.stop as the
+ * emergency brake), the live gateway stderr log, and the raw config view.
+ */
+@Composable
+private fun AdvancedSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // ── Environment variables (~/.hermes/.env) — mockup-I shape: a
+        //    compact card with an Edit action; the editor and its warning
+        //    only unfold when asked for. ──
+        var editingEnv by remember { mutableStateOf(false) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("Environment Variables (.env)", "متغیرهای محیطی (.env)"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingEnv = !editingEnv }) {
+                        Text(if (editingEnv) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
+                Text(
+                    text = t("~/.hermes/.env — API keys and other env vars", "~/.hermes/.env — کلیدهای API و سایر متغیرها"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (editingEnv) {
+                // Explicit, unmissable warning — this file is raw shell-
+                // sourced key=value config read directly into the agent
+                // process; a bad edit here can break the agent's startup or
+                // wipe a working API key with no undo.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("⚠️", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = t(
+                            "Advanced setting. If you don't know what this does, don't touch it — a bad edit here can break the agent or the whole system.",
+                            "تنظیمات پیشرفته. اگه نمی‌دونی این چیه، دستش نزن — یه ویرایش اشتباه اینجا می‌تونه ایجنت یا کل سیستم رو خراب کنه.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                LaunchedEffect(Unit) { viewModel.loadEnvFile() }
+                if (state.isLoadingEnv) {
+                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    var envText by remember(state.envText) { mutableStateOf(state.envText) }
+                    OutlinedTextField(
+                        value = envText,
+                        onValueChange = { envText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        minLines = 4,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.reloadEnv() },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        if (envText != state.envText) {
+                            Button(
+                                onClick = { viewModel.saveEnvFile(envText) },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(t("Save", "ذخیره")) }
+                        }
+                    }
+                }
+                }
+            }
+        }
+
+        // ── MCP servers (config.yaml: mcp_servers) — same collapsed shape. ──
+        var editingMcp by remember { mutableStateOf(false) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = t("MCP Servers", "سرورهای MCP"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    TextButton(onClick = { editingMcp = !editingMcp }) {
+                        Text(if (editingMcp) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    }
+                }
+                Text(
+                    text = t("Raw JSON — config.yaml's mcp_servers section", "JSON خام — بخش mcp_servers فایل config.yaml"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (editingMcp) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("⚠️", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = t(
+                            "Advanced setting. Invalid JSON here will fail to save; a wrong server entry can stop MCP tools from loading.",
+                            "تنظیمات پیشرفته. JSON نامعتبر ذخیره نمی‌شه؛ یه ورودی اشتباه می‌تونه باعث بشه ابزارهای MCP لود نشن.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                LaunchedEffect(Unit) { viewModel.loadMcpServers() }
+                if (state.isLoadingMcp) {
+                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    var mcpText by remember(state.mcpServersText) { mutableStateOf(state.mcpServersText) }
+                    OutlinedTextField(
+                        value = mcpText,
+                        onValueChange = { mcpText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        minLines = 4,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.reloadMcp() },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        if (mcpText != state.mcpServersText) {
+                            Button(
+                                onClick = { viewModel.saveMcpServers(mcpText) },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(t("Save", "ذخیره")) }
+                        }
+                    }
+                }
+                }
+            }
+        }
+
+        // ── Command console (shell.exec) ──
+        Text(
+            text = t("Command Console", "کنسول فرمان"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "Run one-off shell commands on the server — for diagnostics without SSH.",
+                        "اجرای فرمان‌های تکی روی سرور — برای عیب‌یابی بدون SSH.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                state.consoleEntries.forEach { entry ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "$ ${entry.command}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = entry.output,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                            ),
+                            color = if (entry.isError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 12,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                var consoleInput by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = consoleInput,
+                    onValueChange = { consoleInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("df -h /") },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                    ),
+                    singleLine = true,
+                    enabled = !state.isConsoleRunning,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.runConsoleCommand(consoleInput)
+                            consoleInput = ""
+                        },
+                        enabled = consoleInput.isNotBlank() && !state.isConsoleRunning,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        if (state.isConsoleRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text(t("Run", "اجرا"))
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.stopProcesses() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(t("Stop processes", "توقف فرایندها")) }
+                }
+            }
+        }
+
+        // ── Gateway log (gateway.stderr stream) ──
+        Text(
+            text = t("Gateway Log", "لاگ گیت‌وی"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "Live server stderr — fills in as events arrive while the app is open.",
+                        "stderr زندهٔ سرور — تا وقتی برنامه باز است با رسیدن رویدادها پر می‌شود.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (state.gatewayLog.isEmpty()) {
+                    Text(
+                        text = t("No log lines yet", "هنوز خطی نرسیده"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        text = state.gatewayLog.takeLast(40).joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                }
+            }
         }
 
         Text(
@@ -408,1303 +1378,5 @@ private fun GeneralTab(
                 modifier = Modifier.padding(12.dp),
             )
         }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
-private fun ModelsTab(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
-) {
-    // Load providers on first composition
-    val providersLoaded = remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!providersLoaded.value) {
-            viewModel.loadProviders()
-            providersLoaded.value = true
-        }
-    }
-
-    var showAddProviderDialog by remember { mutableStateOf(false) }
-
-    if (state.isLoadingModels && state.isLoadingProviders) {
-        LoadingIndicator(t("Loading models...", "در حال بارگذاری مدلها..."))
-        return
-    }
-
-    val grouped = remember(state.availableModels) {
-        state.availableModels.groupBy { it.provider }
-    }
-    val modelProviders = remember(grouped) { grouped.keys.sorted() }
-
-    // Track selected provider — default to activeProvider or first available
-    var selectedProvider by remember(modelProviders, state.activeProvider) {
-        mutableStateOf(
-            state.activeProvider?.takeIf { it in modelProviders } ?: modelProviders.firstOrNull()
-        )
-    }
-
-    val filteredModels = remember(selectedProvider, grouped) {
-        grouped[selectedProvider].orEmpty()
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // ── Quick model switch (manual input) ──
-        item(key = "__quick_model_switch") {
-            QuickModelSwitch(state, viewModel)
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // ── Provider Management Section ──
-        // ══════════════════════════════════════════════════════════════
-        item(key = "__provider_header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = t("API Providers", "پرووایدرهای API"),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { viewModel.loadCredits() }) {
-                        Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text(t("Credits", "اعتبار"))
-                    }
-                    TextButton(onClick = { viewModel.loadProviders() }) {
-                        Text(t("Refresh", "بارگذاری مجدد"))
-                    }
-                    FilledTonalButton(onClick = { showAddProviderDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(t("Add", "افزودن"))
-                    }
-                }
-            }
-        }
-
-        if (state.isLoadingProviders) {
-            item(key = "__providers_loading") {
-                CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-            }
-        } else if (state.providers.isEmpty()) {
-            item(key = "__providers_empty") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        modifier = Modifier.padding(16.dp),
-                        text = t(
-                            "No providers configured yet.",
-                            "هنوز پرووایدری تنظیم نشده.",
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        } else {
-            // ── Fallback chain visualization ──
-            if (state.fallbackProviders.isNotEmpty()) {
-                item(key = "__fallback_chain") {
-                    FallbackChainBar(state.fallbackProviders)
-                }
-            }
-
-            // ── Provider cards ──
-            items(
-                items = state.providers,
-                key = { it.slug },
-            ) { provider ->
-                ProviderCard(
-                    provider = provider,
-                    credentials = state.credentialPool[provider.slug].orEmpty(),
-                    isExpanded = state.expandedProviderSlug == provider.slug,
-                    onToggleExpand = { viewModel.toggleProviderExpanded(provider.slug) },
-                    onRemove = { viewModel.removeProvider(provider.slug) },
-                    onAddCredential = { key, label -> viewModel.addCredential(provider.slug, key, label) },
-                    onRemoveCredential = { index -> viewModel.removeCredential(provider.slug, index) },
-                    onSetStrategy = { strategy -> viewModel.setProviderStrategy(provider.slug, strategy) },
-                    onSetPrimary = { viewModel.setPrimaryProvider(provider) },
-                    onToggleFallback = { viewModel.toggleFallback(provider.slug) },
-                    onMoveFallback = { up -> viewModel.moveFallback(provider.slug, up) },
-                    onMoveCredential = { index, up -> viewModel.moveCredential(provider.slug, index, up) },
-                )
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // ── Model Selection Section ──
-        // ══════════════════════════════════════════════════════════════
-        item(key = "__model_header") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = t("Select Model", "انتخاب مدل"),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                TextButton(onClick = { viewModel.loadModels() }) {
-                    Text(t("Refresh", "بارگذاری مجدد"))
-                }
-            }
-        }
-
-        if (grouped.isEmpty()) {
-            item(key = "__empty_models") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        modifier = Modifier.padding(16.dp),
-                        text = t(
-                            "No models loaded. Make sure Hermes gateway is running, then tap Refresh.",
-                            "مدلی بارگذاری نشد. مطمئن شو gateway هرمس روشنه، بعد بزن بارگذاری مجدد.",
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            return@LazyColumn
-        }
-
-        // ── API Provider dropdown ──
-        item(key = "__provider_dropdown") {
-            ProviderDropdown(
-                providers = modelProviders,
-                selected = selectedProvider,
-                onSelect = { selectedProvider = it },
-            )
-        }
-
-        // ── Model dropdown (filtered by provider) ──
-        item(key = "__model_dropdown") {
-            ModelDropdown(
-                models = filteredModels,
-                selected = filteredModels.firstOrNull {
-                    it.provider == state.activeProvider && it.modelId == state.activeModel
-                },
-                onSelect = { viewModel.selectModel(it) },
-            )
-        }
-
-        // ── Endpoint info ──
-        selectedProvider?.let { provider ->
-            item(key = "__endpoint") {
-                EndpointCard(provider = provider)
-            }
-        }
-
-        // ── API Key for this provider ──
-        selectedProvider?.let { provider ->
-            val needsKey = filteredModels.any { it.requiresApiKey }
-            if (needsKey) {
-                item(key = "__apikey") {
-                    ApiKeyRow(
-                        provider = provider,
-                        onSaveKey = { slug, key -> viewModel.saveApiKey(slug, key) },
-                    )
-                }
-            }
-        }
-    }
-
-    // ── Add Provider Dialog ──
-    if (showAddProviderDialog) {
-        AddProviderDialog(
-            onDismiss = { showAddProviderDialog = false },
-            onAdd = { slug, baseUrl, model, key ->
-                viewModel.addProvider(slug, baseUrl, model, key)
-                showAddProviderDialog = false
-            },
-        )
-    }
-
-    // ── Credits dialog ──
-    if (state.creditsText != null || state.isLoadingCredits) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissCredits() },
-            title = { Text(t("Credits", "اعتبار")) },
-            text = {
-                if (state.isLoadingCredits) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Text(state.creditsText.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.dismissCredits() }) { Text(t("Close", "بستن")) }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ProviderDropdown(
-    providers: List<String>,
-    selected: String?,
-    onSelect: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column {
-        Text(
-            text = t("API Provider", "پرووایدر API"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            Box {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expanded = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = selected ?: t("Select provider...", "پرووایدر رو انتخاب کن..."),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
-                        color = if (selected != null)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Icon(
-                        imageVector = if (expanded)
-                            Icons.Default.ExpandLess
-                        else
-                            Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    providers.forEach { provider ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = provider,
-                                    fontWeight = if (provider == selected)
-                                        FontWeight.Medium
-                                    else
-                                        FontWeight.Normal,
-                                )
-                            },
-                            onClick = {
-                                onSelect(provider)
-                                expanded = false
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModelDropdown(
-    models: List<ModelOption>,
-    selected: ModelOption?,
-    onSelect: (ModelOption) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column {
-        Text(
-            text = t("Model", "مدل"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            Box {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expanded = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = selected?.modelId
-                                ?: t("Select model...", "مدل رو انتخاب کن..."),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
-                            color = if (selected != null)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (selected != null) {
-                            Text(
-                                text = "✓ " + t("Active", "فعال"),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                    Icon(
-                        imageVector = if (expanded)
-                            Icons.Default.ExpandLess
-                        else
-                            Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    models.forEach { model ->
-                        val isActive = model.provider == selected?.provider &&
-                            model.modelId == selected?.modelId
-                        DropdownMenuItem(
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        text = model.modelId,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isActive)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    if (isActive) {
-                                        Text(
-                                            text = "✓",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                            },
-                            onClick = {
-                                onSelect(model)
-                                expanded = false
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EndpointCard(provider: String) {
-    val endpoint = remember(provider) {
-        knownEndpoints[provider.lowercase()] ?: provider
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = endpoint,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-private val knownEndpoints = mapOf(
-    "openrouter" to "https://openrouter.ai/api/v1",
-    "anthropic" to "https://api.anthropic.com",
-    "openai" to "https://api.openai.com/v1",
-    "google" to "https://generativelanguage.googleapis.com",
-    "mistral" to "https://api.mistral.ai/v1",
-    "groq" to "https://api.groq.com/openai/v1",
-    "deepseek" to "https://api.deepseek.com",
-    "together" to "https://api.together.xyz/v1",
-    "fireworks" to "https://api.fireworks.ai/inference/v1",
-    "cohere" to "https://api.cohere.ai/v1",
-    "replicate" to "https://api.replicate.com/v1",
-    "perplexity" to "https://api.perplexity.ai",
-    "xai" to "https://api.x.ai/v1",
-    "ollama" to "http://localhost:11434",
-    "lmstudio" to "http://localhost:1234/v1",
-)
-
-@Composable
-private fun ApiKeyRow(
-    provider: String,
-    onSaveKey: (String, String) -> Unit,
-) {
-    var apiKey by remember { mutableStateOf("") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text(t("API Key", "کلید API")) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-            )
-            TextButton(onClick = { onSaveKey(provider, apiKey) }) {
-                Text(t("Save", "ذخیره"))
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickModelSwitch(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
-) {
-    var customProvider by remember { mutableStateOf("") }
-    var customModel by remember { mutableStateOf("") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = t("Quick Model Switch", "تغییر سریع مدل"),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = t(
-                    "Current: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
-                    "فعلی: ${state.activeProvider ?: "?"} / ${state.activeModel ?: "?"}",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            OutlinedTextField(
-                value = customProvider,
-                onValueChange = { customProvider = it },
-                label = { Text(t("Provider (e.g. xiaomi, gemini, openai)", "پرووایدر")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = customModel,
-                onValueChange = { customModel = it },
-                label = { Text(t("Model ID (e.g. mimo-v2.5-free)", "شناسه مدل")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            androidx.compose.material3.Button(
-                onClick = {
-                    if (customProvider.isNotBlank() && customModel.isNotBlank()) {
-                        viewModel.selectModel(
-                            ModelOption(
-                                provider = customProvider.trim(),
-                                modelId = customModel.trim(),
-                                name = customModel.trim(),
-                                requiresApiKey = false,
-                            )
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = customProvider.isNotBlank() && customModel.isNotBlank(),
-            ) {
-                Text(t("Switch Model", "تغییر مدل"))
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun ToolsTab(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
-) {
-    if (state.isLoadingTools) {
-        LoadingIndicator("Loading tools…")
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(state.availableTools, key = { it.name }) { tool ->
-            ToolRow(tool, viewModel)
-        }
-    }
-}
-
-@Composable
-private fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = tool.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (tool.description.isNotBlank()) {
-                    Text(
-                        text = tool.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text(
-                    text = "${tool.toolCount} tools" + if (tool.tools.isNotEmpty()) ": ${tool.tools.take(6).joinToString(", ")}${if (tool.tools.size > 6) "…" else ""}" else "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                tool.toolset?.let {
-                    Text(
-                        text = "toolset: $it",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
-            Switch(
-                checked = tool.enabled,
-                onCheckedChange = { viewModel.toggleTool(tool.name, it) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun MemorySection(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
-) {
-    if (state.isLoadingMemory) {
-        LoadingIndicator(t("Loading memory...", "در حال بارگذاری حافظه..."))
-        return
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = t("Memory files", "فایل‌های حافظه"),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            TextButton(onClick = { viewModel.loadMemory() }) {
-                Text(t("Refresh", "بارگذاری مجدد"))
-            }
-        }
-        MemoryFileCard(
-            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-            title = "USER.md",
-            content = state.memoryUserMd,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        MemoryFileCard(
-            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
-            title = "MEMORY.md",
-            content = state.memoryMd,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-    }
-}
-
-@Composable
-private fun MemoryFileCard(
-    icon: @Composable () -> Unit,
-    title: String,
-    content: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color,
-) {
-    val displayText = content
-        .ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }
-        .replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده"))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                icon()
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
-            }
-            Text(
-                text = displayText,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = contentColor,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-    }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// ── Provider Management Composables ──
-// ══════════════════════════════════════════════════════════════════════
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FallbackChainBar(fallbackProviders: List<String>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = t("Fallback Chain", "زنجیره جایگزین"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            Spacer(Modifier.height(6.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                fallbackProviders.forEachIndexed { index, slug ->
-                    if (index > 0) {
-                        Text(
-                            text = "→",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                        )
-                    }
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(slug, style = MaterialTheme.typography.labelSmall) },
-                        leadingIcon = {
-                            Text(
-                                text = "${index + 1}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ProviderCard(
-    provider: HermesProviderConfig,
-    credentials: List<CredentialEntry>,
-    isExpanded: Boolean,
-    onToggleExpand: () -> Unit,
-    onRemove: () -> Unit,
-    onAddCredential: (String, String?) -> Unit,
-    onRemoveCredential: (Int) -> Unit,
-    onSetStrategy: (String) -> Unit,
-    onSetPrimary: () -> Unit = {},
-    onToggleFallback: () -> Unit = {},
-    onMoveFallback: (Boolean) -> Unit = {},
-    onMoveCredential: (Int, Boolean) -> Unit = { _, _ -> },
-) {
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showAddKeyDialog by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (provider.isPrimary)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column {
-            // ── Header row ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onToggleExpand() }
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Dns,
-                        contentDescription = null,
-                        tint = if (provider.isPrimary)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Column {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = provider.slug,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            if (provider.isPrimary) {
-                                AssistChip(
-                                    onClick = {},
-                                    label = { Text(t("Primary", "اصلی"), style = MaterialTheme.typography.labelSmall) },
-                                    leadingIcon = { Icon(Icons.Default.Star, null, Modifier.size(14.dp)) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        labelColor = MaterialTheme.colorScheme.onPrimary,
-                                        leadingIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                                    ),
-                                    border = null,
-                                )
-                            }
-                            if (provider.isFallback) {
-                                AssistChip(
-                                    onClick = {},
-                                    label = { Text(t("Fallback", "جایگزین"), style = MaterialTheme.typography.labelSmall) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiary,
-                                        labelColor = MaterialTheme.colorScheme.onTertiary,
-                                    ),
-                                    border = null,
-                                )
-                            }
-                        }
-                        if (provider.baseUrl.isNotBlank()) {
-                            Text(
-                                text = provider.baseUrl,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Credential count badge
-                    if (credentials.isNotEmpty()) {
-                        Icon(
-                            imageVector = Icons.Default.Key,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = "${credentials.size}",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(start = 2.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = t("Delete", "حذف"),
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                    )
-                }
-            }
-
-            // ── Expanded content ──
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(),
-                exit = shrinkVertically(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // Details
-                    DetailRow(t("Base URL", "آدرس"), provider.baseUrl)
-                    if (provider.defaultModel.isNotBlank()) {
-                        DetailRow(t("Default Model", "مدل پیشفرض"), provider.defaultModel)
-                    }
-
-                    // ── Primary / Fallback actions ──
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (!provider.isPrimary) {
-                            FilledTonalButton(
-                                onClick = onSetPrimary,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Icon(Icons.Default.Star, null, Modifier.size(15.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(t("Set primary", "کلید اصلی"), style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                        FilterChip(
-                            selected = provider.isFallback,
-                            onClick = onToggleFallback,
-                            label = {
-                                Text(
-                                    t("In fallback chain", "در زنجیره جایگزین"),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            },
-                        )
-                        if (provider.isFallback) {
-                            IconButton(onClick = { onMoveFallback(true) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.KeyboardArrowUp, t("Up", "بالا"), Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = { onMoveFallback(false) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.KeyboardArrowDown, t("Down", "پایین"), Modifier.size(18.dp))
-                            }
-                        }
-                    }
-
-                    // Strategy selector — the four strategies Hermes actually
-                    // supports for a provider's credential pool.
-                    Text(
-                        text = t("Key rotation strategy", "استراتژی چرخش کلید"),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    val strategies = listOf(
-                        "round_robin" to t("Round-robin", "چرخشی"),
-                        "fill_first" to t("Fill first", "ترتیبی"),
-                        "least_used" to t("Least used", "کم‌مصرف‌ترین"),
-                        "random" to t("Random", "تصادفی"),
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        strategies.forEach { (value, label) ->
-                            FilterChip(
-                                selected = provider.strategy == value,
-                                onClick = { onSetStrategy(value) },
-                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                leadingIcon = if (provider.strategy == value) {
-                                    { Icon(Icons.Default.SwapHoriz, null, Modifier.size(14.dp)) }
-                                } else null,
-                            )
-                        }
-                    }
-
-                    // Credential pool
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = t("Keys (${credentials.size})", "کلیدها (${credentials.size})"),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        TextButton(onClick = { showAddKeyDialog = true }) {
-                            Icon(Icons.Default.Add, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(t("Add Key", "افزودن کلید"), style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-
-                    if (credentials.isEmpty()) {
-                        Text(
-                            text = t("No keys configured", "کلیدی تنظیم نشده"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        credentials.forEachIndexed { pos, cred ->
-                            CredentialRow(
-                                credential = cred,
-                                canMoveUp = pos > 0,
-                                canMoveDown = pos < credentials.size - 1,
-                                onRemove = { onRemoveCredential(cred.index) },
-                                onMove = { up -> onMoveCredential(cred.index, up) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Delete confirmation ──
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(t("Delete Provider?", "پرووایدر حذف شود؟")) },
-            text = {
-                Text(
-                    t(
-                        "This will remove \"${provider.slug}\" from config.yaml and credential pool.",
-                        "\"${provider.slug}\" از config.yaml و credential pool حذف میشه.",
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRemove()
-                    showDeleteConfirm = false
-                }) {
-                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(t("Cancel", "لغو"))
-                }
-            },
-        )
-    }
-
-    // ── Add key dialog ──
-    if (showAddKeyDialog) {
-        AddKeyDialog(
-            providerSlug = provider.slug,
-            onDismiss = { showAddKeyDialog = false },
-            onAdd = { key, label ->
-                onAddCredential(key, label)
-                showAddKeyDialog = false
-            },
-        )
-    }
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-        )
-    }
-}
-
-@Composable
-private fun CredentialRow(
-    credential: CredentialEntry,
-    canMoveUp: Boolean = false,
-    canMoveDown: Boolean = false,
-    onRemove: () -> Unit,
-    onMove: (Boolean) -> Unit = {},
-) {
-    var showConfirm by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Default.Key,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = when (credential.lastStatus) {
-                    "ok" -> MaterialTheme.colorScheme.primary
-                    "fail" -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Column {
-                Text(
-                    text = credential.label ?: "key #${credential.index}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = credential.tokenPreview,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (credential.requestCount > 0) {
-                Text(
-                    text = "${credential.requestCount} req",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            // Priority order (fill_first uses this order; top = tried first)
-            IconButton(onClick = { onMove(true) }, enabled = canMoveUp, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.KeyboardArrowUp, t("Higher priority", "اولویت بالاتر"), Modifier.size(16.dp))
-            }
-            IconButton(onClick = { onMove(false) }, enabled = canMoveDown, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.KeyboardArrowDown, t("Lower priority", "اولویت پایین‌تر"), Modifier.size(16.dp))
-            }
-            IconButton(
-                onClick = { showConfirm = true },
-                modifier = Modifier.size(24.dp),
-            ) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = t("Remove", "حذف"),
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-
-    if (showConfirm) {
-        AlertDialog(
-            onDismissRequest = { showConfirm = false },
-            title = { Text(t("Remove Key?", "کلید حذف شود؟")) },
-            text = { Text(t("This key will be removed from the credential pool.", "این کلید از credential pool حذف میشه.")) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRemove()
-                    showConfirm = false
-                }) { Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirm = false }) { Text(t("Cancel", "لغو")) }
-            },
-        )
-    }
-}
-
-@Composable
-private fun AddProviderDialog(
-    onDismiss: () -> Unit,
-    onAdd: (slug: String, baseUrl: String, defaultModel: String, apiKey: String) -> Unit,
-) {
-    var slug by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf("") }
-    var defaultModel by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(t("Add Provider", "افزودن پرووایدر")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = slug,
-                    onValueChange = { slug = it.lowercase().replace(" ", "_") },
-                    label = { Text(t("Provider Name (slug)", "نام پرووایدر")) },
-                    placeholder = { Text("openai, anthropic, xai...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text(t("Base URL", "آدرس سرور")) },
-                    placeholder = { Text("https://api.openai.com/v1") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Link, null) },
-                )
-                OutlinedTextField(
-                    value = defaultModel,
-                    onValueChange = { defaultModel = it },
-                    label = { Text(t("Default Model", "مدل پیشفرض")) },
-                    placeholder = { Text("gpt-4o, claude-sonnet-4-20250514...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Psychology, null) },
-                )
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text(t("API Key", "کلید API")) },
-                    placeholder = { Text("sk-...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Security, null) },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onAdd(slug, baseUrl, defaultModel, apiKey) },
-                enabled = slug.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank(),
-            ) {
-                Text(t("Add", "افزودن"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
-        },
-    )
-}
-
-@Composable
-private fun AddKeyDialog(
-    providerSlug: String,
-    onDismiss: () -> Unit,
-    onAdd: (key: String, label: String?) -> Unit,
-) {
-    var key by remember { mutableStateOf("") }
-    var label by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(t("Add Key to $providerSlug", "افزودن کلید به $providerSlug")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = key,
-                    onValueChange = { key = it },
-                    label = { Text(t("API Key", "کلید API")) },
-                    placeholder = { Text("sk-...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Security, null) },
-                )
-                OutlinedTextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    label = { Text(t("Label (optional)", "برچسب (اختیاری)")) },
-                    placeholder = { Text("primary, backup, team...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onAdd(key, label.ifBlank { null }) },
-                enabled = key.isNotBlank(),
-            ) { Text(t("Add", "افزودن")) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
-        },
-    )
-}
-
-@Composable
-private fun LoadingIndicator(text: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator()
-        Text(text = text, style = MaterialTheme.typography.bodyMedium)
     }
 }

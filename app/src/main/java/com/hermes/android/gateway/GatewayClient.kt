@@ -91,6 +91,16 @@ interface GatewayClient {
         params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     )
 
+    /**
+     * Download a file served by the gateway (e.g. an image attachment) and
+     * return its raw bytes.
+     *
+     * @param url absolute http(s) URL, or a path relative to the gateway origin
+     * @return the file bytes
+     * @throws GatewayException on a non-2xx response or transport failure
+     */
+    suspend fun downloadFile(url: String): ByteArray
+
     companion object {
         /**
          * Default WebSocket URL — Hermes dashboard server (running in Termux).

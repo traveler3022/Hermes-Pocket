@@ -24,16 +24,40 @@ enum class ThemeMode(val key: String) {
     }
 }
 
+enum class AppFont(val key: String, val displayEn: String, val displayFa: String) {
+    // Bundled Vazirmatn — shapes Persian correctly and stays clean for Latin.
+    VAZIR("vazir", "Vazirmatn", "وزیر"),
+    // The phone's own system font (whatever the user set device-wide).
+    SYSTEM("system", "System font", "فونت گوشی");
+
+    companion object {
+        fun fromKey(key: String): AppFont = entries.firstOrNull { it.key == key } ?: VAZIR
+    }
+}
+
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
     CLAUDE("claude", "Mocha", "موکا"),
     MIDNIGHT("midnight", "Midnight", "میدنایت"),
-    INDIGO_PRO("indigo_pro", "Indigo Pro", "ایندیگو"),
+    INDIGO_PRO("indigo_pro", "Indigo", "ایندیگو"),
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
-        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: HERMES
+        // Carbon (near-black + neutral grey, no purple) is the default —
+        // the original "Hermes" palette's primary is a vivid indigo/violet
+        // that bled into buttons, icons, and accents across the whole app.
+        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
+    }
+}
+
+/** What to show in the chat top bar to represent the assistant. */
+enum class TopBarDisplay(val key: String, val displayEn: String, val displayFa: String) {
+    NAME("name", "Name", "نام"),
+    AVATAR("avatar", "Avatar", "آواتار");
+
+    companion object {
+        fun fromKey(key: String): TopBarDisplay = entries.firstOrNull { it.key == key } ?: NAME
     }
 }
 
@@ -46,7 +70,54 @@ class ThemeModeState(context: Context) {
         private set
 
     var colorTheme: ColorTheme by mutableStateOf(
-        ColorTheme.fromKey(prefs.getString("color_theme", "hermes") ?: "hermes")
+        ColorTheme.fromKey(prefs.getString("color_theme", "carbon") ?: "carbon")
+    )
+        private set
+
+    // Night/warm reading mode — shifts background/surface toward a soft
+    // amber tint (f.lux-style) to cut blue-light emission during long
+    // sessions, independent of which color theme is active.
+    var warmMode: Boolean by mutableStateOf(prefs.getBoolean("warm_mode", false))
+        private set
+
+    // Which font face the whole app is drawn with (Vazirmatn or the phone's
+    // own system font). One family across every screen = one reading rhythm.
+    var appFont: AppFont by mutableStateOf(
+        AppFont.fromKey(prefs.getString("app_font", "vazir") ?: "vazir")
+    )
+        private set
+
+    // Font size multiplier applied app-wide. Stored as an integer 80..140 (%)
+    // so it survives prefs round-trip cleanly; converted to float when
+    // building typography. 100 = the designer-set baseline; 80 = smaller,
+    // 140 = larger. Default 100.
+    var fontScalePct: Int by mutableStateOf(
+        prefs.getInt("font_scale_pct", 100)
+    )
+        private set
+
+    // ── Personalization: top bar identity ──
+    // What the chat top bar shows to represent the assistant: the user's
+    // chosen name (a text label, default "Hermes" / "هرمس") or the avatar
+    // image they uploaded. Only one or the other shows — keeping both
+    // would crowd the top bar and fight the connection status for space.
+    var topBarDisplay: TopBarDisplay by mutableStateOf(
+        TopBarDisplay.fromKey(prefs.getString("top_bar_display", "name") ?: "name")
+    )
+        private set
+
+    // The assistant's display name shown in the top bar (when topBarDisplay
+    // is NAME) and as the placeholder/fallback for the avatar (first char
+    // when no avatar image is set). Default "Hermes".
+    var assistantName: String by mutableStateOf(
+        prefs.getString("assistant_name", "Hermes") ?: "Hermes"
+    )
+        private set
+
+    // Avatar size (dp) when shown in the top bar. Range 28..48, default 36.
+    // Big enough to read a face clearly without dominating the top bar.
+    var avatarSizeDp: Int by mutableStateOf(
+        prefs.getInt("avatar_size_dp", 36)
     )
         private set
 
@@ -58,6 +129,39 @@ class ThemeModeState(context: Context) {
     fun updateColorTheme(newTheme: ColorTheme) {
         colorTheme = newTheme
         prefs.edit().putString("color_theme", newTheme.key).apply()
+    }
+
+    fun updateWarmMode(enabled: Boolean) {
+        warmMode = enabled
+        prefs.edit().putBoolean("warm_mode", enabled).apply()
+    }
+
+    fun updateAppFont(newFont: AppFont) {
+        appFont = newFont
+        prefs.edit().putString("app_font", newFont.key).apply()
+    }
+
+    fun updateFontScalePct(pct: Int) {
+        val clamped = pct.coerceIn(80, 140)
+        fontScalePct = clamped
+        prefs.edit().putInt("font_scale_pct", clamped).apply()
+    }
+
+    fun updateTopBarDisplay(display: TopBarDisplay) {
+        topBarDisplay = display
+        prefs.edit().putString("top_bar_display", display.key).apply()
+    }
+
+    fun updateAssistantName(name: String) {
+        val trimmed = name.take(40)  // sanity cap
+        assistantName = trimmed
+        prefs.edit().putString("assistant_name", trimmed).apply()
+    }
+
+    fun updateAvatarSizeDp(size: Int) {
+        val clamped = size.coerceIn(28, 48)
+        avatarSizeDp = clamped
+        prefs.edit().putInt("avatar_size_dp", clamped).apply()
     }
 }
 
@@ -401,8 +505,11 @@ private val ClaudeDarkColors = darkColorScheme(
 fun Hermes2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    colorTheme: ColorTheme = ColorTheme.HERMES,
+    colorTheme: ColorTheme = ColorTheme.CARBON,
     dynamicColor: Boolean = false,
+    warmMode: Boolean = false,
+    appFont: AppFont = AppFont.VAZIR,
+    fontScalePct: Int = 100,
     content: @Composable () -> Unit
 ) {
     val useDark = when (themeMode) {
@@ -426,9 +533,32 @@ fun Hermes2Theme(
         }
     }
 
+    val fontFamily = when (appFont) {
+        AppFont.VAZIR -> Vazirmatn
+        AppFont.SYSTEM -> androidx.compose.ui.text.font.FontFamily.Default
+    }
+
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = HermesTypography,
+        colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
+        typography = hermesTypography(fontFamily, fontScalePct),
         content = content
+    )
+}
+
+/** Night/warm reading mode: nudges the large background/surface areas
+ *  toward a soft amber tint (f.lux-style), reducing blue-light emission
+ *  during long sessions. Text/icon colors are left untouched so the
+ *  contrast ratios verified elsewhere stay intact. */
+private fun androidx.compose.material3.ColorScheme.warmed(): androidx.compose.material3.ColorScheme {
+    val warmTint = androidx.compose.ui.graphics.Color(0xFFFFD9A0)
+    fun androidx.compose.ui.graphics.Color.warm(strength: Float) =
+        androidx.compose.ui.graphics.lerp(this, warmTint, strength)
+    return copy(
+        background = background.warm(0.10f),
+        surface = surface.warm(0.10f),
+        surfaceVariant = surfaceVariant.warm(0.10f),
+        primaryContainer = primaryContainer.warm(0.06f),
+        secondaryContainer = secondaryContainer.warm(0.06f),
+        tertiaryContainer = tertiaryContainer.warm(0.06f),
     )
 }

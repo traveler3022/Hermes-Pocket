@@ -79,12 +79,42 @@ sealed class ChatMessage {
 
 enum class InteractiveKind { CLARIFY, SUDO, SECRET }
 
+/**
+ * One entry of the agent's live task list (from tool.start/tool.complete
+ * `todos` payload). UI-facing mirror of the gateway model — ui.screen must
+ * not import from the gateway package (Phase 1.5 Rule 1).
+ */
+data class TodoItemUi(
+    val id: String,
+    val content: String,
+    val status: TodoStatus,
+)
+
+enum class TodoStatus { PENDING, IN_PROGRESS, COMPLETED, CANCELLED }
+
 data class NotificationUi(
     val key: String?,
     val kind: String?,
     val level: String?,
     val text: String?,
     val ttlMs: Long?,
+)
+
+/**
+ * A pending tool-approval request (`approval.request` event), rendered as a
+ * modal bottom sheet over the chat. The gateway blocks the turn until
+ * `approval.respond` is sent, so the sheet stays up until the user picks
+ * Deny / Allow once / Always allow.
+ */
+data class PendingApprovalUi(
+    val requestId: String,
+    val sessionId: String?,
+    val command: String,
+    val description: String,
+    val patternKeys: List<String> = emptyList(),
+    /** When false the "always allow" choice must not be offered
+     *  (mirrors upstream allow_permanent). */
+    val allowPermanent: Boolean = true,
 )
 
 /**
@@ -116,7 +146,7 @@ data class ChatUiState(
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     val inputText: String = "",
     val isSending: Boolean = false,
-    val errorMessage: String? = null,
+    val errorEvent: ErrorEvent? = null,
     val showSessionDrawer: Boolean = false,
     // Feature #16: Search in current chat
     val searchQuery: String = "",
@@ -132,6 +162,20 @@ data class ChatUiState(
     // Files/images staged on the gateway, waiting to go with the next prompt
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
+    // Agent's live task list for the current turn (empty = no plan to show)
+    val activeTodos: List<TodoItemUi> = emptyList(),
+    // Tool-approval request awaiting the user's decision (modal sheet).
+    val pendingApproval: PendingApprovalUi? = null,
+    // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
+    // chat input bar, mirrors the same setting in Settings > General.
+    val reasoningLevel: String = "medium",
+    // Client-side display name shown in the top bar / drawer header. Purely
+    // cosmetic (local prefs) — does not affect the agent's actual identity
+    // (SOUL.md / display.personality on the server).
+    val assistantName: String = "Hermes",
+    // Client-side avatar image (local file path), customized from Settings.
+    // Null shows the default icon.
+    val assistantAvatarPath: String? = null,
 )
 
 /**
@@ -158,6 +202,23 @@ enum class ChatConnectionState {
     Connected,
     Reconnecting,
     Failed,
+}
+
+/**
+ * Typed error events with severity and auto-dismiss timing.
+ * Replaces the old string-only errorMessage for richer UX.
+ */
+sealed class ErrorEvent {
+    abstract val message: String
+    /** Duration in ms after which the UI should auto-dismiss. 0 = manual dismiss only. */
+    abstract val autoDismissMs: Long
+
+    /** Transient issue that self-resolves (reconnecting, rate-limit backoff). */
+    data class Warning(override val message: String, override val autoDismissMs: Long = 4000) : ErrorEvent()
+    /** Actionable error the user should see (send failed, attach failed). */
+    data class Error(override val message: String, override val autoDismissMs: Long = 6000) : ErrorEvent()
+    /** Critical — connection dead, gateway unreachable. Stays until resolved. */
+    data class Critical(override val message: String, override val autoDismissMs: Long = 0) : ErrorEvent()
 }
 
 /**

@@ -2,30 +2,23 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,21 +28,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.StatusChip
+import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PlatformConfig
-import com.hermes.android.ui.viewmodel.PlatformType
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
 
 /**
- * Messaging Platforms screen — configure Telegram/Discord/Slack bots.
+ * Messaging Platforms — configure Telegram/Discord/Slack bot tokens.
+ * Rebuilt on the design system: neutral tonal cards with a clear
+ * connected/not-connected status chip instead of a full-card color flip,
+ * and bilingual labels (was hardcoded English).
  *
- * Depends ONLY on [PlatformsViewModel] — never on gateway or runtime.
- *
- * Reference: Phase 1.5 Rule 1, ADR-003 (messaging gateway)
+ * Depends ONLY on [PlatformsViewModel].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlatformsScreen(
     onNavigateBack: () -> Unit = {},
@@ -65,18 +61,14 @@ fun PlatformsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Messaging Platforms") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+    HermesScaffold(
+        title = t("Messaging Platforms", "پلتفرم‌های پیام‌رسان"),
+        subtitle = t(
+            "Talk to your agent from Telegram, Discord, Slack",
+            "با ایجنت از تلگرام، دیسکورد و اسلک حرف بزن",
+        ),
+        onBack = onNavigateBack,
+        snackbarHostState = snackbarHostState,
     ) { padding ->
         if (uiState.isLoading) {
             Column(
@@ -87,15 +79,23 @@ fun PlatformsScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 CircularProgressIndicator()
-                Text("Loading platforms…", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(HxSpace.sm))
+                Text(
+                    t("Loading platforms…", "در حال بارگذاری پلتفرم‌ها…"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    start = HxSpace.screen, end = HxSpace.screen,
+                    top = HxSpace.sm, bottom = HxSpace.xl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(HxSpace.group),
             ) {
                 items(uiState.platforms, key = { it.type.name }) { platform ->
                     PlatformCard(platform, viewModel)
@@ -112,68 +112,57 @@ private fun PlatformCard(
 ) {
     var token by remember(platform.type) { mutableStateOf(platform.botToken) }
 
-    Card(
+    Surface(
+        shape = RoundedCornerShape(HxRadius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (platform.isConnected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant,
-        ),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(HxSpace.inner),
+            verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = platform.type.displayName,
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (platform.isConnected)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = platform.type.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (platform.isConnected)
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Icon(
-                    imageVector = if (platform.isConnected)
-                        Icons.Default.CheckCircle
-                    else
-                        Icons.Default.CloudOff,
-                    contentDescription = if (platform.isConnected) "Connected" else "Not connected",
-                    tint = if (platform.isConnected)
+                StatusChip(
+                    label = if (platform.isConnected) t("connected", "متصل") else t("off", "خاموش"),
+                    color = if (platform.isConnected) {
                         MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.outline,
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
 
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
-                label = { Text("Bot Token") },
+                label = { Text(t("Bot Token", "توکن بات")) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
+                shape = RoundedCornerShape(HxRadius.sm),
             )
 
-            TextButton(
+            Button(
                 onClick = { viewModel.saveToken(platform.type, token) },
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.align(Alignment.End),
             ) {
-                Text("Save Token")
+                Text(t("Save Token", "ذخیره توکن"))
             }
         }
     }

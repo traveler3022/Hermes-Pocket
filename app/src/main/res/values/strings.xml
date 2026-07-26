@@ -18,6 +18,12 @@
     <string name="approval_approve">Approve</string>
     <string name="approval_deny">Deny</string>
 
+    <!-- Agent activity notification (background replies / tasks) -->
+    <string name="notification_channel_agent_name">Agent Activity</string>
+    <string name="notification_channel_agent_desc">Notifications when the agent replies or finishes a background task</string>
+    <string name="notification_agent_reply_title">Hermes replied</string>
+    <string name="notification_task_done_title">Task complete</string>
+
     <!-- Boot receiver (Step 6) -->
     <string name="boot_notification_text">Starting Hermes gateway…</string>
 

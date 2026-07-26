@@ -23,6 +23,9 @@ class HermesApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var appForegroundState: com.hermes.android.service.AppForegroundState
+
     override fun onCreate() {
         super.onCreate()
 
@@ -31,6 +34,14 @@ class HermesApplication : Application(), Configuration.Provider {
             Timber.plant(Timber.DebugTree())
         }
         Timber.i("HermesApplication initializing")
+
+        // Foreground tracking for proactive notifications: the event observer
+        // only notifies when no Activity is visible.
+        registerActivityLifecycleCallbacks(appForegroundState)
+        // Zero-config completion delivery (Milestone C): a periodic sync that
+        // catches task completions the live socket missed in Doze. Idempotent
+        // (KEEP), so this every-launch call never resets the cadence.
+        com.hermes.android.work.TaskSyncWorker.schedule(this)
     }
 
     /**

@@ -24,6 +24,9 @@ enum class RuntimeType {
     /** Future production runtime — Python bundled in APK (ADR-009). */
     EMBEDDED_PYTHON,
 
+    /** Remote-server runtime — agent runs on a remote host, app connects over WS. */
+    REMOTE,
+
     /** Hypothetical far-future: native Kotlin rewrite of the agent loop. */
     NATIVE_KOTLIN,
 }

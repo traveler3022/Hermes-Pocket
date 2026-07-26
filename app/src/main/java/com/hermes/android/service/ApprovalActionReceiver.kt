@@ -16,15 +16,17 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * Receives Approve/Deny button taps from tool approval notifications.
+ * Receives Approve/Always/Deny button taps from tool approval notifications.
  *
- * Sends the response back to the gateway via `approval.respond` RPC.
+ * Sends the response back to the gateway via `approval.respond` RPC with
+ * params {session_id, choice, all}. Canonical choice values (see
+ * `tools/approval.py` upstream — `_ApprovalEntry.result`):
+ *   "once"    — allow this call only (no persistence)
+ *   "session" — allow this pattern for the rest of the session
+ *   "always"  — persist to the permanent allowlist
+ *   "deny"    — block
  *
- * Fix S7F01: Corrected params to match Hermes source:
- *   {session_id, choice: "approve"/"deny", all: false}
- *   (was: {request_id, approved})
- *
- * Reference: ADR-003, tui_gateway/server.py:8943-8960
+ * Reference: ADR-003, docs/upstream-reference/ (approval.respond handler)
  */
 @AndroidEntryPoint
 class ApprovalActionReceiver : BroadcastReceiver() {
@@ -40,9 +42,9 @@ class ApprovalActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val requestId = intent.getStringExtra(EXTRA_REQUEST_ID) ?: return
         val sessionId = intent.getStringExtra(EXTRA_SESSION_ID)
-        val approved = intent.getBooleanExtra(EXTRA_APPROVED, false)
+        val choice = intent.getStringExtra(EXTRA_CHOICE) ?: CHOICE_DENY
 
-        Timber.i("[Approval] User response: $approved for request=$requestId session=$sessionId")
+        Timber.i("[Approval] User response: $choice for request=$requestId session=$sessionId")
 
         approvalNotificationManager.cancelApproval(requestId)
 
@@ -50,11 +52,11 @@ class ApprovalActionReceiver : BroadcastReceiver() {
             try {
                 val params = buildJsonObject {
                     if (sessionId != null) put("session_id", sessionId)
-                    put("choice", if (approved) "approve" else "deny")
+                    put("choice", choice)
                     put("all", false)
                 }
                 gatewayClient.request(GatewayMethods.APPROVAL_RESPOND, params.toMap())
-                Timber.i("[Approval] Response sent: choice=${if (approved) "approve" else "deny"}")
+                Timber.i("[Approval] Response sent: choice=$choice")
             } catch (e: Exception) {
                 Timber.e(e, "[Approval] Failed to send response")
             }
@@ -64,20 +66,24 @@ class ApprovalActionReceiver : BroadcastReceiver() {
     companion object {
         private const val EXTRA_REQUEST_ID = "request_id"
         private const val EXTRA_SESSION_ID = "session_id"
-        private const val EXTRA_APPROVED = "approved"
+        private const val EXTRA_CHOICE = "choice"
         const val ACTION_APPROVAL_RESPONSE = "com.hermes.android.APPROVAL_RESPONSE"
+
+        const val CHOICE_ONCE = "once"
+        const val CHOICE_ALWAYS = "always"
+        const val CHOICE_DENY = "deny"
 
         fun createIntent(
             context: Context,
             requestId: String,
             sessionId: String?,
-            approved: Boolean,
+            choice: String,
         ): Intent {
             return Intent(context, ApprovalActionReceiver::class.java).apply {
                 action = ACTION_APPROVAL_RESPONSE
                 putExtra(EXTRA_REQUEST_ID, requestId)
                 if (sessionId != null) putExtra(EXTRA_SESSION_ID, sessionId)
-                putExtra(EXTRA_APPROVED, approved)
+                putExtra(EXTRA_CHOICE, choice)
             }
         }
     }

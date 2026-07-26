@@ -42,6 +42,8 @@ class ApprovalNotificationManager @Inject constructor(
      * @param toolName name of the tool (e.g. "terminal")
      * @param command the command/text to approve
      * @param description human-readable description of what the tool does
+     * @param allowPermanent whether the "Always" choice may be offered
+     *   (gateway sends allow_permanent=false for security-capped commands)
      */
     fun showApprovalRequest(
         requestId: String,
@@ -49,36 +51,23 @@ class ApprovalNotificationManager @Inject constructor(
         toolName: String,
         command: String,
         description: String,
+        allowPermanent: Boolean = true,
     ) {
         Timber.i("[Approval] Showing approval notification for $toolName (request=$requestId, session=$sessionId)")
 
-        val approveIntent = ApprovalActionReceiver.createIntent(
-            context = context,
-            requestId = requestId,
-            sessionId = sessionId,
-            approved = true,
-        )
-        val denyIntent = ApprovalActionReceiver.createIntent(
-            context = context,
-            requestId = requestId,
-            sessionId = sessionId,
-            approved = false,
-        )
-
-        val approvePendingIntent = PendingIntent.getBroadcast(
+        fun actionPendingIntent(choice: String, requestCodeSuffix: String) = PendingIntent.getBroadcast(
             context,
-            requestId.hashCode(),
-            approveIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val denyPendingIntent = PendingIntent.getBroadcast(
-            context,
-            (requestId + "_deny").hashCode(),
-            denyIntent,
+            (requestId + requestCodeSuffix).hashCode(),
+            ApprovalActionReceiver.createIntent(
+                context = context,
+                requestId = requestId,
+                sessionId = sessionId,
+                choice = choice,
+            ),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
             .setContentTitle("Tool approval required: $toolName")
             .setContentText(description)
@@ -87,8 +76,26 @@ class ApprovalNotificationManager @Inject constructor(
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .addAction(android.R.drawable.checkbox_on_background, "Approve", approvePendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Deny", denyPendingIntent)
+            .addAction(
+                android.R.drawable.checkbox_on_background,
+                "Approve",
+                actionPendingIntent(ApprovalActionReceiver.CHOICE_ONCE, ""),
+            )
+
+        if (allowPermanent) {
+            builder.addAction(
+                android.R.drawable.star_on,
+                "Always",
+                actionPendingIntent(ApprovalActionReceiver.CHOICE_ALWAYS, "_always"),
+            )
+        }
+
+        val notification = builder
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Deny",
+                actionPendingIntent(ApprovalActionReceiver.CHOICE_DENY, "_deny"),
+            )
             .setAutoCancel(true)
             .build()
 
