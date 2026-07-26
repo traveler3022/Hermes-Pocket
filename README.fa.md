@@ -1,141 +1,99 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/⬡-Hermes2-6750A4?style=for-the-badge&labelColor=1a1a2e&color=6750A4" height="48px"/>
-  <br><br>
-  <b>همراه نیتیو اندروید برای Hermes Agent</b>
-  <br>
-  <sub>یک اتاق فرمان متمرکز برای ایجنت هوش مصنوعی — کاملاً روی گوشی.</sub>
-  <br><br>
-  <a href="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml"><img src="https://github.com/traveler3022/Hermes2/actions/workflows/build-apk.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/traveler3022/Hermes2/releases/tag/debug-latest"><img src="https://img.shields.io/badge/⬇_Download-APK-6750A4?style=flat-square&logo=android&logoColor=white" alt="Download APK"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square" alt="License"></a>
-  <br><br>
-  <a href="README.md">English 🇬🇧</a> · <a href="README.fa.md">فارسی</a>
-</p>
+<div align="right" dir="rtl">
 
-<div dir="rtl">
+# ⬡ Hermes2 — نسخه Termux
 
----
+### کلاینت اندروید Hermes Agent مخصوص VPS و Termux 🤖📱
 
-## این چیه؟
+<br>
 
-**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** یک ایجنت هوش مصنوعی متنباز از [Nous Research](https://nousresearch.com) است که محلی روی دستگاه اجرا میشود. کد مینویسد، دستور اجرا میکند، فایل مدیریت میکند، وب مرور میکند، کار را به زیرایجنتها واگذار میکند و به دهها ابزار وصل میشود.
+[![دانلود APK](https://img.shields.io/badge/⬇_دانلود_APK-v3.0-6750A4?style=for-the-badge&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/v3.0)
 
-**Hermes2** آن ایجنت را به اندروید میآورد — یک اپ نیتیو Material 3. اپ جلوی صحنه است — Hermes داخل Termux مغز. تمام ارتباطات روی گوشی میماند.
+[![Build](https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml/badge.svg?branch=main)](https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml)
+![Material 3](https://img.shields.io/badge/Material_3-6750A4?style=flat-square&logo=materialdesign&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 
-**بدون واسطهی ابری · بدون حساب · بدون تلهمتری**
-
----
-
-## 💪 قابلیتها
-
-- 💬 **چت زنده** با پاسخهای استریم، نمایش استدلال، و کارتهای فراخوانی ابزار
-- 🗂️ **مدیریت سشن** — جستوجو، سنجاق، تغییرنام، ادامهی هر گفتوگوی قبلی
-- ✅ **تأیید ابزار** بهصورت اعلان اندروید — Approve یا Deny قبل از هر اجرا
-- ⚙️ **Runtime Setup** — تشخیص، نصب و استارت gateway از داخل اپ
-- 🎨 **۶ تم رنگی**، حالت روشن/تاریک/سیستم، طراحی کامل Material 3
-- 🌐 **دوزبانه** — انگلیسی و فارسی
-- 🔋 **Foreground service** — زنده نگهداشتن gateway وقتی صفحه خاموش است
-- 📤 **Share intent** — فرستادن متن از هر اپی به چت هرمس۲
-
-
----
-
-## 🛡️ حریم خصوصی و امنیت
-
-**روی گوشی میماند:** کلید API تو در تنظیمات Hermes در Termux ذخیره میشود. ارتباط اپ و ایجنت روی `127.0.0.1` اجرا میشود — هرگز دستگاه را ترک نمیکند.
-
-**خارج میشود:** پیامهایت به ارائهدهندهی مدل میرود (Gemini → گوگل، OpenRouter → مختلف). این طبیعت کار هر API هوش مصنوعی است.
-
-```
-تو ← Hermes2 ← ارائهدهنده هوش مصنوعی (مثلاً گوگل)
-        │
-        └─ کلید API فقط روی گوشیت میمونه ✅
-```
-
-> ⚠️
-
-*
-
-**تأیید ابزار را روشن نگه دار** — خط دفاعی توست. در شک، Deny بزن.
-
----
-
-## 📚 مستندات
-
-| | |
-|---|---|
-| **[راهنمای فنی کامل](docs/RUNNING_ON_ANDROID_TERMUX.md)** | نصب، تنظیم، اولین اتصال و عیبیابی |
-| **[نصب در Termux](docs/INSTALL_HERMES_TERMUX.md)** | نصب گام‌به‌گام |
-| **[ویزارد راهاندازی](docs/SETUP_HERMES_TERMUX.md)** | راهنمای `hermes setup` |
-| **[اتصال اول](docs/GATEWAY_SETUP.md)** | وصلکردن اپ به هرمس |
-| **[مستندات رسمی](https://hermes-agent.nousresearch.com/docs)** | مستندات بالادستی |
-
----
-
-## 📸 اسکرینشات
-
-<p align="center">
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۵۸۵۶_Hermes.jpg" width="150" alt="چت"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۷۰۰_Hermes.jpg" width="150" alt="نشستها"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۴_Hermes.jpg" width="150" alt="ابزارها"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۲۱_Hermes.jpg" width="150" alt="مدلها"/>
-  <img src="screenshots/Screenshot_۲۰۲۶۰۷۰۱_۱۱۴۲۱۳_Hermes.jpg" width="150" alt="تنظیمات"/>
-</p>
-
----
-
-## ❓ سؤالات متداول
-
-<details>
-<summary><b>اپ روی «Connecting...» گیر کرده</b></summary>
-
-استارت سرد ۳۰–۹۰ ثانیه طول میکشد. لاگ: `cat ~/.hermes/logs/gateway_stdout.log`. اگر هرمس در حال اجراست ولی اپ وصل نمیشود، Termux را force-stop کن.
-</details>
-
-<details>
-<summary><b>قطعشدن وقتی صفحه خاموش است</b></summary>
-
-تنظیمات → برنامهها → [برنامه] → باتری → بدون محدودیت.
-</details>
-
-<details>
-<summary><b>چه مدلهایی پشتیبانی میشود؟</b></summary>
-
-هر ارائهدهندهی سازگار با OpenAI: Gemini، OpenRouter، Claude، Mistral، Groq، Ollama، DeepSeek و بیشتر.
-</details>
-
----
-
-## 🛠️ ساخت از سورس
+**اپ مستقل · وابسته به Nous Research نیست**
 
 </div>
+
+---
+
+## ℹ️ توضیح
+
+این اپ یه **کلاینت ۱۵ صفحه‌ای** برای [Hermes Agent](https://github.com/NousResearch/hermes-agent) هست.
+ایجنت روی یه **VPS** یا داخل **Termux** اجرا میشه و شما از طریق این اپ باهاش حرف می‌زنید.
+
+**این نسخه از روی Hermes-Pocket ارتقا یافته** ولی برای استفاده با سرور راه دور (Remote) بهینه شده:
+فایل‌های Remote runtime، سیستم صورتحساب، Pets، پروژه‌ها، تسک‌ها، کانفیگ کامل providerها و مدل‌ها
+همش اضافه شده.
+
+> **اگه می‌خوای همه‌چیز رو خود گوشی اجرا کنی (بدون VPS)، [Hermes-Pocket](https://github.com/traveler3022/Hermes-Pocket) رو ببین.**
+
+---
+
+## 🆕 تغییرات v3.0
+
+**از v0.2 به v3.0:**
+
+- **+۱۵٬۷۶۳ خط کد新增 · ۶۵٪ رشد** (از ۱۷K به ۲۸K خط)
+- **۴ → ۱۵+ صفحه** (Tasks, Projects, Pets, Billing, Plugins, Memory, Model Config, Provider Config, Tools Config, ...)
+- **دیتا لایه کامل** · ۶ Repository (Session, Billing, Pet, Project, Task, Completion Tracker)
+- **رفع باگ NonExistentClass** — فایل‌های RemoteServerConfig + RemoteServerSettings اضافه شدن
+- **رفکتور ChatScreen** به ۷ فایل مجزا
+- **تست** · ۳ فایل تست جدید
+- **DesignSystem** اختصاصی
+
+---
+
+## ✨ امکانات
+
+- 💬 **چت زنده** با streaming + نمایش reasoning
+- 🛠️ **ایجنت عملی** — دستور اجرا می‌کنه، فایل می‌نویسه، جستجو می‌کنه
+- ✅ **تأیید دستورات** — هیچ کاری بدون اجازه‌ت انجام نمیشه
+- 🗂️ **سشن‌ها** — جستجو، pinn, rename, resume
+- 🎨 **Material 3** — ۶ تم رنگی، دارک/لایت، فارسی + انگلیسی
+- 🔋 **کار در پس‌زمینه** — حتی با صفحه خاموش
+- 📎 **ارسال فایل و عکس** به ایجنت
+
+---
+
+## 🚀 شروع
+
+**روی VPS (مود Remote):**
+۱. VPS داشته باش با `hermes serve` روشن
+۲. اپ رو نصب کن
+۳. آدرس سرور و توکن رو بزن → وصل شو
+
+---
+
+## 🛡️ حریم خصوصی
+
+- API key فقط بین اپ و VPS می‌گرده
+- از گوشی خارج نمیشه مگر پیام‌هایی که به provider مدل می‌ره
+- بدون حساب کاربری · بدون telemetry · بدون سرور واسط
+
+---
+
+## 🏗️ بیلد از سورس
 
 ```bash
-git clone https://github.com/traveler3022/Hermes2.git
-cd Hermes2
-bash ./gradlew :app:assembleDebug
+git clone https://github.com/traveler3022/Hermes-android-termux-.git
+cd Hermes-android-termux-
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
 ```
 
-<div dir="rtl">
-
-نیاز: JDK 17 · Android SDK 35 · Android Studio Ladybug+
+نیازمندی: JDK 17 · Android SDK 35
 
 ---
 
-## 🤝 مشارکت
+## 📄 مجوز
 
-issue و PR خوشآمدند. پورت مستقل جامعهمحور — نه محصول رسمی Nous Research. موقع گزارش باگ، نسخهی اندروید، مدل گوشی و لاگهای مرتبط را بگذار.
+**MIT** — فایل [LICENSE](LICENSE)
 
----
-
-## 📄 لایسنس
-
-**MIT** — [LICENSE](LICENSE).
-
-<sub>پروژهی مستقل · وابسته به Nous Research نیست · «Hermes Agent» متعلق به نویسندگان آن است.</sub>
+<sub>پروژه مستقل · وابسته به Nous Research نیست · "Hermes Agent" متعلق به نویسندگانش است.</sub>
 
 <p align="center">
   <br>
-  <b>⬡ ساختهشده برای اندروید · با قدرت Hermes Agent ⬡</b>
+  <b>⬡ ساخته شده برای اندروید · با قدرت Hermes Agent ⬡</b>
 </p>
-</div>
