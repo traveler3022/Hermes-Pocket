@@ -1,11 +1,9 @@
 <div align="right" dir="rtl">
 
-# ⬡ Hermes2 — نسخه Termux
+# ⬡ Hermes2 — اندروید
 
-کلاینت اندروید [Hermes Agent](https://github.com/NousResearch/hermes-agent).  
-اتصال به ایجنت هوش مصنوعی روی VPS از طریق گوشی.
-
-Material 3 · Kotlin/Compose · بدون سرور واسط
+کلاینت Material 3 اندروید برای [Hermes Agent](https://github.com/NousResearch/hermes-agent).  
+اجرای ایجنت هوش مصنوعی شخصی روی گوشی 🤖📱
 
 [![دانلود APK](https://img.shields.io/badge/⬇_دانلود_APK-v3.0-6750A4?style=for-the-badge&logo=android&logoColor=white)](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/v3.0)
 [![Build](https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml/badge.svg?branch=main)](https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml)
@@ -14,37 +12,27 @@ Material 3 · Kotlin/Compose · بدون سرور واسط
 
 ---
 
-## این چیه
+## معرفی
 
-یه اپ اندروید Material 3 که به Hermes Agent روی VPS وصل میشه.  
-ایجنت روی سرورته — اپ فقط کنترل از راه دورشه.
-
-**این نسخه برای استفاده ریموت (VPS) طراحی شده.**  
-اگه می‌خوای ایجنت روی خود گوشی اجرا بشه، برو سراغ [Hermes-Pocket](https://github.com/traveler3022/Hermes-Pocket).
+اپ اندروید برای اجرای Hermes Agent روی گوشی با Termux.  
+همچنین میتونه به ایجنت روی VPS وصل بشه.
 
 ## امکانات
 
-- چت زنده با streaming و نمایش reasoning
-- مدیریت سشن‌ها — جستجو، pinn، rename، resume
-- کانفیگ مدل، provider، ابزارها و memory از داخل اپ
-- مدیریت تسک‌ها، پروژه‌ها، صورتحساب، پلاگین‌ها، pets
+- چت زنده
+- مدیریت سشن‌ها
+- کانفیگ کامل مدل و provider و ابزارها از داخل اپ
+- Tasks, Projects, Billing, Plugins, Pets
 - Material 3 · دارک/لایت · فارسی و انگلیسی
-- سرویس پس‌زمینه برای اتصال مداوم
+- سرویس پس‌زمینه
 
-## شروع کار
+## شروع سریع
 
-### راه‌اندازی سرور
-
-۱. Hermes Agent رو روی VPS نصب کن
-۲. بزن: `hermes serve --host 127.0.0.1 --port 9119`
-۳. (دلخواه) Caddy یا nginx واسه دسترسی از بیرون
-
-### راه‌اندازی اپ
-
-۱. APK رو از [Releases](https://github.com/traveler3022/Hermes-android-termux-/releases) دانلود کن
-۲. نصب کن و باز کن
-۳. آدرس سرور و توکن رو وارد کن
-۴. شروع کن به چت
+۱. Termux رو از [F-Droid](https://f-droid.org/packages/com.termux/) نصب کن
+۲. تو Termux بزن: `mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties` و Force Stop کن
+۳. APK رو از [Releases](https://github.com/traveler3022/Hermes-android-termux-/releases) دانلود و نصب کن
+۴. اپ رو باز کن → Runtime Setup → Install Hermes Agent
+۵. API key رو اضافه کن و شروع کن
 
 ## بیلد از سورس
 
@@ -56,12 +44,6 @@ cd Hermes-android-termux-
 ```
 
 **نیازمندی:** JDK 17 · Android SDK 35
-
-## حریم خصوصی
-
-- API key و سشن‌ها روی VPS خودت می‌مونن
-- پیام‌ها به provider مدلی که انتخاب کردی می‌رن
-- بدون حساب · بدون telemetry · بدون سرور واسط
 
 ## مجوز
 
