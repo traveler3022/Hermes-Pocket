@@ -45,6 +45,22 @@ class ChatViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
+    // ── State ───────────────────────────────────────────────────────────
+
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val _notification = MutableStateFlow<NotificationUi?>(null)
+    val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
+
+    private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
+    val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
+
+    private var eventCollectionJob: Job? = null
+    private var connectionWatchJob: Job? = null
+
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     // ── Delegates ───────────────────────────────────────────────────────
 
     private val sessionDelegate = ChatSessionDelegate(
@@ -62,22 +78,6 @@ class ChatViewModel @Inject constructor(
         loadSessionList = { sessionDelegate.loadList(it) },
         createNewSession = { sessionDelegate.create(it) },
     )
-
-    // ── State ───────────────────────────────────────────────────────────
-
-    private val _uiState = MutableStateFlow(ChatUiState())
-    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
-
-    private val _notification = MutableStateFlow<NotificationUi?>(null)
-    val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
-
-    private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
-    val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
-
-    private var eventCollectionJob: Job? = null
-    private var connectionWatchJob: Job? = null
-
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
         loadDraft()
