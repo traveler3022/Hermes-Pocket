@@ -65,13 +65,14 @@ fun ProjectsScreen(
     HermesScaffold(
         title = detail?.label ?: t("Projects", "پروژه‌ها"),
         onBack = if (detail != null) { { viewModel.closeProject() } } else onNavigateBack,
-        actions = if (detail != null && uiState.selectedProjectPath != null) {
-            {
-                IconButton(onClick = { viewModel.createProjectSession(uiState.selectedProjectPath!!) }) {
+        actions = {
+            val path = uiState.selectedProjectPath
+            if (detail != null && path != null) {
+                IconButton(onClick = { viewModel.createProjectSession(path) }) {
                     Icon(Icons.Default.Add, contentDescription = t("New chat", "چت جدید"))
                 }
             }
-        } else { {} },
+        },
         snackbarHostState = snackbarHostState,
     ) { padding ->
         when {
