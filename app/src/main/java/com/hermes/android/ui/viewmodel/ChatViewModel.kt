@@ -51,7 +51,7 @@ class ChatViewModel @Inject constructor(
         gatewayClient, sessionRepository, viewModelScope
     ) { loadReasoningLevel() }
 
-    private val streamingDelegate = ChatStreamingDelegate(viewModelScope)
+    private val streamingDelegate = ChatStreamingDelegate(viewModelScope, _uiState)
 
     private val attachmentDelegate = ChatAttachmentDelegate(
         gatewayClient, hermesRuntime, context, viewModelScope,
@@ -160,7 +160,6 @@ class ChatViewModel @Inject constructor(
                         state is ConnectionState.Failed
                     ) {
                         streamingDelegate.finalizeOrphanedMessage(
-                            _uiState,
                             if (state is ConnectionState.Failed) "(connection failed)" else "(connection lost)",
                         )
                     }
@@ -345,7 +344,7 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         val sessionId = _uiState.value.activeSessionId ?: return
-        streamingDelegate.finalizeOrphanedMessage(_uiState, "(stopped)")
+        streamingDelegate.finalizeOrphanedMessage("(stopped)")
         _uiState.update { it.copy(
             messages = _uiState.value.messages.updateAll({ msg ->
                 msg is ChatMessage.ToolCall && msg.isRunning
@@ -676,7 +675,7 @@ class ChatViewModel @Inject constructor(
 
         when (event) {
             is GatewayEvent.MessageStart -> {
-                streamingDelegate.finalizeOrphanedMessage(_uiState, "(interrupted)")
+                streamingDelegate.finalizeOrphanedMessage("(interrupted)")
                 streamingDelegate.reset()
                 val msgId = streamingDelegate.onMessageStart()
                 val assistantMsg = ChatMessage.Assistant(
@@ -694,7 +693,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageComplete -> {
-                streamingDelegate.flushBuffer(_uiState)
+                streamingDelegate.flushBuffer()
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.updateFirst({ msg ->
                         msg is ChatMessage.Assistant && msg.isStreaming &&

@@ -10,6 +10,7 @@ import timber.log.Timber
 
 internal class ChatStreamingDelegate(
     private val scope: CoroutineScope,
+    private val state: MutableStateFlow<ChatUiState>,
 ) {
     private var activeAssistantMessageId: String? = null
     private val streamingBuffer = StringBuilder()
@@ -39,7 +40,7 @@ internal class ChatStreamingDelegate(
         }
     }
 
-    fun flushBuffer(state: MutableStateFlow<ChatUiState>) {
+    fun flushBuffer() {
         if (streamingBuffer.isEmpty() && reasoningBuffer.isEmpty()) return
         val chunk = streamingBuffer.toString()
         streamingBuffer.setLength(0)
@@ -68,7 +69,8 @@ internal class ChatStreamingDelegate(
         activeAssistantMessageId = null
     }
 
-    fun finalizeOrphanedMessage(state: MutableStateFlow<ChatUiState>, marker: String) {
+    fun finalizeOrphanedMessage(marker: String) {
+        flushBuffer()
         val orphanedId = activeAssistantMessageId ?: return
         var found = false
         state.update { it.copy(
