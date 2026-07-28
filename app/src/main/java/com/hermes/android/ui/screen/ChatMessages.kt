@@ -284,7 +284,7 @@ internal fun ThinkingBlock(
 /** One quiet icon in the post-reply action row: 32dp touch target, 16dp
  *  glyph, muted tint — present but never competing with the reply text. */
 @Composable
-private fun MessageActionIcon(
+internal fun MessageActionIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
@@ -303,7 +303,7 @@ private fun MessageActionIcon(
  *  spinner while the agent is composing a reply, matching the familiar
  *  chat-app convention (WhatsApp/iMessage) instead of a loading spinner. */
 @Composable
-private fun TypingDots(
+internal fun TypingDots(
     modifier: Modifier = Modifier,
     dotSize: androidx.compose.ui.unit.Dp = 6.dp,
     color: Color = MaterialTheme.colorScheme.primary,
