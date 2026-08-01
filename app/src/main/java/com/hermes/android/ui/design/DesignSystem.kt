@@ -36,8 +36,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -445,5 +449,103 @@ fun HermesEmptyState(
             Spacer(Modifier.height(HxSpace.sm))
             TextButton(onClick = onAction) { Text(actionLabel) }
         }
+    }
+}
+
+// ── Floating controls (Aether-inspired chrome) ─────────────────────────────
+
+/**
+ * Soft, near-invisible scrim used for the gentle "floating control" shadows
+ * (header circle buttons, pills). Dark in light mode, lighter in dark mode —
+ * always just enough to lift the control off the background.
+ */
+val HxSoftShadowColor: Color
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) {
+        Color(0x14000000)
+    } else {
+        Color(0x4D000000)
+    }
+
+/** A soft drop shadow reusable across floating controls (no hard outline). */
+fun Modifier.hxSoftShadow(
+    radius: Dp = 10.dp,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+): Modifier = composed {
+    val scrim = HxSoftShadowColor
+    this.shadow(radius, shape, ambientColor = scrim, spotColor = scrim)
+}
+
+/**
+ * Floating circular icon button (Aether's "HeaderCircleButton" idea, written
+ * against our design tokens). White-ish circle with a soft shadow — the
+ * signature floating control used in chat top bars and drawer headers.
+ */
+@Composable
+fun HxHeaderCircleButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    iconSize: Dp = 20.dp,
+    enabled: Boolean = true,
+    iconTint: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    val surface = MaterialTheme.colorScheme.surface
+    Box(
+        modifier = modifier
+            .size(size)
+            .hxSoftShadow(radius = 12.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(if (enabled) surface.copy(alpha = 0.96f) else surface.copy(alpha = 0.55f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) iconTint else iconTint.copy(alpha = 0.4f),
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+/**
+ * Gradient "action pill" (Aether's floating New-Chat pill). A filled capsule
+ * with a two-stop gradient swept from the theme's primary towards tertiary,
+ * white content. Used for the drawer's primary action.
+ */
+@Composable
+fun HxGradientActionPill(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier = modifier
+            .hxSoftShadow(radius = 18.dp, shape = RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.tertiary,
+                    ),
+                ),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = HxSpace.lg, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+            color = Color.White,
+        )
     }
 }

@@ -238,6 +238,12 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(inputText = text) }
     }
 
+    fun sendSuggestion(text: String) {
+        if (text.isBlank()) return
+        _uiState.update { it.copy(inputText = text) }
+        sendMessage()
+    }
+
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments

@@ -2,7 +2,6 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.HermesMarkdown
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -47,9 +47,9 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
-            .background(toolAccent.copy(alpha = 0.05f))
-            .border(1.dp, toolAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+            .background(toolAccent.copy(alpha = 0.07f)),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -98,7 +98,9 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                 }
             }
             message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
-                var argsExpanded by remember { mutableStateOf(false) }
+                // Auto-expand while the tool is running so the user can watch
+                // what it's doing; once finished, they can open it on demand.
+                var argsExpanded by remember { mutableStateOf(message.isRunning) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
