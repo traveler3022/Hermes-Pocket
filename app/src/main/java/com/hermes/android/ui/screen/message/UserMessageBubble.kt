@@ -37,6 +37,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -56,8 +57,11 @@ internal fun UserMessageBubble(
     } else {
         RoundedCornerShape(16.dp)
     }
-    val bubbleColor = MaterialTheme.colorScheme.surfaceVariant
-    val bubbleTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Aether-style user bubble: a soft primary tint (no hard fill or border)
+    // with a gentle shadow to lift it off the background — readable in every
+    // theme because the tint is translucent and the text stays onSurface.
+    val bubbleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    val bubbleTextColor = MaterialTheme.colorScheme.onSurface
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -66,6 +70,7 @@ internal fun UserMessageBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 420.dp)
+                .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
                 .clip(bubbleShape)
                 .background(bubbleColor)
                 .combinedClickable(

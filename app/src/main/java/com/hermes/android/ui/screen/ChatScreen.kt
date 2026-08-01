@@ -20,29 +20,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -84,7 +86,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
@@ -99,13 +100,16 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
@@ -322,171 +326,41 @@ fun ChatScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                modifier = Modifier.fillMaxHeight().width(322.dp),
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
             ) {
-                // ── Header ─────────────────────────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.clickable { showRenameAssistantDialog = true },
-                    ) {
-                        Text(
-                            text = uiState.assistantName,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = t("Rename", "تغییر نام"),
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { scope.launch { drawerState.close() } }) {
-                        Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
-                    }
-                }
-                Button(
-                    onClick = {
-                        viewModel.newConversation()
+                HermesDrawerContent(
+                    assistantName = uiState.assistantName,
+                    sessions = uiState.sessions,
+                    activeSessionId = uiState.activeSessionId,
+                    drawerSearchQuery = uiState.drawerSearchQuery,
+                    drawerSortNewest = uiState.drawerSortNewest,
+                    drawerPinnedIds = uiState.drawerPinnedIds,
+                    onSearchQueryChange = viewModel::updateDrawerSearch,
+                    onToggleSort = viewModel::toggleDrawerSort,
+                    onSessionClick = { sessionId ->
+                        viewModel.resumeSession(sessionId)
                         scope.launch { drawerState.close() }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                ) {
-                    Text(t("New conversation", "گفتگوی جدید"))
-                }
-                OutlinedButton(
-                    onClick = {
+                    onRenameAssistant = { showRenameAssistantDialog = true },
+                    onTasks = {
                         scope.launch { drawerState.close() }
                         onNavigateToTasks()
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                ) {
-                    Text(t("Task Desk", "میز کار"))
-                }
-                // ── Drawer search + sort bar ───────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    OutlinedTextField(
-                        value = uiState.drawerSearchQuery,
-                        onValueChange = { viewModel.updateDrawerSearch(it) },
-                        modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(
-                                t("Search chats…", "جستجو در گفتگوها…"),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        trailingIcon = {
-                            if (uiState.drawerSearchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.updateDrawerSearch("") }) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = t("Clear", "پاک کردن"),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
-                        textStyle = MaterialTheme.typography.bodySmall,
-                    )
-                    IconButton(onClick = { viewModel.toggleDrawerSort() }) {
-                        Icon(
-                            Icons.Default.Sort,
-                            contentDescription = if (uiState.drawerSortNewest)
-                                t("Newest first", "جدیدترین اول")
-                            else
-                                t("Oldest first", "قدیمی‌ترین اول"),
-                            tint = if (!uiState.drawerSortNewest)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                // ── Session list (fills remaining space) ───────────────────
-                val drawerSessions = remember(
-                    uiState.sessions,
-                    uiState.drawerSearchQuery,
-                    uiState.drawerSortNewest,
-                    uiState.drawerPinnedIds,
-                ) {
-                    var list = uiState.sessions
-                    val q = uiState.drawerSearchQuery.trim().lowercase()
-                    if (q.isNotEmpty()) {
-                        list = list.filter { it.title.lowercase().contains(q) }
-                    }
-                    list = if (uiState.drawerSortNewest) {
-                        list.sortedByDescending { it.updatedAt }
-                    } else {
-                        list.sortedBy { it.updatedAt }
-                    }
-                    // pinned items float to top
-                    val pinned = list.filter { it.id in uiState.drawerPinnedIds }
-                    val unpinned = list.filter { it.id !in uiState.drawerPinnedIds }
-                    pinned + unpinned
-                }
-
-                if (drawerSessions.isEmpty()) {
-                    Text(
-                        text = if (uiState.drawerSearchQuery.isNotEmpty())
-                            t("No results", "نتیجه‌ای یافت نشد")
-                        else
-                            t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(drawerSessions, key = { it.id }) { session ->
-                            SessionDrawerRow(
-                                session = session,
-                                isActive = session.id == uiState.activeSessionId,
-                                isPinned = session.id in uiState.drawerPinnedIds,
-                                onClick = {
-                                    viewModel.resumeSession(session.id)
-                                    scope.launch { drawerState.close() }
-                                },
-                                onLongClick = {
-                                    viewModel.drawerShowRename(session.id, session.title)
-                                },
-                                onPin = { viewModel.drawerTogglePin(session.id) },
-                                onRename = { viewModel.drawerShowRename(session.id, session.title) },
-                                onDelete = { viewModel.drawerShowDelete(session.id) },
-                            )
-                        }
-                    }
-                }
+                    onRenameSession = viewModel::drawerShowRename,
+                    onTogglePin = viewModel::drawerTogglePin,
+                    onDeleteSession = viewModel::drawerShowDelete,
+                    onNewChat = {
+                        viewModel.newConversation()
+                        scope.launch { drawerState.close() }
+                    },
+                    onSettings = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToSettings()
+                    },
+                )
 
                 // ── Rename dialog ──────────────────────────────────────────
                 uiState.drawerRenameTarget?.let { rename ->
@@ -544,31 +418,6 @@ fun ChatScreen(
                                 Text(t("Cancel", "لغو"))
                             }
                         },
-                    )
-                }
-
-                // ── Footer: Settings ───────────────────────────────────────
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            scope.launch { drawerState.close() }
-                            onNavigateToSettings()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = t("Settings", "تنظیمات"),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -733,6 +582,7 @@ fun ChatScreen(
                                     EmptyChatHero(
                                         assistantName = uiState.assistantName,
                                         avatarUri = uiState.assistantAvatarPath,
+                                        onSuggestionClick = viewModel::sendSuggestion,
                                         modifier = Modifier.fillParentMaxSize(),
                                     )
                                 }
@@ -979,8 +829,32 @@ fun ChatScreen(
 private fun EmptyChatHero(
     assistantName: String,
     avatarUri: String?,
+    onSuggestionClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val suggestions = listOf(
+        SuggestionPill(
+            icon = Icons.Default.AutoAwesome,
+            title = t("What can you do?", "چه کارهایی بلدی؟"),
+            prompt = t("What can you help me with?", "چه کارهایی می‌تونی برام انجام بدی؟"),
+        ),
+        SuggestionPill(
+            icon = Icons.Default.RocketLaunch,
+            title = t("Server status", "وضعیت سرور"),
+            prompt = t("Check my server status", "وضعیت سرورم رو چک کن"),
+        ),
+        SuggestionPill(
+            icon = Icons.Default.Code,
+            title = t("Review code", "بررسی کد"),
+            prompt = t("Review the code in my last project", "کد پروژه‌ی آخرمو بررسی کن"),
+        ),
+        SuggestionPill(
+            icon = Icons.Default.Terminal,
+            title = t("Run a command", "اجرای دستور"),
+            prompt = t("Run a command on my server", "یه دستور روی سرورم اجرا کن"),
+        ),
+    )
+
     Column(
         modifier = modifier.padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1022,6 +896,70 @@ private fun EmptyChatHero(
             ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Aether-style suggestion grid: soft rounded pills with an icon,
+        // one tap away from kicking off a conversation.
+        Spacer(modifier = Modifier.height(28.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            suggestions.chunked(2).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    row.forEach { suggestion ->
+                        SuggestionChipPill(
+                            suggestion = suggestion,
+                            onClick = { onSuggestionClick(suggestion.prompt) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (row.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class SuggestionPill(
+    val icon: ImageVector,
+    val title: String,
+    val prompt: String,
+)
+
+@Composable
+private fun SuggestionChipPill(
+    suggestion: SuggestionPill,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            suggestion.icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = suggestion.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
