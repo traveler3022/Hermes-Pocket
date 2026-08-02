@@ -68,7 +68,7 @@ internal fun HxAssistantTurnGroup(
     val shape = RoundedCornerShape(20.dp)
 
     Row(
-        modifier = modifier.fillMax(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
     ) {
         // Leading column: avatar once per turn (same approach as
@@ -168,7 +168,7 @@ internal fun HxPendingGenerationBlock(
 ) {
     Row(
         modifier = modifier
-            .fillMax()
+            .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
