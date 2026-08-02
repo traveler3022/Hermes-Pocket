@@ -342,7 +342,7 @@ internal fun InputBar(
                     disabledIndicatorColor = Color.Transparent,
                 ),
             )
-            if (isSending && text.isNotBlank()) {
+            if (isSending && (text.isNotBlank() || pendingAttachments.isNotEmpty())) {
                 // Mid-turn the agent is running. Two DIFFERENT things can be
                 // meant by "send while it's replying":
                 //  - Steer (session.steer): folds a note into the CURRENT
