@@ -87,10 +87,11 @@ fun ChangesSheet(
                 }
             }
 
+            val diff = uiState.selectedDiff; val hash = uiState.selectedHash
             when {
-                uiState.selectedDiff != null && uiState.selectedHash != null -> DiffView(
-                    diff = uiState.selectedDiff!!,
-                    hash = uiState.selectedHash!!,
+                diff != null && hash != null -> DiffView(
+                    diff = diff,
+                    hash = hash,
                     isRestoring = uiState.isRestoring,
                     onBack = { viewModel.closeDiff() },
                     onRestore = { hash -> viewModel.restore(hash) },
