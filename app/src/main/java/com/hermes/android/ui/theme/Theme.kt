@@ -36,6 +36,10 @@ enum class AppFont(val key: String, val displayEn: String, val displayFa: String
 }
 
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
+    // Aether (warm paper + violet) is the default — the app's UI is designed
+    // around the Aether design language, so the first-run look matches the
+    // chat screen's floating pill chrome. The other palettes stay selectable.
+    AETHER("aether", "Aether", "ایثر"),
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
     CLAUDE("claude", "Mocha", "موکا"),
@@ -44,10 +48,7 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
-        // Carbon (near-black + neutral grey, no purple) is the default —
-        // the original "Hermes" palette's primary is a vivid indigo/violet
-        // that bled into buttons, icons, and accents across the whole app.
-        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
+        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: AETHER
     }
 }
 
@@ -70,7 +71,7 @@ class ThemeModeState(context: Context) {
         private set
 
     var colorTheme: ColorTheme by mutableStateOf(
-        ColorTheme.fromKey(prefs.getString("color_theme", "carbon") ?: "carbon")
+        ColorTheme.fromKey(prefs.getString("color_theme", "aether") ?: "aether")
     )
         private set
 
@@ -219,6 +220,62 @@ private val DarkColors = darkColorScheme(
     onSurfaceVariant = md_dark_onSurfaceVariant,
     outline = md_dark_outline,
     outlineVariant = md_dark_outlineVariant,
+)
+
+// ── Aether palette (default) ──
+
+private val AetherLightColors = lightColorScheme(
+    primary = aether_light_primary,
+    onPrimary = aether_light_onPrimary,
+    primaryContainer = aether_light_primaryContainer,
+    onPrimaryContainer = aether_light_onPrimaryContainer,
+    secondary = aether_light_secondary,
+    onSecondary = aether_light_onSecondary,
+    secondaryContainer = aether_light_secondaryContainer,
+    onSecondaryContainer = aether_light_onSecondaryContainer,
+    tertiary = aether_light_tertiary,
+    onTertiary = aether_light_onTertiary,
+    tertiaryContainer = aether_light_tertiaryContainer,
+    onTertiaryContainer = aether_light_onTertiaryContainer,
+    error = aether_light_error,
+    onError = aether_light_onError,
+    errorContainer = aether_light_errorContainer,
+    onErrorContainer = aether_light_onErrorContainer,
+    background = aether_light_background,
+    onBackground = aether_light_onBackground,
+    surface = aether_light_surface,
+    onSurface = aether_light_onSurface,
+    surfaceVariant = aether_light_surfaceVariant,
+    onSurfaceVariant = aether_light_onSurfaceVariant,
+    outline = aether_light_outline,
+    outlineVariant = aether_light_outlineVariant,
+)
+
+private val AetherDarkColors = darkColorScheme(
+    primary = aether_dark_primary,
+    onPrimary = aether_dark_onPrimary,
+    primaryContainer = aether_dark_primaryContainer,
+    onPrimaryContainer = aether_dark_onPrimaryContainer,
+    secondary = aether_dark_secondary,
+    onSecondary = aether_dark_onSecondary,
+    secondaryContainer = aether_dark_secondaryContainer,
+    onSecondaryContainer = aether_dark_onSecondaryContainer,
+    tertiary = aether_dark_tertiary,
+    onTertiary = aether_dark_onTertiary,
+    tertiaryContainer = aether_dark_tertiaryContainer,
+    onTertiaryContainer = aether_dark_onTertiaryContainer,
+    error = aether_dark_error,
+    onError = aether_dark_onError,
+    errorContainer = aether_dark_errorContainer,
+    onErrorContainer = aether_dark_onErrorContainer,
+    background = aether_dark_background,
+    onBackground = aether_dark_onBackground,
+    surface = aether_dark_surface,
+    onSurface = aether_dark_onSurface,
+    surfaceVariant = aether_dark_surfaceVariant,
+    onSurfaceVariant = aether_dark_onSurfaceVariant,
+    outline = aether_dark_outline,
+    outlineVariant = aether_dark_outlineVariant,
 )
 
 // ── Blue Eye palette ──
@@ -524,6 +581,7 @@ fun Hermes2Theme(
             if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         else -> when (colorTheme) {
+            ColorTheme.AETHER -> if (useDark) AetherDarkColors else AetherLightColors
             ColorTheme.HERMES -> if (useDark) DarkColors else LightColors
             ColorTheme.BLUE_EYE -> if (useDark) BlueDarkColors else BlueLightColors
             ColorTheme.CLAUDE -> if (useDark) ClaudeDarkColors else ClaudeLightColors

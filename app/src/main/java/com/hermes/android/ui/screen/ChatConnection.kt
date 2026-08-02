@@ -137,6 +137,7 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -151,26 +152,50 @@ import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun ConnectionIndicator(state: ChatConnectionState) {
-    // Hide the indicator when connected - only show when there's a problem
-    if (state == ChatConnectionState.Connected) return
-    
+internal fun ConnectionIndicator(
+    state: ChatConnectionState,
+    connectedLabel: String? = null,
+) {
     val (color, label) = when (state) {
-        ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
-        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting...", "◌ در حال اتصال...")
-        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to t("↻ Reconnecting...", "↻ اتصال دوباره...")
-        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to t("○ Tap to Connect", "○ برای اتصال لمس کنید")
-        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to t("✕ Connection Error", "✕ خطای اتصال")
+        ChatConnectionState.Connected -> MaterialTheme.colorScheme.secondary to
+                (connectedLabel?.takeIf { it.isNotBlank() } ?: t("Connected", "متصل"))
+        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("Connecting...", "در حال اتصال...")
+        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to t("Reconnecting...", "اتصال دوباره...")
+        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to t("Tap to Connect", "برای اتصال لمس کنید")
+        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to t("Connection Error", "خطای اتصال")
     }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+    // Aether-style floating pill: a near-opaque surface capsule with a soft
+    // shadow, replacing the old flat Material Card so it matches the header
+    // circle buttons and the composer's floating chrome.
+    val showDot = state == ChatConnectionState.Connected ||
+            state == ChatConnectionState.Connecting
+    Row(
+        modifier = Modifier
+            .hxSoftShadow(radius = 8.dp, shape = RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(999.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
+        if (showDot) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
         Text(
             text = label,
-            color = color,
+            color = if (state == ChatConnectionState.Connected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                color
+            },
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -194,30 +219,30 @@ internal fun AgentWorkingIndicator(label: String) {
         ),
         label = "agent_working_dot",
     )
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+    Row(
+        modifier = Modifier
+            .hxSoftShadow(radius = 8.dp, shape = RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(999.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha)),
-            )
-            Text(
-                text = label,
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha)),
+        )
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
-
 // ── Agent task list (todos from tool.start / tool.complete) ──────────────
 
 @Composable

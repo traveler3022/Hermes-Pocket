@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -111,6 +112,8 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
+import com.hermes.android.ui.theme.aetherChatGradientTop
+import com.hermes.android.ui.theme.aetherSurfaceHigh
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
@@ -424,7 +427,24 @@ fun ChatScreen(
             }
         },
     ) {
+        // Aether canvas: the whole screen is painted with a soft 3-stop
+        // vertical gradient (lit warm top → background → surface) instead of
+        // a flat background. The Scaffold below is transparent so it shows.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            aetherChatGradientTop(),
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                ),
+        ) {
         Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             topBar = {
                 Column {
                     // Floating chrome instead of a flat Material app bar: two
@@ -453,7 +473,10 @@ fun ChatScreen(
                             if (agentActivity != null) {
                                 AgentWorkingIndicator(agentActivity)
                             } else {
-                                ConnectionIndicator(uiState.connectionState)
+                                ConnectionIndicator(
+                                    state = uiState.connectionState,
+                                    connectedLabel = uiState.assistantName,
+                                )
                             }
                         }
                         HxHeaderCircleButton(
@@ -565,7 +588,7 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 20.dp),
                         // Tight gap by default; itemsIndexed adds extra top
                         // padding when a message starts a new group (turn),
                         // so the eye reads turn boundaries instead of a flat
@@ -623,7 +646,7 @@ fun ChatScreen(
                                     prev is ChatMessage.InteractiveRequest
                             val topPad = when {
                                 prev == null -> 0.dp
-                                !grouped -> 18.dp                 // user <-> agent turn boundary
+                                !grouped -> 22.dp                 // user <-> agent turn boundary
                                 isCard != prevIsCard -> 16.dp     // text <-> card: give the card air
                                 isCard && prevIsCard -> 8.dp      // stacked cards: a little gap between them
                                 else -> 0.dp                      // continuous prose from one speaker
@@ -726,6 +749,7 @@ fun ChatScreen(
                     onReasoningLevelChange = viewModel::setReasoningLevel,
                 )
             }
+        }
         }
     }
 
@@ -874,7 +898,7 @@ private fun EmptyChatHero(
             modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
             if (avatarUri != null) {
@@ -888,7 +912,7 @@ private fun EmptyChatHero(
                 Text(
                     text = assistantName.take(1),
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -952,7 +976,7 @@ private fun SuggestionChipPill(
         modifier = modifier
             .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.aetherSurfaceHigh)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

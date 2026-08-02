@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -70,6 +71,15 @@ internal fun AssistantMessageBubble(
 
     val assistantContext = LocalContext.current
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
+
+    // Aether reply body: slightly larger reading size than the app's default
+    // bodyLarge so streamed answers read like Aether's chat (17sp there, we
+    // land on 16sp to respect the app-wide font-scaling setting).
+    val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
+        fontSize = 16.sp,
+        lineHeight = 26.sp,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.widthIn(max = 460.dp)) {
@@ -117,16 +127,12 @@ internal fun AssistantMessageBubble(
                                         if (message.isStreaming) {
                                             Text(
                                                 text = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
+                                                style = bodyStyle,
                                             )
                                         } else {
                                             HermesMarkdown(
                                                 markdown = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
+                                                style = bodyStyle,
                                             )
                                         }
                                     }

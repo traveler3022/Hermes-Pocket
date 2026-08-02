@@ -1,6 +1,86 @@
 package com.hermes.android.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+
+// ── Aether — default: warm paper + violet, distilled from the Aether app ──
+
+val aether_light_primary = Color(0xFF7250E8)
+val aether_light_onPrimary = Color(0xFFFFFFFF)
+val aether_light_primaryContainer = Color(0xFFF1E5FF)
+val aether_light_onPrimaryContainer = Color(0xFF4D2F8E)
+val aether_light_secondary = Color(0xFF4A7B6B)
+val aether_light_onSecondary = Color(0xFFFFFFFF)
+val aether_light_secondaryContainer = Color(0xFFDDF1E8)
+val aether_light_onSecondaryContainer = Color(0xFF1E4A3B)
+val aether_light_tertiary = Color(0xFF9A7DF8)
+val aether_light_onTertiary = Color(0xFFFFFFFF)
+val aether_light_tertiaryContainer = Color(0xFFF1E5FF)
+val aether_light_onTertiaryContainer = Color(0xFF4D2F8E)
+val aether_light_error = Color(0xFFB43E3E)
+val aether_light_onError = Color(0xFFFFFFFF)
+val aether_light_errorContainer = Color(0xFFFFDAD6)
+val aether_light_onErrorContainer = Color(0xFF410002)
+val aether_light_background = Color(0xFFF7F7F3)
+val aether_light_onBackground = Color(0xFF202123)
+val aether_light_surface = Color(0xFFFFFFFF)
+val aether_light_onSurface = Color(0xFF202123)
+val aether_light_surfaceVariant = Color(0xFFE8E4DB)
+val aether_light_onSurfaceVariant = Color(0xFF6E6A62)
+val aether_light_outline = Color(0xFFD9D5CC)
+val aether_light_outlineVariant = Color(0xFFE7E3DA)
+
+val aether_dark_primary = Color(0xFFC0AEFF)
+val aether_dark_onPrimary = Color(0xFF251448)
+val aether_dark_primaryContainer = Color(0xFF3A275F)
+val aether_dark_onPrimaryContainer = Color(0xFFF0E9FF)
+val aether_dark_secondary = Color(0xFF89C8AF)
+val aether_dark_onSecondary = Color(0xFF143126)
+val aether_dark_secondaryContainer = Color(0xFF24483A)
+val aether_dark_onSecondaryContainer = Color(0xFFDDF6EA)
+val aether_dark_tertiary = Color(0xFFD1C2FF)
+val aether_dark_onTertiary = Color(0xFF251448)
+val aether_dark_tertiaryContainer = Color(0xFF3A275F)
+val aether_dark_onTertiaryContainer = Color(0xFFF0E9FF)
+val aether_dark_error = Color(0xFFFF8E8E)
+val aether_dark_onError = Color(0xFF690005)
+val aether_dark_errorContainer = Color(0xFF93000A)
+val aether_dark_onErrorContainer = Color(0xFFFFDAD6)
+val aether_dark_background = Color(0xFF151619)
+val aether_dark_onBackground = Color(0xFFF3F1EC)
+val aether_dark_surface = Color(0xFF1C1F23)
+val aether_dark_onSurface = Color(0xFFF3F1EC)
+val aether_dark_surfaceVariant = Color(0xFF343941)
+val aether_dark_onSurfaceVariant = Color(0xFFB9B4AA)
+val aether_dark_outline = Color(0xFF4A5059)
+val aether_dark_outlineVariant = Color(0xFF3D424A)
+
+/** The "raised surface" tone Aether uses for tool cards and code blocks. In
+ *  M3 terms the closest role is surfaceContainerHighest, but deriving from
+ *  the scheme keeps every selectable palette (Mocha, Midnight, …) working. */
+val androidx.compose.material3.ColorScheme.aetherSurfaceHigh: Color
+    @Composable get() = surfaceContainerHighest
+
+/** Top stop of the chat screen's vertical background gradient (Aether paints
+ *  the whole canvas `gradientTop → background → surface`). Derived from the
+ *  active scheme so each palette keeps a soft lit-top look. */
+@Composable
+fun aetherChatGradientTop(): Color {
+    val bg = MaterialTheme.colorScheme.background
+    val surface = MaterialTheme.colorScheme.surface
+    val variant = MaterialTheme.colorScheme.surfaceVariant
+    return if (bg.luminance() > 0.5f) {
+        lerp(bg, variant, 0.35f)
+    } else {
+        lerp(bg, surface, 0.55f)
+    }
+}
+
+/** Signature Aether composer/send purple — theme-independent, like upstream. */
+val ComposerPurple = Color(0xFF9B5CFF)
 
 // ── Hermes2 Default palette — deep agent console + cyan/violet accents ──
 

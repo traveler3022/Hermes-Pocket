@@ -52,16 +52,12 @@ internal fun UserMessageBubble(
     val isLongMessage = message.text.length > 500
     var isExpanded by remember { mutableStateOf(!isLongMessage) }
 
-    val bubbleShape = if (isLastInGroup) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(16.dp)
-    }
-    // Aether-style user bubble: a soft primary tint (no hard fill or border)
-    // with a gentle shadow to lift it off the background — readable in every
-    // theme because the tint is translucent and the text stays onSurface.
-    val bubbleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-    val bubbleTextColor = MaterialTheme.colorScheme.onSurface
+    // Aether user bubble: a soft lavender fill (primaryContainer =
+    // messageBubble in the Aether palette) with onPrimaryContainer text and a
+    // gentle shadow — all corners uniformly rounded like Aether, no tail.
+    val bubbleShape = RoundedCornerShape(24.dp)
+    val bubbleColor = MaterialTheme.colorScheme.primaryContainer
+    val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -69,8 +65,8 @@ internal fun UserMessageBubble(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 420.dp)
-                .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
+                .widthIn(max = 360.dp)
+                .hxSoftShadow(radius = 10.dp, shape = bubbleShape)
                 .clip(bubbleShape)
                 .background(bubbleColor)
                 .combinedClickable(
@@ -81,7 +77,7 @@ internal fun UserMessageBubble(
             CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                 Column(
                     modifier = Modifier
-                        .padding(12.dp)
+                        .padding(horizontal = 18.dp, vertical = 14.dp)
                         .animateContentSize(),
                 ) {
                     if (message.attachments.isNotEmpty()) {
