@@ -230,22 +230,13 @@ private fun ShimmerToolTitle(
         label = "tool_shimmer_progress",
     )
     val base = MaterialTheme.colorScheme.onSurfaceVariant
-    val brush = Brush.linearGradient(
-        colors = listOf(
-            base.copy(alpha = 0.45f),
-            base.copy(alpha = 0.95f),
-            base.copy(alpha = 0.45f),
-        ),
-        start = Offset(-320f + progress * 960f, 0f),
-        end = Offset(progress * 960f, 0f),
-    )
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier,
-        brush = brush,
+        color = base,
     )
 }
 
