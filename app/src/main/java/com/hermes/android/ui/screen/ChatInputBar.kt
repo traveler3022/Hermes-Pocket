@@ -140,6 +140,7 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -234,19 +235,18 @@ internal fun InputBar(
                 }
             }
         }
-        // One continuous rounded pill holding every control — matches the
-        // reference (ChatGPT): icons and field share a single floating
-        // surface instead of a bordered field plus separately-floating
-        // buttons with no shared background.
+        // Two separately-floating controls instead of one flat shared bar:
+        // a small round "+" that carries its own shadow, and the text pill
+        // next to it with its own shadow — each control lifts off the
+        // background independently rather than sharing one flat surface.
+        // (Same floating-chrome language as HxHeaderCircleButton elsewhere
+        // in the app — this bar just wasn't consuming those tokens yet.)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Declutter: attach + reasoning-effort used to be two separate
             // buttons next to the composer. Collapsed into one "+" so the
@@ -254,10 +254,14 @@ internal fun InputBar(
             // one tap away instead of always competing for attention.
             var extrasMenuOpen by remember { mutableStateOf(false) }
             Box {
-                IconButton(
-                    onClick = { if (!isAttaching) extrasMenuOpen = true },
-                    enabled = !isAttaching,
-                    modifier = Modifier.size(48.dp),
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .hxSoftShadow(radius = 8.dp, shape = CircleShape)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(enabled = !isAttaching) { extrasMenuOpen = true },
+                    contentAlignment = Alignment.Center,
                 ) {
                     if (isAttaching) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -311,6 +315,16 @@ internal fun InputBar(
                     }
                 }
             }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
             TextField(
                 value = text,
                 onValueChange = onTextChange,
@@ -392,6 +406,7 @@ internal fun InputBar(
                         contentDescription = t("Send", "ارسال"),
                     )
                 }
+            }
             }
         }
     }
