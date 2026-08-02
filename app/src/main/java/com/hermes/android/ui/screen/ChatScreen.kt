@@ -109,6 +109,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
@@ -426,32 +427,41 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 Column {
-                    TopAppBar(
-                        title = {
-                            // Keep only the runtime/connection status in the top bar
-                            Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
-                                if (agentActivity != null) {
-                                    AgentWorkingIndicator(agentActivity)
-                                } else {
-                                    ConnectionIndicator(uiState.connectionState)
-                                }
+                    // Floating chrome instead of a flat Material app bar: two
+                    // shadowed circles either side of the status pill, same
+                    // language as the composer's own floating controls, so
+                    // the top and bottom of the screen read as one design
+                    // instead of "system bar" + "custom bar".
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HxHeaderCircleButton(
+                            icon = Icons.Default.Menu,
+                            contentDescription = t("Sessions", "گفتگوها"),
+                            onClick = { viewModel.toggleSessionDrawer() },
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
+                                .clickable { onNavigateToRuntime() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (agentActivity != null) {
+                                AgentWorkingIndicator(agentActivity)
+                            } else {
+                                ConnectionIndicator(uiState.connectionState)
                             }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { viewModel.toggleSessionDrawer() }) {
-                                Icon(Icons.Default.Menu, contentDescription = t("Sessions", "گفتگوها"))
-                            }
-                        },
-                        actions = {
-
-                            IconButton(onClick = { viewModel.toggleSearch() }) {
-                                Icon(
-                                    if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
-                                    contentDescription = t("Search", "جستجو"),
-                                )
-                            }
-                        },
-                    )
+                        }
+                        HxHeaderCircleButton(
+                            icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = t("Search", "جستجو"),
+                            onClick = { viewModel.toggleSearch() },
+                        )
+                    }
                     // Feature #16: Search bar (below TopAppBar)
                     AnimatedVisibility(
                         visible = uiState.showSearch,
