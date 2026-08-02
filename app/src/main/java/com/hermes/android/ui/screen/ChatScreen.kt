@@ -109,7 +109,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
+import com.hermes.android.ui.design.hxTopFadeGradient
+import com.hermes.android.ui.design.hxTopFadeTailGradient
+import com.hermes.android.ui.design.HxChatTokens
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
@@ -117,6 +121,8 @@ import com.hermes.android.ui.viewmodel.PendingAttachment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
+import com.hermes.android.ui.screen.message.HxAssistantTurnGroup
+import com.hermes.android.ui.screen.message.HxPendingGenerationBlock
 
 // Extracted composables (same package, no import needed):
 // - ChatConnection.kt: ConnectionIndicator, ConnectionRetryBanner, ShimmerSkeleton
@@ -426,32 +432,41 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 Column {
-                    TopAppBar(
-                        title = {
-                            // Keep only the runtime/connection status in the top bar
-                            Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
-                                if (agentActivity != null) {
-                                    AgentWorkingIndicator(agentActivity)
-                                } else {
-                                    ConnectionIndicator(uiState.connectionState)
-                                }
+                    // Floating chrome instead of a flat Material app bar: two
+                    // shadowed circles either side of the status pill, same
+                    // language as the composer's own floating controls, so
+                    // the top and bottom of the screen read as one design
+                    // instead of "system bar" + "custom bar".
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HxHeaderCircleButton(
+                            icon = Icons.Default.Menu,
+                            contentDescription = t("Sessions", "گفتگوها"),
+                            onClick = { viewModel.toggleSessionDrawer() },
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
+                                .clickable { onNavigateToRuntime() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (agentActivity != null) {
+                                AgentWorkingIndicator(agentActivity)
+                            } else {
+                                ConnectionIndicator(uiState.connectionState)
                             }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { viewModel.toggleSessionDrawer() }) {
-                                Icon(Icons.Default.Menu, contentDescription = t("Sessions", "گفتگوها"))
-                            }
-                        },
-                        actions = {
-
-                            IconButton(onClick = { viewModel.toggleSearch() }) {
-                                Icon(
-                                    if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
-                                    contentDescription = t("Search", "جستجو"),
-                                )
-                            }
-                        },
-                    )
+                        }
+                        HxHeaderCircleButton(
+                            icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = t("Search", "جستجو"),
+                            onClick = { viewModel.toggleSearch() },
+                        )
+                    }
                     // Feature #16: Search bar (below TopAppBar)
                     AnimatedVisibility(
                         visible = uiState.showSearch,
@@ -547,119 +562,162 @@ fun ChatScreen(
                         }
                     }
 
-                    // Message list
+                    // ── Aether-inspired grouping + top fade ──────────────────
+                    // Build turn-based list: user message = separate item, following assistant/tools = one group.
+                    // This mirrors Aether's AssistantGroup concept but with our own names/logic.
+                    val chatListItems = remember(filteredMessages) {
+                        buildHxChatListItems(filteredMessages)
+                    }
+
                     val copiedToast = t("Copied", "کپی شد")
                     val codeCopiedToast = t("Code copied", "کد کپی شد")
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                        // Tight gap by default; itemsIndexed adds extra top
-                        // padding when a message starts a new group (turn),
-                        // so the eye reads turn boundaries instead of a flat
-                        // evenly-spaced list.
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
-                    ) {
-                        if (filteredMessages.isEmpty() &&
-                            uiState.connectionState == ChatConnectionState.Connected
+
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                top = HxChatTokens.topFadeHeight + 8.dp,
+                                bottom = 12.dp,
+                            ),
                         ) {
-                            item {
-                                if (uiState.searchQuery.isNotBlank()) {
-                                    Box(
-                                        modifier = Modifier.fillParentMaxSize(),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            text = t("No matching messages", "پیامی پیدا نشد"),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            if (chatListItems.isEmpty() &&
+                                uiState.connectionState == ChatConnectionState.Connected
+                            ) {
+                                item {
+                                    if (uiState.searchQuery.isNotBlank()) {
+                                        Box(
+                                            modifier = Modifier.fillParentMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                text = t("No matching messages", "پیامی پیدا نشد"),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    } else {
+                                        EmptyChatHero(
+                                            assistantName = uiState.assistantName,
+                                            avatarUri = uiState.assistantAvatarPath,
+                                            onSuggestionClick = viewModel::sendSuggestion,
+                                            modifier = Modifier.fillParentMaxSize(),
                                         )
                                     }
-                                } else {
-                                    EmptyChatHero(
-                                        assistantName = uiState.assistantName,
-                                        avatarUri = uiState.assistantAvatarPath,
-                                        onSuggestionClick = viewModel::sendSuggestion,
-                                        modifier = Modifier.fillParentMaxSize(),
-                                    )
                                 }
                             }
-                        }
-                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
-                            val isLastAssistant = message is ChatMessage.Assistant &&
-                                    !message.isStreaming &&
-                                    filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
-                            // Grouped == previous message is from the same side
-                            // (user vs agent). Used to show the agent avatar only
-                            // once per run and tighten consecutive bubbles.
-                            val prev = filteredMessages.getOrNull(index - 1)
-                            val next = filteredMessages.getOrNull(index + 1)
-                            val grouped = prev != null &&
-                                    (prev is ChatMessage.User) == (message is ChatMessage.User)
-                            val isLastInGroup = next == null ||
-                                    (next is ChatMessage.User) != (message is ChatMessage.User)
 
-                            // Tool/subagent/request cards should stand apart
-                            // from the surrounding prose instead of being glued
-                            // to it (they're "objects", not continuous text).
-                            val isCard = message is ChatMessage.ToolCall ||
-                                    message is ChatMessage.SubagentCard ||
-                                    message is ChatMessage.InteractiveRequest
-                            val prevIsCard = prev is ChatMessage.ToolCall ||
-                                    prev is ChatMessage.SubagentCard ||
-                                    prev is ChatMessage.InteractiveRequest
-                            val topPad = when {
-                                prev == null -> 0.dp
-                                !grouped -> 18.dp                 // user <-> agent turn boundary
-                                isCard != prevIsCard -> 16.dp     // text <-> card: give the card air
-                                isCard && prevIsCard -> 8.dp      // stacked cards: a little gap between them
-                                else -> 0.dp                      // continuous prose from one speaker
-                            }
+                            itemsIndexed(chatListItems, key = { _, item -> item.key }) { index, item ->
+                                val prev = chatListItems.getOrNull(index - 1)
+                                val isLast = index == chatListItems.lastIndex
 
-                            Box(
-                                modifier = Modifier
-                                    .animateItem(
-                                        fadeInSpec = tween(220),
-                                        placementSpec = spring(
-                                            stiffness = Spring.StiffnessMediumLow,
-                                            visibilityThreshold = IntOffset.VisibilityThreshold,
-                                        ),
-                                    )
-                                    .padding(top = topPad),
-                            ) {
-                            MessageBubble(
-                                message = message,
-                                grouped = grouped,
-                                isLastInGroup = isLastInGroup,
-                                avatarUri = uiState.assistantAvatarPath,
-                                searchQuery = uiState.searchQuery,
-                                isLastAssistant = isLastAssistant,
-                                isSending = uiState.isSending,
-                                onCopyMessage = { text ->
-                                    clipboardManager.setText(AnnotatedString(text))
-                                    Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
-                                },
-                                onCopyCode = { code ->
-                                    clipboardManager.setText(AnnotatedString(code))
-                                    Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
-                                },
-                                onRetry = { viewModel.retryLastMessage() },
-                                onRespondToClarify = viewModel::respondToClarify,
-                                onRespondToSudo = viewModel::respondToSudo,
-                                onRespondToSecret = viewModel::respondToSecret,
-                                onImageClick = { url -> fullscreenImageUrl = url },
-                                resolveUrl = viewModel::resolveMediaUrl,
-                                onBranch = { viewModel.branchSession() },
-                                onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
-                            )
+                                // Turn boundary padding — more air between user <-> agent
+                                val topPad = when {
+                                    prev == null -> 0.dp
+                                    prev is HxChatListItem.User && item is HxChatListItem.AgentTurn -> 20.dp
+                                    prev is HxChatListItem.AgentTurn && item is HxChatListItem.User -> 20.dp
+                                    else -> 4.dp
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .animateItem(
+                                            fadeInSpec = tween(260),
+                                            placementSpec = spring(
+                                                stiffness = Spring.StiffnessMediumLow,
+                                                visibilityThreshold = IntOffset.VisibilityThreshold,
+                                            ),
+                                        )
+                                        .padding(top = topPad),
+                                ) {
+                                    when (item) {
+                                        is HxChatListItem.User -> {
+                                            MessageBubble(
+                                                message = item.message,
+                                                grouped = false,
+                                                isLastInGroup = true,
+                                                avatarUri = uiState.assistantAvatarPath,
+                                                searchQuery = uiState.searchQuery,
+                                                isLastAssistant = false,
+                                                isSending = uiState.isSending,
+                                                onCopyMessage = { text ->
+                                                    clipboardManager.setText(AnnotatedString(text))
+                                                    Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                                                },
+                                                onCopyCode = { code ->
+                                                    clipboardManager.setText(AnnotatedString(code))
+                                                    Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
+                                                },
+                                                onRetry = { viewModel.retryLastMessage() },
+                                                onRespondToClarify = viewModel::respondToClarify,
+                                                onRespondToSudo = viewModel::respondToSudo,
+                                                onRespondToSecret = viewModel::respondToSecret,
+                                                onImageClick = { url -> fullscreenImageUrl = url },
+                                                resolveUrl = viewModel::resolveMediaUrl,
+                                                onBranch = { viewModel.branchSession() },
+                                                onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                            )
+                                        }
+                                        is HxChatListItem.AgentTurn -> {
+                                            // If single message and it's InteractiveRequest, keep old bubble (needs input)
+                                            val single = item.messages.singleOrNull()
+                                            if (single is ChatMessage.InteractiveRequest) {
+                                                MessageBubble(
+                                                    message = single,
+                                                    grouped = false,
+                                                    isLastInGroup = true,
+                                                    avatarUri = uiState.assistantAvatarPath,
+                                                    searchQuery = uiState.searchQuery,
+                                                    isLastAssistant = isLast,
+                                                    isSending = uiState.isSending,
+                                                    onCopyMessage = { text ->
+                                                        clipboardManager.setText(AnnotatedString(text))
+                                                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onCopyCode = { code ->
+                                                        clipboardManager.setText(AnnotatedString(code))
+                                                        Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onRetry = { viewModel.retryLastMessage() },
+                                                    onRespondToClarify = viewModel::respondToClarify,
+                                                    onRespondToSudo = viewModel::respondToSudo,
+                                                    onRespondToSecret = viewModel::respondToSecret,
+                                                    onImageClick = { url -> fullscreenImageUrl = url },
+                                                    resolveUrl = viewModel::resolveMediaUrl,
+                                                    onBranch = { viewModel.branchSession() },
+                                                    onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                                )
+                                            } else {
+                                                HxAssistantTurnGroup(
+                                                    messages = item.messages,
+                                                    isSending = uiState.isSending,
+                                                    isLastTurn = isLast,
+                                                    searchQuery = uiState.searchQuery,
+                                                    onCopyMessage = { text ->
+                                                        clipboardManager.setText(AnnotatedString(text))
+                                                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onCopyCode = { code ->
+                                                        clipboardManager.setText(AnnotatedString(code))
+                                                        Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onRetry = { viewModel.retryLastMessage() },
+                                                    onImageClick = { url -> fullscreenImageUrl = url },
+                                                    resolveUrl = viewModel::resolveMediaUrl,
+                                                    onBranch = { viewModel.branchSession() },
+                                                    onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }
                         // Trailing spacer so the last user message can be
                         // scrolled to the TOP of the viewport — but ONLY while
-                        // the AI is still composing its reply (isSending or
+                        // the AI is still composing its reply (isSending, or
                         // the last message is an Assistant that isStreaming).
                         // Once the reply is done, the spacer collapses to zero
                         // so the user can scroll normally and there's no large
@@ -687,6 +745,24 @@ fun ChatScreen(
                             )
                             Spacer(modifier = Modifier.height(spacerHeight))
                         }
+                        }
+
+                        // Top fade overlay — Aether-inspired, own brush
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(HxChatTokens.topFadeHeight)
+                                .background(hxTopFadeGradient(MaterialTheme.colorScheme.background)),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .padding(top = HxChatTokens.topFadeHeight)
+                                .height(18.dp)
+                                .background(hxTopFadeTailGradient(MaterialTheme.colorScheme.background)),
+                        )
                     }
                 }
 
@@ -819,6 +895,48 @@ fun ChatScreen(
     }
 }
 
+
+/**
+ * Turn-based list items — clean-room grouping inspired by Aether's AssistantGroup,
+ * but own naming and logic.
+ */
+sealed interface HxChatListItem {
+    val key: String
+    data class User(val message: ChatMessage.User) : HxChatListItem {
+        override val key: String = message.id
+    }
+    data class AgentTurn(val messages: List<ChatMessage>) : HxChatListItem {
+        // Key = first message id + size to stay stable when streaming adds tokens
+        override val key: String = messages.firstOrNull()?.id?.let { "${it}-${messages.size}" } ?: "turn-${hashCode()}"
+    }
+}
+
+internal fun buildHxChatListItems(messages: List<ChatMessage>): List<HxChatListItem> {
+    val result = mutableListOf<HxChatListItem>()
+    var currentAgentBuffer = mutableListOf<ChatMessage>()
+
+    fun flushAgent() {
+        if (currentAgentBuffer.isNotEmpty()) {
+            result.add(HxChatListItem.AgentTurn(currentAgentBuffer.toList()))
+            currentAgentBuffer = mutableListOf()
+        }
+    }
+
+    for (msg in messages) {
+        when (msg) {
+            is ChatMessage.User -> {
+                flushAgent()
+                result.add(HxChatListItem.User(msg))
+            }
+            else -> {
+                // All non-user messages belong to the current agent turn
+                currentAgentBuffer.add(msg)
+            }
+        }
+    }
+    flushAgent()
+    return result
+}
 
 /**
  * Welcoming zero-state for a fresh conversation: just the assistant's

@@ -549,3 +549,39 @@ fun HxGradientActionPill(
         )
     }
 }
+
+// ── Chat-specific tokens — Aether-inspired but own implementation ──────────
+
+object HxChatTokens {
+    val composerShape = RoundedCornerShape(26.dp)
+    val composerFocusedShape = RoundedCornerShape(28.dp)
+    val topFadeHeight = 42.dp
+    val thinkingRadius = RoundedCornerShape(16.dp)
+    val toolCardRadius = RoundedCornerShape(14.dp)
+    val toolCollapseThreshold = 3
+    val streamingFadeDuration = 400
+}
+
+/** Top fade gradient for list under floating header — own stops, not copy of Aether. */
+@Composable
+fun hxTopFadeGradient(base: Color): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.0f to base.copy(alpha = 0.98f),
+        0.28f to base.copy(alpha = 0.84f),
+        0.60f to base.copy(alpha = 0.32f),
+        1.0f to Color.Transparent,
+    ),
+)
+
+/** Tail fade after header — subtle continuation. */
+@Composable
+fun hxTopFadeTailGradient(base: Color): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.0f to base.copy(alpha = 0.16f),
+        0.5f to base.copy(alpha = 0.04f),
+        1.0f to Color.Transparent,
+    ),
+)
+
+/** Motion easing similar to ChatGPT mobile — generic cubic bezier, not GPL. */
+val HxMotionEasing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 0.84f, 0.18f, 1f)
