@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.rotate
 
 private val ToolCardColors: @Composable () -> Color = {
     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -102,10 +101,10 @@ fun HxToolCard(
                 if (output != null) {
                     IconButton(onClick = { isExpanded = !isExpanded }) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowDown,
+                            imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.rotate(if (isExpanded) 180f else 0f)
+                            modifier = Modifier.graphicsLayer { rotationZ = if (isExpanded) 180f else 0f }
                         )
                     }
                 }

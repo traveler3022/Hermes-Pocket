@@ -67,7 +67,7 @@ private fun ThinkingGlyph(isExpanded: Boolean) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = Icons.Default.KeyboardArrowRight,
             contentDescription = null,
             tint = ThinkingAccentColor(),
             modifier = Modifier.rotate(if (isExpanded) 90f else rotation)
@@ -219,12 +219,12 @@ fun HxSmartThinkingBlock(
 
                 // فلش وضعیت
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowDown,
+                    imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
                     tint = ThinkingTextColor(),
                     modifier = Modifier
                         .size(20.dp)
-                        .rotate(if (isExpanded) 180f else 0f)
+                        .graphicsLayer { rotationZ = if (isExpanded) 180f else 0f }
                 )
             }
 
