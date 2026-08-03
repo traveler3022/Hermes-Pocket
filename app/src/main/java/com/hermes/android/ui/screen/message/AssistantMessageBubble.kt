@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.components.thinking.HxSmartThinkingBlock
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -64,7 +65,6 @@ internal fun AssistantMessageBubble(
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
-    var isThinkingExpanded by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
     val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
 
@@ -84,11 +84,9 @@ internal fun AssistantMessageBubble(
                         .padding(vertical = 2.dp),
                 ) {
                     if (hasThinking) {
-                        ThinkingBlock(
+                        HxSmartThinkingBlock(
                             reasoning = message.reasoning ?: "",
-                            isStreaming = message.isStreaming,
-                            expanded = isThinkingExpanded,
-                            onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
                     if (message.text.isEmpty()) {
