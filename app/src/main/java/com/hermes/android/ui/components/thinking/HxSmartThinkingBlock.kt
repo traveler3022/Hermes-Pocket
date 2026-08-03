@@ -11,8 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,10 +69,10 @@ private fun ThinkingGlyph(isExpanded: Boolean) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = if (isExpanded) ExpandLess else ExpandMore,
             contentDescription = null,
             tint = ThinkingAccentColor(),
-            modifier = Modifier.rotate(if (isExpanded) 90f else rotation)
+            modifier = Modifier.rotate(if (isExpanded) 90f else 0f)
         )
     }
 }
@@ -217,7 +217,7 @@ fun HxSmartThinkingBlock(
 
                 // فلش وضعیت
                 Icon(
-                    imageVector = KeyboardArrowDown,
+                    imageVector = if (isExpanded) ExpandLess else ExpandMore,
                     contentDescription = null,
                     tint = ThinkingTextColor(),
                     modifier = Modifier
