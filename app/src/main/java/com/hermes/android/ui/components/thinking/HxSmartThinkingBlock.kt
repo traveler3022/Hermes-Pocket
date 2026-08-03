@@ -12,7 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowDown
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -217,7 +217,7 @@ fun HxSmartThinkingBlock(
 
                 // فلش وضعیت
                 Icon(
-                    imageVector = androidx.compose.material.icons.filled.KeyboardArrowDown,
+                    imageVector = KeyboardArrowDown,
                     contentDescription = null,
                     tint = ThinkingTextColor(),
                     modifier = Modifier
