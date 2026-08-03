@@ -69,7 +69,7 @@ private fun ThinkingGlyph(isExpanded: Boolean) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = if (isExpanded) ExpandLess else ExpandMore,
+            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
             contentDescription = null,
             tint = ThinkingAccentColor(),
             modifier = Modifier.rotate(if (isExpanded) 90f else 0f)
@@ -217,7 +217,7 @@ fun HxSmartThinkingBlock(
 
                 // فلش وضعیت
                 Icon(
-                    imageVector = if (isExpanded) ExpandLess else ExpandMore,
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
                     tint = ThinkingTextColor(),
                     modifier = Modifier
