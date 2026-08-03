@@ -102,7 +102,7 @@ private fun ShimmerText(text: String) {
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         color = Color.Transparent,
-        background = brush
+        modifier = Modifier.background(brush)
     )
 }
 
@@ -217,7 +217,7 @@ fun HxSmartThinkingBlock(
 
                 // فلش وضعیت
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowDown,
+                    imageVector = androidx.compose.material.icons.filled.KeyboardArrowDown,
                     contentDescription = null,
                     tint = ThinkingTextColor(),
                     modifier = Modifier
