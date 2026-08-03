@@ -12,10 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.rotate
 
 private val ToolCardColors: @Composable () -> Color = {
     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -47,7 +49,7 @@ fun HxToolCard(
     var isExpanded by remember { mutableStateOf(false) }
     val infiniteTransition = rememberInfiniteTransition(label = "tool")
     
-    val borderColor by infiniteTransition.animateColor(
+    val borderColor: Color by infiniteTransition.animateColor(
         initialValue = ToolBorderColor(),
         targetValue = ToolBorderColor().copy(alpha = 0.6f),
         animationSpec = infiniteRepeatable(
