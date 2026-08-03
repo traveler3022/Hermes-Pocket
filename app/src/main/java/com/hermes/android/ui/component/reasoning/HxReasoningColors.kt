@@ -34,7 +34,7 @@ data class ReasoningColors(
 @Composable
 fun reasoningColors(): ReasoningColors {
     val colors = MaterialTheme.colorScheme
-    val isLight = colors.background == Color(0xFFF8FAFF) || colors.background == Color.White
+    val isLight = colors.background.value == 0xFFFFFFFFL
     
     return if (isLight) {
         lightReasoningColors(colors)
