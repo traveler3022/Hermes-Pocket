@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -73,8 +74,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toDp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -143,13 +144,13 @@ fun ChatScreen(
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
 
     val topOverlayHeight = with(density) {
-        if (topOverlayHeightPx == 0) 86.dp else topOverlayHeightPx.toDp()
+        if (topOverlayHeightPx == 0) 86.dp else (topOverlayHeightPx / density.density).dp
     }
     val composerHeight = with(density) {
-        if (composerHeightPx == 0) 104.dp else composerHeightPx.toDp()
+        if (composerHeightPx == 0) 104.dp else (composerHeightPx / density.density).dp
     }
     val imeBottom = with(density) {
-        WindowInsets.ime.getBottom(this).toDp()
+        (WindowInsets.ime.getBottom(this) / density.density).dp
     }
     val animatedImeBottom by animateDpAsState(
         targetValue = imeBottom,
@@ -376,7 +377,7 @@ fun ChatScreen(
                     onSearch = viewModel::toggleSearch,
                     onRuntime = onNavigateToRuntime,
                     onSearchQueryChange = viewModel::updateSearchQuery,
-                    onMeasured = { topOverlayHeightPx = it },
+                    onMeasured = { topOverlayHeightPx = it.height },
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
 
@@ -420,7 +421,7 @@ private fun ConversationTopOverlay(
     onSearch: () -> Unit,
     onRuntime: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onMeasured: (Int) -> Unit,
+    onMeasured: (IntSize) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -480,6 +481,7 @@ private fun ConversationTopOverlay(
     }
 }
 
+@Composable
 private fun connectionLabel(state: ChatConnectionState): String = when (state) {
     ChatConnectionState.Connected -> t("Connected", "متصل")
     ChatConnectionState.Connecting -> t("Connecting…", "در حال اتصال…")
