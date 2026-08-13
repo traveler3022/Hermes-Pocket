@@ -511,6 +511,7 @@ fun ChatScreen(
                         },
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.hxSoftShadow(radius = 6.dp, shape = CircleShape),
                     ) {
                         Icon(
                             Icons.Default.KeyboardArrowDown,
