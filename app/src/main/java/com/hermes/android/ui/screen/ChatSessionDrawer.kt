@@ -326,7 +326,7 @@ internal fun HermesDrawerContent(
         pinned + unpinned
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(bottom = 18.dp)) {
+    Box(modifier = Modifier.fillMaxSize().padding(bottom = 18.dp).statusBarsPadding()) {
         if (filteredSessions.isEmpty()) {
             Text(
                 text = if (drawerSearchQuery.isNotEmpty()) {
