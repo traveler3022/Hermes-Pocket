@@ -82,7 +82,7 @@ internal fun AssistantMessageBubble(
                             onLongClick = { showContextMenu = true },
                         )
                         .animateContentSize()
-                        .padding(vertical = 2.dp),
+                        .padding(vertical = 4.dp),
                 ) {
                     if (hasThinking) {
                         HxSmartThinkingBlock(
