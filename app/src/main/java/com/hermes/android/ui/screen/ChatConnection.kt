@@ -164,13 +164,14 @@ internal fun ConnectionIndicator(state: ChatConnectionState) {
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.hxSoftShadow(radius = 4.dp, shape = RoundedCornerShape(16.dp)),
     ) {
         Text(
             text = label,
             color = color,
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         )
     }
 }
@@ -196,12 +197,13 @@ internal fun AgentWorkingIndicator(label: String) {
     )
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.hxSoftShadow(radius = 4.dp, shape = RoundedCornerShape(16.dp)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Box(
                 modifier = Modifier
