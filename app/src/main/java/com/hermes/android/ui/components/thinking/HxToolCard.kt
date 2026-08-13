@@ -94,7 +94,7 @@ fun HxToolCard(
                 if (output != null) {
                     IconButton(onClick = { isExpanded = !isExpanded }) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowDown,
+                            imageVector = Icons.Filled.KeyboardArrowDown,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.rotate(if (isExpanded) 180f else 0f)
