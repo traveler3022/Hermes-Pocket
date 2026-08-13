@@ -426,7 +426,9 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
-                Column {
+                Column(
+                    modifier = Modifier.statusBarsPadding(),
+                ) {
                     // Floating chrome instead of a flat Material app bar: two
                     // shadowed circles either side of the status pill, same
                     // language as the composer's own floating controls, so
