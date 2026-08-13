@@ -265,6 +265,4 @@ internal fun AssistantMessageBubble(
                     }
                 }
             }
-        }
-    }
 }
