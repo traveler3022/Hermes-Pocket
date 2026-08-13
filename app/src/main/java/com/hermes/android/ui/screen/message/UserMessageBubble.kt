@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,17 +63,19 @@ internal fun UserMessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 520.dp)
-                .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
-                .clip(bubbleShape)
-                .background(bubbleColor)
-                .combinedClickable(
-                    onClick = { if (isLongMessage) isExpanded = !isExpanded },
-                    onLongClick = { onCopyMessage(message.text) },
-                ),
-        ) {
+        BoxWithConstraints {
+            val maxBubbleWidth = (maxWidth * 0.72f).coerceIn(300.dp, 520.dp)
+            Box(
+                modifier = Modifier
+                    .widthIn(max = maxBubbleWidth)
+                    .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
+                    .clip(bubbleShape)
+                    .background(bubbleColor)
+                    .combinedClickable(
+                        onClick = { if (isLongMessage) isExpanded = !isExpanded },
+                        onLongClick = { onCopyMessage(message.text) },
+                    ),
+            ) {
             CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                 Column(
                     modifier = Modifier
@@ -157,6 +160,7 @@ internal fun UserMessageBubble(
                     }
                 }
             }
+        }
         }
     }
 }

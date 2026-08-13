@@ -2,6 +2,10 @@ package com.hermes.android.ui.components.thinking
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -25,8 +29,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,9 +39,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+
 import androidx.compose.material3.Text
-import androidx.compose.material3.ExperimentalMaterial3Api
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,7 +60,6 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.HermesMarkdown
 
 /** Aether-like reasoning: compact live status first, detailed timeline on expand. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HxSmartThinkingBlock(
     reasoning: String,
@@ -98,10 +100,8 @@ fun HxSmartThinkingBlock(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
                 .clickable(onClick = onToggle)
-                .background(colors.surfaceVariant.copy(alpha = if (isStreaming) 0.34f else 0.22f))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 2.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ThinkingGlyph(active = isStreaming, alpha = pulse)
@@ -135,43 +135,33 @@ fun HxSmartThinkingBlock(
             )
         }
 
-        if (expanded) {
-            ModalBottomSheet(
-                onDismissRequest = onToggle,
-                containerColor = colors.surface,
-                contentColor = colors.onSurface,
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 42.dp, end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 640.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 30.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
-                ) {
-                    Text(
-                        text = if (isStreaming) "در حال فکر کردن" else "فرآیند تفکر",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.onSurface,
-                        modifier = Modifier.padding(bottom = 16.dp),
+                if (steps.isEmpty()) {
+                    HermesMarkdown(
+                        markdown = reasoning.ifBlank { "در انتظار reasoning..." },
+                        style = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    if (steps.isEmpty()) {
-                        HermesMarkdown(
-                            markdown = reasoning.ifBlank { "در انتظار reasoning..." },
-                            style = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant),
-                            modifier = Modifier.fillMaxWidth(),
+                } else {
+                    steps.forEachIndexed { index, step ->
+                        ReasoningTimelineRow(
+                            title = step.title,
+                            detail = step.detail,
+                            isLast = index == steps.lastIndex && !isStreaming,
+                            active = isStreaming && index == steps.lastIndex,
                         )
-                    } else {
-                        steps.forEachIndexed { index, step ->
-                            ReasoningTimelineRow(
-                                title = step.title,
-                                detail = step.detail,
-                                isLast = index == steps.lastIndex && !isStreaming,
-                                active = isStreaming && index == steps.lastIndex,
-                            )
-                        }
-                        if (!isStreaming) ReasoningDoneRow()
                     }
+                    if (!isStreaming) ReasoningDoneRow()
                 }
             }
         }

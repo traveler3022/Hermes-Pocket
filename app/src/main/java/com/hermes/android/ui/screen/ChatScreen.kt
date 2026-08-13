@@ -587,14 +587,18 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .background(Color.Transparent),
                         // Aether-style breathing room between conversation items.
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = 20.dp,
                             end = 20.dp,
                             top = 18.dp,
-                            bottom = 18.dp,
+                            // Reserve the lower breathing room used by Aether's
+                            // floating composer instead of letting the last bubble
+                            // touch the input chrome.
+                            bottom = 132.dp,
                         ),
                     ) {
                         if (filteredMessages.isEmpty() &&

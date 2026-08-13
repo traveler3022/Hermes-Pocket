@@ -244,7 +244,7 @@ internal fun InputBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -257,7 +257,7 @@ internal fun InputBar(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .hxSoftShadow(radius = 8.dp, shape = CircleShape)
+                        .hxSoftShadow(radius = 14.dp, shape = CircleShape)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable(enabled = !isAttaching) { extrasMenuOpen = true },
@@ -318,10 +318,10 @@ internal fun InputBar(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .hxSoftShadow(radius = 16.dp, shape = RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {

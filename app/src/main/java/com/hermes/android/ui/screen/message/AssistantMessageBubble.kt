@@ -73,7 +73,7 @@ internal fun AssistantMessageBubble(
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.widthIn(max = 460.dp)) {
+        Column(modifier = Modifier.widthIn(max = 520.dp)) {
             Box {
                 Column(
                     modifier = Modifier

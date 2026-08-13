@@ -95,31 +95,29 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(colors.surfaceVariant.copy(alpha = 0.26f))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 2.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(accent.copy(alpha = if (message.isRunning) 0.28f + pulse * 0.25f else 0.18f)),
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(accent.copy(alpha = if (message.isRunning) 0.18f + pulse * 0.18f else 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = if (message.isRunning) Icons.Default.Terminal else Icons.Default.CheckCircle,
                     contentDescription = null,
                     tint = accent,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(13.dp),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = toolLabel(message.toolName),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = colors.onSurface,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = colors.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -146,10 +144,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.surfaceVariant.copy(alpha = 0.20f))
-                    .padding(12.dp),
+                    .padding(start = 30.dp, end = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 message.argsText?.takeIf { it.isNotBlank() }?.let {
