@@ -52,16 +52,11 @@ internal fun UserMessageBubble(
     val isLongMessage = message.text.length > 500
     var isExpanded by remember { mutableStateOf(!isLongMessage) }
 
-    val bubbleShape = if (isLastInGroup) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(16.dp)
-    }
-    // Aether-style user bubble: a soft primary tint (no hard fill or border)
-    // with a gentle shadow to lift it off the background — readable in every
-    // theme because the tint is translucent and the text stays onSurface.
-    val bubbleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-    val bubbleTextColor = MaterialTheme.colorScheme.onSurface
+    // Aether-style user message: a standalone, fully rounded floating bubble.
+    // The assistant remains document-like; only user messages receive a bubble.
+    val bubbleShape = RoundedCornerShape(24.dp)
+    val bubbleColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+    val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -69,7 +64,7 @@ internal fun UserMessageBubble(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 420.dp)
+                .widthIn(max = 520.dp)
                 .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
                 .clip(bubbleShape)
                 .background(bubbleColor)
@@ -81,7 +76,7 @@ internal fun UserMessageBubble(
             CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                 Column(
                     modifier = Modifier
-                        .padding(12.dp)
+                        .padding(horizontal = 18.dp, vertical = 14.dp)
                         .animateContentSize(),
                 ) {
                     if (message.attachments.isNotEmpty()) {
