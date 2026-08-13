@@ -1,6 +1,5 @@
 package com.hermes.android.ui.screen
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -33,10 +32,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.hermes.android.ui.design.HxShape
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -53,14 +54,16 @@ internal fun UserMessageBubble(
     var isExpanded by remember { mutableStateOf(!isLongMessage) }
 
     val bubbleShape = if (isLastInGroup) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(16.dp)
+        HxShape.bubble
     }
-    // Aether-style user bubble: a soft primary tint (no hard fill or border)
-    // with a gentle shadow to lift it off the background — readable in every
-    // theme because the tint is translucent and the text stays onSurface.
-    val bubbleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+
+    val bubbleColor = if (isLastInGroup) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+    }
     val bubbleTextColor = MaterialTheme.colorScheme.onSurface
 
     Row(
@@ -70,7 +73,7 @@ internal fun UserMessageBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 420.dp)
-                .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
+                .shadow(6.dp, bubbleShape, ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                 .clip(bubbleShape)
                 .background(bubbleColor)
                 .combinedClickable(
@@ -81,8 +84,7 @@ internal fun UserMessageBubble(
             CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                 Column(
                     modifier = Modifier
-                        .padding(12.dp)
-                        .animateContentSize(),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                 ) {
                     if (message.attachments.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -94,7 +96,7 @@ internal fun UserMessageBubble(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .heightIn(max = 200.dp)
-                                            .clip(RoundedCornerShape(8.dp)),
+                                            .clip(RoundedCornerShape(12.dp)),
                                         contentScale = ContentScale.Fit,
                                     )
                                 } else {
@@ -102,7 +104,7 @@ internal fun UserMessageBubble(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(12.dp))
                                             .background(bubbleTextColor.copy(alpha = 0.15f))
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
                                     ) {

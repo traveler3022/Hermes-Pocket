@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -140,6 +142,7 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.design.HxShape
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
@@ -173,8 +176,6 @@ internal fun InputBar(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(onAttachFile) }
-    // Feature 5.2: slash command suggestions — from the gateway catalog
-    // (commands.catalog); falls back to a minimal built-in list if empty.
     val fallbackCommands = remember {
         listOf("/help", "/clear", "/config", "/model", "/session")
             .map { SlashCommandSuggestion(it, "") }
@@ -186,21 +187,17 @@ internal fun InputBar(
         else commandList.filter { it.command.startsWith(text) }
     }
 
-    // Scaffold's own content padding (in ChatScreen.kt) already reserves
-    // the navigation-bar inset — adding navigationBarsPadding() again here
-    // double-counted it, leaving a dead gap between the pill and the true
-    // bottom edge. imePadding() stays: that inset is NOT part of Scaffold's
-    // systemBars content window insets.
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .imePadding(),
     ) {
         if (showSuggestions && suggestions.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(suggestions) { cmd ->
@@ -211,13 +208,11 @@ internal fun InputBar(
                 }
             }
         }
-        // Staged attachments — already uploaded to the gateway, sent with the
-        // next prompt. Tap a chip to remove it.
         if (pendingAttachments.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(pendingAttachments) { attachment ->
@@ -235,41 +230,31 @@ internal fun InputBar(
                 }
             }
         }
-        // Two separately-floating controls instead of one flat shared bar:
-        // a small round "+" that carries its own shadow, and the text pill
-        // next to it with its own shadow — each control lifts off the
-        // background independently rather than sharing one flat surface.
-        // (Same floating-chrome language as HxHeaderCircleButton elsewhere
-        // in the app — this bar just wasn't consuming those tokens yet.)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Declutter: attach + reasoning-effort used to be two separate
-            // buttons next to the composer. Collapsed into one "+" so the
-            // bar's default state is just "type and send" — the extras are
-            // one tap away instead of always competing for attention.
             var extrasMenuOpen by remember { mutableStateOf(false) }
             Box {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .hxSoftShadow(radius = 8.dp, shape = CircleShape)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(MaterialTheme.colorScheme.surface)
                         .clickable(enabled = !isAttaching) { extrasMenuOpen = true },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (isAttaching) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = t("More", "بیشتر"),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -315,98 +300,85 @@ internal fun InputBar(
                     }
                 }
             }
-            Row(
+            Card(
                 modifier = Modifier
                     .weight(1f)
-                    .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .heightIn(min = 44.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             ) {
-            TextField(
-                value = text,
-                onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
-                maxLines = 4,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                ),
-            )
-            if (isSending) {
-                // Mid-turn the agent is running. Two DIFFERENT things can be
-                // meant by "send while it's replying", and neither replaces
-                // the other:
-                //  - Steer (session.steer): folds a note into the CURRENT
-                //    turn without interrupting it — but verified against
-                //    Hermes' own docs, the text only actually lands "after
-                //    the next tool call" (appended to a tool result). For a
-                //    turn with no tool calls (a plain text answer), it just
-                //    queues and never gets delivered — steer alone can look
-                //    completely broken for ordinary chatty replies.
-                //  - A normal Send: submits as a new prompt. The gateway's
-                //    prompt.submit handler explicitly does NOT reject this
-                //    mid-turn — it queues it and interrupts the live turn
-                //    (_handle_busy_submit), i.e. exactly "send a message
-                //    that cuts in", which is what most users expect from a
-                //    chat app. This used to be unreachable: the button was
-                //    swapped out entirely while isSending.
-                // Stop (full interrupt, no follow-up) stays available too.
-                if (text.isNotBlank()) {
-                    IconButton(
-                        onClick = onSteer,
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.CallSplit,
-                            contentDescription = t("Steer the agent", "هدایت عامل"),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    IconButton(
-                        onClick = onSend,
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = onStop,
-                    modifier = Modifier.size(48.dp),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        Icons.Default.Stop,
-                        contentDescription = t("Stop", "توقف"),
-                        tint = MaterialTheme.colorScheme.error,
+                    TextField(
+                        value = text,
+                        onValueChange = onTextChange,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
+                        maxLines = 4,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                        ),
                     )
+                    if (isSending) {
+                        if (text.isNotBlank()) {
+                            IconButton(
+                                onClick = onSteer,
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.CallSplit,
+                                    contentDescription = t("Steer the agent", "هدایت عامل"),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = onSend,
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = onStop,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Stop,
+                                contentDescription = t("Stop", "توقف"),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onSend,
+                            enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = t("Send", "ارسال"),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
-            } else {
-                IconButton(
-                    onClick = onSend,
-                    // An attachment-only message (no typed text) is valid —
-                    // sendMessage() already handles it — so the button must
-                    // not be gated on text alone, or a picked file/image can
-                    // never actually be sent.
-                    enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = t("Send", "ارسال"),
-                    )
-                }
-            }
             }
         }
     }
