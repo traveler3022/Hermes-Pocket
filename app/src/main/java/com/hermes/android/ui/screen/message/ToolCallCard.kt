@@ -47,13 +47,13 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
+            .hxSoftShadow(radius = 8.dp, shape = RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(toolAccent.copy(alpha = 0.07f)),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
