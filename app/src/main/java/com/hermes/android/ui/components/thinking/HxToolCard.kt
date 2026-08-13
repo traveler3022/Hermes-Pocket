@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 
 private val ToolCardColors: @Composable () -> Color = {
     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -49,17 +49,7 @@ fun HxToolCard(
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    val infiniteTransition = rememberInfiniteTransition(label = "tool")
-    
-    val borderColor: Color by infiniteTransition.animateColor(
-        initialValue = ToolBorderColor(),
-        targetValue = ToolBorderColor().copy(alpha = 0.6f),
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = HxEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "borderPulse"
-    )
+    // The card stays lightweight; status color communicates activity.
 
     Surface(
         modifier = modifier
