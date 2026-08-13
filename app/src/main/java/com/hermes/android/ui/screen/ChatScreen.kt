@@ -103,6 +103,8 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
@@ -425,8 +427,21 @@ fun ChatScreen(
         },
     ) {
         Scaffold(
+            containerColor = Color.Transparent,
             topBar = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0.98f),
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
+                ) {
                     // Floating chrome instead of a flat Material app bar: two
                     // shadowed circles either side of the status pill, same
                     // language as the composer's own floating controls, so
@@ -522,6 +537,14 @@ fun ChatScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.surface,
+                            ),
+                        ),
+                    )
             ) {
                 // Feature #7: Connection error retry banner
                 if (uiState.connectionState == ChatConnectionState.Failed ||
@@ -564,14 +587,15 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                        // Tight gap by default; itemsIndexed adds extra top
-                        // padding when a message starts a new group (turn),
-                        // so the eye reads turn boundaries instead of a flat
-                        // evenly-spaced list.
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                            .fillMaxWidth(),
+                        // Aether-style breathing room between conversation items.
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = 20.dp,
+                            end = 20.dp,
+                            top = 18.dp,
+                            bottom = 18.dp,
+                        ),
                     ) {
                         if (filteredMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
