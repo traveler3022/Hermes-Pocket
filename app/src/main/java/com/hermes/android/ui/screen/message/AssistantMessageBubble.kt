@@ -85,15 +85,15 @@ internal fun AssistantMessageBubble(
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.widthIn(max = 460.dp)) {
             Box {
-                    Column(
-                        modifier = Modifier
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { showContextMenu = true },
-                            )
-                            .animateContentSize()
-                            .padding(vertical = 2.dp),
-                    ) {
+                Column(
+                    modifier = Modifier
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { showContextMenu = true },
+                        )
+                        .animateContentSize()
+                        .padding(vertical = 2.dp),
+                ) {
                         if (hasThinking) {
                             ThinkingBlock(
                                 reasoning = message.reasoning ?: "",
@@ -233,36 +233,37 @@ internal fun AssistantMessageBubble(
                     }
                 }
 
-                if (!message.isStreaming && message.text.isNotBlank()) {
-                    Row(
-                        modifier = Modifier.padding(top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+            if (!message.isStreaming && message.text.isNotBlank()) {
+                Row(
+                    modifier = Modifier.padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MessageActionIcon(
+                        icon = Icons.Default.ContentCopy,
+                        contentDescription = t("Copy text", "کپی متن"),
+                        onClick = { onCopyMessage(message.text) },
+                    )
+                    MessageActionIcon(
+                        icon = Icons.Default.Share,
+                        contentDescription = t("Share", "اشتراک\u200Cگذاری"),
+                        onClick = {
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, message.text)
+                                type = "text/plain"
+                            }
+                            assistantContext.startActivity(Intent.createChooser(sendIntent, null))
+                        },
+                    )
+                    if (isLastAssistant && !isSending) {
                         MessageActionIcon(
-                            icon = Icons.Default.ContentCopy,
-                            contentDescription = t("Copy text", "کپی متن"),
-                            onClick = { onCopyMessage(message.text) },
+                            icon = Icons.Default.Refresh,
+                            contentDescription = t("Retry", "تلاش دوباره"),
+                            onClick = onRetry,
                         )
-                        MessageActionIcon(
-                            icon = Icons.Default.Share,
-                            contentDescription = t("Share", "اشتراک\u200Cگذاری"),
-                            onClick = {
-                                val sendIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, message.text)
-                                    type = "text/plain"
-                                }
-                                assistantContext.startActivity(Intent.createChooser(sendIntent, null))
-                            },
-                        )
-                        if (isLastAssistant && !isSending) {
-                            MessageActionIcon(
-                                icon = Icons.Default.Refresh,
-                                contentDescription = t("Retry", "تلاش دوباره"),
-                                onClick = onRetry,
-                            )
-                        }
                     }
                 }
             }
+        }
+    }
 }
