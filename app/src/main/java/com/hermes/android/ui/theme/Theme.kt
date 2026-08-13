@@ -44,10 +44,7 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
-        // Carbon (near-black + neutral grey, no purple) is the default —
-        // the original "Hermes" palette's primary is a vivid indigo/violet
-        // that bled into buttons, icons, and accents across the whole app.
-        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
+        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: HERMES
     }
 }
 

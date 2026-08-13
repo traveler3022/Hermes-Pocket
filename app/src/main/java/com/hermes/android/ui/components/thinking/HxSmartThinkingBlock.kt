@@ -21,9 +21,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,7 +36,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.HermesMarkdown
 
 /** Aether-like reasoning: compact live status first, detailed timeline on expand. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HxSmartThinkingBlock(
     reasoning: String,
@@ -129,32 +135,42 @@ fun HxSmartThinkingBlock(
             )
         }
 
-        AnimatedVisibility(visible = expanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(colors.surfaceVariant.copy(alpha = 0.26f))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
+        if (expanded) {
+            ModalBottomSheet(
+                onDismissRequest = onToggle,
+                containerColor = colors.surface,
+                contentColor = colors.onSurface,
             ) {
-                if (steps.isEmpty()) {
-                    HermesMarkdown(
-                        markdown = reasoning.ifBlank { "در انتظار reasoning..." },
-                        style = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant),
-                        modifier = Modifier.fillMaxWidth(),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 640.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 30.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    Text(
+                        text = if (isStreaming) "در حال فکر کردن" else "فرآیند تفکر",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp),
                     )
-                } else {
-                    steps.forEachIndexed { index, step ->
-                        ReasoningTimelineRow(
-                            title = step.title,
-                            detail = step.detail,
-                            isLast = index == steps.lastIndex && !isStreaming,
-                            active = isStreaming && index == steps.lastIndex,
+                    if (steps.isEmpty()) {
+                        HermesMarkdown(
+                            markdown = reasoning.ifBlank { "در انتظار reasoning..." },
+                            style = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant),
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                    }
-                    if (!isStreaming) {
-                        ReasoningDoneRow()
+                    } else {
+                        steps.forEachIndexed { index, step ->
+                            ReasoningTimelineRow(
+                                title = step.title,
+                                detail = step.detail,
+                                isLast = index == steps.lastIndex && !isStreaming,
+                                active = isStreaming && index == steps.lastIndex,
+                            )
+                        }
+                        if (!isStreaming) ReasoningDoneRow()
                     }
                 }
             }
