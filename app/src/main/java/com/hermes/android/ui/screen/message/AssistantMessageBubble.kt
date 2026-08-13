@@ -83,29 +83,8 @@ internal fun AssistantMessageBubble(
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            if (isLastAssistant) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            } else {
-                Spacer(modifier = Modifier.width(40.dp))
-            }
-
-            Column(modifier = Modifier.widthIn(max = 460.dp)) {
-                Box {
+        Column(modifier = Modifier.widthIn(max = 460.dp)) {
+            Box {
                     Column(
                         modifier = Modifier
                             .combinedClickable(
