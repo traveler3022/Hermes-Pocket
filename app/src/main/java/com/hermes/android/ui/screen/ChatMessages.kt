@@ -207,22 +207,22 @@ internal fun ThinkingBlock(
         emojiRe.findAll(reasoning.takeLast(400)).map { it.value }.lastOrNull()
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onToggle() }
-                .padding(bottom = 2.dp),
+                .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
                     .width(3.dp)
-                    .height(16.dp)
+                    .height(18.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(barColor.copy(alpha = barAlpha)),
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = if (isStreaming) t("‌", "‌") else t("Thoughts", "افکار"),
                 style = MaterialTheme.typography.labelMedium,
@@ -233,40 +233,35 @@ internal fun ThinkingBlock(
                 imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
         }
 
-        // Mood sticker: the latest emotive emoji from the reasoning, shown big,
-        // popping in when it changes.
         AnimatedVisibility(visible = sticker != null) {
             Text(
                 text = sticker ?: "",
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 11.dp, top = 2.dp, bottom = 4.dp),
             )
         }
 
-        // Live preview: latest reasoning line, fading with the pulse, while collapsed.
         if (isStreaming && !expanded) {
             val preview = remember(reasoning) {
-                // Bounded tail for the same O(n²) reason as the sticker scan.
                 reasoning.takeLast(400).trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
             }
             if (preview.isNotEmpty()) {
                 Text(
                     text = preview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.8f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.85f),
                     maxLines = 1,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 11.dp, bottom = 2.dp),
+                        .padding(start = 13.dp, bottom = 2.dp),
                 )
             }
         }
 
-        // Full reasoning: fades/expands in when opened (the "fade from bottom").
         AnimatedVisibility(visible = expanded) {
             HermesMarkdown(
                 markdown = reasoning,
@@ -275,7 +270,7 @@ internal fun ThinkingBlock(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 11.dp, bottom = 8.dp),
+                    .padding(start = 13.dp, bottom = 10.dp),
             )
         }
     }

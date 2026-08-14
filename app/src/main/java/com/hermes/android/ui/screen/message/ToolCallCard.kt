@@ -45,37 +45,38 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
         else -> MaterialTheme.colorScheme.primary
     }
 
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .background(surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (message.isRunning) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.6.dp,
                     color = statusColor,
                 )
             } else {
                 Text(
                     text = if (message.error != null) "✕" else "✓",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = statusColor,
                 )
             }
-            Text(
-                text = message.toolName,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            if (!message.isRunning) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = message.toolName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 message.durationS?.let { duration ->
                     Text(
                         text = "${"%.1f".format(duration)}s",
@@ -94,27 +95,28 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
                     text = if (expanded) t("Hide details", "مخفی کردن") else t("Show details", "نمایش جزئیات"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    modifier = Modifier.padding(top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
                         Text(
