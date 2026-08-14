@@ -103,6 +103,8 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
@@ -489,9 +491,28 @@ fun ChatScreen(
                             shape = RoundedCornerShape(24.dp),
                         )
                     }
+                    // Aether-style top fade overlay — blends the message list
+                    // into the top chrome so the scroll feels continuous.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to MaterialTheme.colorScheme.background.copy(alpha = 0.98f),
+                                        0.28f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+                                        0.58f to MaterialTheme.colorScheme.background.copy(alpha = 0.52f),
+                                        0.82f to MaterialTheme.colorScheme.background.copy(alpha = 0.18f),
+                                        1.0f to Color.Transparent,
+                                    )
+                                )
+                            ),
+                    )
                 }
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = Color.Transparent,
             // Feature #4: Scroll-to-bottom FAB
             floatingActionButton = {
                 AnimatedVisibility(
@@ -522,6 +543,15 @@ fun ChatScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surface,
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                        )
+                    )
             ) {
                 // Feature #7: Connection error retry banner
                 if (uiState.connectionState == ChatConnectionState.Failed ||
@@ -565,13 +595,11 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                        // Tight gap by default; itemsIndexed adds extra top
-                        // padding when a message starts a new group (turn),
-                        // so the eye reads turn boundaries instead of a flat
-                        // evenly-spaced list.
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                            .padding(horizontal = 20.dp),
+                        // Aether-style spacing: 22dp between items gives
+                        // each message breathing room and clear turn boundaries.
+                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp),
                     ) {
                         if (filteredMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
@@ -684,16 +712,14 @@ fun ChatScreen(
                         val lastMsg = filteredMessages.lastOrNull()
                         val isAwaitingReply = uiState.isSending ||
                             (lastMsg is ChatMessage.Assistant && lastMsg.isStreaming)
-                        // Always-present item animating between 600dp and 0 —
-                        // conditionally removing it made the whole tail of the
-                        // list snap upward the instant a reply finished. Kept
-                        // in composition with a stable key so the collapse is
-                        // a smooth ease-out instead of a jump cut.
-                        item(key = "streaming-tail-spacer") {
+                        // Aether-style composer padding: keep the last item above
+                        // the floating composer so messages aren't trapped
+                        // underneath it.
+                        item(key = "composer-padding-spacer") {
                             val spacerHeight by animateDpAsState(
-                                targetValue = if (isAwaitingReply) 600.dp else 0.dp,
-                                animationSpec = tween(durationMillis = 450),
-                                label = "streamingTailSpacer",
+                                targetValue = if (isAwaitingReply) 120.dp else 80.dp,
+                                animationSpec = tween(durationMillis = 300),
+                                label = "composerPaddingSpacer",
                             )
                             Spacer(modifier = Modifier.height(spacerHeight))
                         }
