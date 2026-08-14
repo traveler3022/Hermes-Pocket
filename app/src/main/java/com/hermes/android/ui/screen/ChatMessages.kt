@@ -376,6 +376,7 @@ internal fun MessageBubble(
                 searchQuery = searchQuery,
                 isLastAssistant = isLastAssistant,
                 isSending = isSending,
+                toolGroups = toolGroups,
                 onCopyMessage = onCopyMessage,
                 onCopyCode = onCopyCode,
                 onRetry = onRetry,
@@ -387,20 +388,8 @@ internal fun MessageBubble(
         }
 
         is ChatMessage.ToolCall -> {
-            val group = toolGroups.find { it.tools.any { tool -> tool.id == message.id } }
-            if (group != null && group.tools.size >= 3) {
-                // Only render the group card for the FIRST tool in the group;
-                // the trailing tools are rendered inside the group.
-                if (group.tools.first().id == message.id) {
-                    ToolCallGroupCard(
-                        group = group,
-                        onToggleGroup = onToggleToolGroup,
-                        onToggleTool = onToggleTool,
-                    )
-                }
-            } else {
-                SingleToolCallCard(message = message)
-            }
+            // Tool calls are shown in the assistant's combined timeline;
+            // skip separate rendering to avoid duplication.
         }
 
         is ChatMessage.Status -> {

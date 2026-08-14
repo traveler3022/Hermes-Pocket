@@ -48,6 +48,7 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.screen.message.ReasoningTimeline
 import com.hermes.android.ui.screen.message.ReasoningTimelineItem
 import com.hermes.android.ui.screen.message.StreamingMarkdownContent
+import com.hermes.android.ui.screen.message.ToolCallGroup
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -57,6 +58,7 @@ internal fun AssistantMessageBubble(
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,
+    toolGroups: List<ToolCallGroup> = emptyList(),
     onCopyMessage: (String) -> Unit = {},
     onCopyCode: (String) -> Unit = {},
     onRetry: () -> Unit = {},
@@ -85,15 +87,32 @@ internal fun AssistantMessageBubble(
                         .animateContentSize()
                         .padding(vertical = 4.dp),
                 ) {
-                    if (hasThinking) {
-                        val timelineItems = remember(message.reasoning) {
-                            listOf(
-                                ReasoningTimelineItem.Summary(
-                                    title = if (message.isStreaming) "Thinking…" else "Thought",
-                                    detail = message.reasoning ?: "",
-                                    isStreaming = message.isStreaming,
-                                )
-                            )
+                    if (hasThinking || toolGroups.isNotEmpty()) {
+                        val timelineItems = remember(message.reasoning, toolGroups) {
+                            buildList {
+                                // Reasoning chunk
+                                if (hasThinking) {
+                                    add(
+                                        ReasoningTimelineItem.Summary(
+                                            title = if (message.isStreaming) "Thinking…" else "Thought",
+                                            detail = message.reasoning ?: "",
+                                            isStreaming = message.isStreaming,
+                                        )
+                                    )
+                                }
+                                // Tool invocations - add each tool from each group
+                                toolGroups.forEach { group ->
+                                    group.tools.forEach { tool ->
+                                        add(
+                                            ReasoningTimelineItem.Tool(
+                                                toolName = tool.toolName,
+                                                isRunning = tool.isRunning,
+                                                detail = tool.resultText?.take(120),
+                                            )
+                                        )
+                                    }
+                                }
+                            }
                         }
                         ReasoningTimeline(
                             items = timelineItems,
