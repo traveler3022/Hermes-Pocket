@@ -44,8 +44,10 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.components.thinking.HxSmartThinkingBlock
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.screen.message.ReasoningTimeline
+import com.hermes.android.ui.screen.message.ReasoningTimelineItem
+import com.hermes.android.ui.screen.message.StreamingMarkdownContent
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -65,7 +67,6 @@ internal fun AssistantMessageBubble(
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
-    var isThinkingExpanded by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
     val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
 
@@ -85,11 +86,17 @@ internal fun AssistantMessageBubble(
                         .padding(vertical = 4.dp),
                 ) {
                     if (hasThinking) {
-                        HxSmartThinkingBlock(
-                            reasoning = message.reasoning ?: "",
-                            isStreaming = message.isStreaming,
-                            expanded = isThinkingExpanded,
-                            onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                        val timelineItems = remember(message.reasoning) {
+                            listOf(
+                                ReasoningTimelineItem.Summary(
+                                    title = if (message.isStreaming) "Thinking…" else "Thought",
+                                    detail = message.reasoning ?: "",
+                                    isStreaming = message.isStreaming,
+                                )
+                            )
+                        }
+                        ReasoningTimeline(
+                            items = timelineItems,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
@@ -117,8 +124,8 @@ internal fun AssistantMessageBubble(
                                 when (block) {
                                     is ContentBlock.Text -> SelectionContainer {
                                         if (message.isStreaming) {
-                                            Text(
-                                                text = block.markdown,
+                                            StreamingMarkdownContent(
+                                                markdown = block.markdown,
                                                 style = MaterialTheme.typography.bodyLarge.copy(
                                                     color = MaterialTheme.colorScheme.onSurface,
                                                 ),
