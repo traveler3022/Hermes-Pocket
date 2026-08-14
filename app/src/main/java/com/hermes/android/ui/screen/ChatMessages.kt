@@ -143,9 +143,7 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.i18n.t
-import com.hermes.android.ui.screen.message.SingleToolCallCard
 import com.hermes.android.ui.screen.message.ToolCallGroup
-import com.hermes.android.ui.screen.message.ToolCallGroupCard
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel

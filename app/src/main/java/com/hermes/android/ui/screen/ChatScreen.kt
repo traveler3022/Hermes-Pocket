@@ -226,61 +226,43 @@ fun ChatScreen(
         }
     }
 
-    // Aether-style tool grouping: collapse consecutive tool cards into a
-    // single header + indented timeline when there are 3 or more in a row.
-    val toolGroups = remember(filteredMessages) {
-        val groups = mutableListOf<ToolCallGroup>()
+    // Aether-style tool grouping: map assistant message IDs to their tool groups.
+    val assistantToolGroups = remember(filteredMessages) {
+        val map = mutableMapOf<String, MutableList<ToolCallGroup>>()
         val currentTools = mutableListOf<ChatMessage.ToolCall>()
         var groupIndex = 0
+        var lastAssistantId: String? = null
+
+        fun flushTools() {
+            if (currentTools.isEmpty() || lastAssistantId == null) return
+            val group = ToolCallGroup(
+                tools = currentTools.toList(),
+                isRunning = currentTools.any { it.isRunning },
+                stateKey = "tool_group_$groupIndex",
+                autoExpand = currentTools.any { it.isRunning },
+            )
+            map.getOrPut(lastAssistantId!!) { mutableListOf() }.add(group)
+            groupIndex++
+            currentTools.clear()
+        }
 
         filteredMessages.forEach { message ->
-            if (message is ChatMessage.ToolCall) {
-                currentTools.add(message)
-            } else {
-                if (currentTools.size >= 3) {
-                    groups.add(
-                        ToolCallGroup(
-                            tools = currentTools.toList(),
-                            isRunning = currentTools.any { it.isRunning },
-                            stateKey = "tool_group_$groupIndex",
-                            autoExpand = currentTools.any { it.isRunning },
-                        )
-                    )
-                    groupIndex++
-                } else if (currentTools.isNotEmpty()) {
-                    groups.add(
-                        ToolCallGroup(
-                            tools = currentTools.toList(),
-                            isRunning = currentTools.any { it.isRunning },
-                            stateKey = "tool_group_$groupIndex",
-                            autoExpand = false,
-                        )
-                    )
-                    groupIndex++
+            when (message) {
+                is ChatMessage.Assistant -> {
+                    flushTools()
+                    lastAssistantId = message.id
                 }
-                currentTools.clear()
+                is ChatMessage.ToolCall -> {
+                    currentTools.add(message)
+                }
+                else -> {
+                    flushTools()
+                    lastAssistantId = null
+                }
             }
         }
-        if (currentTools.size >= 3) {
-            groups.add(
-                ToolCallGroup(
-                    tools = currentTools.toList(),
-                    isRunning = currentTools.any { it.isRunning },
-                    stateKey = "tool_group_$groupIndex",
-                    autoExpand = currentTools.any { it.isRunning },
-                )
-            )
-        } else if (currentTools.isNotEmpty()) {
-            groups.add(
-                ToolCallGroup(
-                    tools = currentTools.toList(),
-                    isRunning = currentTools.any { it.isRunning },
-                    stateKey = "tool_group_$groupIndex",
-                    autoExpand = false,
-                )
-            )
-        }
-        groups
+        flushTools()
+        map
     }
 
     val onToggleToolGroup: (String) -> Unit = { stateKey ->
@@ -755,7 +737,7 @@ fun ChatScreen(
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                                 onToggleToolGroup = onToggleToolGroup,
-                                toolGroups = toolGroups,
+                                toolGroups = if (message is ChatMessage.Assistant) assistantToolGroups[message.id].orEmpty() else emptyList(),
                                 onToggleTool = onToggleTool,
                             )
                             }
