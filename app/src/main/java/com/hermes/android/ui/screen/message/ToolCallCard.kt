@@ -1,6 +1,10 @@
 package com.hermes.android.ui.screen.message
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -9,17 +13,16 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,19 +30,29 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
+import kotlinx.coroutines.delay
+
+// ── Aether-style animation constants ──────────────────────────────────────
+private const val ToolInvocationCollapseThreshold = 3
+private const val ToolTransitionDurationMillis = 360
+private const val ToolInvocationAutoExpandDelayMillis = 1_000L
+private const val ToolGroupCollapseStageDelayMillis = 180L
+private val ToolTransitionEasing = CubicBezierEasing(0.22f, 0.84f, 0.18f, 1f)
+internal val ToolGroupIndent = 14.dp
 
 internal data class ToolCallGroup(
     val tools: List<ChatMessage.ToolCall>,
@@ -48,6 +61,14 @@ internal data class ToolCallGroup(
     val autoExpand: Boolean = false,
 )
 
+/**
+ * Aether-style tool invocation list.
+ *
+ * - Fewer than [ToolInvocationCollapseThreshold] tools → show inline (no header).
+ * - At or above threshold → collapsible header with animated indent + arrow rotation.
+ * - Staggered entry animation per tool card.
+ * - State survives config changes (rememberSaveable).
+ */
 @Composable
 internal fun ToolCallGroupCard(
     group: ToolCallGroup,
@@ -56,18 +77,51 @@ internal fun ToolCallGroupCard(
 ) {
     if (group.tools.isEmpty()) return
 
-    var headerVisible by remember(group.stateKey) { mutableStateOf(!group.autoExpand) }
-    var expanded by remember(group.stateKey) { mutableStateOf(group.autoExpand) }
-    var lastAutoExpanded by remember(group.stateKey) { mutableStateOf(group.autoExpand) }
+    val isRunning = group.isRunning
 
-    if (group.autoExpand != lastAutoExpanded) {
-        headerVisible = !group.autoExpand
-        expanded = group.autoExpand
-        lastAutoExpanded = group.autoExpand
+    // Under threshold: show inline, no grouping header
+    if (group.tools.size < ToolInvocationCollapseThreshold) {
+        ToolInvocationCardsColumn(
+            toolInvocations = group.tools,
+            indent = 0.dp,
+            topPadding = 6.dp,
+        )
+        return
     }
 
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val statusColor = if (group.isRunning) {
+    // ── Grouped (≥ threshold) ─────────────────────────────────────────────
+    var headerVisible by rememberSaveable(group.stateKey) { mutableStateOf(!group.autoExpand) }
+    var expanded by rememberSaveable(group.stateKey) { mutableStateOf(group.autoExpand) }
+    var lastAutoExpanded by rememberSaveable(group.stateKey) { mutableStateOf(group.autoExpand) }
+
+    LaunchedEffect(group.autoExpand) {
+        if (lastAutoExpanded != group.autoExpand) {
+            if (group.autoExpand) {
+                headerVisible = false
+                expanded = true
+            } else {
+                headerVisible = true
+                expanded = true
+                delay(ToolGroupCollapseStageDelayMillis)
+                expanded = false
+            }
+            lastAutoExpanded = group.autoExpand
+        }
+    }
+
+    val childIndent by animateDpAsState(
+        targetValue = if (headerVisible) ToolGroupIndent else 0.dp,
+        animationSpec = tween(durationMillis = ToolTransitionDurationMillis, easing = ToolTransitionEasing),
+        label = "tool_group_indent",
+    )
+
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 90f else 0f,
+        animationSpec = tween(durationMillis = ToolTransitionDurationMillis, easing = ToolTransitionEasing),
+        label = "tool_group_arrow_rotation",
+    )
+
+    val statusColor = if (isRunning) {
         MaterialTheme.colorScheme.tertiary
     } else {
         MaterialTheme.colorScheme.primary
@@ -79,23 +133,34 @@ internal fun ToolCallGroupCard(
             .padding(top = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ── Collapsible header ────────────────────────────────────────────
         AnimatedVisibility(
             visible = headerVisible,
-            enter = fadeIn(tween(260)) + expandVertically(tween(260), expandFrom = Alignment.Top),
-            exit = fadeOut(tween(180)) + shrinkVertically(tween(220), shrinkTowards = Alignment.Top),
+            enter = fadeIn(
+                animationSpec = tween(
+                    durationMillis = ToolTransitionDurationMillis - 100,
+                    easing = ToolTransitionEasing,
+                ),
+            ) + expandVertically(
+                animationSpec = tween(durationMillis = ToolTransitionDurationMillis, easing = ToolTransitionEasing),
+                expandFrom = Alignment.Top,
+            ),
+            exit = fadeOut(
+                animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing),
+            ) + shrinkVertically(
+                animationSpec = tween(durationMillis = 220, easing = FastOutLinearInEasing),
+                shrinkTowards = Alignment.Top,
+            ),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onToggleGroup(group.stateKey) }
-                    .shadow(1.dp, RoundedCornerShape(12.dp), ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Transparent)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(surfaceVariant.copy(alpha = 0.45f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (group.isRunning) {
+                if (isRunning) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 1.6.dp,
@@ -108,46 +173,114 @@ internal fun ToolCallGroupCard(
                         color = statusColor,
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    val label = if (group.isRunning) {
+                Text(
+                    text = if (isRunning) {
                         t("Executing tools…", "در حال اجرای ابزارها…")
                     } else {
                         t("Executed tools", "ابزارهای اجرا شده")
-                    }
-                    Text(
-                        text = "$label ${group.tools.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                    } + " ${group.tools.size}",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                    contentDescription = if (expanded) {
+                        t("Collapse tools", "جمع کردن ابزارها")
+                    } else {
+                        t("Expand tools", "باز کردن ابزارها")
+                    },
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .graphicsLayer { rotationZ = arrowRotation },
                 )
             }
         }
 
+        // ── Expanded tool cards ───────────────────────────────────────────
         AnimatedVisibility(
             visible = expanded,
-            enter = expandVertically(tween(260), expandFrom = Alignment.Top) +
-                    fadeIn(tween(170, delayMillis = 40)),
-            exit = shrinkVertically(tween(260), shrinkTowards = Alignment.Top) +
-                    fadeOut(tween(180)),
+            enter = expandVertically(
+                animationSpec = tween(durationMillis = ToolTransitionDurationMillis, easing = ToolTransitionEasing),
+                expandFrom = Alignment.Top,
+            ) + fadeIn(
+                animationSpec = tween(
+                    durationMillis = ToolTransitionDurationMillis - 90,
+                    delayMillis = 40,
+                    easing = ToolTransitionEasing,
+                ),
+            ),
+            exit = shrinkVertically(
+                animationSpec = tween(durationMillis = 260, easing = FastOutLinearInEasing),
+                shrinkTowards = Alignment.Top,
+            ) + fadeOut(
+                animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing),
+            ),
         ) {
-            Column(
-                modifier = Modifier.padding(start = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                group.tools.forEach { tool ->
-                    SingleToolCallCard(
-                        message = tool,
-                        onToggle = { onToggleTool(tool.id) },
-                    )
-                }
-            }
+            ToolInvocationCardsColumn(
+                toolInvocations = group.tools,
+                indent = childIndent,
+                topPadding = 4.dp,
+            )
         }
+    }
+}
+
+/**
+ * Column of tool cards with staggered entry animation (Aether-style).
+ */
+@Composable
+private fun ToolInvocationCardsColumn(
+    toolInvocations: List<ChatMessage.ToolCall>,
+    indent: Dp = 0.dp,
+    topPadding: Dp = 6.dp,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = indent),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        toolInvocations.forEach { tool ->
+            ToolInvocationAnimatedCard(
+                toolInvocation = tool,
+                topPadding = topPadding,
+            )
+        }
+    }
+}
+
+/**
+ * Single tool card with staggered fade-in animation.
+ */
+@Composable
+private fun ToolInvocationAnimatedCard(
+    toolInvocation: ChatMessage.ToolCall,
+    topPadding: Dp,
+) {
+    var visible by rememberSaveable(toolInvocation.id) { mutableStateOf(false) }
+    LaunchedEffect(toolInvocation.id) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(
+            animationSpec = tween(durationMillis = ToolTransitionDurationMillis, easing = ToolTransitionEasing),
+            expandFrom = Alignment.Top,
+        ) + fadeIn(
+            animationSpec = tween(
+                durationMillis = ToolTransitionDurationMillis - 90,
+                delayMillis = 30,
+                easing = ToolTransitionEasing,
+            ),
+        ),
+    ) {
+        SingleToolCallCard(
+            message = toolInvocation,
+            topPadding = topPadding,
+        )
     }
 }
 
@@ -156,8 +289,9 @@ internal fun SingleToolCallCard(
     message: ChatMessage.ToolCall,
     expanded: Boolean = false,
     onToggle: () -> Unit = {},
+    topPadding: Dp = 6.dp,
 ) {
-    var internalExpanded by remember { mutableStateOf(expanded) }
+    var internalExpanded by rememberSaveable(message.id) { mutableStateOf(expanded) }
 
     val statusColor = when {
         message.error != null -> MaterialTheme.colorScheme.error
@@ -170,6 +304,7 @@ internal fun SingleToolCallCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(top = topPadding)
             .clip(RoundedCornerShape(12.dp))
             .background(surfaceVariant.copy(alpha = 0.45f)),
     ) {
@@ -199,7 +334,7 @@ internal fun SingleToolCallCard(
                 )
                 message.durationS?.let { duration ->
                     Text(
-                        text = "${"%.1f".format(duration)}s",
+                        text = "%.1fs".format(duration),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -215,11 +350,11 @@ internal fun SingleToolCallCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { internalExpanded = !internalExpanded }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                Spacer(modifier = Modifier.width(24.dp))
                 Text(
                     text = if (internalExpanded) t("Hide details", "مخفی کردن") else t("Show details", "نمایش جزئیات"),
                     style = MaterialTheme.typography.labelSmall,
