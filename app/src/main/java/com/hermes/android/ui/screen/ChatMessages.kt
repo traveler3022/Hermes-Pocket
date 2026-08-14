@@ -143,6 +143,9 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.screen.message.SingleToolCallCard
+import com.hermes.android.ui.screen.message.ToolCallGroup
+import com.hermes.android.ui.screen.message.ToolCallGroupCard
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -353,6 +356,9 @@ internal fun MessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    onToggleToolGroup: (String) -> Unit = {},
+    toolGroups: List<ToolCallGroup> = emptyList(),
+    onToggleTool: (String) -> Unit = {},
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -381,7 +387,20 @@ internal fun MessageBubble(
         }
 
         is ChatMessage.ToolCall -> {
-            ToolCallCard(message = message)
+            val group = toolGroups.find { it.tools.any { tool -> tool.id == message.id } }
+            if (group != null && group.tools.size >= 3) {
+                // Only render the group card for the FIRST tool in the group;
+                // the trailing tools are rendered inside the group.
+                if (group.tools.first().id == message.id) {
+                    ToolCallGroupCard(
+                        group = group,
+                        onToggleGroup = onToggleToolGroup,
+                        onToggleTool = onToggleTool,
+                    )
+                }
+            } else {
+                SingleToolCallCard(message = message)
+            }
         }
 
         is ChatMessage.Status -> {

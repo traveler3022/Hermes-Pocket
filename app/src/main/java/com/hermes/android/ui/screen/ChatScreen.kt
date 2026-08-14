@@ -110,6 +110,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.hermes.android.ui.screen.message.ToolCallGroup
+import com.hermes.android.ui.screen.message.ToolCallGroupCard
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
@@ -222,6 +224,71 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // Aether-style tool grouping: collapse consecutive tool cards into a
+    // single header + indented timeline when there are 3 or more in a row.
+    val toolGroups = remember(filteredMessages) {
+        val groups = mutableListOf<ToolCallGroup>()
+        val currentTools = mutableListOf<ChatMessage.ToolCall>()
+        var groupIndex = 0
+
+        filteredMessages.forEach { message ->
+            if (message is ChatMessage.ToolCall) {
+                currentTools.add(message)
+            } else {
+                if (currentTools.size >= 3) {
+                    groups.add(
+                        ToolCallGroup(
+                            tools = currentTools.toList(),
+                            isRunning = currentTools.any { it.isRunning },
+                            stateKey = "tool_group_$groupIndex",
+                            autoExpand = currentTools.any { it.isRunning },
+                        )
+                    )
+                    groupIndex++
+                } else if (currentTools.isNotEmpty()) {
+                    groups.add(
+                        ToolCallGroup(
+                            tools = currentTools.toList(),
+                            isRunning = currentTools.any { it.isRunning },
+                            stateKey = "tool_group_$groupIndex",
+                            autoExpand = false,
+                        )
+                    )
+                    groupIndex++
+                }
+                currentTools.clear()
+            }
+        }
+        if (currentTools.size >= 3) {
+            groups.add(
+                ToolCallGroup(
+                    tools = currentTools.toList(),
+                    isRunning = currentTools.any { it.isRunning },
+                    stateKey = "tool_group_$groupIndex",
+                    autoExpand = currentTools.any { it.isRunning },
+                )
+            )
+        } else if (currentTools.isNotEmpty()) {
+            groups.add(
+                ToolCallGroup(
+                    tools = currentTools.toList(),
+                    isRunning = currentTools.any { it.isRunning },
+                    stateKey = "tool_group_$groupIndex",
+                    autoExpand = false,
+                )
+            )
+        }
+        groups
+    }
+
+    val onToggleToolGroup: (String) -> Unit = { stateKey ->
+        // Handled inside ToolCallGroupCard via remember(stateKey)
+    }
+
+    val onToggleTool: (String) -> Unit = { toolId ->
+        // Handled inside ToolCallCard via remember(toolId)
     }
 
     // What the agent is doing right now (null = idle). Derived, not stored —
@@ -587,17 +654,12 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .background(Color.Transparent),
-                        // Aether-style breathing room between conversation items.
+                            .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = 20.dp,
                             end = 20.dp,
                             top = 18.dp,
-                            // Reserve the lower breathing room used by Aether's
-                            // floating composer instead of letting the last bubble
-                            // touch the input chrome.
                             bottom = 132.dp,
                         ),
                     ) {
@@ -692,6 +754,9 @@ fun ChatScreen(
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                onToggleToolGroup = onToggleToolGroup,
+                                toolGroups = toolGroups,
+                                onToggleTool = onToggleTool,
                             )
                             }
                         }
