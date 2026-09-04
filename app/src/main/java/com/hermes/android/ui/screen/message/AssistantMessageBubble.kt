@@ -64,7 +64,6 @@ internal fun AssistantMessageBubble(
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
-    var isThinkingExpanded by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
     val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
 
@@ -84,11 +83,10 @@ internal fun AssistantMessageBubble(
                         .padding(vertical = 2.dp),
                 ) {
                     if (hasThinking) {
-                        ThinkingBlock(
+                        HxThinkingTrace(
                             reasoning = message.reasoning ?: "",
                             isStreaming = message.isStreaming,
-                            expanded = isThinkingExpanded,
-                            onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                            messageId = message.id,
                         )
                     }
                     if (message.text.isEmpty()) {
