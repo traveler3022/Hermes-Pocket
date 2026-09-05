@@ -659,6 +659,16 @@ class ChatViewModel @Inject constructor(
         val pending = _uiState.value.pendingApproval ?: return
         _uiState.update { it.copy(pendingApproval = null) }
         approvalNotificationManager.cancelApproval(pending.requestId)
+        // The card stays in the transcript showing what was decided, so the
+        // record of "who allowed this command" does not vanish with the sheet.
+        markAnswered(
+            pending.requestId,
+            when (choice) {
+                "always" -> "Always allowed"
+                "once" -> "Allowed once"
+                else -> "Denied"
+            },
+        )
         viewModelScope.launch {
             try {
                 gatewayClient.request(
@@ -1052,14 +1062,23 @@ class ChatViewModel @Inject constructor(
                     description = event.description,
                     allowPermanent = event.allowPermanent,
                 )
-                val statusMsg = ChatMessage.Status(
+                // In the conversation, not over it. This was a plain status
+                // line plus an undismissable modal sheet: the line could not
+                // be acted on and the sheet hid the very messages the reader
+                // needed in order to judge the command.
+                val askMsg = ChatMessage.InteractiveRequest(
                     id = requestId,
                     timestamp = System.currentTimeMillis(),
-                    text = "Approval needed: ${event.description}\nCommand: ${event.command}",
-                    isError = false,
+                    requestId = requestId,
+                    question = event.description.ifBlank { "Run this command?" },
+                    choices = null,
+                    kind = InteractiveKind.APPROVAL,
+                    command = event.command,
+                    allowPermanent = event.allowPermanent,
+                    patternKeys = event.patternKeys,
                 )
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages + statusMsg,
+                    messages = _uiState.value.messages + askMsg,
                     pendingApproval = PendingApprovalUi(
                         requestId = requestId,
                         sessionId = event.sessionId,

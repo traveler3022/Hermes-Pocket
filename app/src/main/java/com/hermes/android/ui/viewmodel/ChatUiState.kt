@@ -78,6 +78,12 @@ sealed class ChatMessage {
         val answered: Boolean = false,
         val kind: InteractiveKind = InteractiveKind.CLARIFY,
         val answer: String? = null,
+        /** The command awaiting approval (APPROVAL only). */
+        val command: String? = null,
+        /** APPROVAL only: when false, "always allow" must not be offered. */
+        val allowPermanent: Boolean = true,
+        /** APPROVAL only: what "always allow" would whitelist from now on. */
+        val patternKeys: List<String> = emptyList(),
     ) : ChatMessage()
 
     /** Sub-agent execution card. */
@@ -90,7 +96,13 @@ sealed class ChatMessage {
     ) : ChatMessage()
 }
 
-enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+/**
+ * APPROVAL is a command-approval request (`approval.request`). It is one of
+ * these rather than a screen of its own because it is the same thing: the
+ * agent stopped and needs an answer before it can go on, and the answer
+ * belongs in the conversation where the reader can see what led to it.
+ */
+enum class InteractiveKind { CLARIFY, SUDO, SECRET, APPROVAL }
 
 /**
  * One entry of the agent's live task list (from tool.start/tool.complete
@@ -114,10 +126,13 @@ data class NotificationUi(
 )
 
 /**
- * A pending tool-approval request (`approval.request` event), rendered as a
- * modal bottom sheet over the chat. The gateway blocks the turn until
- * `approval.respond` is sent, so the sheet stays up until the user picks
- * Deny / Allow once / Always allow.
+ * The approval request currently awaiting an answer (`approval.request`).
+ *
+ * The gateway blocks the turn until `approval.respond` is sent. This is the
+ * record the response is built from — session id, request id — and the flag
+ * the chat uses to bring the decision into view; the request itself is drawn
+ * as a card in the transcript (see [ChatMessage.InteractiveRequest] with
+ * [InteractiveKind.APPROVAL]), not as a sheet over it.
  */
 data class PendingApprovalUi(
     val requestId: String,

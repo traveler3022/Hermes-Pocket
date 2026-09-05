@@ -341,6 +341,17 @@ fun ChatScreen(
         }
     }
 
+    // An approval blocks the turn until it is answered, and it arrives while
+    // the reader may be scrolled anywhere. It used to be a modal sheet that
+    // could not be missed OR avoided; as a card in the flow it has to be
+    // brought to the reader instead — otherwise the agent waits behind a
+    // question sitting below the fold.
+    LaunchedEffect(uiState.pendingApproval?.requestId) {
+        val requestId = uiState.pendingApproval?.requestId ?: return@LaunchedEffect
+        val index = visibleMessages.indexOfFirst { it.id == requestId }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
+
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
         if (uiState.sessionLoadedAt > 0L && visibleMessages.isNotEmpty()) {
@@ -522,19 +533,11 @@ fun ChatScreen(
                                 } else {
                                     ConnectionIndicator(uiState.connectionState)
                                 }
-                                // Which model is answering, at a glance. Read
-                                // only — switching happens in the composer's
-                                // menu, next to reasoning effort, so this slot
-                                // keeps its existing tap target.
-                                configState.activeModel?.takeIf { it.isNotBlank() }?.let { model ->
-                                    Text(
-                                        text = model,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
+                                // The model name used to sit here. It told the
+                                // reader nothing they had asked for and pushed
+                                // a decision at them on every screen; the model
+                                // is chosen — and shown — in the composer's
+                                // menu, where switching it actually happens.
                             }
                         }
                         HxHeaderCircleButton(
@@ -759,6 +762,7 @@ fun ChatScreen(
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
+                                onRespondToApproval = viewModel::respondToApproval,
                                 onImageClick = { url -> fullscreenImageUrl = url },
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
@@ -879,16 +883,6 @@ fun ChatScreen(
                 }
             }
         }
-    }
-
-    // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
-    // level so it overlays the whole screen; see ChatApprovalSheet.kt for
-    // why it can't be swiped away.
-    uiState.pendingApproval?.let { approval ->
-        ApprovalSheet(
-            approval = approval,
-            onRespond = viewModel::respondToApproval,
-        )
     }
 
     if (showChanges) {

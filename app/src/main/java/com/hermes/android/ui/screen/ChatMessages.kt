@@ -78,7 +78,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
@@ -92,8 +91,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -128,7 +125,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -147,7 +143,6 @@ import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
 import com.hermes.android.ui.viewmodel.DrawerRenameState
-import com.hermes.android.ui.viewmodel.InteractiveKind
 import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
@@ -349,6 +344,7 @@ internal fun MessageBubble(
     onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
+    onRespondToApproval: (choice: String) -> Unit = {},
     onImageClick: (String) -> Unit = {},
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
@@ -399,94 +395,17 @@ internal fun MessageBubble(
         }
 
         is ChatMessage.InteractiveRequest -> {
-            // Needs the user's action, so a stronger tint than the passive
-            // ToolCall status card — but still tint+border, not a solid
-            // fill, to stay consistent with the rest of the document-style
-            // chat.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f))
-                    .border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "❓ ${message.question}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (message.answered) {
-                        Text(
-                            text = t("Answered", "پاسخ داده شد"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else when (message.kind) {
-                        InteractiveKind.CLARIFY -> if (message.choices != null) {
-                            message.choices.forEach { choice ->
-                                OutlinedButton(
-                                    onClick = { onRespondToClarify(message.requestId, choice) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp),
-                                ) { Text(choice) }
-                            }
-                        } else {
-                            var answer by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = answer,
-                                onValueChange = { answer = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(t("Type answer...", "جواب بنویسید...")) },
-                            )
-                            Button(
-                                onClick = { onRespondToClarify(message.requestId, answer) },
-                                enabled = answer.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                        InteractiveKind.SUDO -> {
-                            var password by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(t("Enter sudo password...", "رمز sudo بنویسید...")) },
-                                visualTransformation = PasswordVisualTransformation(),
-                            )
-                            Button(
-                                onClick = { onRespondToSudo(message.requestId, password) },
-                                enabled = password.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                        InteractiveKind.SECRET -> {
-                            var secretValue by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = secretValue,
-                                onValueChange = { secretValue = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text(message.question) },
-                                placeholder = { Text(t("Enter value...", "مقدار را وارد کنید...")) },
-                                visualTransformation = PasswordVisualTransformation(),
-                            )
-                            Button(
-                                onClick = { onRespondToSecret(message.requestId, secretValue) },
-                                enabled = secretValue.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                    }
-                }
-            }
+            // One implementation, in InteractiveRequestCard.kt. This branch
+            // used to hold a second, near-identical copy of that card — and
+            // it was the copy the app actually rendered, so every fix made to
+            // the other one was invisible on screen.
+            InteractiveRequestCard(
+                message = message,
+                onRespondToClarify = onRespondToClarify,
+                onRespondToSudo = onRespondToSudo,
+                onRespondToSecret = onRespondToSecret,
+                onRespondToApproval = onRespondToApproval,
+            )
         }
 
         is ChatMessage.SubagentCard -> {

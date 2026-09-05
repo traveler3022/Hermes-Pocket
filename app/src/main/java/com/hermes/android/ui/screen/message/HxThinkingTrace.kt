@@ -89,15 +89,25 @@ private const val ShimmerHalfWidth = 180f
 private const val StatusSampleMillis = 450L
 private const val StatusFadeMillis = 260
 
+/** A blank line: what separates one thought from the next in reasoning the
+ *  model did not put headings on. */
+private val ParagraphBreak = Regex("""\n\s*\n""")
+
 /** Only scan the tail of the reasoning: it grows by hundreds of tokens per
  *  turn and this re-runs on every buffered flush, so scanning the whole
  *  string would be O(n²) across a turn — enough to visibly stutter on a
  *  phone during a long thinking phase. */
 private const val PreviewScanTail = 400
 
-/** Raw reasoning past this length is truncated — a `Text` holding a whole
- *  turn's unstructured reasoning janks the sheet's scroll. */
-private const val RawReasoningCap = 12_000
+/** Unstructured reasoning is split into paragraph rows; past this many, the
+ *  OLDEST are dropped. One `Text` holding a whole turn's reasoning janks the
+ *  sheet's scroll, but the cut has to come off the far end from the reader:
+ *  the newest thought is the one being looked for. */
+private const val MaxReasoningParagraphs = 40
+
+/** A single paragraph longer than this is itself trimmed — from its START, so
+ *  its last words survive. */
+private const val ParagraphCap = 4_000
 
 /** The sheet takes this share of the screen at most, so it opens to the same
  *  proportion on a small phone and a tall one. A fixed dp cap could not: 640dp
@@ -482,7 +492,7 @@ private fun HxReasoningTimeline(
     }
 }
 
-private sealed interface TimelineRow {
+internal sealed interface TimelineRow {
     data class Text(
         val title: String,
         val detail: String,
@@ -500,7 +510,7 @@ private sealed interface TimelineRow {
  * alternative — a separate "raw" panel below the timeline — broke the sequence
  * the timeline exists to show.
  */
-private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = buildList {
+internal fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = buildList {
     items.forEach { item ->
         when (item) {
             is HxTraceItem.Note -> {
@@ -513,19 +523,32 @@ private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = bui
                 if (steps.worthATimeline()) {
                     steps.forEach { add(TimelineRow.Text(title = it.title, detail = it.detail)) }
                 } else {
-                    val raw = item.text.trim()
-                    if (raw.isNotEmpty()) {
-                        add(
-                            TimelineRow.Text(
-                                title = "",
-                                detail = if (raw.length <= RawReasoningCap) {
-                                    raw
-                                } else {
-                                    raw.take(RawReasoningCap).trimEnd() + "\n…"
-                                },
-                            ),
-                        )
-                    }
+                    // Unstructured reasoning used to become ONE row holding the
+                    // whole blob, cut at its HEAD when it got long. Both halves
+                    // of that were wrong for the person reading it: the newest
+                    // thought — the only one they are chasing — sat at the
+                    // bottom of a wall of text that the newest-first ordering
+                    // below could not reach into, and once the model thought
+                    // past the cap the newest thought was the part thrown away.
+                    // Paragraphs are rows of their own, so the ordering reaches
+                    // them, and everything that is dropped is dropped from the
+                    // OLD end.
+                    item.text.split(ParagraphBreak)
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .takeLast(MaxReasoningParagraphs)
+                        .forEach { paragraph ->
+                            add(
+                                TimelineRow.Text(
+                                    title = "",
+                                    detail = if (paragraph.length <= ParagraphCap) {
+                                        paragraph
+                                    } else {
+                                        "…" + paragraph.takeLast(ParagraphCap).trimStart()
+                                    },
+                                ),
+                            )
+                        }
                 }
             }
 
