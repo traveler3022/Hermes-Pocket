@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.hermes.android.ui.design.hxSoftShadow
+import com.hermes.android.ui.design.hxUserBubbleMaxWidth
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -69,7 +70,7 @@ internal fun UserMessageBubble(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 420.dp)
+                .widthIn(max = hxUserBubbleMaxWidth())
                 .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
                 .clip(bubbleShape)
                 .background(bubbleColor)

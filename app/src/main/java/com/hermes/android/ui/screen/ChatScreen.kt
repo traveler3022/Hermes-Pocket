@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -109,6 +110,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
@@ -166,8 +168,14 @@ fun ChatScreen(
     resumeSessionId: String? = null,
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
+    // The model catalogue and the switch itself already live in ConfigViewModel
+    // — including the part that is easy to get wrong, which is telling the live
+    // session about the change rather than only the next one. Reaching for it
+    // here keeps one implementation of that rather than a second copy.
+    configViewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val configState by configViewModel.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -217,6 +225,51 @@ fun ChatScreen(
                     is ChatMessage.Status -> msg.text.lowercase().contains(query)
                     is ChatMessage.InteractiveRequest -> msg.question.lowercase().contains(query)
                     is ChatMessage.SubagentCard -> msg.text.lowercase().contains(query)
+                }
+            }
+        }
+    }
+
+    // An agent turn is not one message. The gateway opens a new assistant
+    // message for every stretch of narration between tool calls, so a single
+    // question can produce a dozen — and left alone, the chat fills up with the
+    // agent talking to itself on the way to an answer.
+    //
+    // Whatever a turn did on the way is collected in list order and shown in a
+    // trace rather than as loose cards and fragments. List order is also what
+    // gives that trace a true sequence: reasoning and tool events carry no
+    // shared ordering key, but the order they arrived in is one.
+    //
+    // Two independent choices shape what folds:
+    //
+    //  • Narration — off by default, so only the message that ends a turn stays
+    //    on the chat surface. A reader who wants the running commentary turns it
+    //    back on in Settings, and then every fragment keeps its place in the
+    //    flow with its own reasoning and its own tools beneath it.
+    //  • Search — while a query is active nothing folds at all, tool cards
+    //    included, because a hit must never be hidden inside a closed sheet.
+    val searching = uiState.searchQuery.isNotBlank()
+    val foldNarration = !searching && themeModeState?.showInlineNarration != true
+    val turnWork: Map<String, List<HxTraceItem>> =
+        remember(filteredMessages, foldNarration, searching) {
+            if (searching) {
+                emptyMap()
+            } else {
+                buildTurnWork(filteredMessages, foldNarration)
+            }
+        }
+
+    // What folded into a trace leaves the flow: every tool card, and — when
+    // narration is folded — every assistant message but the one ending its turn.
+    val visibleMessages = remember(filteredMessages, turnWork, searching) {
+        if (searching) {
+            filteredMessages
+        } else {
+            filteredMessages.filter { msg ->
+                when (msg) {
+                    is ChatMessage.ToolCall -> false
+                    is ChatMessage.Assistant -> msg.id in turnWork
+                    else -> true
                 }
             }
         }
@@ -450,10 +503,25 @@ fun ChatScreen(
                                 .clickable { onNavigateToRuntime() },
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (agentActivity != null) {
-                                AgentWorkingIndicator(agentActivity)
-                            } else {
-                                ConnectionIndicator(uiState.connectionState)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (agentActivity != null) {
+                                    AgentWorkingIndicator(agentActivity)
+                                } else {
+                                    ConnectionIndicator(uiState.connectionState)
+                                }
+                                // Which model is answering, at a glance. Read
+                                // only — switching happens in the composer's
+                                // menu, next to reasoning effort, so this slot
+                                // keeps its existing tap target.
+                                configState.activeModel?.takeIf { it.isNotBlank() }?.let { model ->
+                                    Text(
+                                        text = model,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                         HxHeaderCircleButton(
@@ -565,15 +633,27 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
+                            // HxSpace.screen, the same inset every other screen
+                            // uses. The chat had a hand-written 12dp, which is
+                            // why its text ran to the edges while the rest of
+                            // the app breathed — and a long reply with no margin
+                            // reads as a wall rather than as a message.
+                            .padding(horizontal = HxSpace.screen),
                         // Tight gap by default; itemsIndexed adds extra top
                         // padding when a message starts a new group (turn),
                         // so the eye reads turn boundaries instead of a flat
                         // evenly-spaced list.
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                        // More at the top than the bottom: the first message
+                        // sits directly under the top bar and needs clearing
+                        // from it, while the composer already brings its own
+                        // padding to the bottom edge.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            top = HxSpace.xl,
+                            bottom = HxSpace.md,
+                        ),
                     ) {
-                        if (filteredMessages.isEmpty() &&
+                        if (visibleMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
@@ -598,15 +678,15 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
+                        itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
-                                    filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                                    visibleMessages.lastOrNull { it is ChatMessage.Assistant } == message
                             // Grouped == previous message is from the same side
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
-                            val prev = filteredMessages.getOrNull(index - 1)
-                            val next = filteredMessages.getOrNull(index + 1)
+                            val prev = visibleMessages.getOrNull(index - 1)
+                            val next = visibleMessages.getOrNull(index + 1)
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
                             val isLastInGroup = next == null ||
@@ -656,6 +736,7 @@ fun ChatScreen(
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
+                                traceItems = turnWork[message.id].orEmpty(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,
@@ -724,6 +805,10 @@ fun ChatScreen(
                     onRemoveAttachment = viewModel::removeAttachment,
                     reasoningLevel = uiState.reasoningLevel,
                     onReasoningLevelChange = viewModel::setReasoningLevel,
+                    models = configState.availableModels,
+                    activeModel = configState.activeModel,
+                    onModelChange = configViewModel::selectModel,
+                    onModelMenuOpened = configViewModel::loadModels,
                 )
             }
         }
