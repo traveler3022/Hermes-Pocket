@@ -1,10 +1,12 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,7 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,8 +55,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.ChatMessage
 import kotlinx.coroutines.delay
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
@@ -77,11 +85,13 @@ private const val ShimmerTravelMillis = 1800
 private const val ShimmerPauseMillis = 1000
 private const val ShimmerHalfWidth = 180f
 
-// ── Typewriter ───────────────────────────────────────────────────────────────
-// Three characters per frame is fast enough to keep up with a streaming model
-// but slow enough that the reveal reads as motion rather than a repaint.
-private const val TypewriterCharsPerStep = 3
-private const val TypewriterStepMillis = 18L
+// ── Status line ──────────────────────────────────────────────────────────────
+// The preview line is recomputed on every buffered streaming flush — many
+// times a second. Repainting the line that often is what makes small text
+// strobe, so the line is *sampled* on a slow fixed cadence instead of
+// following the stream, and each new value crossfades in.
+private const val StatusSampleMillis = 450L
+private const val StatusFadeMillis = 260
 
 /** Only scan the tail of the reasoning: it grows by hundreds of tokens per
  *  turn and this re-runs on every buffered flush, so scanning the whole
@@ -162,6 +172,7 @@ internal fun HxThinkingTrace(
     reasoning: String,
     isStreaming: Boolean,
     messageId: String,
+    tools: List<ChatMessage.ToolCall> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     var sheetVisible by remember(messageId) { mutableStateOf(false) }
@@ -209,7 +220,7 @@ internal fun HxThinkingTrace(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            preview.isNotEmpty() -> HxTypewriterText(text = preview)
+            preview.isNotEmpty() -> HxStatusLine(text = preview)
 
             else -> HxShimmerText(text = t("Thinking", "در حال فکر کردن"))
         }
@@ -225,6 +236,7 @@ internal fun HxThinkingTrace(
         ) {
             HxThinkingSheetContent(
                 reasoning = reasoning,
+                tools = tools,
                 isComplete = !isStreaming,
                 elapsedSeconds = elapsedSeconds,
             )
@@ -247,10 +259,12 @@ private fun HxSheetGrabber() {
 @Composable
 private fun HxThinkingSheetContent(
     reasoning: String,
+    tools: List<ChatMessage.ToolCall>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
 ) {
     val steps = remember(reasoning) { parseReasoningSteps(reasoning) }
+    val structured = steps.worthATimeline()
 
     Column(
         modifier = Modifier
@@ -260,13 +274,18 @@ private fun HxThinkingSheetContent(
             .padding(start = 24.dp, top = 10.dp, end = 24.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (steps.worthATimeline()) {
+        if (structured || tools.isNotEmpty()) {
             HxReasoningTimeline(
-                steps = steps,
+                // When the model never labelled its own reasoning there are no
+                // steps worth rendering as rows — the tools still are, and the
+                // raw text follows below rather than being thrown away.
+                steps = if (structured) steps else emptyList(),
+                tools = tools,
                 isComplete = isComplete,
                 elapsedSeconds = elapsedSeconds,
             )
-        } else {
+        }
+        if (!structured) {
             HxRawReasoningPanel(rawText = reasoning)
         }
     }
@@ -275,18 +294,27 @@ private fun HxThinkingSheetContent(
 @Composable
 private fun HxReasoningTimeline(
     steps: List<HxReasoningStep>,
+    tools: List<ChatMessage.ToolCall>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
 ) {
+    // The gateway streams reasoning as one growing string and tool calls as
+    // separate events, with no shared ordering key — so steps and tools cannot
+    // be truly interleaved the way they were emitted. Steps come first, then
+    // the tools in the order they ran.
+    val lastRowIsSteps = tools.isEmpty()
     Column {
         steps.forEachIndexed { index, step ->
-            // While the model is still thinking the final row is genuinely the
-            // end of the rail; once it is done, the check row below owns that
-            // position and every step keeps its connector.
             HxTimelineRow(
                 title = step.title,
                 detail = step.detail,
-                isLast = !isComplete && index == steps.lastIndex,
+                isLast = !isComplete && lastRowIsSteps && index == steps.lastIndex,
+            )
+        }
+        tools.forEachIndexed { index, tool ->
+            HxTimelineToolRow(
+                tool = tool,
+                isLast = !isComplete && index == tools.lastIndex,
             )
         }
         if (isComplete) {
@@ -300,6 +328,37 @@ private fun HxReasoningTimeline(
             )
         }
     }
+}
+
+/** A tool the turn ran, sitting on the same rail as the reasoning steps. The
+ *  row's body is the ordinary tool card, so its arguments and result stay
+ *  expandable exactly as they were in the message flow. */
+@Composable
+private fun HxTimelineToolRow(
+    tool: ChatMessage.ToolCall,
+    isLast: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(RailTextGap),
+    ) {
+        HxTimelineGlyph(icon = toolGlyph(tool.toolName), isLast = isLast)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = if (isLast) 0.dp else RowBottomGap),
+        ) {
+            ToolCallCard(message = tool)
+        }
+    }
+}
+
+private fun toolGlyph(toolName: String): ImageVector = when (toolName.lowercase()) {
+    "bash", "shell", "terminal", "run_command" -> Icons.Rounded.Terminal
+    "fetch", "fetch_web_url", "web_search", "browse" -> Icons.Rounded.Language
+    else -> Icons.Rounded.Build
 }
 
 @Composable
@@ -418,34 +477,45 @@ private fun HxRawReasoningPanel(rawText: String) {
 }
 
 /**
- * The status line, revealed a few characters at a time.
+ * The one-line "what the agent is chewing on" preview.
  *
- * The model rewrites this line as it thinks, and each rewrite usually extends
- * the previous one — so the reveal continues from where it was rather than
- * restarting. When the new text is *not* an extension the model changed its
- * mind, and the line retypes from scratch.
+ * The underlying text changes many times a second while the model streams, so
+ * it is sampled on a fixed cadence rather than followed: the line updates a
+ * couple of times a second at most, and each new value crossfades in. Held to
+ * a single line so a long reasoning sentence can never reflow the message and
+ * shove the rest of the conversation around.
  */
 @Composable
-private fun HxTypewriterText(text: String) {
-    var rendered by remember { mutableStateOf("") }
-    LaunchedEffect(text) {
-        if (text.isBlank()) {
-            rendered = ""
-            return@LaunchedEffect
-        }
-        if (!text.startsWith(rendered)) rendered = ""
-        while (rendered.length < text.length) {
-            rendered = text.substring(
-                0,
-                (rendered.length + TypewriterCharsPerStep).coerceAtMost(text.length),
-            )
-            delay(TypewriterStepMillis)
+private fun HxStatusLine(text: String) {
+    val reduceMotion = rememberReduceMotion()
+    val latest by rememberUpdatedState(text)
+    var shown by remember { mutableStateOf(text) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (latest != shown) shown = latest
+            delay(StatusSampleMillis)
         }
     }
+
+    if (reduceMotion) {
+        HxStatusText(shown)
+        return
+    }
+    Crossfade(
+        targetState = shown,
+        animationSpec = tween(StatusFadeMillis),
+        label = "thinking_status",
+    ) { line -> HxStatusText(line) }
+}
+
+@Composable
+private fun HxStatusText(text: String) {
     Text(
-        text = rendered.ifBlank { text },
+        text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

@@ -353,6 +353,7 @@ internal fun MessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    tools: List<ChatMessage.ToolCall> = emptyList(),
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -377,6 +378,7 @@ internal fun MessageBubble(
                 resolveUrl = resolveUrl,
                 onBranch = onBranch,
                 onDownloadFile = onDownloadFile,
+                tools = tools,
             )
         }
 

@@ -222,6 +222,47 @@ fun ChatScreen(
         }
     }
 
+    // A completed tool call belongs to the agent turn that ran it, and is shown
+    // inside that turn's thinking trace rather than as a loose card in the
+    // flow. Two deliberate exceptions: a tool that is still running stays
+    // inline so its progress is visible without opening anything, and while a
+    // search is active every card stays put — a hit must never be hidden
+    // inside a closed sheet.
+    val foldTools = uiState.searchQuery.isBlank()
+    val toolsByTurn: Map<String, List<ChatMessage.ToolCall>> =
+        remember(filteredMessages, foldTools) {
+            if (!foldTools) {
+                emptyMap()
+            } else {
+                val grouped = mutableMapOf<String, MutableList<ChatMessage.ToolCall>>()
+                var turnId: String? = null
+                for (msg in filteredMessages) {
+                    when (msg) {
+                        // A new user turn ends the previous agent turn, so a
+                        // tool can never be adopted across the boundary.
+                        is ChatMessage.User -> turnId = null
+                        is ChatMessage.Assistant -> turnId = msg.id
+                        is ChatMessage.ToolCall -> {
+                            val owner = turnId
+                            if (!msg.isRunning && owner != null) {
+                                grouped.getOrPut(owner) { mutableListOf() }.add(msg)
+                            }
+                        }
+                        else -> Unit
+                    }
+                }
+                grouped
+            }
+        }
+    val visibleMessages = remember(filteredMessages, toolsByTurn) {
+        if (toolsByTurn.isEmpty()) {
+            filteredMessages
+        } else {
+            val folded = toolsByTurn.values.flatten().mapTo(mutableSetOf()) { it.id }
+            filteredMessages.filterNot { it.id in folded }
+        }
+    }
+
     // What the agent is doing right now (null = idle). Derived, not stored —
     // the running tool cards / streaming flags already carry the state.
     // Shown in the connection-status slot of the top bar while a turn runs
@@ -573,7 +614,7 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
                     ) {
-                        if (filteredMessages.isEmpty() &&
+                        if (visibleMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
@@ -598,15 +639,15 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
+                        itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
-                                    filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                                    visibleMessages.lastOrNull { it is ChatMessage.Assistant } == message
                             // Grouped == previous message is from the same side
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
-                            val prev = filteredMessages.getOrNull(index - 1)
-                            val next = filteredMessages.getOrNull(index + 1)
+                            val prev = visibleMessages.getOrNull(index - 1)
+                            val next = visibleMessages.getOrNull(index + 1)
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
                             val isLastInGroup = next == null ||
@@ -656,6 +697,7 @@ fun ChatScreen(
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
+                                tools = toolsByTurn[message.id].orEmpty(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,

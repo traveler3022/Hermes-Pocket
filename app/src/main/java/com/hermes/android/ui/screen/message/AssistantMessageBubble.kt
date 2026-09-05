@@ -61,11 +61,14 @@ internal fun AssistantMessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    tools: List<ChatMessage.ToolCall> = emptyList(),
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
     var showContextMenu by remember { mutableStateOf(false) }
-    val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
+    // The trace is worth showing for a turn that only ran tools, too — that
+    // is where the tool cards now live.
+    val hasThinking = !message.reasoning.isNullOrEmpty() || tools.isNotEmpty()
 
     val assistantContext = LocalContext.current
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
@@ -87,6 +90,7 @@ internal fun AssistantMessageBubble(
                             reasoning = message.reasoning ?: "",
                             isStreaming = message.isStreaming,
                             messageId = message.id,
+                            tools = tools,
                         )
                     }
                     if (message.text.isEmpty()) {
