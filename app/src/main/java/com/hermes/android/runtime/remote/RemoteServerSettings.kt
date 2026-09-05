@@ -42,11 +42,12 @@ class RemoteServerSettings @Inject constructor(
 
     fun save(serverUrl: String, token: String) {
         val normalized = normalizeUrl(serverUrl)
+        val cleanToken = normalizeToken(token)
         prefs.edit()
             .putString(KEY_SERVER_URL, normalized)
-            .putString(KEY_TOKEN, token.trim())
+            .putString(KEY_TOKEN, cleanToken)
             .apply()
-        _config.value = RemoteServerConfig(normalized, token.trim())
+        _config.value = RemoteServerConfig(normalized, cleanToken)
     }
 
     /**
@@ -90,6 +91,37 @@ class RemoteServerSettings @Inject constructor(
             }
             return url.trimEnd('/')
         }
+
+        /**
+         * Recover the bare token from whatever the user pasted.
+         *
+         * A token is copied out of a chat message or a setup note, so it
+         * arrives carrying its label — `- توکن: e03730…`, `token=e03730…`,
+         * `Token: e03730…` — and the server answers a labelled token with a
+         * WebSocket close and no explanation. Split on the separators a label
+         * uses and keep the longest run made only of token characters
+         * (`secrets.token_urlsafe` emits `[A-Za-z0-9_-]`) — a token is far
+         * longer than the words around it, so the label falls away whichever
+         * side of the token it sits on.
+         *
+         * Input with no token-shaped run left is returned trimmed, so a
+         * genuinely wrong entry still reaches the server and fails visibly
+         * rather than silently becoming something else.
+         */
+        fun normalizeToken(input: String): String {
+            val trimmed = input.trim()
+            if (trimmed.isEmpty()) return ""
+            // Drop a `token=` / `?token=` query-style key first, so a pasted
+            // WebSocket URL reduces to its token before splitting.
+            val candidate = trimmed.substringAfterLast("token=")
+                .split(' ', '\t', '\n', '\r', ':', '=', '&', '?', ',', '"', '\'')
+                .filter { it.isNotEmpty() && it.all(::isTokenChar) }
+                .maxByOrNull { it.length }
+            return candidate ?: trimmed
+        }
+
+        private fun isTokenChar(c: Char): Boolean =
+            c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '_' || c == '-'
     }
 }
 
