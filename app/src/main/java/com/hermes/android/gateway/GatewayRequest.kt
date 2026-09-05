@@ -80,6 +80,9 @@ object GatewayMethods {
     const val PROCESS_LIST = "process.list"
     const val PROCESS_KILL = "process.kill"
 
+    const val SESSION_COMPRESS = "session.compress"
+    const val SESSION_CONTEXT_BREAKDOWN = "session.context_breakdown"
+
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
     const val CREDITS_VIEW = "credits.view"

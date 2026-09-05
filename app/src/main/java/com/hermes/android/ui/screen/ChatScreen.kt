@@ -95,6 +95,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -179,6 +180,7 @@ fun ChatScreen(
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
+    var showContext by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -457,6 +459,11 @@ fun ChatScreen(
                                 ConnectionIndicator(uiState.connectionState)
                             }
                         }
+                        HxHeaderCircleButton(
+                            icon = Icons.Default.DataUsage,
+                            contentDescription = t("Context", "کانتکست"),
+                            onClick = { showContext = true },
+                        )
                         HxHeaderCircleButton(
                             icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                             contentDescription = t("Search", "جستجو"),
@@ -795,6 +802,16 @@ fun ChatScreen(
                 sessionId = sid,
                 snackbarHostState = snackbarHostState,
                 onDismiss = { showChanges = false },
+            )
+        }
+    }
+
+    if (showContext) {
+        uiState.activeSessionId?.let { sid ->
+            ContextSheet(
+                sessionId = sid,
+                snackbarHostState = snackbarHostState,
+                onDismiss = { showContext = false },
             )
         }
     }
