@@ -229,44 +229,78 @@ fun ChatScreen(
         }
     }
 
-    // A tool call belongs to the agent turn that ran it, and is shown inside
-    // that turn's thinking trace rather than as a loose card in the flow —
-    // running ones too, with the trace line naming the tool while it works, so
-    // the chat stays prose and the machinery stays one tap away. The one
-    // exception is an active search: every card stays put then, because a hit
-    // must never be hidden inside a closed sheet.
-    val foldTools = uiState.searchQuery.isBlank()
-    val toolsByTurn: Map<String, List<ChatMessage.ToolCall>> =
-        remember(filteredMessages, foldTools) {
-            if (!foldTools) {
-                emptyMap()
-            } else {
-                val grouped = mutableMapOf<String, MutableList<ChatMessage.ToolCall>>()
-                var turnId: String? = null
-                for (msg in filteredMessages) {
-                    when (msg) {
-                        // A new user turn ends the previous agent turn, so a
-                        // tool can never be adopted across the boundary.
-                        is ChatMessage.User -> turnId = null
-                        is ChatMessage.Assistant -> turnId = msg.id
-                        is ChatMessage.ToolCall -> {
-                            val owner = turnId
-                            if (owner != null) {
-                                grouped.getOrPut(owner) { mutableListOf() }.add(msg)
+    // An agent turn is not one message. The gateway opens a new assistant
+    // message for every stretch of narration between tool calls, so a single
+    // question can produce a dozen — and the chat filled up with the agent
+    // talking to itself on the way to an answer.
+    //
+    // Everything a turn did on the way — its narration, its reasoning, the
+    // tools it ran — is collected in list order and shown inside the trace of
+    // the message that ends the turn, leaving only the answer on the chat
+    // surface. List order is also what finally gives the trace a true sequence:
+    // reasoning and tool events carry no shared ordering key, but the order
+    // they arrived in is one.
+    //
+    // The exception is an active search: nothing folds then, because a hit must
+    // never be hidden inside a closed sheet.
+    val foldTurns = uiState.searchQuery.isBlank()
+    val turnWork: Map<String, List<HxTraceItem>> = remember(filteredMessages, foldTurns) {
+        if (!foldTurns) {
+            emptyMap()
+        } else {
+            val byTurn = mutableMapOf<String, List<HxTraceItem>>()
+            var span = mutableListOf<ChatMessage>()
+
+            fun closeTurn() {
+                val ending = span.filterIsInstance<ChatMessage.Assistant>().lastOrNull()
+                if (ending != null) {
+                    val items = mutableListOf<HxTraceItem>()
+                    for (msg in span) {
+                        when (msg) {
+                            is ChatMessage.Assistant -> {
+                                msg.reasoning?.takeIf { it.isNotBlank() }
+                                    ?.let { items.add(HxTraceItem.Reasoning(it)) }
+                                // The turn's last word is the answer, and stays
+                                // on the chat surface. Everything it said before
+                                // that was work.
+                                if (msg.id != ending.id) {
+                                    msg.text.takeIf { it.isNotBlank() }
+                                        ?.let { items.add(HxTraceItem.Note(it)) }
+                                }
                             }
+
+                            is ChatMessage.ToolCall -> items.add(HxTraceItem.Tool(msg))
+                            else -> Unit
                         }
-                        else -> Unit
                     }
+                    // Registered even when empty: the key is also what marks
+                    // this message as the one that stays visible.
+                    byTurn[ending.id] = items
                 }
-                grouped
+                span = mutableListOf()
             }
+
+            for (msg in filteredMessages) {
+                if (msg is ChatMessage.User) closeTurn() else span.add(msg)
+            }
+            closeTurn()
+            byTurn
         }
-    val visibleMessages = remember(filteredMessages, toolsByTurn) {
-        if (toolsByTurn.isEmpty()) {
+    }
+
+    // What folded into a trace leaves the flow: every tool card, and every
+    // assistant message except the one that ends its turn.
+    val visibleMessages = remember(filteredMessages, turnWork, foldTurns) {
+        if (!foldTurns) {
             filteredMessages
         } else {
-            val folded = toolsByTurn.values.flatten().mapTo(mutableSetOf()) { it.id }
-            filteredMessages.filterNot { it.id in folded }
+            filteredMessages.filter { msg ->
+                when (msg) {
+                    is ChatMessage.ToolCall -> false
+                    is ChatMessage.Assistant -> msg.id in turnWork
+                    else -> true
+                }
+            }
         }
     }
 
@@ -719,7 +753,7 @@ fun ChatScreen(
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
-                                tools = toolsByTurn[message.id].orEmpty(),
+                                traceItems = turnWork[message.id].orEmpty(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToSudo = viewModel::respondToSudo,

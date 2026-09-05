@@ -62,14 +62,14 @@ internal fun AssistantMessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
-    tools: List<ChatMessage.ToolCall> = emptyList(),
+    traceItems: List<HxTraceItem> = emptyList(),
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
     var showContextMenu by remember { mutableStateOf(false) }
-    // The trace is worth showing for a turn that only ran tools, too — that
-    // is where the tool cards now live.
-    val hasThinking = !message.reasoning.isNullOrEmpty() || tools.isNotEmpty()
+    // The trace covers everything the turn did on the way here — its own
+    // reasoning, what it said between tool calls, and the tools themselves.
+    val hasTrace = traceItems.isNotEmpty()
 
     val assistantContext = LocalContext.current
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
@@ -86,16 +86,20 @@ internal fun AssistantMessageBubble(
                         .animateContentSize()
                         .padding(vertical = 2.dp),
                 ) {
-                    if (hasThinking) {
+                    if (hasTrace) {
                         HxThinkingTrace(
-                            reasoning = message.reasoning ?: "",
+                            items = traceItems,
                             isStreaming = message.isStreaming,
                             messageId = message.id,
-                            tools = tools,
                         )
                     }
+                    // A turn can end on a tool rather than a sentence, leaving
+                    // this message with no text at all. Only a turn still in
+                    // flight is waiting for words.
                     if (message.text.isEmpty()) {
-                        TypingDots(modifier = Modifier.padding(vertical = 4.dp))
+                        if (message.isStreaming) {
+                            TypingDots(modifier = Modifier.padding(vertical = 4.dp))
+                        }
                     } else {
                         val displayMd = if (!isResponseExpanded && isLongResponse) {
                             message.text.take(800) + "\n\n\u2026"
