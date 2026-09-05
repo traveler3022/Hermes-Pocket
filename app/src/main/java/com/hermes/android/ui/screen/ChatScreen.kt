@@ -110,6 +110,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
@@ -632,13 +633,25 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
+                            // HxSpace.screen, the same inset every other screen
+                            // uses. The chat had a hand-written 12dp, which is
+                            // why its text ran to the edges while the rest of
+                            // the app breathed — and a long reply with no margin
+                            // reads as a wall rather than as a message.
+                            .padding(horizontal = HxSpace.screen),
                         // Tight gap by default; itemsIndexed adds extra top
                         // padding when a message starts a new group (turn),
                         // so the eye reads turn boundaries instead of a flat
                         // evenly-spaced list.
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                        // More at the top than the bottom: the first message
+                        // sits directly under the top bar and needs clearing
+                        // from it, while the composer already brings its own
+                        // padding to the bottom edge.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            top = HxSpace.xl,
+                            bottom = HxSpace.md,
+                        ),
                     ) {
                         if (visibleMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
