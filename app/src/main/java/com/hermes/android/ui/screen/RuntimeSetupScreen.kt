@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,6 +63,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.service.HermesGatewayService
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.i18n.t
@@ -209,7 +209,7 @@ fun RuntimeSetupScreen(
                     },
                 ) {
                     Icon(
-                        Icons.Default.OpenInNew,
+                        HxIcons.ExternalLink,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )

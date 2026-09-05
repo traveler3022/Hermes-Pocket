@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
@@ -81,7 +81,7 @@ fun ChangesSheet(
             ) {
                 Text(t("Changes", "تغییرات"), style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = { viewModel.undoLastTurn() }) {
-                    Icon(Icons.Default.Undo, contentDescription = null, modifier = Modifier.height(18.dp))
+                    Icon(HxIcons.Undo, contentDescription = null, modifier = Modifier.height(18.dp))
                     Spacer(Modifier.height(0.dp))
                     Text(t("Undo last turn", "واگرد آخرین نوبت"))
                 }
@@ -99,7 +99,7 @@ fun ChangesSheet(
                 uiState.isLoadingDiff -> LoadingRow()
                 uiState.isLoading -> LoadingRow()
                 uiState.checkpoints.isEmpty() -> HermesEmptyState(
-                    icon = Icons.Default.Undo,
+                    icon = HxIcons.Undo,
                     title = t("No checkpoints yet", "هنوز هیچ چک‌پوینتی نیست"),
                     caption = t(
                         "Checkpoints appear here after the agent edits files",

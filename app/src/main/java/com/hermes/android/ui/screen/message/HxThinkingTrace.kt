@@ -27,11 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Build
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +53,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 import kotlinx.coroutines.delay
@@ -352,7 +348,7 @@ private fun HxReasoningTimeline(
                 title = doneLabel(elapsedSeconds, tools.size),
                 detail = t("Done", "تمام"),
                 isLast = true,
-                icon = Icons.Rounded.CheckCircle,
+                icon = HxIcons.CircleCheck,
             )
         }
     }
@@ -384,9 +380,9 @@ private fun HxTimelineToolRow(
 }
 
 private fun toolGlyph(toolName: String): ImageVector = when (toolName.lowercase()) {
-    "bash", "shell", "terminal", "run_command" -> Icons.Rounded.Terminal
-    "fetch", "fetch_web_url", "web_search", "browse" -> Icons.Rounded.Language
-    else -> Icons.Rounded.Build
+    "bash", "shell", "terminal", "run_command" -> HxIcons.Terminal
+    "fetch", "fetch_web_url", "web_search", "browse" -> HxIcons.Globe
+    else -> HxIcons.Wrench
 }
 
 @Composable
