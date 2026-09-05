@@ -149,6 +149,7 @@ import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.InteractiveKind
 import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
+import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
@@ -169,6 +170,10 @@ internal fun InputBar(
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
     reasoningLevel: String = "medium",
     onReasoningLevelChange: (String) -> Unit = {},
+    models: List<ModelOption> = emptyList(),
+    activeModel: String? = null,
+    onModelChange: (ModelOption) -> Unit = {},
+    onModelMenuOpened: () -> Unit = {},
 ) {
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -260,7 +265,13 @@ internal fun InputBar(
                         .hxSoftShadow(radius = 8.dp, shape = CircleShape)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(enabled = !isAttaching) { extrasMenuOpen = true },
+                        .clickable(enabled = !isAttaching) {
+                            extrasMenuOpen = true
+                            // The catalogue comes from the gateway; ask for it
+                            // when the menu opens rather than holding a stale
+                            // list from whenever the screen was composed.
+                            onModelMenuOpened()
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (isAttaching) {
@@ -285,6 +296,48 @@ internal fun InputBar(
                             filePicker.launch("*/*")
                         },
                     )
+                    if (models.isNotEmpty()) {
+                        HorizontalDivider()
+                        Text(
+                            text = t("Model", "مدل"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                        models.forEach { model ->
+                            val selected = model.modelId == activeModel
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            model.name,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        )
+                                        Text(
+                                            model.provider,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        HxIcons.Sparkles,
+                                        contentDescription = null,
+                                        tint = if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            LocalContentColor.current
+                                        },
+                                    )
+                                },
+                                onClick = {
+                                    onModelChange(model)
+                                    extrasMenuOpen = false
+                                },
+                            )
+                        }
+                    }
                     HorizontalDivider()
                     Text(
                         text = t("Reasoning effort", "سطح استدلال"),

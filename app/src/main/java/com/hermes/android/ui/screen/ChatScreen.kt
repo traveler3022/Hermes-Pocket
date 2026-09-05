@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -166,8 +167,14 @@ fun ChatScreen(
     resumeSessionId: String? = null,
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
+    // The model catalogue and the switch itself already live in ConfigViewModel
+    // — including the part that is easy to get wrong, which is telling the live
+    // session about the change rather than only the next one. Reaching for it
+    // here keeps one implementation of that rather than a second copy.
+    configViewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val configState by configViewModel.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -491,10 +498,25 @@ fun ChatScreen(
                                 .clickable { onNavigateToRuntime() },
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (agentActivity != null) {
-                                AgentWorkingIndicator(agentActivity)
-                            } else {
-                                ConnectionIndicator(uiState.connectionState)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (agentActivity != null) {
+                                    AgentWorkingIndicator(agentActivity)
+                                } else {
+                                    ConnectionIndicator(uiState.connectionState)
+                                }
+                                // Which model is answering, at a glance. Read
+                                // only — switching happens in the composer's
+                                // menu, next to reasoning effort, so this slot
+                                // keeps its existing tap target.
+                                configState.activeModel?.takeIf { it.isNotBlank() }?.let { model ->
+                                    Text(
+                                        text = model,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                         HxHeaderCircleButton(
@@ -766,6 +788,10 @@ fun ChatScreen(
                     onRemoveAttachment = viewModel::removeAttachment,
                     reasoningLevel = uiState.reasoningLevel,
                     onReasoningLevelChange = viewModel::setReasoningLevel,
+                    models = configState.availableModels,
+                    activeModel = configState.activeModel,
+                    onModelChange = configViewModel::selectModel,
+                    onModelMenuOpened = configViewModel::loadModels,
                 )
             }
         }
