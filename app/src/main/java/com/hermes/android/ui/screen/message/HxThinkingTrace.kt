@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,11 @@ private const val PreviewScanTail = 400
 /** Raw reasoning past this length is truncated — a `Text` holding a whole
  *  turn's unstructured reasoning janks the sheet's scroll. */
 private const val RawReasoningCap = 12_000
+
+/** The sheet takes this share of the screen at most, so it opens to the same
+ *  proportion on a small phone and a tall one. A fixed dp cap could not: 640dp
+ *  is four fifths of one screen and the whole of another. */
+private const val SheetScreenFraction = 0.6f
 
 /** One step of the model's reasoning. [title] is blank for text that arrived
  *  before the model emitted any heading. */
@@ -211,11 +217,19 @@ internal fun HxThinkingTrace(
             .noRippleClickable { sheetVisible = true },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val runningTool = tools.lastOrNull { it.isRunning }
         when {
+            // The tool cards live in the sheet now, so the line has to say
+            // what is running — otherwise a long tool looks like a hang.
+            runningTool != null -> HxShimmerText(
+                text = t(
+                    "Using ${runningTool.toolName}…",
+                    "در حال استفاده از ${runningTool.toolName}…",
+                ),
+            )
+
             !isStreaming -> Text(
-                text = elapsedSeconds
-                    ?.let { t("Thought for ${it}s", "$it ثانیه فکر کرد") }
-                    ?: t("Thoughts", "افکار"),
+                text = doneLabel(elapsedSeconds, tools.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -244,6 +258,22 @@ internal fun HxThinkingTrace(
     }
 }
 
+/** What the collapsed line reads once the turn is over: how long it thought,
+ *  and how many tools it reached for on the way. */
+@Composable
+private fun doneLabel(elapsedSeconds: Long?, toolCount: Int): String {
+    val thought = elapsedSeconds
+        ?.let { t("Thought for ${it}s", "$it ثانیه فکر کرد") }
+        ?: t("Thoughts", "افکار")
+    if (toolCount == 0) return thought
+    val tools = if (toolCount == 1) {
+        t("1 tool", "۱ ابزار")
+    } else {
+        t("$toolCount tools", "$toolCount ابزار")
+    }
+    return "$thought · $tools"
+}
+
 @Composable
 private fun HxSheetGrabber() {
     Box(
@@ -269,7 +299,7 @@ private fun HxThinkingSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 640.dp)
+            .heightIn(max = (LocalConfiguration.current.screenHeightDp * SheetScreenFraction).dp)
             .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, top = 10.dp, end = 24.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -319,9 +349,7 @@ private fun HxReasoningTimeline(
         }
         if (isComplete) {
             HxTimelineRow(
-                title = elapsedSeconds
-                    ?.let { t("Thought for ${it}s", "$it ثانیه فکر کرد") }
-                    ?: t("Thoughts", "افکار"),
+                title = doneLabel(elapsedSeconds, tools.size),
                 detail = t("Done", "تمام"),
                 isLast = true,
                 icon = Icons.Rounded.CheckCircle,
