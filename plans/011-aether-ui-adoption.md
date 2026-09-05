@@ -34,6 +34,8 @@ that branch hard to defend. Name things for what they do here.
 | Messages sized against the screen instead of a fixed dp cap | `ui/design/DesignSystem.kt` |
 | Icons transcribed from Lucide; 9 deprecation warnings down to 1 | `ui/design/HxIcons.kt` |
 | Model switching from the composer, next to reasoning effort | `ChatInputBar.kt` |
+| Token split charted; `HxSplitBar` primitive | `ui/design/HxCharts.kt` |
+| Markdown finished: dead dependency dropped, modern links, streams as markdown | `component/HermesMarkdown.kt` |
 
 ## Backlog, cheapest-first
 
@@ -88,17 +90,33 @@ original estimate:
 Pick one before building more chart primitives. Adding a chart with no data to
 feed it is how the other branch ended up with 755 lines nothing calls.
 
-### 5. Pure-Compose markdown renderer — P3, effort L
+### 5. Pure-Compose markdown renderer — DONE, and it was already half done
 
-`HermesMarkdown.kt` is a 255-line wrapper around the `compose-markdown` library,
-which renders through `AndroidView`. Its own comment warns about the cost inside
-a `LazyColumn`, and `AssistantMessageBubble` works around it by falling back to
-plain `Text` while streaming — so streamed replies show raw markup until the turn
-ends. Aether renders markdown in Compose directly (~3k lines) and highlights code
-blocks.
+**Second correction.** This plan described `HermesMarkdown.kt` as "a wrapper
+around the `compose-markdown` library, which renders through `AndroidView`", and
+sized the item at effort L. That misread the file: its own doc comment describes
+the AndroidView version as the one it *replaced*. The renderer has been pure
+Compose — blocks parsed into `AnnotatedString`, no View interop — for some time.
 
-Biggest item here and the only one that removes a dependency. Do it when the
-streaming-markup compromise starts to matter, not before.
+The lesson is worth keeping: a comment explaining why code is *not* something is
+easy to read as a description of what it *is*. Check what a file does, not what
+its comment mentions.
+
+What was actually left, and is now done:
+
+- `compose-markdown` was still declared in `app/build.gradle.kts` and referenced
+  by no line of Kotlin — a dead dependency pulling Markwon and a View stack into
+  the APK. Removed.
+- Links used `pushStringAnnotation` plus a deprecated `ClickableText`, the app's
+  last build warning. They are `LinkAnnotation.Url` inside the string now, so
+  opening, focusing and reading them out are the platform's job — and text
+  selection works across a link, which `ClickableText` had blocked.
+- `AssistantMessageBubble` fell back to plain `Text` while streaming, a leftover
+  from the AndroidView era whose only remaining effect was showing raw `**` and
+  `##` until the turn ended. Streaming renders as markdown now.
+
+Still not done, and genuinely worth doing: **syntax highlighting in code
+blocks**. `CodeBlockCard` renders code unstyled.
 
 ### 6. Conversation timeline rail — P3, effort M
 

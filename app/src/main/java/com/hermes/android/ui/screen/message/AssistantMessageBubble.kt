@@ -116,22 +116,20 @@ internal fun AssistantMessageBubble(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             blocks.forEach { block ->
                                 when (block) {
+                                    // Rendered as markdown while streaming too.
+                                    // The plain-Text fallback here dated from
+                                    // when this renderer was a TextView behind
+                                    // AndroidView and re-laid out the whole view
+                                    // per token; it is pure Compose now, and the
+                                    // fallback's only remaining effect was
+                                    // showing raw ** and ## until the turn ended.
                                     is ContentBlock.Text -> SelectionContainer {
-                                        if (message.isStreaming) {
-                                            Text(
-                                                text = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
-                                            )
-                                        } else {
-                                            HermesMarkdown(
-                                                markdown = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
-                                            )
-                                        }
+                                        HermesMarkdown(
+                                            markdown = block.markdown,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                        )
                                     }
                                     is ContentBlock.Image -> InlineImageBlock(
                                         alt = block.alt, url = block.url,

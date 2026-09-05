@@ -2,7 +2,6 @@
 agp = "8.7.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
-composeMarkdown = "0.7.2"
 coil = "2.7.0"
 
 # AndroidX
@@ -87,7 +86,6 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
 # Markdown
-compose-markdown = { group = "com.github.jeziellago", name = "compose-markdown", version.ref = "composeMarkdown" }
 
 # Coil (image loading for markdown)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
