@@ -31,6 +31,9 @@ that branch hard to defend. Name things for what they do here.
 | Empty state with starter chips | `ChatScreen.kt` `EmptyChatHero` |
 | Thinking as a quiet line + bottom-sheet trace with a glyph rail | `message/HxThinkingTrace.kt` |
 | Tool cards folded off the chat surface into that trace | `ChatScreen.kt` `toolsByTurn` |
+| Messages sized against the screen instead of a fixed dp cap | `ui/design/DesignSystem.kt` |
+| Icons transcribed from Lucide; 9 deprecation warnings down to 1 | `ui/design/HxIcons.kt` |
+| Model switching from the composer, next to reasoning effort | `ChatInputBar.kt` |
 
 ## Backlog, cheapest-first
 
@@ -58,15 +61,32 @@ Branching exists but is buried in the long-press menu
 stepper under the user message that owns the branch point, so the feature is
 discoverable and switching is one tap. Same backend, visible affordance.
 
-### 4. Usage statistics with charts — P2, effort M
+### 4. Usage statistics with charts — P2, effort M — PARTLY DONE, then blocked
 
-Hermes draws **no charts anywhere** — `BillingScreen.kt` is two functions and a
-dialog. Aether has a statistics page with token bars, a history line, a
-provider-mix pie and a speed chart.
+Hermes drew no charts anywhere. A first primitive now exists — `HxSplitBar` in
+`ui/design/HxCharts.kt` — and the session detail uses it to show the input/output
+split beside the raw token tiles.
 
-The data is already arriving: `SessionsViewModel` logs per-session token totals.
-This is a rendering job on top of numbers Hermes already has. Compose `Canvas`
-is enough; no charting dependency needed.
+**Correction to this plan's first draft.** It claimed the rest was "a rendering
+job on top of numbers Hermes already has". That was wrong, and checking the data
+is what showed it:
+
+| What exists | Shape |
+|---|---|
+| `SessionUsage` | `calls`, `input`, `output`, `total`, `creditsLines` — one session, fetched on demand |
+| `InsightsData` | `days`, `sessions`, `messages` — three scalars over 30 days |
+
+There is **no time series anywhere**, so tokens-over-time, a provider mix, and a
+throughput chart have nothing to plot. Two ways forward, both bigger than the
+original estimate:
+
+- **Client-side aggregate** — call `session.usage` for every session in the list
+  and bucket by `updatedAt`. Works today, at the cost of N round-trips per open.
+- **Gateway endpoint** — one call returning usage bucketed by day and provider.
+  Cheaper on the wire and the better answer, but it is server work.
+
+Pick one before building more chart primitives. Adding a chart with no data to
+feed it is how the other branch ended up with 755 lines nothing calls.
 
 ### 5. Pure-Compose markdown renderer — P3, effort L
 
