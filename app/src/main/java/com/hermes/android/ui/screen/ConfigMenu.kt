@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pets
@@ -213,6 +214,12 @@ internal fun SettingsMenu(
                 subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
                 icon = Icons.Default.Language,
                 onClick = { onOpen(SettingsSection.GENERAL) },
+            ),
+            DomainSpec(
+                title = t("About", "درباره"),
+                subtitle = t("Version and updates", "نسخه و به\u200Cروزرسانی"),
+                icon = Icons.Default.Info,
+                onClick = { onOpen(SettingsSection.ABOUT) },
             ),
         )
         Column(
