@@ -222,12 +222,12 @@ fun ChatScreen(
         }
     }
 
-    // A completed tool call belongs to the agent turn that ran it, and is shown
-    // inside that turn's thinking trace rather than as a loose card in the
-    // flow. Two deliberate exceptions: a tool that is still running stays
-    // inline so its progress is visible without opening anything, and while a
-    // search is active every card stays put — a hit must never be hidden
-    // inside a closed sheet.
+    // A tool call belongs to the agent turn that ran it, and is shown inside
+    // that turn's thinking trace rather than as a loose card in the flow —
+    // running ones too, with the trace line naming the tool while it works, so
+    // the chat stays prose and the machinery stays one tap away. The one
+    // exception is an active search: every card stays put then, because a hit
+    // must never be hidden inside a closed sheet.
     val foldTools = uiState.searchQuery.isBlank()
     val toolsByTurn: Map<String, List<ChatMessage.ToolCall>> =
         remember(filteredMessages, foldTools) {
@@ -244,7 +244,7 @@ fun ChatScreen(
                         is ChatMessage.Assistant -> turnId = msg.id
                         is ChatMessage.ToolCall -> {
                             val owner = turnId
-                            if (!msg.isRunning && owner != null) {
+                            if (owner != null) {
                                 grouped.getOrPut(owner) { mutableListOf() }.add(msg)
                             }
                         }
