@@ -193,6 +193,7 @@ fun ConfigScreen(
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
                 SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
                 SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
+                SettingsSection.ABOUT -> AboutSection()
             }
         }
     }
@@ -206,6 +207,7 @@ internal enum class SettingsSection(val titleEn: String, val titleFa: String) {
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     TOOLS("Tools", "ابزارها"),
     ADVANCED("Advanced", "پیشرفته"),
+    ABOUT("About", "درباره"),
 }
 
 

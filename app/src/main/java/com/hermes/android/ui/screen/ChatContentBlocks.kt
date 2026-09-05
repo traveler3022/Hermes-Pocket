@@ -66,7 +66,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -136,6 +135,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -379,7 +379,7 @@ internal fun HtmlBlockCard(
                 }
                 IconButton(onClick = onOpenExternal, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        Icons.Default.OpenInNew,
+                        HxIcons.ExternalLink,
                         contentDescription = t("Open in browser", "باز کردن در مرورگر"),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary,

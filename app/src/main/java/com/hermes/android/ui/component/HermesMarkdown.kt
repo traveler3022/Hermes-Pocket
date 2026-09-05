@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,16 +16,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,7 +61,6 @@ fun HermesMarkdown(
     val blocks = remember(markdown) { parseMarkdownBlocks(markdown) }
     val codeBg = MaterialTheme.colorScheme.surfaceVariant
     val onCode = MaterialTheme.colorScheme.onSurfaceVariant
-    val uriHandler = LocalUriHandler.current
 
     Column(modifier) {
         blocks.forEach { block ->
@@ -76,7 +75,6 @@ fun HermesMarkdown(
                     MdText(
                         text = inline(block.text, linkColor, codeBg),
                         style = style.copy(fontWeight = FontWeight.Bold, fontSize = size),
-                        uriHandler = uriHandler,
                         modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
                     )
                 }
@@ -106,18 +104,16 @@ fun HermesMarkdown(
                     MdText(
                         inline(block.text, linkColor, codeBg),
                         style.copy(color = style.color.copy(alpha = 0.85f)),
-                        uriHandler,
-                    )
+                        )
                 }
                 is MdBlock.ListItem -> Row(Modifier.padding(start = 4.dp, top = 1.dp, bottom = 1.dp)) {
                     Text(block.marker, style = style)
                     Spacer(Modifier.width(6.dp))
-                    MdText(inline(block.text, linkColor, codeBg), style, uriHandler)
+                    MdText(inline(block.text, linkColor, codeBg), style)
                 }
                 is MdBlock.Para -> MdText(
                     inline(block.text, linkColor, codeBg),
                     style,
-                    uriHandler,
                     Modifier.padding(vertical = 1.dp),
                 )
             }
@@ -125,23 +121,22 @@ fun HermesMarkdown(
     }
 }
 
+/**
+ * A run of inline markdown.
+ *
+ * Links are [LinkAnnotation.Url]s inside the string rather than plain
+ * annotations resolved by a click handler, so opening them, focusing them and
+ * reading them out are the platform's job — which is also why this is an
+ * ordinary [Text]. The `ClickableText` it replaces is deprecated, and it
+ * swallowed text selection: a reply could not be selected across a link.
+ */
 @Composable
 private fun MdText(
     text: AnnotatedString,
     style: TextStyle,
-    uriHandler: UriHandler,
     modifier: Modifier = Modifier,
 ) {
-    ClickableText(
-        text = text,
-        style = style,
-        modifier = modifier,
-        onClick = { offset ->
-            text.getStringAnnotations("URL", offset, offset).firstOrNull()?.let {
-                runCatching { uriHandler.openUri(it.item) }
-            }
-        },
-    )
+    Text(text = text, style = style, modifier = modifier)
 }
 
 // ── Parsing ──────────────────────────────────────────────────────────────
@@ -240,11 +235,19 @@ private fun inline(text: String, linkColor: Color, codeBg: Color): AnnotatedStri
                         if (pClose > close) {
                             val label = text.substring(i + 1, close)
                             val url = text.substring(close + 2, pClose)
-                            pushStringAnnotation("URL", url)
-                            withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                            withLink(
+                                LinkAnnotation.Url(
+                                    url = url,
+                                    styles = TextLinkStyles(
+                                        style = SpanStyle(
+                                            color = linkColor,
+                                            textDecoration = TextDecoration.Underline,
+                                        ),
+                                    ),
+                                ),
+                            ) {
                                 append(label)
                             }
-                            pop()
                             i = pClose + 1
                         } else { append(c); i++ }
                     } else { append(c); i++ }

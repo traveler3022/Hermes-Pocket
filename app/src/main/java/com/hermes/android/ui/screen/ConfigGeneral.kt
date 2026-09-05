@@ -139,6 +139,30 @@ internal fun GeneralTab(
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = t("Show the agent's running commentary", "نمایش روایت میانی"),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = t(
+                                    "What the agent says between tool calls stays in the chat instead of folding into the thinking trace. More to read, nothing hidden.",
+                                    "چیزهایی که ایجنت بین ابزارها می‌گوید در خود گفتگو می‌ماند و داخل صفحهٔ استدلال جمع نمی‌شود. شلوغ‌تر، ولی چیزی پنهان نمی‌ماند.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.showInlineNarration,
+                            onCheckedChange = { themeModeState.updateShowInlineNarration(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = t("Font", "فونت"),
                         style = MaterialTheme.typography.titleSmall,

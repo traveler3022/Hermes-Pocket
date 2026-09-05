@@ -36,6 +36,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -451,6 +452,35 @@ fun HermesEmptyState(
         }
     }
 }
+
+// ── Message measure ────────────────────────────────────────────────────────
+
+/**
+ * How wide a message may grow, as a share of the screen rather than a fixed dp.
+ *
+ * A hard cap cannot suit both ends of the range: 420dp is the entire width of a
+ * small phone and barely half of a tablet, so the same number reads as
+ * "edge to edge" on one device and "a ribbon down the middle" on another.
+ * Scaling with the screen and capping only the upper end fixes both — the cap
+ * is what keeps a line of prose from growing past a comfortable reading measure
+ * on a large screen.
+ *
+ * No lower bound on purpose: a share of a narrow screen is already narrow, and
+ * a floor would be free to exceed the screen it is meant to fit inside.
+ */
+@Composable
+fun hxMessageMaxWidth(fraction: Float, ceiling: Dp): Dp =
+    (LocalConfiguration.current.screenWidthDp.dp * fraction).coerceAtMost(ceiling)
+
+/** The agent's replies read as a document, so they run nearly full width and
+ *  stop at a comfortable reading measure. */
+@Composable
+fun hxAssistantMaxWidth(): Dp = hxMessageMaxWidth(fraction = 0.94f, ceiling = 620.dp)
+
+/** The user's messages are bubbles pinned to one side; leaving a margin beside
+ *  them is what makes them read as "sent" rather than as another paragraph. */
+@Composable
+fun hxUserBubbleMaxWidth(): Dp = hxMessageMaxWidth(fraction = 0.82f, ceiling = 520.dp)
 
 // ── Floating controls (Aether-inspired chrome) ─────────────────────────────
 

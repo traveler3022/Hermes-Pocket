@@ -52,6 +52,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.design.hxCompactCount
+import com.hermes.android.ui.design.HxSplitBar
+import com.hermes.android.ui.design.HxBarPart
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
@@ -98,11 +101,21 @@ internal fun HistoryDetailView(
                     .fillMaxWidth()
                     .padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
             ) {
-                StatTile(value = "${u.input}", label = t("in", "ورودی"))
-                StatTile(value = "${u.output}", label = t("out", "خروجی"))
-                StatTile(value = "${u.total}", label = t("total", "کل"))
+                StatTile(value = hxCompactCount(u.input), label = t("in", "ورودی"))
+                StatTile(value = hxCompactCount(u.output), label = t("out", "خروجی"))
+                StatTile(value = hxCompactCount(u.total), label = t("total", "کل"))
                 StatTile(value = "${u.calls}", label = t("calls", "فراخوانی"))
             }
+            HxSplitBar(
+                parts = listOf(
+                    HxBarPart(t("in", "ورودی"), u.input, MaterialTheme.colorScheme.primary),
+                    HxBarPart(t("out", "خروجی"), u.output, MaterialTheme.colorScheme.tertiary),
+                ),
+                modifier = Modifier.padding(
+                    horizontal = HxSpace.screen,
+                    vertical = HxSpace.xs,
+                ),
+            )
             u.creditsLines.forEach { line ->
                 Text(
                     text = line,

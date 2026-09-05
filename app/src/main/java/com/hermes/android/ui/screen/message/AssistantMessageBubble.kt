@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -41,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.hxAssistantMaxWidth
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -61,18 +62,20 @@ internal fun AssistantMessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    traceItems: List<HxTraceItem> = emptyList(),
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
-    var isThinkingExpanded by remember { mutableStateOf(false) }
     var showContextMenu by remember { mutableStateOf(false) }
-    val hasThinking = message.reasoning != null && message.reasoning.isNotEmpty()
+    // The trace covers everything the turn did on the way here — its own
+    // reasoning, what it said between tool calls, and the tools themselves.
+    val hasTrace = traceItems.isNotEmpty()
 
     val assistantContext = LocalContext.current
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.widthIn(max = 460.dp)) {
+        Column(modifier = Modifier.widthIn(max = hxAssistantMaxWidth())) {
             Box {
                 Column(
                     modifier = Modifier
@@ -83,16 +86,20 @@ internal fun AssistantMessageBubble(
                         .animateContentSize()
                         .padding(vertical = 2.dp),
                 ) {
-                    if (hasThinking) {
-                        ThinkingBlock(
-                            reasoning = message.reasoning ?: "",
+                    if (hasTrace) {
+                        HxThinkingTrace(
+                            items = traceItems,
                             isStreaming = message.isStreaming,
-                            expanded = isThinkingExpanded,
-                            onToggle = { isThinkingExpanded = !isThinkingExpanded },
+                            messageId = message.id,
                         )
                     }
+                    // A turn can end on a tool rather than a sentence, leaving
+                    // this message with no text at all. Only a turn still in
+                    // flight is waiting for words.
                     if (message.text.isEmpty()) {
-                        TypingDots(modifier = Modifier.padding(vertical = 4.dp))
+                        if (message.isStreaming) {
+                            TypingDots(modifier = Modifier.padding(vertical = 4.dp))
+                        }
                     } else {
                         val displayMd = if (!isResponseExpanded && isLongResponse) {
                             message.text.take(800) + "\n\n\u2026"
@@ -113,22 +120,20 @@ internal fun AssistantMessageBubble(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             blocks.forEach { block ->
                                 when (block) {
+                                    // Rendered as markdown while streaming too.
+                                    // The plain-Text fallback here dated from
+                                    // when this renderer was a TextView behind
+                                    // AndroidView and re-laid out the whole view
+                                    // per token; it is pure Compose now, and the
+                                    // fallback's only remaining effect was
+                                    // showing raw ** and ## until the turn ended.
                                     is ContentBlock.Text -> SelectionContainer {
-                                        if (message.isStreaming) {
-                                            Text(
-                                                text = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
-                                            )
-                                        } else {
-                                            HermesMarkdown(
-                                                markdown = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
-                                            )
-                                        }
+                                        HermesMarkdown(
+                                            markdown = block.markdown,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                        )
                                     }
                                     is ContentBlock.Image -> InlineImageBlock(
                                         alt = block.alt, url = block.url,
@@ -217,7 +222,7 @@ internal fun AssistantMessageBubble(
                     DropdownMenuItem(
                         text = { Text(t("Branch conversation", "شاخه\u200Cزدن گفتگو")) },
                         onClick = { onBranch(); showContextMenu = false },
-                        leadingIcon = { Icon(Icons.Default.CallSplit, contentDescription = null) },
+                        leadingIcon = { Icon(HxIcons.GitBranch, contentDescription = null) },
                     )
                 }
             }
