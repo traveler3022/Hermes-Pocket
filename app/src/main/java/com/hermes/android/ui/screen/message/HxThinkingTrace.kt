@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -105,6 +104,27 @@ private const val RawReasoningCap = 12_000
  *  is four fifths of one screen and the whole of another. */
 private const val SheetScreenFraction = 0.6f
 
+/**
+ * One thing the agent did on the way to its answer, in the order it happened.
+ *
+ * A turn is not one message: the gateway opens a new assistant message for each
+ * stretch of narration between tool calls, so a single question can produce a
+ * dozen of them. Collected in list order, they and the tool calls between them
+ * finally give the trace a real sequence — which is what the plan called out as
+ * missing, because reasoning and tools carry no shared ordering key of their
+ * own. List order is that key.
+ */
+internal sealed interface HxTraceItem {
+    /** Something the agent said out loud on the way — not its private
+     *  reasoning, but not the answer either. */
+    data class Note(val text: String) : HxTraceItem
+
+    /** A block of the model's private reasoning. */
+    data class Reasoning(val text: String) : HxTraceItem
+
+    data class Tool(val call: ChatMessage.ToolCall) : HxTraceItem
+}
+
 /** One step of the model's reasoning. [title] is blank for text that arrived
  *  before the model emitted any heading. */
 internal data class HxReasoningStep(
@@ -171,12 +191,16 @@ internal fun List<HxReasoningStep>.worthATimeline(): Boolean =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HxThinkingTrace(
-    reasoning: String,
+    items: List<HxTraceItem>,
     isStreaming: Boolean,
     messageId: String,
-    tools: List<ChatMessage.ToolCall> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
+    if (items.isEmpty()) return
+    val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
+    val reasoning = remember(items) {
+        items.filterIsInstance<HxTraceItem.Reasoning>().joinToString("\n\n") { it.text }
+    }
     var sheetVisible by remember(messageId) { mutableStateOf(false) }
 
     // Thinking duration is measured, never guessed: a message restored from
@@ -245,8 +269,7 @@ internal fun HxThinkingTrace(
             dragHandle = { HxSheetGrabber() },
         ) {
             HxThinkingSheetContent(
-                reasoning = reasoning,
-                tools = tools,
+                items = items,
                 isComplete = !isStreaming,
                 elapsedSeconds = elapsedSeconds,
             )
@@ -284,14 +307,10 @@ private fun HxSheetGrabber() {
 
 @Composable
 private fun HxThinkingSheetContent(
-    reasoning: String,
-    tools: List<ChatMessage.ToolCall>,
+    items: List<HxTraceItem>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
 ) {
-    val steps = remember(reasoning) { parseReasoningSteps(reasoning) }
-    val structured = steps.worthATimeline()
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -300,56 +319,98 @@ private fun HxThinkingSheetContent(
             .padding(start = 24.dp, top = 10.dp, end = 24.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (structured || tools.isNotEmpty()) {
-            HxReasoningTimeline(
-                // When the model never labelled its own reasoning there are no
-                // steps worth rendering as rows — the tools still are, and the
-                // raw text follows below rather than being thrown away.
-                steps = if (structured) steps else emptyList(),
-                tools = tools,
-                isComplete = isComplete,
-                elapsedSeconds = elapsedSeconds,
-            )
-        }
-        if (!structured) {
-            HxRawReasoningPanel(rawText = reasoning)
-        }
+        HxReasoningTimeline(
+            items = items,
+            isComplete = isComplete,
+            elapsedSeconds = elapsedSeconds,
+        )
     }
 }
 
 @Composable
 private fun HxReasoningTimeline(
-    steps: List<HxReasoningStep>,
-    tools: List<ChatMessage.ToolCall>,
+    items: List<HxTraceItem>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
 ) {
-    // The gateway streams reasoning as one growing string and tool calls as
-    // separate events, with no shared ordering key — so steps and tools cannot
-    // be truly interleaved the way they were emitted. Steps come first, then
-    // the tools in the order they ran.
-    val lastRowIsSteps = tools.isEmpty()
+    // Flattened first so "is this the last row?" is a question about rows, not
+    // about items — one reasoning block can be several rows, or none.
+    val rows = remember(items) { buildTimelineRows(items) }
+    val toolCount = remember(items) { items.count { it is HxTraceItem.Tool } }
+
     Column {
-        steps.forEachIndexed { index, step ->
-            HxTimelineRow(
-                title = step.title,
-                detail = step.detail,
-                isLast = !isComplete && lastRowIsSteps && index == steps.lastIndex,
-            )
-        }
-        tools.forEachIndexed { index, tool ->
-            HxTimelineToolRow(
-                tool = tool,
-                isLast = !isComplete && index == tools.lastIndex,
-            )
+        rows.forEachIndexed { index, row ->
+            val isLast = !isComplete && index == rows.lastIndex
+            when (row) {
+                is TimelineRow.Text -> HxTimelineRow(
+                    title = row.title,
+                    detail = row.detail,
+                    isLast = isLast,
+                    icon = row.icon,
+                )
+
+                is TimelineRow.Tool -> HxTimelineToolRow(tool = row.call, isLast = isLast)
+            }
         }
         if (isComplete) {
             HxTimelineRow(
-                title = doneLabel(elapsedSeconds, tools.size),
+                title = doneLabel(elapsedSeconds, toolCount),
                 detail = t("Done", "تمام"),
                 isLast = true,
                 icon = HxIcons.CircleCheck,
             )
+        }
+    }
+}
+
+private sealed interface TimelineRow {
+    data class Text(
+        val title: String,
+        val detail: String,
+        val icon: ImageVector? = null,
+    ) : TimelineRow
+
+    data class Tool(val call: ChatMessage.ToolCall) : TimelineRow
+}
+
+/**
+ * Turns the work log into rows.
+ *
+ * Reasoning the model structured itself becomes one row per heading; reasoning
+ * it left as a blob becomes a single row rather than being dropped, because the
+ * alternative — a separate "raw" panel below the timeline — broke the sequence
+ * the timeline exists to show.
+ */
+private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = buildList {
+    items.forEach { item ->
+        when (item) {
+            is HxTraceItem.Note -> {
+                val text = item.text.trim()
+                if (text.isNotEmpty()) add(TimelineRow.Text(title = "", detail = text))
+            }
+
+            is HxTraceItem.Reasoning -> {
+                val steps = parseReasoningSteps(item.text)
+                if (steps.worthATimeline()) {
+                    steps.forEach { add(TimelineRow.Text(title = it.title, detail = it.detail)) }
+                } else {
+                    val raw = item.text.trim()
+                    if (raw.isNotEmpty()) {
+                        add(
+                            TimelineRow.Text(
+                                title = "",
+                                detail = if (raw.length <= RawReasoningCap) {
+                                    raw
+                                } else {
+                                    raw.take(RawReasoningCap).trimEnd() + "\n…"
+                                },
+                            ),
+                        )
+                    }
+                }
+            }
+
+            is HxTraceItem.Tool -> add(TimelineRow.Tool(item.call))
         }
     }
 }
@@ -466,35 +527,6 @@ private fun HxTimelineGlyph(
                     .size(GlyphDotSize)
                     .clip(CircleShape)
                     .background(muted),
-            )
-        }
-    }
-}
-
-@Composable
-private fun HxRawReasoningPanel(rawText: String) {
-    val waiting = t("Waiting for reasoning…", "در انتظار استدلال…")
-    val displayText = remember(rawText, waiting) {
-        val text = rawText.ifBlank { waiting }
-        if (text.length <= RawReasoningCap) text
-        else text.take(RawReasoningCap).trimEnd() + "\n…"
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = t("Raw reasoning", "استدلال خام"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        SelectionContainer {
-            Text(
-                text = displayText,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .padding(14.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
