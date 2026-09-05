@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.ui.design.hxAssistantMaxWidth
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -74,7 +75,7 @@ internal fun AssistantMessageBubble(
     val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.widthIn(max = 460.dp)) {
+        Column(modifier = Modifier.widthIn(max = hxAssistantMaxWidth())) {
             Box {
                 Column(
                     modifier = Modifier
