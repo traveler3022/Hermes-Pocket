@@ -164,6 +164,9 @@ data class ChatUiState(
     val isAttaching: Boolean = false,
     // Agent's live task list for the current turn (empty = no plan to show)
     val activeTodos: List<TodoItemUi> = emptyList(),
+    // Turn state of every live session, so the drawer can show which other
+    // chats are working and which replied while the user was away.
+    val sessionActivity: Map<String, SessionActivity> = emptyMap(),
     // Tool-approval request awaiting the user's decision (modal sheet).
     val pendingApproval: PendingApprovalUi? = null,
     // Reasoning effort (agent.reasoning_effort) — quick-switchable from the

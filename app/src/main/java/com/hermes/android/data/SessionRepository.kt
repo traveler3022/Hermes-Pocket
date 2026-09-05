@@ -367,6 +367,76 @@ class SessionRepository @Inject constructor(
         return result?.bool("paused") ?: paused
     }
 
+    // ── Context window (breakdown + manual compression) ────────────────────
+
+    data class ContextCategory(val id: String, val label: String, val tokens: Int)
+
+    data class ContextBreakdown(
+        val categories: List<ContextCategory>,
+        val used: Int,
+        val max: Int,
+        val percent: Int,
+        val model: String,
+    )
+
+    /** What is filling this LIVE session's context window, largest first. */
+    suspend fun contextBreakdown(liveSessionId: String): ContextBreakdown {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_CONTEXT_BREAKDOWN,
+            buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
+        ) as? JsonObject ?: return ContextBreakdown(emptyList(), 0, 0, 0, "")
+        val categories = (result["categories"] as? JsonArray).orEmpty()
+            .mapNotNull { it as? JsonObject }
+            .map { ContextCategory(it.str("id"), it.str("label"), it.int("tokens")) }
+            .sortedByDescending { it.tokens }
+        return ContextBreakdown(
+            categories = categories,
+            used = result.int("context_used"),
+            max = result.int("context_max"),
+            percent = result.int("context_percent"),
+            model = result.str("model"),
+        )
+    }
+
+    /**
+     * Outcome of a manual compress. The server answers in several shapes: a
+     * finished local run, an "still running" ack from a compute host, and a
+     * skip when another compressor holds the lock.
+     */
+    data class CompressionResult(
+        val status: String,
+        val beforeTokens: Int,
+        val afterTokens: Int,
+        val removedMessages: Int,
+        val message: String,
+    )
+
+    /**
+     * Compress a LIVE session's history. [focusTopic] tells the summarizer what
+     * to preserve. The server refuses with 4009 while a turn is running, so the
+     * caller has to interrupt first.
+     */
+    suspend fun compressSession(liveSessionId: String, focusTopic: String = ""): CompressionResult {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_COMPRESS,
+            buildJsonObject {
+                put("session_id", liveSessionId)
+                if (focusTopic.isNotBlank()) put("focus_topic", focusTopic.trim())
+            }.toElementMap(),
+        ) as? JsonObject ?: return CompressionResult("unknown", 0, 0, 0, "")
+        // The lock-held shape carries no status field, only compressed=false.
+        val status = result.str("status").ifBlank {
+            if (result.bool("lock_held") == true) "busy" else "unknown"
+        }
+        return CompressionResult(
+            status = status,
+            beforeTokens = result.int("before_tokens"),
+            afterTokens = result.int("after_tokens"),
+            removedMessages = result.int("removed"),
+            message = result.str("message"),
+        )
+    }
+
     // ── Rollback / undo (git-checkpoint diff + restore) ────────────────────
 
     data class Checkpoint(val hash: String, val timestamp: String, val message: String)
@@ -429,6 +499,9 @@ class SessionRepository @Inject constructor(
 
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.content ?: ""
+
+    private fun JsonObject.int(key: String): Int =
+        (this[key] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toInt() ?: 0
 
     private fun JsonObject.toElementMap(): Map<String, JsonElement> =
         entries.associate { (k, v) -> k to v }

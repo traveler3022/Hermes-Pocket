@@ -119,6 +119,18 @@ sealed class GatewayEvent {
         val status: String, // "pending" | "in_progress" | "completed" | "cancelled"
     )
 
+    /**
+     * Authoritative full snapshot of the agent's task list.
+     *
+     * The server emits this whenever the state changes, while the `todos`
+     * field riding along on tool.start/tool.complete only ships when tool
+     * progress is enabled for the session.
+     */
+    data class TodoUpdated(
+        override val sessionId: String?,
+        val todos: List<TodoItem>,
+    ) : GatewayEvent()
+
     /** Tool execution started. */
     data class ToolStart(
         override val sessionId: String?,

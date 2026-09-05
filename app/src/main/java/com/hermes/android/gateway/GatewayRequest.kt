@@ -72,7 +72,16 @@ object GatewayMethods {
     const val INSIGHTS_GET = "insights.get"
 
     const val SHELL_EXEC = "shell.exec"
+
+    // process.stop is a global kill_all — only the console's explicit
+    // "emergency stop" may use it. Per-chat cleanup goes through the
+    // session-scoped pair below.
     const val PROCESS_STOP = "process.stop"
+    const val PROCESS_LIST = "process.list"
+    const val PROCESS_KILL = "process.kill"
+
+    const val SESSION_COMPRESS = "session.compress"
+    const val SESSION_CONTEXT_BREAKDOWN = "session.context_breakdown"
 
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
