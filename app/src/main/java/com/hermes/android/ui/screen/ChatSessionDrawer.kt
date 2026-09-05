@@ -72,6 +72,7 @@ import com.hermes.android.ui.design.HxGradientActionPill
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.SessionActivity
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
@@ -82,6 +83,7 @@ internal fun SessionDrawerRow(
     session: SessionItem,
     isActive: Boolean,
     isPinned: Boolean,
+    activity: SessionActivity?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onPin: () -> Unit,
@@ -92,14 +94,22 @@ internal fun SessionDrawerRow(
     val messageCountText = session.messageCount?.let { count ->
         t("$count messages", "$count پیام")
     }
+    val isWorking = activity?.isRunning == true
     val subtitle = buildString {
         if (isPinned) append("📌 ")
-        if (messageCountText != null) {
+        if (isWorking) {
+            append(t("working…", "در حال کار…"))
+            append(" · ")
+        } else if (messageCountText != null) {
             append(messageCountText)
             append(" · ")
         }
         append(relativeTime)
     }
+    // While a background chat streams, its own tail is fresher than the
+    // stored preview that session.list returned.
+    val preview = activity?.preview?.takeIf { it.isNotBlank() && (isWorking || !isActive) }
+        ?: session.lastMessagePreview
 
     var showMenu by remember { mutableStateOf(false) }
 
@@ -148,7 +158,7 @@ internal fun SessionDrawerRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                session.lastMessagePreview?.takeIf { it.isNotBlank() }?.let {
+                preview?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(1.dp))
                     Text(
                         text = it.take(80),
@@ -156,6 +166,22 @@ internal fun SessionDrawerRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            val unread = activity?.unreadReplies ?: 0
+            if (unread > 0 && !isActive) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = if (unread > 9) "9+" else unread.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
             }
@@ -288,6 +314,7 @@ internal fun HermesDrawerContent(
     drawerSearchQuery: String,
     drawerSortNewest: Boolean,
     drawerPinnedIds: Set<String>,
+    sessionActivity: Map<String, SessionActivity>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSort: () -> Unit,
     onSessionClick: (String) -> Unit,
@@ -382,6 +409,7 @@ internal fun HermesDrawerContent(
                         session = session,
                         isActive = session.id == activeSessionId,
                         isPinned = session.id in drawerPinnedIds,
+                        activity = sessionActivity[session.id],
                         onClick = { onSessionClick(session.id) },
                         onLongClick = { onRenameSession(session.id, session.title) },
                         onPin = { onTogglePin(session.id) },

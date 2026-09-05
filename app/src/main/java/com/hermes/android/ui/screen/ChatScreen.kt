@@ -339,6 +339,7 @@ fun ChatScreen(
                     drawerSearchQuery = uiState.drawerSearchQuery,
                     drawerSortNewest = uiState.drawerSortNewest,
                     drawerPinnedIds = uiState.drawerPinnedIds,
+                    sessionActivity = uiState.sessionActivity,
                     onSearchQueryChange = viewModel::updateDrawerSearch,
                     onToggleSort = viewModel::toggleDrawerSort,
                     onSessionClick = { sessionId ->
