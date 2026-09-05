@@ -370,13 +370,34 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] session.interrupt did not complete quickly")
             }
+            // process.stop is process_registry.kill_all() — it reaps every
+            // session's background work, so stopping one chat killed the
+            // others. process.list/process.kill are session-scoped.
             try {
-                gatewayClient.request(
-                    method = GatewayMethods.PROCESS_STOP,
+                val listed = gatewayClient.request(
+                    method = GatewayMethods.PROCESS_LIST,
+                    params = jsonToElementMap(buildJsonObject { put("session_id", sessionId) }),
                     timeoutMs = 5_000,
                 )
+                val processes = (listed as? JsonObject)?.get("processes") as? JsonArray ?: JsonArray(emptyList())
+                for (entry in processes) {
+                    val row = entry as? JsonObject ?: continue
+                    // The registry names a process id "session_id" (a "proc_…"
+                    // handle), which is not the chat session id.
+                    val procId = (row["session_id"] as? JsonPrimitive)?.content
+                    if (procId.isNullOrBlank()) continue
+                    if ((row["status"] as? JsonPrimitive)?.content == "exited") continue
+                    gatewayClient.request(
+                        method = GatewayMethods.PROCESS_KILL,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("session_id", sessionId)
+                            put("process_id", procId)
+                        }),
+                        timeoutMs = 5_000,
+                    )
+                }
             } catch (e: Exception) {
-                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
+                Timber.d(e, "[Chat] session-scoped process cleanup skipped/failed")
             }
         }
     }
@@ -389,6 +410,13 @@ class ChatViewModel @Inject constructor(
                     put("session_id", sessionId)
                     if (truncateBeforeUserOrdinal != null) {
                         put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
+                        // The server refuses truncating submits with 4029 unless the
+                        // rewind is explicitly confirmed, so a stale ordinal on an
+                        // ordinary submit can never silently drop history. Ordinal 0
+                        // (regenerating the first turn) empties the transcript and
+                        // needs the second opt-in, or the server answers 4028.
+                        put("confirm_truncate", true)
+                        if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
                     }
                 }
                 gatewayClient.request(
