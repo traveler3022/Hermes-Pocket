@@ -231,67 +231,37 @@ fun ChatScreen(
 
     // An agent turn is not one message. The gateway opens a new assistant
     // message for every stretch of narration between tool calls, so a single
-    // question can produce a dozen — and the chat filled up with the agent
-    // talking to itself on the way to an answer.
+    // question can produce a dozen — and left alone, the chat fills up with the
+    // agent talking to itself on the way to an answer.
     //
-    // Everything a turn did on the way — its narration, its reasoning, the
-    // tools it ran — is collected in list order and shown inside the trace of
-    // the message that ends the turn, leaving only the answer on the chat
-    // surface. List order is also what finally gives the trace a true sequence:
-    // reasoning and tool events carry no shared ordering key, but the order
-    // they arrived in is one.
+    // Whatever a turn did on the way is collected in list order and shown in a
+    // trace rather than as loose cards and fragments. List order is also what
+    // gives that trace a true sequence: reasoning and tool events carry no
+    // shared ordering key, but the order they arrived in is one.
     //
-    // The exception is an active search: nothing folds then, because a hit must
-    // never be hidden inside a closed sheet.
-    val foldTurns = uiState.searchQuery.isBlank()
-    val turnWork: Map<String, List<HxTraceItem>> = remember(filteredMessages, foldTurns) {
-        if (!foldTurns) {
-            emptyMap()
-        } else {
-            val byTurn = mutableMapOf<String, List<HxTraceItem>>()
-            var span = mutableListOf<ChatMessage>()
-
-            fun closeTurn() {
-                val ending = span.filterIsInstance<ChatMessage.Assistant>().lastOrNull()
-                if (ending != null) {
-                    val items = mutableListOf<HxTraceItem>()
-                    for (msg in span) {
-                        when (msg) {
-                            is ChatMessage.Assistant -> {
-                                msg.reasoning?.takeIf { it.isNotBlank() }
-                                    ?.let { items.add(HxTraceItem.Reasoning(it)) }
-                                // The turn's last word is the answer, and stays
-                                // on the chat surface. Everything it said before
-                                // that was work.
-                                if (msg.id != ending.id) {
-                                    msg.text.takeIf { it.isNotBlank() }
-                                        ?.let { items.add(HxTraceItem.Note(it)) }
-                                }
-                            }
-
-                            is ChatMessage.ToolCall -> items.add(HxTraceItem.Tool(msg))
-                            else -> Unit
-                        }
-                    }
-                    // Registered even when empty: the key is also what marks
-                    // this message as the one that stays visible.
-                    byTurn[ending.id] = items
-                }
-                span = mutableListOf()
+    // Two independent choices shape what folds:
+    //
+    //  • Narration — off by default, so only the message that ends a turn stays
+    //    on the chat surface. A reader who wants the running commentary turns it
+    //    back on in Settings, and then every fragment keeps its place in the
+    //    flow with its own reasoning and its own tools beneath it.
+    //  • Search — while a query is active nothing folds at all, tool cards
+    //    included, because a hit must never be hidden inside a closed sheet.
+    val searching = uiState.searchQuery.isNotBlank()
+    val foldNarration = !searching && themeModeState?.showInlineNarration != true
+    val turnWork: Map<String, List<HxTraceItem>> =
+        remember(filteredMessages, foldNarration, searching) {
+            if (searching) {
+                emptyMap()
+            } else {
+                buildTurnWork(filteredMessages, foldNarration)
             }
-
-            for (msg in filteredMessages) {
-                if (msg is ChatMessage.User) closeTurn() else span.add(msg)
-            }
-            closeTurn()
-            byTurn
         }
-    }
 
-    // What folded into a trace leaves the flow: every tool card, and every
-    // assistant message except the one that ends its turn.
-    val visibleMessages = remember(filteredMessages, turnWork, foldTurns) {
-        if (!foldTurns) {
+    // What folded into a trace leaves the flow: every tool card, and — when
+    // narration is folded — every assistant message but the one ending its turn.
+    val visibleMessages = remember(filteredMessages, turnWork, searching) {
+        if (searching) {
             filteredMessages
         } else {
             filteredMessages.filter { msg ->
