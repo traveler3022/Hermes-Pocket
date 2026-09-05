@@ -59,7 +59,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
@@ -85,6 +84,7 @@ import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
@@ -96,6 +96,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -187,6 +188,7 @@ fun ChatScreen(
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
+    var showContext by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -392,6 +394,7 @@ fun ChatScreen(
                     drawerSearchQuery = uiState.drawerSearchQuery,
                     drawerSortNewest = uiState.drawerSortNewest,
                     drawerPinnedIds = uiState.drawerPinnedIds,
+                    sessionActivity = uiState.sessionActivity,
                     onSearchQueryChange = viewModel::updateDrawerSearch,
                     onToggleSort = viewModel::toggleDrawerSort,
                     onSessionClick = { sessionId ->
@@ -479,7 +482,11 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
-                Column {
+                // The activity is edge-to-edge, and a plain Column does not
+                // consume the status bar inset the way the Material TopAppBar
+                // this replaced did — without this the chrome draws under the
+                // status bar and off the top of the screen.
+                Column(modifier = Modifier.statusBarsPadding()) {
                     // Floating chrome instead of a flat Material app bar: two
                     // shadowed circles either side of the status pill, same
                     // language as the composer's own floating controls, so
@@ -524,6 +531,11 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        HxHeaderCircleButton(
+                            icon = Icons.Default.DataUsage,
+                            contentDescription = t("Context", "کانتکست"),
+                            onClick = { showContext = true },
+                        )
                         HxHeaderCircleButton(
                             icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
                             contentDescription = t("Search", "جستجو"),
@@ -879,6 +891,16 @@ fun ChatScreen(
                 sessionId = sid,
                 snackbarHostState = snackbarHostState,
                 onDismiss = { showChanges = false },
+            )
+        }
+    }
+
+    if (showContext) {
+        uiState.activeSessionId?.let { sid ->
+            ContextSheet(
+                sessionId = sid,
+                snackbarHostState = snackbarHostState,
+                onDismiss = { showContext = false },
             )
         }
     }

@@ -896,6 +896,10 @@ class OkHttpGatewayClient @Inject constructor(
                 sid, p["reason"]?.jsonPrimitive?.content,
             )
             "error" -> GatewayEvent.Error(sid, p["message"]?.jsonPrimitive?.content)
+            "todo.updated" -> GatewayEvent.TodoUpdated(
+                sid,
+                p["todos"]?.let { GatewayEventHelpers.parseTodos(it) } ?: emptyList(),
+            )
             else -> GatewayEvent.Unknown(sid, eventType, p.toMap())
         }
     }

@@ -46,7 +46,7 @@ internal class ChatSessionDelegate(
                 ?.let { it as? JsonPrimitive }
                 ?.content
             if (sessionId != null) {
-                state.update { it.copy(activeSessionId = sessionId) }
+                state.update { it.copy(activeSessionId = sessionId, isSending = false) }
                 Timber.i("[Chat] Session created: $sessionId")
             }
         } catch (e: GatewayException) {
@@ -70,6 +70,10 @@ internal class ChatSessionDelegate(
                 sessionLoadedAt = System.currentTimeMillis(),
                 activeTodos = emptyList(),
                 pendingApproval = null,
+                // isSending tracks the turn of the session we just left. Leaving
+                // it set makes the input bar of the session we switched TO show
+                // a stop button instead of send, so the chat looks unusable.
+                isSending = false,
             ) }
             loadReasoningLevel()
             if (history.isNotEmpty()) {

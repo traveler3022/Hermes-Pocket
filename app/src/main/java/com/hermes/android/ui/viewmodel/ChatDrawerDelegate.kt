@@ -15,6 +15,7 @@ internal class ChatDrawerDelegate(
     private val scope: CoroutineScope,
     private val loadSessionList: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
+    private val forgetSessionActivity: (String) -> Unit,
 ) {
     fun updateSearch(state: MutableStateFlow<ChatUiState>, query: String) {
         state.update { it.copy(drawerSearchQuery = query) }
@@ -83,6 +84,7 @@ internal class ChatDrawerDelegate(
                 val params = buildJsonObject { put("session_id", sessionId) }
                 gatewayClient.request(GatewayMethods.SESSION_DELETE, jsonToElementMap(params))
                 Timber.i("[Chat] Deleted $sessionId")
+                forgetSessionActivity(sessionId)
                 if (state.value.activeSessionId == sessionId) {
                     state.update { it.copy(
                         activeSessionId = null,
