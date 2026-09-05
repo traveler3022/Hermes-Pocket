@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -68,6 +67,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxGradientActionPill
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
@@ -530,7 +530,7 @@ private fun DrawerSearchField(
         }
         IconButton(onClick = onToggleSort) {
             Icon(
-                Icons.Default.Sort,
+                HxIcons.SortArrows,
                 contentDescription = if (sortNewest) {
                     t("Newest first", "جدیدترین اول")
                 } else {

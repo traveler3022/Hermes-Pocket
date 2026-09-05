@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -41,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxAssistantMaxWidth
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
@@ -220,7 +220,7 @@ internal fun AssistantMessageBubble(
                     DropdownMenuItem(
                         text = { Text(t("Branch conversation", "شاخه\u200Cزدن گفتگو")) },
                         onClick = { onBranch(); showContextMenu = false },
-                        leadingIcon = { Icon(Icons.Default.CallSplit, contentDescription = null) },
+                        leadingIcon = { Icon(HxIcons.GitBranch, contentDescription = null) },
                     )
                 }
             }

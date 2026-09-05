@@ -54,7 +54,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -137,6 +136,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -365,7 +365,7 @@ internal fun InputBar(
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
-                            Icons.Default.CallSplit,
+                            HxIcons.GitBranch,
                             contentDescription = t("Steer the agent", "هدایت عامل"),
                             tint = MaterialTheme.colorScheme.primary,
                         )
