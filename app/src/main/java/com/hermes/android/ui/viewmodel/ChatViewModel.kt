@@ -762,6 +762,18 @@ class ChatViewModel @Inject constructor(
     private fun liveIdsFor(drawerId: String): List<String> =
         listOf(drawerId) + storedIdByLiveId.filterValues { it == drawerId }.keys
 
+    /** Put an empty streaming bubble on screen for [msgId] to stream into. */
+    private fun openAssistantBubble(msgId: String) {
+        val assistantMsg = ChatMessage.Assistant(
+            id = msgId,
+            timestamp = System.currentTimeMillis(),
+            text = "",
+            isStreaming = true,
+            reasoning = null,
+        )
+        _uiState.update { it.copy(messages = it.messages + assistantMsg) }
+    }
+
     private fun handleEvent(event: GatewayEvent) {
         val eventSid = event.sessionId
         val activeSid = _uiState.value.activeSessionId
@@ -771,7 +783,9 @@ class ChatViewModel @Inject constructor(
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
             event !is GatewayEvent.SecretRequest &&
-            event !is GatewayEvent.BackgroundComplete
+            event !is GatewayEvent.BackgroundComplete &&
+            // A background chat renaming itself still repaints the drawer.
+            event !is GatewayEvent.SessionTitle
         ) {
             return
         }
@@ -780,33 +794,61 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.MessageStart -> {
                 streamingDelegate.finalizeOrphanedMessage("(interrupted)")
                 streamingDelegate.reset()
-                val msgId = streamingDelegate.onMessageStart()
-                val assistantMsg = ChatMessage.Assistant(
-                    id = msgId,
-                    timestamp = System.currentTimeMillis(),
-                    text = "",
-                    isStreaming = true,
-                    reasoning = null,
-                )
-                _uiState.update { it.copy(messages = _uiState.value.messages + assistantMsg) }
+                openAssistantBubble(streamingDelegate.onMessageStart())
             }
 
             is GatewayEvent.MessageDelta -> {
                 streamingDelegate.enqueueDelta(event.text)
             }
 
+            is GatewayEvent.MessageInterim -> {
+                streamingDelegate.sealInterim(event.text)?.let { openAssistantBubble(it) }
+            }
+
+            is GatewayEvent.SessionTitle -> {
+                if (event.title.isNotBlank() && event.storedSessionId.isNotBlank()) {
+                    _uiState.update { state ->
+                        state.copy(
+                            sessions = state.sessions.updateFirst({ it.id == event.storedSessionId }) {
+                                it.copy(title = event.title)
+                            },
+                        )
+                    }
+                }
+            }
+
+            is GatewayEvent.SessionsChanged -> {
+                // Fires on every message append of every session, floored to
+                // one per 2s server-side. Only worth a refetch while the list
+                // is on screen; opening the drawer reloads it anyway.
+                if (_uiState.value.showSessionDrawer) loadSessionList()
+            }
+
             is GatewayEvent.MessageComplete -> {
                 streamingDelegate.flushBuffer()
+                // A previewed answer repeats text already sealed on screen; any
+                // other final text is new and follows the sealed commentary.
+                val finalText = if (event.responsePreviewed) {
+                    streamingDelegate.withoutSealedInterims(event.text)
+                } else {
+                    event.text
+                }
+                val streamingId = streamingDelegate.currentAssistantMessageId
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.updateFirst({ msg ->
                         msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (streamingDelegate.currentAssistantMessageId == null || msg.id == streamingDelegate.currentAssistantMessageId)
+                            (streamingId == null || msg.id == streamingId)
                     }) { msg ->
                         (msg as ChatMessage.Assistant).copy(
-                            text = event.text.ifEmpty { msg.text },
+                            text = finalText.ifEmpty { msg.text },
                             isStreaming = false,
                             reasoning = event.reasoning?.takeIf { it.isNotBlank() } ?: msg.reasoning,
                         )
+                    }.filterNot { msg ->
+                        // The bubble sealInterim opened, on a turn that ended
+                        // with nothing left to put in it.
+                        msg is ChatMessage.Assistant && msg.id == streamingId &&
+                            msg.text.isBlank() && msg.reasoning.isNullOrBlank()
                     }.let { msgs ->
                         msgs.updateAll({ msg ->
                             msg is ChatMessage.ToolCall && msg.isRunning

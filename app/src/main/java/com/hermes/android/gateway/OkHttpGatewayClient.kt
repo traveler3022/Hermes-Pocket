@@ -17,7 +17,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -590,8 +593,7 @@ class OkHttpGatewayClient @Inject constructor(
                 Timber.w("[Gateway] activate failed (${activateError.message}); trying session.resume")
                 request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
             }
-            val liveId = (result as? JsonObject)?.get("session_id")?.jsonPrimitive?.content
-                ?.takeIf { it.isNotBlank() } ?: sessionId
+            val liveId = (result as? JsonObject)?.get("session_id").sessionIdOrNull() ?: sessionId
             lastSessionId = liveId
             Timber.i("[Gateway] session resumed: $sessionId -> live $liveId")
             _connectionState.value = ConnectionState.Connected(liveId)
@@ -604,6 +606,11 @@ class OkHttpGatewayClient @Inject constructor(
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, JsonElement> =
         obj.toMap()
+
+    /** A usable session id, or null when the field is absent, JSON null, or
+     *  the empty string that session-less broadcasts carry. */
+    private fun JsonElement?.sessionIdOrNull(): String? =
+        (this as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     // ── WebSocket listener ─────────────────────────────────────────────────
 
@@ -721,10 +728,11 @@ class OkHttpGatewayClient @Inject constructor(
             )
         } else if (response.result != null) {
             if (!skipSessionTracking) {
-                (response.result as? JsonObject)?.get("session_id")?.let { sidEl ->
-                    (sidEl as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { sid ->
-                        lastSessionId = sid
-                    }
+                // session.most_recent answers {"session_id": null} when there
+                // is nothing to resume, and JsonNull.content is the string
+                // "null" — adopting that is as bad as adopting "".
+                (response.result as? JsonObject)?.get("session_id").sessionIdOrNull()?.let { sid ->
+                    lastSessionId = sid
                 }
             }
             deferred.complete(response.result)
@@ -736,7 +744,10 @@ class OkHttpGatewayClient @Inject constructor(
     private fun handleEvent(obj: JsonObject, onState: (WsState) -> Unit = {}) {
         val params = obj["params"]?.jsonObject ?: return
         val eventType = (params["event"] ?: params["type"])?.jsonPrimitive?.content ?: return
-        val sid = (params["sid"] ?: params["session_id"])?.jsonPrimitive?.content
+        // Broadcasts (sessions.changed, cron.changed, …) carry session_id "":
+        // they belong to no session, and adopting that empty id as the one to
+        // resume is how a reconnect silently lands in a brand new chat.
+        val sid = (params["sid"] ?: params["session_id"]).sessionIdOrNull()
         val payload = params["payload"]?.jsonObject ?: JsonObject(emptyMap())
 
         val event = parseEvent(eventType, sid, payload)
@@ -781,12 +792,19 @@ class OkHttpGatewayClient @Inject constructor(
                 sid, p["preview"]?.jsonPrimitive?.content,
             )
             "session.info" -> GatewayEvent.SessionInfo(sid, p.toMap())
+            "session.title" -> GatewayEvent.SessionTitle(
+                sid,
+                p["session_id"].sessionIdOrNull() ?: sid.orEmpty(),
+                p["title"]?.jsonPrimitive?.content ?: "",
+            )
+            "sessions.changed" -> GatewayEvent.SessionsChanged(sid)
             "message.start" -> GatewayEvent.MessageStart(sid)
             "message.delta" -> GatewayEvent.MessageDelta(
                 sid,
                 p["text"]?.jsonPrimitive?.content ?: "",
                 p["rendered"]?.jsonPrimitive?.content,
             )
+            "message.interim" -> GatewayEvent.MessageInterim(sid, p["text"]?.jsonPrimitive?.content ?: "")
             "message.complete" -> GatewayEvent.MessageComplete(
                 sid,
                 p["text"]?.jsonPrimitive?.content ?: "",
@@ -794,6 +812,7 @@ class OkHttpGatewayClient @Inject constructor(
                 p["reasoning"]?.jsonPrimitive?.content,
                 p["usage"]?.jsonObject?.toMap()
                     ?.mapNotNull { (k, v) -> v.jsonPrimitive.content.toLongOrNull()?.let { k to it } }?.toMap(),
+                p["response_previewed"]?.jsonPrimitive?.booleanOrNull ?: false,
             )
             "thinking.delta" -> GatewayEvent.ThinkingDelta(sid, p["text"]?.jsonPrimitive?.content ?: "")
             "reasoning.delta" -> GatewayEvent.ReasoningDelta(sid, p["text"]?.jsonPrimitive?.content ?: "")
