@@ -98,6 +98,34 @@ internal class ChatStreamingDelegate(
         return tail
     }
 
+    /**
+     * Close the open bubble because the gateway moved on to a new message —
+     * not because anything went wrong.
+     *
+     * This is the counterpart of [finalizeOrphanedMessage], which speaks for a
+     * turn that died: it stamps a marker into the text and clears `isSending`.
+     * A turn that simply continues in a second message must do neither, or the
+     * fragment the agent had just finished picks up an "(interrupted)" it
+     * never earned and the composer flips back to Send while the agent is
+     * still working. An empty bubble is dropped rather than left as a blank
+     * card.
+     */
+    fun sealOpenBubble() {
+        flushBuffer()
+        val openId = activeAssistantMessageId ?: return
+        state.update { s -> s.copy(
+            messages = s.messages.updateFirst({ msg ->
+                msg is ChatMessage.Assistant && msg.isStreaming && msg.id == openId
+            }) { msg ->
+                (msg as ChatMessage.Assistant).copy(isStreaming = false)
+            }.filterNot { msg ->
+                msg is ChatMessage.Assistant && msg.id == openId &&
+                    msg.text.isBlank() && msg.reasoning.isNullOrBlank()
+            }
+        ) }
+        activeAssistantMessageId = null
+    }
+
     fun reset() {
         streamingFlushJob?.cancel()
         streamingFlushJob = null

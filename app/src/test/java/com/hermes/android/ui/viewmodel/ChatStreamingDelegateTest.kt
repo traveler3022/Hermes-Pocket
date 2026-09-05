@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatStreamingDelegateTest {
@@ -29,6 +30,46 @@ class ChatStreamingDelegateTest {
     }
 
     private fun assistants() = state.value.messages.filterIsInstance<ChatMessage.Assistant>()
+
+    @Test
+    fun `a new message seals the previous fragment without marking it interrupted`() {
+        // The gateway opens a new message for every stretch of narration
+        // between tool calls. Finalizing the previous one as "orphaned"
+        // stamped "(interrupted)" into text the agent had just finished and
+        // cleared isSending while the turn was still running.
+        state.value = state.value.copy(isSending = true)
+        startTurn()
+        delegate.enqueueDelta("Looking at the logs.")
+
+        delegate.sealOpenBubble()
+
+        assertEquals(1, assistants().size)
+        assertEquals("Looking at the logs.", assistants()[0].text)
+        assertFalse(assistants()[0].isStreaming)
+        assertTrue("the turn is still running", state.value.isSending)
+        assertNull(delegate.currentAssistantMessageId)
+    }
+
+    @Test
+    fun `sealing an empty fragment drops its bubble`() {
+        startTurn()
+
+        delegate.sealOpenBubble()
+
+        assertTrue(assistants().isEmpty())
+    }
+
+    @Test
+    fun `a dead connection still marks the bubble and stops the turn`() {
+        state.value = state.value.copy(isSending = true)
+        startTurn()
+        delegate.enqueueDelta("half a th")
+
+        delegate.finalizeOrphanedMessage("(connection lost)")
+
+        assertEquals("half a th\n\n(connection lost)", assistants()[0].text)
+        assertFalse(state.value.isSending)
+    }
 
     @Test
     fun `sealing an interim closes the live bubble and hands back a new id`() {

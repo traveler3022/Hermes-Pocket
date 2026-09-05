@@ -176,16 +176,44 @@ class ChatViewModel @Inject constructor(
                     if (state is ConnectionState.Disconnected ||
                         state is ConnectionState.Failed
                     ) {
-                        streamingDelegate.finalizeOrphanedMessage(
-                            if (state is ConnectionState.Failed) "(connection failed)" else "(connection lost)",
-                        )
+                        val marker =
+                            if (state is ConnectionState.Failed) "(connection failed)" else "(connection lost)"
+                        streamingDelegate.finalizeOrphanedMessage(marker)
+                        // finalizeOrphanedMessage only speaks for a bubble that
+                        // was open. The socket is gone either way, so nothing
+                        // will ever complete the tool cards still marked
+                        // running or clear the composer's stop button: the
+                        // chat sat on "working" forever, inviting the user to
+                        // wait for a reply that can no longer arrive.
+                        _uiState.update { s -> s.copy(
+                            messages = s.messages.updateAll({ msg ->
+                                msg is ChatMessage.ToolCall && msg.isRunning
+                            }) { msg ->
+                                (msg as ChatMessage.ToolCall)
+                                    .copy(isRunning = false, resultText = msg.resultText ?: marker)
+                            },
+                            isSending = false,
+                        ) }
                     }
 
                     if (state is ConnectionState.Connected) {
                         val liveId = state.sessionId
                         if (liveId != null && liveId != _uiState.value.activeSessionId) {
+                            val hadTranscript = _uiState.value.messages.isNotEmpty()
                             _uiState.update { it.copy(activeSessionId = liveId) }
-                            launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                            // A reconnect re-mints the live id of the SAME
+                            // conversation, so the transcript already on screen
+                            // IS this session. Refetching it over the top threw
+                            // away the turn in flight: the bubble the deltas
+                            // were landing in vanished, every later delta found
+                            // nothing to append to, and the answer stopped
+                            // halfway with no way to tell it had. Only fetch
+                            // when there is nothing on screen to lose.
+                            if (hadTranscript) {
+                                Timber.i("[Chat] adopted live session $liveId, keeping the transcript on screen")
+                            } else {
+                                launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                            }
                         } else if (liveId == null && _uiState.value.activeSessionId == null) {
                             launch { sessionDelegate.createOrResume(_uiState) }
                         }
@@ -659,7 +687,8 @@ class ChatViewModel @Inject constructor(
                         put("answer", answer)
                     },
                 )
-                markAnswered(requestId)
+                // Only the clarify answer is echoed — see markAnswered.
+                markAnswered(requestId, answer)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to respond to clarify")
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
@@ -703,12 +732,20 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun markAnswered(requestId: String) {
+    /**
+     * [answer] is shown on the card so the reader can see what was chosen.
+     * The sudo and secret paths pass nothing: a password or an API key must
+     * never be written back into the transcript.
+     */
+    private fun markAnswered(requestId: String, answer: String? = null) {
         _uiState.update { it.copy(
             messages = _uiState.value.messages.updateFirst({ msg ->
                 msg is ChatMessage.InteractiveRequest && msg.requestId == requestId
             }) { msg ->
-                (msg as ChatMessage.InteractiveRequest).copy(answered = true)
+                (msg as ChatMessage.InteractiveRequest).copy(
+                    answered = true,
+                    answer = answer?.takeIf { it.isNotBlank() },
+                )
             }
         ) }
     }
@@ -795,8 +832,19 @@ class ChatViewModel @Inject constructor(
 
         when (event) {
             is GatewayEvent.MessageStart -> {
-                streamingDelegate.finalizeOrphanedMessage("(interrupted)")
-                streamingDelegate.reset()
+                // A turn is not one message: the gateway opens a new one for
+                // every stretch of narration between tool calls. Treating that
+                // as an interruption stamped "(interrupted)" onto a fragment
+                // the agent had just finished saying and cleared isSending
+                // mid-turn, so the composer offered Send while the reply was
+                // still being written. The previous fragment is simply
+                // finished — seal it and open the next.
+                //
+                // reset() is deliberately not called here: it would also drop
+                // the sealed-interim texts this turn needs at message.complete
+                // to avoid repeating its own preview. The turn's own end
+                // (message.complete, an error, a dead socket) resets.
+                streamingDelegate.sealOpenBubble()
                 openAssistantBubble(streamingDelegate.onMessageStart())
             }
 
@@ -837,6 +885,17 @@ class ChatViewModel @Inject constructor(
                     event.text
                 }
                 val streamingId = streamingDelegate.currentAssistantMessageId
+                // Whether there is still a bubble to put the answer in. A
+                // turn can end with none: the socket dropped and finalized it,
+                // a reconnect replaced the transcript, message.start never
+                // arrived. Every one of those silently threw the finished
+                // answer away — the reply simply never appeared — so when
+                // nothing matches, the answer is appended as its own message
+                // instead of being dropped.
+                val hasOpenBubble = _uiState.value.messages.any { msg ->
+                    msg is ChatMessage.Assistant && msg.isStreaming &&
+                        (streamingId == null || msg.id == streamingId)
+                }
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.updateFirst({ msg ->
                         msg is ChatMessage.Assistant && msg.isStreaming &&
@@ -857,6 +916,21 @@ class ChatViewModel @Inject constructor(
                             msg is ChatMessage.ToolCall && msg.isRunning
                         }) { msg ->
                             (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Completed")
+                        }
+                    }.let { msgs ->
+                        if (hasOpenBubble || finalText.isBlank()) {
+                            msgs
+                        } else {
+                            msgs + ChatMessage.Assistant(
+                                // A fresh id: streamingId may still be on a
+                                // bubble sealed earlier, and a repeated id is
+                                // fatal to the keyed list that renders this.
+                                id = UUID.randomUUID().toString(),
+                                timestamp = System.currentTimeMillis(),
+                                text = finalText,
+                                isStreaming = false,
+                                reasoning = event.reasoning?.takeIf { r -> r.isNotBlank() },
+                            )
                         }
                     },
                     isSending = false,
@@ -951,6 +1025,11 @@ class ChatViewModel @Inject constructor(
                     errorEvent = ErrorEvent.Warning(displayMsg ?: "Unknown error"),
                     isSending = false,
                 ) }
+                // The turn is over. Without this the half-written bubble kept
+                // its typing animation forever, and the buffers and sealed
+                // interims of the dead turn bled into the next one.
+                streamingDelegate.sealOpenBubble()
+                streamingDelegate.reset()
             }
 
             is GatewayEvent.StatusUpdate -> {

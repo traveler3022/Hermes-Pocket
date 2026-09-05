@@ -63,7 +63,12 @@ sealed class ChatMessage {
         val isError: Boolean,
     ) : ChatMessage()
 
-    /** Interactive request: clarify question, sudo prompt, or secret input. */
+    /** Interactive request: clarify question, sudo prompt, or secret input.
+     *
+     *  [answer] is what the user replied, kept so the exchange still reads as
+     *  a conversation afterwards — "Answered" alone left no trace of what was
+     *  actually chosen. It is set for CLARIFY only: a sudo password or a
+     *  secret must never be echoed back into the transcript. */
     data class InteractiveRequest(
         override val id: String,
         override val timestamp: Long,
@@ -72,6 +77,7 @@ sealed class ChatMessage {
         val choices: List<String>?,
         val answered: Boolean = false,
         val kind: InteractiveKind = InteractiveKind.CLARIFY,
+        val answer: String? = null,
     ) : ChatMessage()
 
     /** Sub-agent execution card. */

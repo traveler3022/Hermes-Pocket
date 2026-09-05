@@ -229,6 +229,14 @@ internal fun buildTurnWork(
                     commitTo(byMessage, owner, work)
                 }
 
+                // A question to the user ends what came before it, exactly
+                // like a user message does: what runs after the answer is new
+                // work and must not be filed under the message that asked.
+                is ChatMessage.InteractiveRequest -> {
+                    commit()
+                    owner = null
+                }
+
                 else -> Unit
             }
         }
@@ -263,7 +271,17 @@ internal fun buildTurnWork(
         span = mutableListOf()
     }
     for (msg in messages) {
-        if (msg is ChatMessage.User) closeTurn() else span.add(msg)
+        // A turn ends at a user message AND at a question put to the user.
+        // Without the second case, answering a clarify/sudo/secret card did
+        // not start a new turn: everything said before the question — the
+        // question's own explanation included — was folded away into the
+        // trace of whatever the agent said last, so the exchange became
+        // unreadable the moment the user answered.
+        if (msg is ChatMessage.User || msg is ChatMessage.InteractiveRequest) {
+            closeTurn()
+        } else {
+            span.add(msg)
+        }
     }
     closeTurn()
     return byMessage

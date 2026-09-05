@@ -41,6 +41,64 @@ class TurnWorkTest {
 
     // ── Folded: a turn collapses onto the message that ends it ───────────────
 
+    private fun question(id: String, text: String = "which one?") =
+        ChatMessage.InteractiveRequest(
+            id = id,
+            timestamp = seq++.toLong(),
+            requestId = id,
+            question = text,
+            choices = listOf("a", "b"),
+        )
+
+    @Test
+    fun `a question to the user ends the turn like a user message does`() {
+        // Answering a clarify card adds no user message, so without this the
+        // whole exchange stayed one turn: the message that asked the question
+        // folded into whatever the agent said after the answer, and the reader
+        // lost both the question's explanation and everything before it.
+        val messages = listOf(
+            user(),
+            assistant("a1", text = "I need to know something"),
+            question("q1"),
+            assistant("a2", text = "done"),
+        )
+
+        val work = buildTurnWork(messages, foldNarration = true)
+
+        assertEquals(setOf("a1", "a2"), work.keys)
+    }
+
+    @Test
+    fun `work after a question is not filed under the message that asked`() {
+        val messages = listOf(
+            user(),
+            assistant("a1", text = "which file?"),
+            question("q1"),
+            tool("t1"),
+            assistant("a2", text = "patched it"),
+        )
+
+        val work = buildTurnWork(messages, foldNarration = true)
+
+        assertTrue(work.getValue("a1").isEmpty())
+        assertEquals(listOf("t1"), work.getValue("a2").filterIsInstance<HxTraceItem.Tool>().map { it.call.id })
+    }
+
+    @Test
+    fun `unfolded, a question closes the previous message's work`() {
+        val messages = listOf(
+            user(),
+            assistant("a1", text = "which file?"),
+            question("q1"),
+            tool("t1"),
+            assistant("a2", text = "patched it"),
+        )
+
+        val work = buildTurnWork(messages, foldNarration = false)
+
+        assertTrue(work.getValue("a1").isEmpty())
+    }
+
     @Test
     fun `folded turn keeps only its ending message`() {
         val messages = listOf(

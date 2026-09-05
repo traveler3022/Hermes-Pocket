@@ -51,9 +51,12 @@ internal fun InteractiveRequestCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             if (message.answered) {
+                // What was answered, not just that it was: a card reading
+                // only "Answered" left the exchange unreadable afterwards.
+                // message.answer is null for sudo/secret by design.
                 Text(
-                    text = t("Answered", "پاسخ داده شد"),
-                    style = MaterialTheme.typography.labelSmall,
+                    text = message.answer?.let { "\u21B3 $it" } ?: t("Answered", "پاسخ داده شد"),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else when (message.kind) {
