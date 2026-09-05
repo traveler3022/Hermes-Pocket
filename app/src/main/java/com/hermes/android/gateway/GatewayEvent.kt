@@ -61,6 +61,19 @@ sealed class GatewayEvent {
         val info: Map<String, kotlinx.serialization.json.JsonElement>,
     ) : GatewayEvent()
 
+    /**
+     * The gateway auto-named a session. [storedSessionId] is the stored key the
+     * drawer rows are keyed by — not the live id this event was emitted under.
+     */
+    data class SessionTitle(
+        override val sessionId: String?,
+        val storedSessionId: String,
+        val title: String,
+    ) : GatewayEvent()
+
+    /** The session list moved (any surface). Session-less: refetch, don't map. */
+    data class SessionsChanged(override val sessionId: String?) : GatewayEvent()
+
     // ── Message streaming (the main chat flow) ────────────────────────────
 
     /** Assistant message started. */
@@ -73,6 +86,17 @@ sealed class GatewayEvent {
         val rendered: String?,
     ) : GatewayEvent()
 
+    /**
+     * Assistant commentary the agent emitted mid-turn — text alongside a tool
+     * call, or the answer it drafted before a verify-on-stop retry. Without it
+     * that text is lost, because [MessageComplete] replaces the streaming
+     * bubble with the final answer only.
+     */
+    data class MessageInterim(
+        override val sessionId: String?,
+        val text: String,
+    ) : GatewayEvent()
+
     /** Assistant message finished. */
     data class MessageComplete(
         override val sessionId: String?,
@@ -80,6 +104,8 @@ sealed class GatewayEvent {
         val rendered: String?,
         val reasoning: String?,
         val usage: Map<String, Long>?,
+        /** [text] is a rerun of text already sealed by [MessageInterim]. */
+        val responsePreviewed: Boolean = false,
     ) : GatewayEvent()
 
     /** Thinking text chunk (reasoning models). */

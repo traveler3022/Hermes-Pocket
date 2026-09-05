@@ -15,6 +15,7 @@ internal class ChatStreamingDelegate(
     private var activeAssistantMessageId: String? = null
     private val streamingBuffer = StringBuilder()
     private val reasoningBuffer = StringBuilder()
+    private val sealedInterimTexts = mutableListOf<String>()
     private var streamingFlushJob: Job? = null
 
     val currentAssistantMessageId: String? get() = activeAssistantMessageId
@@ -61,11 +62,48 @@ internal class ChatStreamingDelegate(
         ) }
     }
 
+    /**
+     * Seal the live bubble as a finished message and hand back the id of the
+     * bubble the rest of the turn streams into, or null when there is nothing
+     * to seal. [text] is authoritative: the gateway does not always stream
+     * every token it later reports as interim.
+     */
+    fun sealInterim(text: String): String? {
+        flushBuffer()
+        val sealedId = activeAssistantMessageId ?: return null
+        val authoritative = text.trimStart()
+        if (authoritative.isBlank()) return null
+        var sealed = false
+        state.update { it.copy(
+            messages = it.messages.updateFirst({ msg ->
+                msg is ChatMessage.Assistant && msg.isStreaming && msg.id == sealedId
+            }) { msg ->
+                sealed = true
+                (msg as ChatMessage.Assistant).copy(text = authoritative, isStreaming = false)
+            }
+        ) }
+        if (!sealed) return null
+        sealedInterimTexts += authoritative
+        val nextId = java.util.UUID.randomUUID().toString()
+        activeAssistantMessageId = nextId
+        return nextId
+    }
+
+    /** Drop the lead-in that [sealInterim] already put on screen this turn. */
+    fun withoutSealedInterims(finalText: String): String {
+        var tail = finalText.trimStart()
+        for (sealed in sealedInterimTexts) {
+            if (tail.startsWith(sealed)) tail = tail.removePrefix(sealed).trimStart()
+        }
+        return tail
+    }
+
     fun reset() {
         streamingFlushJob?.cancel()
         streamingFlushJob = null
         streamingBuffer.setLength(0)
         reasoningBuffer.setLength(0)
+        sealedInterimTexts.clear()
         activeAssistantMessageId = null
     }
 
