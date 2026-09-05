@@ -435,9 +435,21 @@ private fun HxReasoningTimeline(
     val rows = remember(items) { buildTimelineRows(items) }
     val toolCount = remember(items) { items.count { it is HxTraceItem.Tool } }
 
+    // Newest first: while the model thinks, the sheet grows from the top, so
+    // the latest step is under the reader's thumb instead of below the fold.
+    // The rail still runs unbroken from the top row down to the oldest one,
+    // which is now the only row with nothing below it.
     Column {
-        rows.forEachIndexed { index, row ->
-            val isLast = !isComplete && index == rows.lastIndex
+        if (isComplete) {
+            HxTimelineRow(
+                title = doneLabel(elapsedSeconds, toolCount),
+                detail = t("Done", "تمام"),
+                isLast = rows.isEmpty(),
+                icon = HxIcons.CircleCheck,
+            )
+        }
+        rows.asReversed().forEachIndexed { index, row ->
+            val isLast = index == rows.lastIndex
             when (row) {
                 is TimelineRow.Text -> HxTimelineRow(
                     title = row.title,
@@ -448,14 +460,6 @@ private fun HxReasoningTimeline(
 
                 is TimelineRow.Tool -> HxTimelineToolRow(tool = row.call, isLast = isLast)
             }
-        }
-        if (isComplete) {
-            HxTimelineRow(
-                title = doneLabel(elapsedSeconds, toolCount),
-                detail = t("Done", "تمام"),
-                isLast = true,
-                icon = HxIcons.CircleCheck,
-            )
         }
     }
 }
