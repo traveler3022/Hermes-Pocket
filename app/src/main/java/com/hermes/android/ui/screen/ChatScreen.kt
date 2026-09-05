@@ -327,9 +327,15 @@ fun ChatScreen(
     //
     // scrollToItem (instant) is used instead of animateScrollToItem so there
     // is no animation in flight to be cancelled/restarted by the next event.
-    val lastUserMessageId = uiState.messages.lastOrNull { it is ChatMessage.User }?.id
+    //
+    // Every index below is an index into [visibleMessages], because that is
+    // what the LazyColumn actually lays out. uiState.messages is the raw
+    // transcript — tool cards and folded narration included — and is always
+    // the longer list, so an index taken from it overshoots and the list
+    // clamps to the bottom instead of pinning the question at the top.
+    val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
     LaunchedEffect(lastUserMessageId) {
-        val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
+        val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
             listState.scrollToItem(lastUserIndex)
         }
@@ -337,8 +343,8 @@ fun ChatScreen(
 
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
-        if (uiState.sessionLoadedAt > 0L && uiState.messages.isNotEmpty()) {
-            listState.scrollToItem(uiState.messages.size - 1)
+        if (uiState.sessionLoadedAt > 0L && visibleMessages.isNotEmpty()) {
+            listState.scrollToItem(visibleMessages.lastIndex)
         }
     }
 
@@ -582,8 +588,8 @@ fun ChatScreen(
                     SmallFloatingActionButton(
                         onClick = {
                             scope.launch {
-                                if (uiState.messages.isNotEmpty()) {
-                                    listState.animateScrollToItem(uiState.messages.size - 1)
+                                if (visibleMessages.isNotEmpty()) {
+                                    listState.animateScrollToItem(visibleMessages.lastIndex)
                                 }
                             }
                         },

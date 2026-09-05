@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.ui.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -68,45 +67,29 @@ class SessionsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingSessions = true)
             try {
                 val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
-                val sessions = parseSessionList(result)
+                val sessions = parseSessionListPayload(result)
                 _uiState.value = _uiState.value.copy(
                     sessions = sessions,
                     isLoadingSessions = false,
                 )
                 Timber.i("[Sessions] Loaded ${sessions.size} sessions")
-            } catch (e: GatewayException) {
+            } catch (e: CancellationException) {
+                // The screen went away: leave no "still loading" state behind
+                // for a recomposition to inherit, and let the cancellation
+                // finish unwrapping.
+                _uiState.value = _uiState.value.copy(isLoadingSessions = false)
+                throw e
+            } catch (e: Exception) {
+                // Every failure has to clear the spinner, not just the
+                // GatewayException this used to name: a timeout, a malformed
+                // payload or a transport error left the list spinning forever
+                // with no way back but killing the app.
                 Timber.e(e, "[Sessions] Failed to load")
                 _uiState.value = _uiState.value.copy(
                     isLoadingSessions = false,
                     errorMessage = "Failed to load sessions: ${e.message}",
                 )
             }
-        }
-    }
-
-    private fun parseSessionList(result: kotlinx.serialization.json.JsonElement): List<SessionSummary> {
-        return try {
-            val obj = result as? JsonObject ?: return emptyList()
-            val arr = obj["sessions"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
-            arr.mapNotNull { item ->
-                val s = item as? JsonObject ?: return@mapNotNull null
-                SessionSummary(
-                    id = s["id"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    title = s["title"]?.let { (it as? JsonPrimitive)?.content }
-                        ?: "Untitled",
-                    // Fix S9F01: field is "preview" not "last_message"
-                    lastMessagePreview = s["preview"]?.let { (it as? JsonPrimitive)?.content },
-                    // Fix S9F01: field is "started_at" not "updated_at"
-                    updatedAt = (s["started_at"] ?: s["updated_at"])
-                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
-                        ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis(),
-                    messageCount = s["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
-                        ?: 0,
-                )
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Sessions] Parse error")
-            emptyList()
         }
     }
 
@@ -243,6 +226,11 @@ class SessionsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedSessionId = null,
             selectedSessionHistory = emptyList(),
+            // Both belong to the session being closed: leaving them made the
+            // next session open with the previous one's token usage, and kept
+            // its "no messages found" line on a list that has plenty.
+            selectedSessionUsage = null,
+            errorMessage = null,
         )
     }
 

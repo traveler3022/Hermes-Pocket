@@ -90,6 +90,10 @@ class ChatViewModel @Inject constructor(
             }
             publishSessionActivity()
         },
+        isActiveSession = { drawerId ->
+            val active = _uiState.value.activeSessionId
+            active != null && active in liveIdsFor(drawerId)
+        },
     )
 
     init {
@@ -301,24 +305,22 @@ class ChatViewModel @Inject constructor(
         val sessionId = _uiState.value.activeSessionId ?: return
         if (_uiState.value.isSending) return
 
-        val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
-        val refs = lastUserMsg.attachments.mapNotNull { it.refText }
+        // Steer lines look like user messages on screen but were never user
+        // turns on the server, so [retryTarget] skips them: resending one
+        // would resubmit the arrow-prefixed nudge, and counting one would
+        // rewind the server to the wrong turn.
+        val target = _uiState.value.messages.retryTarget() ?: return
+        val refs = target.message.attachments.mapNotNull { it.refText }
         val lastUserText = if (refs.isEmpty()) {
-            lastUserMsg.text
+            target.message.text
         } else {
-            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+            (target.message.text + "\n" + refs.joinToString("\n")).trim()
         }
 
-        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
-        val lastUserOrdinal = userMessages.size - 1
+        val trimmedMessages = _uiState.value.messages.subList(0, target.index + 1).toList()
+        _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
 
-        val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
-            _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
-        }
-
-        sendPrompt(lastUserText, sessionId, truncateBeforeUserOrdinal = lastUserOrdinal)
+        sendPrompt(lastUserText, sessionId, truncateBeforeUserOrdinal = target.ordinal)
     }
 
     fun steerAgent() {
@@ -328,6 +330,7 @@ class ChatViewModel @Inject constructor(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
             text = "\u21B3 $text",
+            isSteer = true,
         )
         _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
         clearDraft()
@@ -915,9 +918,16 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ToolProgress -> {
+                // The event names the tool it is reporting on. Several tools
+                // can be running at once, so "the first running card" is the
+                // wrong card as soon as that happens — match the name when
+                // there is one and only fall back to the first runner when
+                // the gateway sent none.
+                val progressName = event.name?.takeIf { it.isNotBlank() }
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.ToolCall && msg.isRunning
+                        msg is ChatMessage.ToolCall && msg.isRunning &&
+                            (progressName == null || msg.toolName == progressName)
                     }) { msg ->
                         (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
                     }

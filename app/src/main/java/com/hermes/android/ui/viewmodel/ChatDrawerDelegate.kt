@@ -16,6 +16,14 @@ internal class ChatDrawerDelegate(
     private val loadSessionList: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val forgetSessionActivity: (String) -> Unit,
+    /**
+     * Is the session behind this drawer row the one the chat is open on?
+     * The rows are keyed by STORED db ids while [ChatUiState.activeSessionId]
+     * is the LIVE id the events speak, so the two are never equal and a plain
+     * `==` never fires — deleting the chat you are reading left its messages
+     * on screen, still pointing at a session the server had dropped.
+     */
+    private val isActiveSession: (String) -> Boolean,
 ) {
     fun updateSearch(state: MutableStateFlow<ChatUiState>, query: String) {
         state.update { it.copy(drawerSearchQuery = query) }
@@ -85,7 +93,7 @@ internal class ChatDrawerDelegate(
                 gatewayClient.request(GatewayMethods.SESSION_DELETE, jsonToElementMap(params))
                 Timber.i("[Chat] Deleted $sessionId")
                 forgetSessionActivity(sessionId)
-                if (state.value.activeSessionId == sessionId) {
+                if (isActiveSession(sessionId)) {
                     state.update { it.copy(
                         activeSessionId = null,
                         messages = emptyList(),

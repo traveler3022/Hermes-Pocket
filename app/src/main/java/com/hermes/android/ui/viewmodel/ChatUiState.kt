@@ -19,12 +19,19 @@ sealed class ChatMessage {
 
     /** User-sent message. [text] is exactly what the user typed; attached
      *  files/images live in [attachments] and render as separate elements —
-     *  never merged into the text. */
+     *  never merged into the text.
+     *
+     *  [isSteer] marks a mid-turn nudge sent over `session.steer` rather than
+     *  a prompt of its own. It is echoed into the transcript so the user can
+     *  see what they said, but it is NOT a turn: it never became a user
+     *  message on the server, so retry must neither resend it nor count it
+     *  when numbering user turns for a truncating resubmit. */
     data class User(
         override val id: String,
         override val timestamp: Long,
         val text: String,
         val attachments: List<PendingAttachment> = emptyList(),
+        val isSteer: Boolean = false,
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */

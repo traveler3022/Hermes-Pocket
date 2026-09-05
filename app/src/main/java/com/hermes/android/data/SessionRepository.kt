@@ -69,6 +69,11 @@ class SessionRepository @Inject constructor(
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
         val result = try {
             gatewayClient.request(first, params)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            // The caller went away — that is not "the wrong id kind", and
+            // retrying under a cancelled scope only produces a second doomed
+            // round-trip.
+            throw cancelled
         } catch (firstError: Exception) {
             Timber.w("[Repo] $first failed (${firstError.message}); trying $second for $sessionId")
             gatewayClient.request(second, params)
@@ -250,7 +255,17 @@ class SessionRepository @Inject constructor(
      * against the live running set so a task mid-turn is never reported done.
      */
     suspend fun finishedTasks(): List<TaskHistoryRow> {
-        val running = activeTasks().filter { it.isRunning }.map { it.id }.toSet()
+        // The two lists speak different id kinds: active_list rows are keyed
+        // by LIVE id and carry the stored key in `session_key`, while
+        // session.list rows ARE the stored keys. Matching `id` against `id`
+        // therefore never matched — every running task was reported finished
+        // the moment it had one message, and because a completion is claimed
+        // exactly once, its real ending was then never announced. Exclude a
+        // running task under either spelling.
+        val running = activeTasks().filter { it.isRunning }
+            .flatMap { listOf(it.id, it.sessionKey) }
+            .filter { it.isNotBlank() }
+            .toSet()
         return taskHistory().filter { it.id !in running && it.messageCount > 0 }
     }
 

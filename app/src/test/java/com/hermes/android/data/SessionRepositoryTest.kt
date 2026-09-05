@@ -323,6 +323,90 @@ class SessionRepositoryTest {
     }
 
     @Test
+    fun `finishedTasks excludes a task still streaming under its stored key`() = runTest {
+        // The Task Desk's two lists speak different id kinds: active_list is
+        // keyed by LIVE id and names the stored key separately, session.list
+        // is keyed by the STORED id. Comparing id to id matched nothing, so a
+        // running task was announced as complete — once, permanently.
+        registry.register("liveT", "storedT")
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_ACTIVE_LIST -> buildJsonObject {
+                    put(
+                        "sessions",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("id", "liveT"); put("session_key", "storedT")
+                                    put("title", "backup"); put("status", "streaming")
+                                    put("message_count", 2); put("last_active", 1.0)
+                                }
+                            )
+                        }
+                    )
+                }
+                GatewayMethods.SESSION_LIST -> buildJsonObject {
+                    put(
+                        "sessions",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("id", "storedT"); put("title", "backup")
+                                    put("preview", "working…"); put("message_count", 2)
+                                    put("source", SessionRepository.TASK_SOURCE)
+                                }
+                            )
+                        }
+                    )
+                }
+                else -> JsonObject(emptyMap())
+            }
+        }
+
+        assertTrue(repo.finishedTasks().isEmpty())
+    }
+
+    @Test
+    fun `finishedTasks reports a task once it stops running`() = runTest {
+        registry.register("liveT", "storedT")
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_ACTIVE_LIST -> buildJsonObject {
+                    put(
+                        "sessions",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("id", "liveT"); put("session_key", "storedT")
+                                    put("title", "backup"); put("status", "idle")
+                                    put("message_count", 4); put("last_active", 1.0)
+                                }
+                            )
+                        }
+                    )
+                }
+                GatewayMethods.SESSION_LIST -> buildJsonObject {
+                    put(
+                        "sessions",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("id", "storedT"); put("title", "backup")
+                                    put("preview", "all done"); put("message_count", 4)
+                                    put("source", SessionRepository.TASK_SOURCE)
+                                }
+                            )
+                        }
+                    )
+                }
+                else -> JsonObject(emptyMap())
+            }
+        }
+
+        assertEquals(listOf("storedT"), repo.finishedTasks().map { it.id })
+    }
+
+    @Test
     fun `transcript attaches then flattens roles and text`() = runTest {
         gateway.handler = { method, _ ->
             when (method) {
