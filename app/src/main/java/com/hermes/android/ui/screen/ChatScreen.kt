@@ -59,7 +59,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
@@ -84,6 +83,7 @@ import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
@@ -429,7 +429,11 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
-                Column {
+                // The activity is edge-to-edge, and a plain Column does not
+                // consume the status bar inset the way the Material TopAppBar
+                // this replaced did — without this the chrome draws under the
+                // status bar and off the top of the screen.
+                Column(modifier = Modifier.statusBarsPadding()) {
                     // Floating chrome instead of a flat Material app bar: two
                     // shadowed circles either side of the status pill, same
                     // language as the composer's own floating controls, so
