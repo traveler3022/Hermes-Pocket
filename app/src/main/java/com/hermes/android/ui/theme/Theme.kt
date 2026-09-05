@@ -96,6 +96,17 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // An agent turn arrives as many messages: the gateway opens a new one for
+    // every stretch of narration between tool calls. By default only the
+    // message that ends a turn stays on the chat surface and the rest fold into
+    // its trace, which keeps the chat readable but hides the running commentary
+    // some people want to watch. Turning this on puts every fragment back in
+    // the flow.
+    var showInlineNarration: Boolean by mutableStateOf(
+        prefs.getBoolean("show_inline_narration", false)
+    )
+        private set
+
     // ── Personalization: top bar identity ──
     // What the chat top bar shows to represent the assistant: the user's
     // chosen name (a text label, default "Hermes" / "هرمس") or the avatar
@@ -134,6 +145,11 @@ class ThemeModeState(context: Context) {
     fun updateWarmMode(enabled: Boolean) {
         warmMode = enabled
         prefs.edit().putBoolean("warm_mode", enabled).apply()
+    }
+
+    fun updateShowInlineNarration(enabled: Boolean) {
+        showInlineNarration = enabled
+        prefs.edit().putBoolean("show_inline_narration", enabled).apply()
     }
 
     fun updateAppFont(newFont: AppFont) {

@@ -180,6 +180,103 @@ internal fun parseReasoningSteps(raw: String): List<HxReasoningStep> {
 internal fun List<HxReasoningStep>.worthATimeline(): Boolean =
     count { it.title.isNotBlank() } >= 2
 
+
+/**
+ * Attributes each turn's work to the message whose trace will carry it.
+ *
+ * The returned map does double duty: its values are what a trace shows, and its
+ * keys are which assistant messages stay on the chat surface. A message with no
+ * work still gets an entry, because being absent from the map means "folded
+ * away", not "has nothing to show".
+ *
+ * With [foldNarration] on, a turn — the run of messages between two questions —
+ * collapses onto the assistant message that ends it, and everything said before
+ * that becomes a note in its trace. With it off, every assistant message keeps
+ * its place and carries only its own reasoning and the tools that ran after it.
+ * Tool calls fold either way: putting them back in the flow is what the chat
+ * looked like before, and it is not what this switch is for.
+ */
+internal fun buildTurnWork(
+    messages: List<ChatMessage>,
+    foldNarration: Boolean,
+): Map<String, List<HxTraceItem>> {
+    val byMessage = mutableMapOf<String, List<HxTraceItem>>()
+
+    if (!foldNarration) {
+        var owner: String? = null
+        val work = mutableListOf<HxTraceItem>()
+        fun commit() {
+            owner?.let { byMessage[it] = work.toList() }
+            work.clear()
+        }
+        for (msg in messages) {
+            when (msg) {
+                is ChatMessage.User -> {
+                    commit()
+                    owner = null
+                }
+
+                is ChatMessage.Assistant -> {
+                    commit()
+                    owner = msg.id
+                    msg.reasoning?.takeIf { it.isNotBlank() }
+                        ?.let { work.add(HxTraceItem.Reasoning(it)) }
+                    byMessage[msg.id] = work.toList()
+                }
+
+                is ChatMessage.ToolCall -> {
+                    work.add(HxTraceItem.Tool(msg))
+                    commitTo(byMessage, owner, work)
+                }
+
+                else -> Unit
+            }
+        }
+        commit()
+        return byMessage
+    }
+
+    var span = mutableListOf<ChatMessage>()
+    fun closeTurn() {
+        val ending = span.filterIsInstance<ChatMessage.Assistant>().lastOrNull()
+        if (ending != null) {
+            val items = mutableListOf<HxTraceItem>()
+            for (msg in span) {
+                when (msg) {
+                    is ChatMessage.Assistant -> {
+                        msg.reasoning?.takeIf { it.isNotBlank() }
+                            ?.let { items.add(HxTraceItem.Reasoning(it)) }
+                        // The turn's last word is the answer and stays on the
+                        // chat surface; everything it said before that was work.
+                        if (msg.id != ending.id) {
+                            msg.text.takeIf { it.isNotBlank() }
+                                ?.let { items.add(HxTraceItem.Note(it)) }
+                        }
+                    }
+
+                    is ChatMessage.ToolCall -> items.add(HxTraceItem.Tool(msg))
+                    else -> Unit
+                }
+            }
+            byMessage[ending.id] = items
+        }
+        span = mutableListOf()
+    }
+    for (msg in messages) {
+        if (msg is ChatMessage.User) closeTurn() else span.add(msg)
+    }
+    closeTurn()
+    return byMessage
+}
+
+private fun commitTo(
+    target: MutableMap<String, List<HxTraceItem>>,
+    owner: String?,
+    work: List<HxTraceItem>,
+) {
+    owner?.let { target[it] = work.toList() }
+}
+
 /**
  * The agent's reasoning, as a single quiet line in the message flow.
  *
