@@ -65,6 +65,8 @@ data class ConfigUiState(
     val modelSwitchConfirm: ModelSwitchConfirm? = null,
     // One-shot feedback for a model switch made from the chat (shown as a snackbar there).
     val modelSwitchNotice: String? = null,
+    // Starred models pinned atop the chat's model sheet (local prefs, max ModelFavorites.MAX).
+    val favoriteModels: List<ModelFavorite> = emptyList(),
 )
 
 /** `config.set model` answered `confirm_required`; re-sent with `confirm_expensive_model` on confirm. */
@@ -87,6 +89,8 @@ data class ModelOption(
     val modelId: String,
     val name: String,
     val requiresApiKey: Boolean,
+    // Provider display name from model.options (row `name`); blank → show [provider].
+    val providerName: String = "",
 )
 
 data class ToolOption(

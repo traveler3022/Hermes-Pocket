@@ -55,6 +55,9 @@ class ConfigViewModel @Inject constructor(
     private val prefs = context.getSharedPreferences("hermes_chat_prefs", Context.MODE_PRIVATE)
 
     init {
+        _uiState.value = _uiState.value.copy(
+            favoriteModels = ModelFavorites.decode(prefs.getString(KEY_FAVORITE_MODELS, null)),
+        )
         loadAll()
         loadAvatarUri()
         loadHubStats()
@@ -501,6 +504,13 @@ class ConfigViewModel @Inject constructor(
 
     fun clearModelSwitchNotice() {
         _uiState.value = _uiState.value.copy(modelSwitchNotice = null)
+    }
+
+    /** Star/unstar a model for the chat's model sheet (no-op when starring past the cap). */
+    fun toggleFavoriteModel(model: ModelOption) {
+        val updated = ModelFavorites.toggle(_uiState.value.favoriteModels, ModelFavorite(model.provider, model.modelId))
+        prefs.edit().putString(KEY_FAVORITE_MODELS, ModelFavorites.encode(updated)).apply()
+        _uiState.value = _uiState.value.copy(favoriteModels = updated)
     }
 
     /**
@@ -1568,6 +1578,8 @@ class ConfigViewModel @Inject constructor(
     }
 
     private companion object {
+        const val KEY_FAVORITE_MODELS = "favorite_models"
+
         // Same key ChatViewModel reads from the shared "hermes_chat_prefs"
         // file — keep these in sync if either changes.
         const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
