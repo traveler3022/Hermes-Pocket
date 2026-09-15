@@ -889,6 +889,12 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            is GatewayEvent.EventGap -> {
+                // Frames for the open chat were lost on a live socket: the same
+                // hole a reconnect leaves, so the same recovery.
+                viewModelScope.launch { recoverActiveSession(event.sessionId) }
+            }
+
             is GatewayEvent.ThinkingDelta -> {
                 streamingDelegate.enqueueDelta(event.text, isReasoning = true)
             }

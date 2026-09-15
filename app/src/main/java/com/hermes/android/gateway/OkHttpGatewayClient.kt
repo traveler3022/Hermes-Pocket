@@ -23,6 +23,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -97,6 +98,8 @@ class OkHttpGatewayClient @Inject constructor(
 
     @Volatile
     private var lastSessionId: String? = null
+
+    private val eventSequence = EventSequenceTracker()
 
     /** HTTP status code from the last connection failure (for permanent error detection). */
     @Volatile
@@ -204,6 +207,7 @@ class OkHttpGatewayClient @Inject constructor(
                 socket
             }
             oldSocket?.close(1000, "reconnecting")
+            eventSequence.reset()
 
             val request = Request.Builder().url(url).build()
             val listener = GatewayWebSocketListener { state ->
@@ -749,6 +753,12 @@ class OkHttpGatewayClient @Inject constructor(
         // resume is how a reconnect silently lands in a brand new chat.
         val sid = (params["sid"] ?: params["session_id"]).sessionIdOrNull()
         val payload = params["payload"]?.jsonObject ?: JsonObject(emptyMap())
+        // A hole in the per-session seq means frames were lost on this socket;
+        // announce it before the event so the chat rebuilds from the server.
+        val seq = (params["seq"] as? JsonPrimitive)?.longOrNull
+        if (sid != null && seq != null && eventSequence.isGap(sid, seq)) {
+            _events.tryEmit(GatewayEvent.EventGap(sid))
+        }
 
         val event = parseEvent(eventType, sid, payload)
         if (event is GatewayEvent.GatewayReady) {
