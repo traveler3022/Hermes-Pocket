@@ -152,15 +152,20 @@ class HermesGatewayService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // Clean up legacy channel to avoid cached LOW importance on existing installs
+            try {
+                manager.deleteNotificationChannel("hermes_gateway")
+            } catch (_: Exception) { }
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.notification_channel_gateway_name),
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,
             ).apply {
                 description = getString(R.string.notification_channel_gateway_desc)
                 setShowBadge(false)
             }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
     }
@@ -179,7 +184,7 @@ class HermesGatewayService : Service() {
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
     }
@@ -190,7 +195,7 @@ class HermesGatewayService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "hermes_gateway"
+        private const val CHANNEL_ID = "hermes_gateway_service"
         private const val NOTIFICATION_ID = 1
 
         fun start(context: Context) {

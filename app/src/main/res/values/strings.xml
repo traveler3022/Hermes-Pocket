@@ -4,7 +4,7 @@
     <string name="app_name">Hermes</string>
 
     <!-- Gateway service notification (Step 6) -->
-    <string name="notification_channel_gateway_id">hermes_gateway</string>
+    <string name="notification_channel_gateway_id">hermes_gateway_service</string>
     <string name="notification_channel_gateway_name">Gateway Service</string>
     <string name="notification_channel_gateway_desc">Keeps the Hermes gateway running in the background</string>
     <string name="gateway_notification_title">Hermes Gateway</string>
