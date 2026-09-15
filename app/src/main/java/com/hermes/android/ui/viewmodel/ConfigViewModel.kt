@@ -324,14 +324,27 @@ class ConfigViewModel @Inject constructor(
 
     // ── Models ────────────────────────────────────────────────────────────
 
-    fun loadModels() {
+    /**
+     * [sessionId]: the open chat's live id. With it the gateway reports THAT
+     * session's running model; without it, config.yaml's default.
+     */
+    fun loadModels(sessionId: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingModels = true)
             try {
-                val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
+                val sid = sessionId?.takeIf { it.isNotBlank() }
+                val result = gatewayClient.request(
+                    GatewayMethods.MODEL_OPTIONS,
+                    if (sid != null) mapOf("session_id" to JsonPrimitive(sid)) else emptyMap(),
+                )
                 val obj = result as? JsonObject
+                // A queued mid-turn pick isn't on the agent yet: keep it painted
+                // until the chat's session.info reports the real outcome.
+                val keepPending = sid != null && pendingModelSwitch?.first == sid
                 val activeProvider = obj?.get("provider")?.let { (it as? JsonPrimitive)?.content }
+                    ?.takeUnless { keepPending }
                 val activeModel = obj?.get("model")?.let { (it as? JsonPrimitive)?.content }
+                    ?.takeUnless { keepPending }
                 // Parse model list from result
                 val models = parseModelOptions(result)
                 _uiState.value = _uiState.value.copy(
@@ -423,29 +436,90 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    /** [liveSessionId]/[storedSessionId]: the open chat, when called from it. */
-    fun selectModel(model: ModelOption, liveSessionId: String? = null, storedSessionId: String? = null) {
-        viewModelScope.launch {
-            try {
-                val error = applyHermesModelSwitch(model.provider, model.modelId, liveSessionId, storedSessionId)
-                if (error != null) {
-                    _uiState.value = _uiState.value.copy(errorMessage = error)
-                    return@launch
-                }
-                _uiState.value = _uiState.value.copy(
-                    activeProvider = model.provider,
-                    activeModel = model.modelId,
-                    errorMessage = "Backend set to ${model.provider}/${model.modelId}",
-                )
-                loadConfig()
-                loadModels()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to select model")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to select model: ${e.message}",
-                )
+    /** Live id + pick of a switch the gateway queued for the next turn (`deferred`). */
+    private var pendingModelSwitch: Pair<String, ModelOption>? = null
+
+    /**
+     * [liveSessionId]/[storedSessionId]: the open chat, when called from it.
+     * [confirmed]: re-send of a pick the user confirmed ([confirmModelSwitch]).
+     */
+    fun selectModel(
+        model: ModelOption,
+        liveSessionId: String? = null,
+        storedSessionId: String? = null,
+        confirmed: Boolean = false,
+    ) {
+        val live = liveSessionId?.takeIf { it.isNotBlank() }
+        // The chat shows its own snackbar; Settings keeps using errorMessage.
+        fun notify(message: String) {
+            _uiState.value = if (live != null) {
+                _uiState.value.copy(modelSwitchNotice = message)
+            } else {
+                _uiState.value.copy(errorMessage = message)
             }
         }
+        viewModelScope.launch {
+            try {
+                when (val outcome = applyHermesModelSwitch(model.provider, model.modelId, live, storedSessionId, confirmed)) {
+                    is ModelSwitchOutcome.Failed -> notify(outcome.message)
+                    is ModelSwitchOutcome.NeedsConfirm -> _uiState.value = _uiState.value.copy(
+                        modelSwitchConfirm = ModelSwitchConfirm(model, live, storedSessionId, outcome.message),
+                    )
+                    is ModelSwitchOutcome.Applied -> {
+                        pendingModelSwitch = if (outcome.deferred && live != null) live to model else null
+                        _uiState.value = _uiState.value.copy(
+                            activeProvider = model.provider,
+                            activeModel = model.modelId,
+                        )
+                        if (outcome.deferred) {
+                            // Queued mid-turn: refetching now would repaint the model
+                            // still running. session.info re-syncs once it lands.
+                            notify("Model changes to ${model.modelId} on your next message")
+                        } else {
+                            notify("Backend set to ${model.provider}/${model.modelId}")
+                            loadConfig()
+                            loadModels(live)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "[Config] Failed to select model")
+                notify("Failed to select model: ${e.message}")
+            }
+        }
+    }
+
+    fun confirmModelSwitch() {
+        val confirm = _uiState.value.modelSwitchConfirm ?: return
+        _uiState.value = _uiState.value.copy(modelSwitchConfirm = null)
+        selectModel(confirm.model, confirm.liveSessionId, confirm.storedSessionId, confirmed = true)
+    }
+
+    fun dismissModelSwitchConfirm() {
+        _uiState.value = _uiState.value.copy(modelSwitchConfirm = null)
+    }
+
+    fun clearModelSwitchNotice() {
+        _uiState.value = _uiState.value.copy(modelSwitchNotice = null)
+    }
+
+    /**
+     * Adopt the open chat's model from its session.info — the gateway's source
+     * of truth, which also reports a queued pick while it is pending.
+     */
+    fun onSessionModel(liveSessionId: String?, model: String, provider: String?) {
+        if (liveSessionId.isNullOrBlank() || model.isBlank()) return
+        if (pendingModelSwitch?.first == liveSessionId) pendingModelSwitch = null
+        _uiState.value = _uiState.value.copy(
+            activeModel = model,
+            activeProvider = provider?.takeIf { it.isNotBlank() } ?: _uiState.value.activeProvider,
+        )
+    }
+
+    private sealed interface ModelSwitchOutcome {
+        data class Applied(val deferred: Boolean) : ModelSwitchOutcome
+        data class NeedsConfirm(val message: String) : ModelSwitchOutcome
+        data class Failed(val message: String) : ModelSwitchOutcome
     }
 
     /**
@@ -458,51 +532,71 @@ class ConfigViewModel @Inject constructor(
      * The correct path is Hermes' own `config.set` handler with key="model".
      * Its `value` mirrors the `/model` command grammar parsed by
      * `parse_model_flags`:
-     *   "<model> --provider <provider> --global"
+     *   "<model> --provider <provider>[ --global]"
      *     • `--provider` pins the provider (else Hermes infers it from the model)
-     *     • `--global` persists the choice to config.yaml so new sessions inherit it
+     *     • `--global` persists the choice to config.yaml so new sessions inherit it.
+     *       Only Settings (no open chat) sends it: a pick inside a chat is that
+     *       chat's, same as Hermes Desktop (#90235) — otherwise every other open
+     *       chat without its own override adopts it at its next turn.
+     *
+     * The response mirrors Hermes Desktop's handling: `confirm_required` means
+     * nothing was switched until re-sent with `confirm_expensive_model`;
+     * `deferred` means a turn was running and the pick applies at the next one.
      *
      * The server resolves `session_id` against LIVE ids only; without one it
      * answers 4001 "config.set model requires a live session". So we use the
      * open chat's live id when given (re-attaching its stored id if reclaimed),
      * else attach `session.most_recent`'s STORED id to obtain a live one.
-     * Returns null on success, or a user-facing error string on failure.
      */
     private suspend fun applyHermesModelSwitch(
         provider: String,
         model: String,
         liveSessionId: String? = null,
         storedSessionId: String? = null,
-    ): String? {
+        confirmed: Boolean = false,
+    ): ModelSwitchOutcome {
+        val live = liveSessionId?.takeIf { it.isNotBlank() }
         val value = buildString {
             append(model)
             if (provider.isNotBlank()) append(" --provider ").append(provider)
-            append(" --global")
+            if (live == null) append(" --global")
         }
         fun params(sid: String?) = buildJsonObject {
             put("key", "model")
             put("value", value)
             if (!sid.isNullOrBlank()) put("session_id", sid)
+            if (confirmed) put("confirm_expensive_model", true)
         }.toMap()
         return try {
-            val live = liveSessionId?.takeIf { it.isNotBlank() }
-            if (live != null) {
+            val result = if (live != null) {
                 sessionRepository.onLiveSession(live, storedSessionId, onRebound = {}) { sid ->
                     gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid))
                 }
             } else {
                 gatewayClient.request(GatewayMethods.CONFIG_SET, params(mostRecentLiveId()))
             }
-            null
-        } catch (e: GatewayException) {
-            // 4009 = session busy (mid-turn). Hermes rejects model swaps while a
-            // turn is in flight; surface an actionable message.
-            val m = e.message.orEmpty()
-            if (m.contains("busy") || m.contains("4009")) {
-                "Session is busy — interrupt the current turn before switching models."
+            val obj = result as? JsonObject
+            fun flag(key: String) = (obj?.get(key) as? JsonPrimitive)?.content == "true"
+            fun text(key: String) = (obj?.get(key) as? JsonPrimitive)
+                ?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+            if (flag("confirm_required")) {
+                ModelSwitchOutcome.NeedsConfirm(
+                    text("confirm_message") ?: text("warning") ?: "This model needs confirmation before switching.",
+                )
             } else {
-                "Failed to switch model: $m"
+                ModelSwitchOutcome.Applied(deferred = flag("deferred"))
             }
+        } catch (e: GatewayException) {
+            // 4009 = session busy (mid-turn) on older gateways; current ones
+            // answer `deferred` instead.
+            val m = e.message.orEmpty()
+            ModelSwitchOutcome.Failed(
+                if (m.contains("busy") || m.contains("4009")) {
+                    "Session is busy — interrupt the current turn before switching models."
+                } else {
+                    "Failed to switch model: $m"
+                },
+            )
         }
     }
 

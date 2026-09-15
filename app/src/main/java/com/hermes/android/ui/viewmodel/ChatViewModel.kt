@@ -1151,6 +1151,14 @@ class ChatViewModel @Inject constructor(
                 (event.info["reasoning_effort"] as? JsonPrimitive)?.content
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
+                (event.info["model"] as? JsonPrimitive)?.content
+                    ?.takeIf { it.isNotBlank() && event.sessionId == _uiState.value.activeSessionId }
+                    ?.let { model ->
+                        val provider = (event.info["provider"] as? JsonPrimitive)?.content
+                        _uiState.update {
+                            it.copy(sessionModel = model, sessionProvider = provider, sessionInfoSeq = it.sessionInfoSeq + 1)
+                        }
+                    }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 

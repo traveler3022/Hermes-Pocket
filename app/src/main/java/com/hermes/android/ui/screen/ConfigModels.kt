@@ -84,13 +84,34 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
+import com.hermes.android.ui.viewmodel.ModelSwitchConfirm
 import com.hermes.android.ui.viewmodel.ToolOption
+
+/** Confirm a model pick the gateway flagged (cost, data policy, large context). */
+@Composable
+internal fun ModelSwitchConfirmDialog(
+    confirm: ModelSwitchConfirm,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Switch model?", "مدل عوض شود؟")) },
+        text = { Text(confirm.message) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(t("Switch anyway", "عوض کن")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) } },
+    )
+}
 
 @Composable
 internal fun ModelsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
 ) {
+    state.modelSwitchConfirm?.let { confirm ->
+        ModelSwitchConfirmDialog(confirm, viewModel::confirmModelSwitch, viewModel::dismissModelSwitchConfirm)
+    }
+
     // Load providers on first composition
     val providersLoaded = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
