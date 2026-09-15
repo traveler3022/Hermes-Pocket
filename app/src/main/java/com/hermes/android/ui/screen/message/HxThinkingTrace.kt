@@ -278,6 +278,23 @@ private fun commitTo(
 }
 
 /**
+ * [buildTurnWork] that hands back the previous list for every trace whose
+ * content did not change. The rebuild runs on every streaming flush, and a
+ * fresh-but-equal list still counts as a new parameter, so every visible
+ * bubble recomposed each time — the cost that grew with the chat's length.
+ */
+internal class TurnWorkCache {
+    private var last: Map<String, List<HxTraceItem>> = emptyMap()
+
+    fun build(messages: List<ChatMessage>, foldNarration: Boolean): Map<String, List<HxTraceItem>> {
+        val previous = last
+        return buildTurnWork(messages, foldNarration)
+            .mapValues { (id, items) -> previous[id]?.takeIf { it == items } ?: items }
+            .also { last = it }
+    }
+}
+
+/**
  * The agent's reasoning, as a single quiet line in the message flow.
  *
  * Collapsed it is only text — no card, no border, no chevron: while the model

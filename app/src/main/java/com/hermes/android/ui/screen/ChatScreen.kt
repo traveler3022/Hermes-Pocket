@@ -205,7 +205,15 @@ fun ChatScreen(
     }
 
     // Feature #16: Filter messages based on search query
-    val filteredMessages = remember(uiState.messages, uiState.searchQuery) {
+    // Long chats render a window — the latest turns, with older ones added as
+    // the list is scrolled to the top (ChatHistoryWindow). Search spans all.
+    val windowedMessages = rememberChatHistoryWindow(
+        messages = uiState.messages,
+        listState = listState,
+        resetKey = uiState.sessionLoadedAt,
+        enabled = uiState.searchQuery.isBlank(),
+    )
+    val filteredMessages = remember(windowedMessages, uiState.searchQuery) {
         // Last-resort safety net: the LazyColumn below is keyed by message id
         // (required for correct animation/scroll behavior), and Compose treats
         // a repeated key as fatal — it crashes the whole screen rather than
@@ -214,7 +222,7 @@ fun ChatScreen(
         // exists), but distinctBy costs nothing on a chat-length list and
         // means a future event-handling bug degrades to "a message is
         // missing" instead of a hard crash.
-        val deduped = uiState.messages.distinctBy { it.id }
+        val deduped = windowedMessages.distinctBy { it.id }
         if (uiState.searchQuery.isBlank()) {
             deduped
         } else {
@@ -254,12 +262,17 @@ fun ChatScreen(
     //    included, because a hit must never be hidden inside a closed sheet.
     val searching = uiState.searchQuery.isNotBlank()
     val foldNarration = !searching && themeModeState?.showInlineNarration != true
+    //
+    // The cache hands back the previous list for every trace whose content is
+    // unchanged: a fresh list per rebuild (every 80ms while streaming) made
+    // every visible bubble recompose, and long chats crawled.
+    val turnWorkCache = remember { TurnWorkCache() }
     val turnWork: Map<String, List<HxTraceItem>> =
         remember(filteredMessages, foldNarration, searching) {
             if (searching) {
                 emptyMap()
             } else {
-                buildTurnWork(filteredMessages, foldNarration)
+                turnWorkCache.build(filteredMessages, foldNarration)
             }
         }
 
@@ -285,9 +298,6 @@ fun ChatScreen(
     // (user decision: working state replaces the connection chip, no extra
     // chrome), and reused to gate the live plan (todo) strip so it only
     // appears while the plan is actually being executed.
-    val isToolRunning = uiState.messages.any { it is ChatMessage.ToolCall && it.isRunning }
-    val streamingAssistant =
-        uiState.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
     // Removed: agent activity text was distracting - ConnectionIndicator handles it
     val agentActivity: String? = null
 
@@ -343,8 +353,8 @@ fun ChatScreen(
 
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
-        if (uiState.sessionLoadedAt > 0L && uiState.messages.isNotEmpty()) {
-            listState.scrollToItem(uiState.messages.size - 1)
+        if (uiState.sessionLoadedAt > 0L && visibleMessages.isNotEmpty()) {
+            listState.scrollToItem(visibleMessages.lastIndex)
         }
     }
 
@@ -575,8 +585,8 @@ fun ChatScreen(
                     SmallFloatingActionButton(
                         onClick = {
                             scope.launch {
-                                if (uiState.messages.isNotEmpty()) {
-                                    listState.animateScrollToItem(uiState.messages.size - 1)
+                                if (visibleMessages.isNotEmpty()) {
+                                    listState.animateScrollToItem(visibleMessages.lastIndex)
                                 }
                             }
                         },
