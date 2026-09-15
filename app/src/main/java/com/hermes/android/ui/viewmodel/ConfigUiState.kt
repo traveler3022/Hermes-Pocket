@@ -63,18 +63,6 @@ data class ConfigUiState(
     val gatewayLog: List<String> = emptyList(),
     // A model pick the gateway flagged (cost / data policy / large context) awaiting the user.
     val modelSwitchConfirm: ModelSwitchConfirm? = null,
-    // One-shot feedback for a model switch made from the chat (shown as a snackbar there).
-    val modelSwitchNotice: String? = null,
-    // Starred models pinned atop the chat's model sheet (local prefs, max ModelFavorites.MAX).
-    val favoriteModels: List<ModelFavorite> = emptyList(),
-)
-
-/** `config.set model` answered `confirm_required`; re-sent with `confirm_expensive_model` on confirm. */
-data class ModelSwitchConfirm(
-    val model: ModelOption,
-    val liveSessionId: String?,
-    val storedSessionId: String?,
-    val message: String,
 )
 
 /** One command + its result in the Advanced screen's console. */
