@@ -65,6 +65,12 @@ sealed class ChatMessage {
         val choices: List<String>?,
         val answered: Boolean = false,
         val kind: InteractiveKind = InteractiveKind.CLARIFY,
+        /** Clarify: more than one of [choices] may be picked. */
+        val multiSelect: Boolean = false,
+        /** Batch clarify: several questions answered together (instead of [question]/[choices]). */
+        val questions: List<ClarifyQuestionUi> = emptyList(),
+        /** The server withdrew the request (timeout, interrupt) before it was answered. */
+        val expired: Boolean = false,
     ) : ChatMessage()
 
     /** Sub-agent execution card. */
@@ -78,6 +84,14 @@ sealed class ChatMessage {
 }
 
 enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+
+/** One question of a batch clarify card. */
+data class ClarifyQuestionUi(
+    val qid: String,
+    val question: String,
+    val choices: List<String>?,
+    val multiSelect: Boolean,
+)
 
 /**
  * One entry of the agent's live task list (from tool.start/tool.complete
@@ -115,6 +129,8 @@ data class PendingApprovalUi(
     /** When false the "always allow" choice must not be offered
      *  (mirrors upstream allow_permanent). */
     val allowPermanent: Boolean = true,
+    /** The `srq-…` id `request.cancel` names when the server withdraws this approval. */
+    val serverRequestId: String = "",
 )
 
 /**

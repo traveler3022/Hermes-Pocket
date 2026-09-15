@@ -83,6 +83,9 @@ internal class ChatSessionDelegate(
                 isSending = false,
             ) }
             loadReasoningLevel()
+            // Questions the agent is still blocked on come back with the resume.
+            (attached.raw["open_requests"] as? kotlinx.serialization.json.JsonArray)
+                ?.let(gatewayClient::redeliverServerRequests)
             if (history.isNotEmpty()) {
                 Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
             } else {
@@ -158,6 +161,8 @@ internal class ChatSessionDelegate(
             )
         }
         if (!applied) return null
+        (attached.raw["open_requests"] as? kotlinx.serialization.json.JsonArray)
+            ?.let(gatewayClient::redeliverServerRequests)
         Timber.i("[Chat] Recovered $liveId as ${attached.liveId}: ${snapshot.size} messages, running=$running")
         return running
     }

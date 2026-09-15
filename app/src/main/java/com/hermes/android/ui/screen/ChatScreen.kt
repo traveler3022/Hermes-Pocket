@@ -754,6 +754,7 @@ fun ChatScreen(
                                 traceItems = turnWork[message.id].orEmpty(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
+                                onRespondToClarifyBatch = viewModel::respondToClarifyBatch,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
                                 onImageClick = { url -> fullscreenImageUrl = url },

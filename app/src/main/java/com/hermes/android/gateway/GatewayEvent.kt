@@ -212,14 +212,39 @@ sealed class GatewayEvent {
         val description: String,
         val patternKeys: List<String>,
         val allowPermanent: Boolean = true,
+        /** The approval queue entry's id — what `approval.respond` resolves. */
+        val requestId: String = "",
+        /** The `srq-…` id `request.cancel` names when the server withdraws it. */
+        val serverRequestId: String = "",
     ) : GatewayEvent()
 
-    /** Agent asks a clarifying question. */
+    /**
+     * Agent asks a clarifying question. [requestId] is the server request id
+     * the answer goes back to. A batch carries [questions] instead of
+     * [question]/[choices].
+     */
     data class ClarifyRequest(
         override val sessionId: String?,
         val requestId: String,
         val question: String,
         val choices: List<String>?,
+        val multiSelect: Boolean = false,
+        val questions: List<ClarifyQuestion> = emptyList(),
+    ) : GatewayEvent()
+
+    /** One question of a batch [ClarifyRequest]. */
+    data class ClarifyQuestion(
+        val qid: String,
+        val question: String,
+        val choices: List<String>?,
+        val multiSelect: Boolean,
+    )
+
+    /** The server withdrew server request [requestId] (timeout, interrupt, session close). */
+    data class RequestCancel(
+        override val sessionId: String?,
+        val requestId: String,
+        val method: String,
     ) : GatewayEvent()
 
     /** Sudo password needed. */

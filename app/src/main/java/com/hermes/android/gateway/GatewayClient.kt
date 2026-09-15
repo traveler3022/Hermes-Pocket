@@ -70,6 +70,15 @@ interface GatewayClient {
     suspend fun disconnect()
 
     /**
+     * Answer server→client request [id] (clarify / sudo / secret) with the
+     * response frame the agent is blocking on. False when the socket is down.
+     */
+    fun respondToServerRequest(id: String, result: kotlinx.serialization.json.JsonObject): Boolean = false
+
+    /** Re-emit a resume payload's `open_requests`, so questions still waiting survive a reconnect. */
+    fun redeliverServerRequests(requests: kotlinx.serialization.json.JsonArray) {}
+
+    /**
      * Send an RPC request and await the response.
      *
      * @param method RPC method name (see [GatewayMethods])

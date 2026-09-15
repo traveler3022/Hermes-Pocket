@@ -702,10 +702,17 @@ class OkHttpGatewayClient @Inject constructor(
             }
             val obj = element.jsonObject
 
-            // Check if it's a response (has "id") or an event (has "method" == "event")
-            if ("id" in obj) {
+            // Three shapes: an event ("method" == "event"), a server→client
+            // request ("method" + a "srq-…" id: clarify / approval / sudo /
+            // secret), and a response to one of our own calls ("id" only). A
+            // server request used to land in handleResponse, fail its Long id
+            // parse and vanish — the agent then waited out its whole timeout.
+            val method = (obj["method"] as? JsonPrimitive)?.content
+            if (method != null && method != "event" && "id" in obj) {
+                handleServerRequest(obj)
+            } else if ("id" in obj) {
                 handleResponse(obj)
-            } else if (obj["method"]?.jsonPrimitive?.content == "event") {
+            } else if (method == "event") {
                 handleEvent(obj, onState)
             } else {
                 Timber.w("[Gateway] unknown message shape: ${raw.take(200)}")
@@ -744,6 +751,50 @@ class OkHttpGatewayClient @Inject constructor(
             deferred.completeExceptionally(GatewayException("Response has neither result nor error"))
         }
     }
+
+    /**
+     * A server→client request: kinds with a card become events, answered later
+     * through [respondToServerRequest]; any other kind is declined at once so
+     * the agent isn't left blocking on a question nobody can see.
+     */
+    private fun handleServerRequest(obj: JsonObject) {
+        val id = (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
+        val method = (obj["method"] as? JsonPrimitive)?.content ?: return
+        val params = obj["params"] as? JsonObject ?: JsonObject(emptyMap())
+        val event = ServerRequestParser.parse(id, method, params)
+        if (event == null) {
+            Timber.w("[Gateway] no handler for server request $method; declining")
+            sendFrame(
+                JsonObject(
+                    mapOf(
+                        "jsonrpc" to JsonPrimitive("2.0"),
+                        "id" to JsonPrimitive(id),
+                        "error" to JsonObject(
+                            mapOf(
+                                "code" to JsonPrimitive(-32601),
+                                "message" to JsonPrimitive("not supported by this client: $method"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            return
+        }
+        if (!_events.tryEmit(event)) {
+            Timber.w("[Gateway] Event buffer full, dropped server request: $method")
+        }
+    }
+
+    override fun respondToServerRequest(id: String, result: JsonObject): Boolean =
+        sendFrame(
+            JsonObject(mapOf("jsonrpc" to JsonPrimitive("2.0"), "id" to JsonPrimitive(id), "result" to result)),
+        )
+
+    override fun redeliverServerRequests(requests: kotlinx.serialization.json.JsonArray) {
+        requests.forEach { (it as? JsonObject)?.let(::handleServerRequest) }
+    }
+
+    private fun sendFrame(frame: JsonObject): Boolean = webSocket?.send(frame.toString()) == true
 
     private fun handleEvent(obj: JsonObject, onState: (WsState) -> Unit = {}) {
         val params = obj["params"]?.jsonObject ?: return
@@ -858,29 +909,13 @@ class OkHttpGatewayClient @Inject constructor(
                 p["name"]?.jsonPrimitive?.content,
                 p["preview"]?.jsonPrimitive?.content,
             )
-            "approval.request" -> GatewayEvent.ApprovalRequest(
+            // Approval / clarify / sudo / secret arrive as server requests
+            // (handleServerRequest); this withdraws one that timed out or was
+            // interrupted before it was answered.
+            "request.cancel" -> GatewayEvent.RequestCancel(
                 sid,
-                p["command"]?.jsonPrimitive?.content ?: "",
-                p["description"]?.jsonPrimitive?.content ?: "",
-                p["pattern_keys"]?.let { GatewayEventHelpers.parseStringList(it) } ?: emptyList(),
-                // Absent means unrestricted — only an explicit false hides "always allow"
-                allowPermanent = p["allow_permanent"]?.jsonPrimitive?.content != "false",
-            )
-            "clarify.request" -> GatewayEvent.ClarifyRequest(
-                sid,
-                p["request_id"]?.jsonPrimitive?.content ?: "",
-                p["question"]?.jsonPrimitive?.content ?: "",
-                p["choices"]?.let { GatewayEventHelpers.parseStringList(it) },
-            )
-            "sudo.request" -> GatewayEvent.SudoRequest(
-                sid,
-                p["request_id"]?.jsonPrimitive?.content ?: "",
-            )
-            "secret.request" -> GatewayEvent.SecretRequest(
-                sid,
-                p["request_id"]?.jsonPrimitive?.content ?: "",
-                p["env_var"]?.jsonPrimitive?.content ?: "",
-                p["prompt"]?.jsonPrimitive?.content ?: "",
+                p["id"]?.jsonPrimitive?.content ?: "",
+                p["method"]?.jsonPrimitive?.content ?: "",
             )
             "notification.show" -> GatewayEvent.NotificationShow(
                 sid,
