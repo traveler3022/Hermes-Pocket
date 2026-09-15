@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.hermes.android.MainActivity
 import com.hermes.android.R
@@ -41,13 +40,11 @@ class HermesGatewayService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob())
     private var connectionWatchJob: Job? = null
-    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         Timber.i("[GatewayService] onCreate")
         createNotificationChannel()
-        acquireWakeLock()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -90,7 +87,7 @@ class HermesGatewayService : Service() {
             }
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private suspend fun ensureRuntimeGatewayStarted() {
@@ -141,28 +138,15 @@ class HermesGatewayService : Service() {
         connectionWatchJob?.cancel()
         scope.launch { gatewayClient.disconnect() }
         scope.cancel()
-        releaseWakeLock()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Timber.i("[GatewayService] onTaskRemoved — stopping service")
+        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    // ── WakeLock ─────────────────────────────────────────────────────────
-
-    private fun acquireWakeLock() {
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hermes:gateway").apply {
-            acquire()
-        }
-        Timber.i("[GatewayService] WakeLock acquired")
-    }
-
-    private fun releaseWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-            Timber.i("[GatewayService] WakeLock released")
-        }
-        wakeLock = null
-    }
 
     // ── Notification ──────────────────────────────────────────────────────
 

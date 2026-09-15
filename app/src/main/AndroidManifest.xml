@@ -14,9 +14,6 @@
     <!-- Notifications — tool approval, gateway status (ADR-003) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Boot — auto-start gateway on device boot (temporary, ADR-004) -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
     <!-- Battery — request exemption from battery optimization (ADR-004, RISK-001) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -63,15 +60,6 @@
             android:name=".service.HermesGatewayService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-
-        <!-- Boot Receiver (ADR-004, temporary during migration) -->
-        <receiver
-            android:name=".service.BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Approval Action Receiver (ADR-003) -->
         <receiver
