@@ -162,6 +162,29 @@ internal class ChatSessionDelegate(
         return running
     }
 
+    /**
+     * The gateway re-issued the open chat under a new live id mid-request.
+     * Adopt it with the transcript it came back with: the old live id was
+     * reclaimed, so whatever it produced since the screen last synced (a reply
+     * that finished meanwhile) is only in this snapshot.
+     */
+    fun adoptRebound(
+        state: MutableStateFlow<ChatUiState>,
+        oldLiveId: String,
+        attached: SessionRepository.AttachedSession,
+    ) {
+        val snapshot = parseSessionHistory(attached.raw)
+        state.update { current ->
+            if (current.activeSessionId != oldLiveId) return@update current
+            current.copy(
+                activeSessionId = attached.liveId,
+                activeSessionKey = attached.storedId ?: current.activeSessionKey,
+                messages = mergeRecoveredTranscript(snapshot, current.messages),
+            )
+        }
+        Timber.i("[Chat] $oldLiveId was reclaimed; continuing as ${attached.liveId}")
+    }
+
     suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }

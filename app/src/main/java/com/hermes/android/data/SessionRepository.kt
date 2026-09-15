@@ -1,6 +1,7 @@
 package com.hermes.android.data
 
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -86,6 +87,35 @@ class SessionRepository @Inject constructor(
         val liveId = obj.str("session_id").ifBlank { sessionId }
         return AttachedSession(liveId = liveId, raw = obj)
     }
+
+    /**
+     * Run a session-scoped RPC on [liveId], re-attaching through [storedId]
+     * once when the gateway no longer holds that live id. The gateway only
+     * accepts live ids and answers a reclaimed one (orphan reap, idle timeout,
+     * LRU evict) with 4001/4007, expecting the client to resume the stored id;
+     * this is the one place that does. Those codes mean the request was
+     * rejected before it ran, so the retry cannot duplicate it. [onRebound]
+     * sees the new attachment before the retry goes out.
+     */
+    suspend fun <T> onLiveSession(
+        liveId: String,
+        storedId: String?,
+        onRebound: (AttachedSession) -> Unit,
+        call: suspend (liveId: String) -> T,
+    ): T {
+        try {
+            return call(liveId)
+        } catch (e: GatewayException) {
+            if (storedId == null || !e.isSessionGone()) throw e
+            Timber.w("[Repo] live session $liveId is gone (${e.message}); re-attaching $storedId")
+            val attached = attach(storedId)
+            onRebound(attached)
+            return call(attached.liveId)
+        }
+    }
+
+    private fun GatewayException.isSessionGone(): Boolean =
+        message.orEmpty().let { it.startsWith("RPC error 4001:") || it.startsWith("RPC error 4007:") }
 
     // ── Tasks (delegation) ─────────────────────────────────────────────────
 
