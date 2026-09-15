@@ -74,6 +74,9 @@ sealed class GatewayEvent {
     /** The session list moved (any surface). Session-less: refetch, don't map. */
     data class SessionsChanged(override val sessionId: String?) : GatewayEvent()
 
+    /** Frames for [sessionId] were lost on this socket (client-side, from the seq stamp). */
+    data class EventGap(override val sessionId: String) : GatewayEvent()
+
     // ── Message streaming (the main chat flow) ────────────────────────────
 
     /** Assistant message started. */
