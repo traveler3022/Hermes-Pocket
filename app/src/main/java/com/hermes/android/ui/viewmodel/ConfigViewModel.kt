@@ -1305,16 +1305,12 @@ class ConfigViewModel @Inject constructor(
      * return its stdout. Throws with stderr when the script fails — callers
      * surface that as the error message instead of silently "succeeding".
      *
-     * The script is fed through a quoted heredoc on stdin, NOT `python3 -c`:
-     * the gateway's safety filter hard-blocks any `-c`/`-e` script execution
-     * ("script execution via -e/-c flag"), which is exactly why every
-     * provider operation used to fail. Heredoc passes the filter and works
-     * even though shell.exec runs the outer shell with stdin=DEVNULL (bash
-     * wires the heredoc to python's stdin itself).
+     * See [pythonStdinCommand] for why the script isn't sent as `-c` or a
+     * heredoc (both are rejected with 4005).
      */
     private suspend fun execPython(script: String): String {
         val result = gatewayClient.request(GatewayMethods.SHELL_EXEC, buildJsonObject {
-            put("command", "python3 - <<'H2PYEOF'\n$script\nH2PYEOF")
+            put("command", pythonStdinCommand(script))
         }.toMap())
         val obj = result as? JsonObject
         val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: -1

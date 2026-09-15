@@ -256,15 +256,15 @@ class SkillsViewModel @Inject constructor(
                     GatewayMethods.SHELL_EXEC,
                     mapOf(
                         "command" to JsonPrimitive(
-                            "python3 - <<'H2PYEOF'\n" +
+                            pythonStdinCommand(
                                 "import base64, pathlib\n" +
                                 "d = pathlib.Path.home() / '.hermes' / 'skills'\n" +
                                 "d.mkdir(parents=True, exist_ok=True)\n" +
                                 renameLine +
                                 "p = d / '$slug.md'\n" +
                                 "p.write_text(base64.b64decode('$b64Content').decode())\n" +
-                                "print('OK')\n" +
-                                "H2PYEOF"
+                                "print('OK')\n"
+                            )
                         ),
                     ),
                 )
