@@ -146,8 +146,7 @@ class SessionsViewModel @Inject constructor(
     private suspend fun loadHistoryFromFilesystem(sessionId: String): List<HistoryMessage> {
         return try {
             val payload = Base64.getEncoder().encodeToString(sessionId.toByteArray(Charsets.UTF_8))
-            val command = """
-                python3 - <<'PY'
+            val script = """
                 import base64, json
                 from pathlib import Path
 
@@ -197,11 +196,10 @@ class SessionsViewModel @Inject constructor(
                         break
 
                 print(json.dumps({'messages': messages}))
-                PY
             """.trimIndent()
             val result = gatewayClient.request(
                 GatewayMethods.SHELL_EXEC,
-                mapOf("command" to JsonPrimitive(command)),
+                mapOf("command" to JsonPrimitive(pythonStdinCommand(script))),
                 timeoutMs = 10_000,
             )
             parseHistory(result).also { msgs ->
