@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -776,18 +777,16 @@ fun ChatScreen(
                         // a smooth ease-out instead of a jump cut.
                         item(key = "streaming-tail-spacer") {
                             // One viewport tall — just enough to lift the user
-                            // message to the top. A fixed 600dp overshot once
-                            // the composer grew and the viewport shrank.
-                            val density = androidx.compose.ui.platform.LocalDensity.current
-                            val viewportHeight by remember {
-                                derivedStateOf { with(density) { listState.layoutInfo.viewportSize.height.toDp() } }
-                            }
-                            val spacerHeight by animateDpAsState(
-                                targetValue = if (isAwaitingReply) viewportHeight else 0.dp,
+                            // message to the top (a fixed 600dp overshot once the
+                            // composer grew). Sized by fillParentMaxHeight at
+                            // layout time: reading listState.layoutInfo here made
+                            // every scroll frame touch this item and scrolling lag.
+                            val spacerFraction by animateFloatAsState(
+                                targetValue = if (isAwaitingReply) 1f else 0f,
                                 animationSpec = tween(durationMillis = 450),
                                 label = "streamingTailSpacer",
                             )
-                            Spacer(modifier = Modifier.height(spacerHeight))
+                            Spacer(modifier = Modifier.fillParentMaxHeight(spacerFraction))
                         }
                     }
                 }
