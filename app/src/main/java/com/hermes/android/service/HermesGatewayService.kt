@@ -60,11 +60,15 @@ class HermesGatewayService : Service() {
         connectionWatchJob = scope.launch {
             launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 gatewayClient.connectionState.collect { state ->
+                    if (state is ConnectionState.Connected) {
+                        // Connected is normal — dismiss notification completely so it doesn't clutter the screen
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        return@collect
+                    }
                     val text = when (state) {
                         is ConnectionState.Disconnected -> "Disconnected"
                         is ConnectionState.Connecting -> "Connecting…"
-                        // Connected is normal - dont clutter notification
-                        is ConnectionState.Connected -> "‏"
+                        is ConnectionState.Connected -> return@collect
                         // Show WHY — an endless "attempt N" with no reason is
                         // undebuggable from the phone.
                         is ConnectionState.Reconnecting ->
