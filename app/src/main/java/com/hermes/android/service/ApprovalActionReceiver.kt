@@ -52,6 +52,8 @@ class ApprovalActionReceiver : BroadcastReceiver() {
             try {
                 val params = buildJsonObject {
                     if (sessionId != null) put("session_id", sessionId)
+                    // The server's approval queue id — resolves exactly this entry.
+                    put("request_id", requestId)
                     put("choice", choice)
                     put("all", false)
                 }

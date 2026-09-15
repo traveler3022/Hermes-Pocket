@@ -674,6 +674,7 @@ class ChatViewModel @Inject constructor(
                     method = GatewayMethods.APPROVAL_RESPOND,
                     params = buildJsonObject {
                         pending.sessionId?.let { sid -> put("session_id", sid) }
+                        put("request_id", pending.requestId)
                         put("choice", choice)
                         put("all", false)
                     },
@@ -686,57 +687,91 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun respondToClarify(requestId: String, answer: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.CLARIFY_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("answer", answer)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to clarify")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
+    // Clarify / sudo / secret are server→client requests: the agent blocks
+    // until a response frame with the request's id comes back. They have no
+    // RPC of their own (the old clarify.respond / sudo.respond / secret.respond
+    // don't exist on the server, so answers never arrived).
+
+    /** [picked]: the typed text, the chosen option, or — multi-select — every chosen option. */
+    fun respondToClarify(requestId: String, picked: List<String>) {
+        val card = findInteractiveRequest(requestId) ?: return
+        answerServerRequest(
+            requestId,
+            kotlinx.serialization.json.JsonObject(
+                mapOf("answer" to JsonPrimitive(clarifyAnswer(picked, card.multiSelect))),
+            ),
+        )
+    }
+
+    /** Batch clarify: every question's answer, keyed by its qid. */
+    fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) {
+        val card = findInteractiveRequest(requestId) ?: return
+        val encoded = card.questions.associate { q ->
+            q.qid to JsonPrimitive(clarifyAnswer(answers[q.qid].orEmpty(), q.multiSelect))
+        }
+        answerServerRequest(
+            requestId,
+            kotlinx.serialization.json.JsonObject(mapOf("answers" to kotlinx.serialization.json.JsonObject(encoded))),
+        )
+    }
+
+    fun respondToSudo(requestId: String, password: String) =
+        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(password))))
+
+    fun respondToSecret(requestId: String, value: String) =
+        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(value))))
+
+    private fun findInteractiveRequest(requestId: String): ChatMessage.InteractiveRequest? =
+        _uiState.value.messages.lastOrNull {
+            it is ChatMessage.InteractiveRequest && it.requestId == requestId
+        } as? ChatMessage.InteractiveRequest
+
+    /** The clarify tool reads a multi-select answer as a JSON list and anything else as the bare string. */
+    private fun clarifyAnswer(picked: List<String>, multiSelect: Boolean): String {
+        val values = picked.filter { it.isNotBlank() }
+        return if (multiSelect) {
+            kotlinx.serialization.json.JsonArray(values.map { JsonPrimitive(it) }).toString()
+        } else {
+            values.firstOrNull().orEmpty()
         }
     }
 
-    fun respondToSudo(requestId: String, password: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.SUDO_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("password", password)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to sudo")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
+    private fun answerServerRequest(requestId: String, result: kotlinx.serialization.json.JsonObject) {
+        if (gatewayClient.respondToServerRequest(requestId, result)) {
+            markAnswered(requestId)
+        } else {
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Not connected — answer not sent")) }
         }
     }
 
-    fun respondToSecret(requestId: String, value: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.SECRET_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("value", value)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to secret")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
+    /**
+     * Show a question the agent is blocked on — only in its own chat (another
+     * chat's comes back through `open_requests` when that chat is opened), and
+     * only once: a reconnect replay re-delivers the same request id.
+     */
+    private fun addInteractiveRequest(sessionId: String?, request: ChatMessage.InteractiveRequest) {
+        _uiState.update { state ->
+            if (sessionId != null && sessionId != state.activeSessionId) return@update state
+            if (state.messages.any { it.id == request.id }) return@update state
+            state.copy(messages = state.messages + request)
+        }
+    }
+
+    /** The server withdrew a request (timeout, interrupt, answered elsewhere): its card stops taking answers. */
+    private fun onRequestCancel(serverRequestId: String) {
+        val pending = _uiState.value.pendingApproval
+        if (pending != null && pending.serverRequestId == serverRequestId) {
+            approvalNotificationManager.cancelApproval(pending.requestId)
+        }
+        _uiState.update { state ->
+            state.copy(
+                pendingApproval = state.pendingApproval?.takeUnless { it.serverRequestId == serverRequestId },
+                messages = state.messages.updateFirst({ msg ->
+                    msg is ChatMessage.InteractiveRequest && msg.requestId == serverRequestId && !msg.answered
+                }) { msg ->
+                    (msg as ChatMessage.InteractiveRequest).copy(expired = true)
+                },
+            )
         }
     }
 
@@ -828,6 +863,7 @@ class ChatViewModel @Inject constructor(
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
             event !is GatewayEvent.SecretRequest &&
+            event !is GatewayEvent.RequestCancel &&
             event !is GatewayEvent.BackgroundComplete &&
             // A background chat renaming itself still repaints the drawer.
             event !is GatewayEvent.SessionTitle
@@ -1010,7 +1046,9 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ApprovalRequest -> {
-                val requestId = UUID.randomUUID().toString()
+                // The server's queue id: approval.respond resolves exactly this
+                // entry (a random id here left the server guessing which one).
+                val requestId = event.requestId.ifBlank { event.serverRequestId }
                 approvalNotificationManager.showApprovalRequest(
                     requestId = requestId,
                     sessionId = event.sessionId,
@@ -1034,45 +1072,50 @@ class ChatViewModel @Inject constructor(
                         description = event.description,
                         patternKeys = event.patternKeys,
                         allowPermanent = event.allowPermanent,
+                        serverRequestId = event.serverRequestId,
                     ),
                 ) }
             }
 
-            is GatewayEvent.ClarifyRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.ClarifyRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
                     question = event.question,
                     choices = event.choices,
                     kind = InteractiveKind.CLARIFY,
-                )
-                _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
-            }
+                    multiSelect = event.multiSelect,
+                    questions = event.questions.map { ClarifyQuestionUi(it.qid, it.question, it.choices, it.multiSelect) },
+                ),
+            )
 
-            is GatewayEvent.SudoRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.SudoRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
-                    question = "Sudo password required",
+                    question = "",
                     choices = null,
                     kind = InteractiveKind.SUDO,
-                )
-                _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
-            }
+                ),
+            )
 
-            is GatewayEvent.SecretRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.SecretRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
                     question = event.prompt,
                     choices = null,
                     kind = InteractiveKind.SECRET,
-                )
-                _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
-            }
+                ),
+            )
+
+            is GatewayEvent.RequestCancel -> onRequestCancel(event.requestId)
 
             is GatewayEvent.SubagentEvent -> {
                 when (event.subagentType) {

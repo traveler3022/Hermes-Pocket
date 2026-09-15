@@ -65,9 +65,6 @@ object GatewayMethods {
     const val RELOAD_ENV = "reload.env"
 
     const val APPROVAL_RESPOND = "approval.respond"
-    const val CLARIFY_RESPOND = "clarify.respond"
-    const val SUDO_RESPOND = "sudo.respond"
-    const val SECRET_RESPOND = "secret.respond"
 
     const val INSIGHTS_GET = "insights.get"
 

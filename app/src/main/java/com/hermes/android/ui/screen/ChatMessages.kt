@@ -346,7 +346,8 @@ internal fun MessageBubble(
     onCopyMessage: (String) -> Unit = {},
     onCopyCode: (String) -> Unit = {},
     onRetry: () -> Unit = {},
-    onRespondToClarify: (requestId: String, answer: String) -> Unit = { _, _ -> },
+    onRespondToClarify: (requestId: String, picked: List<String>) -> Unit = { _, _ -> },
+    onRespondToClarifyBatch: (requestId: String, answers: Map<String, List<String>>) -> Unit = { _, _ -> },
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
     onImageClick: (String) -> Unit = {},
@@ -398,96 +399,13 @@ internal fun MessageBubble(
             )
         }
 
-        is ChatMessage.InteractiveRequest -> {
-            // Needs the user's action, so a stronger tint than the passive
-            // ToolCall status card — but still tint+border, not a solid
-            // fill, to stay consistent with the rest of the document-style
-            // chat.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f))
-                    .border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "❓ ${message.question}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (message.answered) {
-                        Text(
-                            text = t("Answered", "پاسخ داده شد"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else when (message.kind) {
-                        InteractiveKind.CLARIFY -> if (message.choices != null) {
-                            message.choices.forEach { choice ->
-                                OutlinedButton(
-                                    onClick = { onRespondToClarify(message.requestId, choice) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp),
-                                ) { Text(choice) }
-                            }
-                        } else {
-                            var answer by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = answer,
-                                onValueChange = { answer = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(t("Type answer...", "جواب بنویسید...")) },
-                            )
-                            Button(
-                                onClick = { onRespondToClarify(message.requestId, answer) },
-                                enabled = answer.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                        InteractiveKind.SUDO -> {
-                            var password by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text(t("Enter sudo password...", "رمز sudo بنویسید...")) },
-                                visualTransformation = PasswordVisualTransformation(),
-                            )
-                            Button(
-                                onClick = { onRespondToSudo(message.requestId, password) },
-                                enabled = password.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                        InteractiveKind.SECRET -> {
-                            var secretValue by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = secretValue,
-                                onValueChange = { secretValue = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text(message.question) },
-                                placeholder = { Text(t("Enter value...", "مقدار را وارد کنید...")) },
-                                visualTransformation = PasswordVisualTransformation(),
-                            )
-                            Button(
-                                onClick = { onRespondToSecret(message.requestId, secretValue) },
-                                enabled = secretValue.isNotBlank(),
-                                modifier = Modifier
-                                    .align(Alignment.End)
-                                    .padding(top = 4.dp),
-                            ) { Text(t("Send", "ارسال")) }
-                        }
-                    }
-                }
-            }
-        }
+        is ChatMessage.InteractiveRequest -> InteractiveRequestCard(
+            message = message,
+            onRespondToClarify = onRespondToClarify,
+            onRespondToClarifyBatch = onRespondToClarifyBatch,
+            onRespondToSudo = onRespondToSudo,
+            onRespondToSecret = onRespondToSecret,
+        )
 
         is ChatMessage.SubagentCard -> {
             val isLongSubagent = message.text.length > 120
