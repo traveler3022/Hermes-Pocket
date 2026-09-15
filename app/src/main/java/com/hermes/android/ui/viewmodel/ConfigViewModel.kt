@@ -522,6 +522,13 @@ class ConfigViewModel @Inject constructor(
         data class Failed(val message: String) : ModelSwitchOutcome
     }
 
+    /** Error text for callers without a confirm flow (provider setup); null when the switch went through. */
+    private fun ModelSwitchOutcome.errorText(): String? = when (this) {
+        is ModelSwitchOutcome.Applied -> null
+        is ModelSwitchOutcome.NeedsConfirm -> "Model not switched — confirmation required: $message"
+        is ModelSwitchOutcome.Failed -> message
+    }
+
     /**
      * Switch model + provider the Hermes-native way, via `config.set` key="model".
      *
@@ -1097,7 +1104,7 @@ class ConfigViewModel @Inject constructor(
                 // address (matching custom_providers[].name above) — passing
                 // the bare slug would silently fail to activate it.
                 if (chosen.isNotBlank()) {
-                    val err = applyHermesModelSwitch("custom:$s", chosen)
+                    val err = applyHermesModelSwitch("custom:$s", chosen).errorText()
                     _uiState.value = _uiState.value.copy(
                         isLoadingModels = false,
                         activeProvider = if (err == null) s else _uiState.value.activeProvider,
@@ -1191,7 +1198,7 @@ class ConfigViewModel @Inject constructor(
                 // provider.slug is one of our custom_providers entries — Hermes
                 // only resolves it via the "custom:<name>" address (see
                 // addProvider's comment for why the bare slug silently fails).
-                val error = applyHermesModelSwitch("custom:${provider.slug}", model)
+                val error = applyHermesModelSwitch("custom:${provider.slug}", model).errorText()
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(errorMessage = error)
                     return@launch
