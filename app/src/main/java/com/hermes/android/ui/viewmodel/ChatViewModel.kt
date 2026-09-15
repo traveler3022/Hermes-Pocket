@@ -198,6 +198,7 @@ class ChatViewModel @Inject constructor(
                             }
                             else -> launch { sessionDelegate.createOrResume(_uiState) }
                         }
+                        if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
                     }
                 }
@@ -232,6 +233,16 @@ class ChatViewModel @Inject constructor(
         recoverOnTurnEnd = sessionDelegate.recover(_uiState, liveId, storedId, turnEnded) ?: return
         val newId = _uiState.value.activeSessionId
         if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
+    }
+
+    /** Bring back the busy chats the user is not looking at, and settle the ones that ended meanwhile. */
+    private suspend fun reattachBusyBackground() {
+        val active = _uiState.value.activeSessionId
+        val busy = backgroundSessions.snapshot().filter { (sid, activity) -> activity.isRunning && sid != active }.keys
+        if (busy.isEmpty()) return
+        val ended = sessionDelegate.reattachBackground(busy.associateWith { storedIdByLiveId[it] })
+        ended.forEach { backgroundSessions.onTurnEnd(it, "", isActive = false) }
+        if (ended.isNotEmpty()) publishSessionActivity()
     }
 
     // ── Session management (coordinated via delegate) ────────────────────

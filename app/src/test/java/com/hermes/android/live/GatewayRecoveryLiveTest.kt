@@ -223,11 +223,20 @@ class GatewayRecoveryLiveTest {
         val cutAt = phone.events.size
         relay.cut()
         awaitReconnect(phone)
-        // What ChatViewModel does after a reconnect: recover the open chat only.
-        runBlocking { phone.chat.recover(phone.state, openLive, phone.state.value.activeSessionKey) }
+        // What ChatViewModel does after a reconnect: recover the open chat and
+        // re-attach the busy ones the user is not looking at.
+        val ended = runBlocking {
+            phone.chat.recover(phone.state, openLive, phone.state.value.activeSessionKey)
+            phone.chat.reattachBackground(chats.associate { it.value.activeSessionId!! to it.value.activeSessionKey })
+        }
+        // A turn that ended while detached is settled from the server, not from events.
+        chats.zip(marks).filter { (chat, _) -> chat.value.activeSessionId in ended }.forEach { (chat, mark) ->
+            val raw = runBlocking { phone.repo.attach(chat.value.activeSessionKey ?: chat.value.activeSessionId!!) }.raw
+            assertTrue("${chat.value.activeSessionId} ended while detached but its reply is not on the server", raw.toString().contains(mark))
+        }
 
         val deadline = System.currentTimeMillis() + 150_000
-        val pending = chats.map { it.value.activeSessionId!! }.toMutableSet()
+        val pending = (chats.map { it.value.activeSessionId!! } - ended).toMutableSet()
         while (pending.isNotEmpty() && System.currentTimeMillis() < deadline) {
             phone.eventsSince(cutAt).forEach { if (it is GatewayEvent.MessageComplete) pending.remove(it.sessionId) }
             Thread.sleep(250)

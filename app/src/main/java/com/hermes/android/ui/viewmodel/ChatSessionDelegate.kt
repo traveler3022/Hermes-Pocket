@@ -185,6 +185,29 @@ internal class ChatSessionDelegate(
         Timber.i("[Chat] $oldLiveId was reclaimed; continuing as ${attached.liveId}")
     }
 
+    /**
+     * Re-attach busy chats the user is not looking at once the socket is back,
+     * keyed live id → stored id. The gateway client brings back at most the
+     * one session it last heard from, so any other busy chat would finish
+     * detached and its reply never arrive. Returns the live ids whose turn is
+     * no longer running under that id (it ended while detached, was
+     * reclaimed, or could not be reached), so their busy state can be settled.
+     */
+    suspend fun reattachBackground(busy: Map<String, String?>): Set<String> =
+        busy.filter { (liveId, storedId) ->
+            try {
+                val attached = if (storedId != null) {
+                    sessionRepository.attach(storedId)
+                } else {
+                    sessionRepository.attach(liveId, preferLive = true)
+                }
+                attached.liveId != liveId || (attached.raw["running"] as? JsonPrimitive)?.content != "true"
+            } catch (e: Exception) {
+                Timber.w("[Chat] Could not re-attach background session $liveId: ${e.message}")
+                true
+            }
+        }.keys
+
     suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }
