@@ -346,4 +346,59 @@ class SessionRepositoryTest {
         assertEquals("hi", t[0].text)
         assertEquals("hello", t[1].text)
     }
+
+    // ── onLiveSession: a reclaimed live id ─────────────────────────────────
+
+    @Test
+    fun `onLiveSession passes a healthy live id straight through`() = runTest {
+        var rebound: SessionRepository.AttachedSession? = null
+        val result = repo.onLiveSession("live1", "stored1", { rebound = it }) { live -> "ok:$live" }
+        assertEquals("ok:live1", result)
+        assertEquals(null, rebound)
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun `onLiveSession re-attaches through the stored id when the live id is gone`() = runTest {
+        gateway.handler = { method, _ ->
+            assertEquals(GatewayMethods.SESSION_RESUME, method)
+            buildJsonObject { put("session_id", "live2"); put("session_key", "stored1") }
+        }
+        val tried = mutableListOf<String>()
+        var rebound: SessionRepository.AttachedSession? = null
+        val result = repo.onLiveSession("live1", "stored1", { rebound = it }) { live ->
+            tried += live
+            if (live == "live1") throw GatewayException("RPC error 4001: session not found")
+            "sent:$live"
+        }
+        assertEquals("sent:live2", result)
+        assertEquals(listOf("live1", "live2"), tried)
+        assertEquals("live2", rebound?.liveId)
+        assertEquals("stored1", rebound?.storedId)
+    }
+
+    @Test
+    fun `onLiveSession does not retry other failures`() = runTest {
+        val tried = mutableListOf<String>()
+        val error = runCatching {
+            repo.onLiveSession("live1", "stored1", {}) { live ->
+                tried += live
+                throw GatewayException("RPC error 4009: session busy")
+            }
+        }.exceptionOrNull()
+        assertTrue(error is GatewayException)
+        assertEquals(listOf("live1"), tried)
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun `onLiveSession without a stored id surfaces the dead live id`() = runTest {
+        val error = runCatching {
+            repo.onLiveSession<String>("live1", null, {}) {
+                throw GatewayException("RPC error 4001: session not found")
+            }
+        }.exceptionOrNull()
+        assertTrue(error is GatewayException)
+        assertTrue(gateway.calls.isEmpty())
+    }
 }

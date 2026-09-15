@@ -446,9 +446,9 @@ class ChatViewModel @Inject constructor(
     private fun sendPrompt(text: String, sessionId: String, truncateBeforeUserOrdinal: Int? = null) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
+                fun params(liveId: String) = buildJsonObject {
                     put("text", text)
-                    put("session_id", sessionId)
+                    put("session_id", liveId)
                     if (truncateBeforeUserOrdinal != null) {
                         put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
                         // The server refuses truncating submits with 4029 unless the
@@ -460,10 +460,16 @@ class ChatViewModel @Inject constructor(
                         if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
                     }
                 }
-                gatewayClient.request(
-                    method = GatewayMethods.PROMPT_SUBMIT,
-                    params = jsonToElementMap(params),
-                )
+                sessionRepository.onLiveSession(
+                    liveId = sessionId,
+                    storedId = _uiState.value.activeSessionKey,
+                    onRebound = { sessionDelegate.adoptRebound(_uiState, sessionId, it) },
+                ) { liveId ->
+                    gatewayClient.request(
+                        method = GatewayMethods.PROMPT_SUBMIT,
+                        params = jsonToElementMap(params(liveId)),
+                    )
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
                 _uiState.update { it.copy(
