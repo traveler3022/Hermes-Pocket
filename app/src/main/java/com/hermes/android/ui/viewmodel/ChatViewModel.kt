@@ -228,7 +228,7 @@ class ChatViewModel @Inject constructor(
     /** Rebuild the open chat from the server's snapshot of [liveId]. */
     private suspend fun recoverActiveSession(liveId: String, turnEnded: Boolean = false) {
         streamingDelegate.reset()
-        val storedId = storedIdByLiveId[liveId]
+        val storedId = _uiState.value.activeSessionKey ?: storedIdByLiveId[liveId]
         recoverOnTurnEnd = sessionDelegate.recover(_uiState, liveId, storedId, turnEnded) ?: return
         val newId = _uiState.value.activeSessionId
         if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
@@ -265,6 +265,7 @@ class ChatViewModel @Inject constructor(
                 messages = emptyList(),
                 showSessionDrawer = false,
                 activeSessionId = null,
+                activeSessionKey = null,
                 activeTodos = emptyList(),
                 pendingApproval = null,
             ) }
@@ -748,6 +749,11 @@ class ChatViewModel @Inject constructor(
         val publishNow = when (event) {
             is GatewayEvent.SessionInfo -> {
                 val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
+                if (!stored.isNullOrBlank() && sid == activeSid) {
+                    _uiState.update {
+                        if (it.activeSessionId == sid && it.activeSessionKey == null) it.copy(activeSessionKey = stored) else it
+                    }
+                }
                 if (stored.isNullOrBlank() || storedIdByLiveId[sid] == stored) return
                 storedIdByLiveId[sid] = stored
                 true

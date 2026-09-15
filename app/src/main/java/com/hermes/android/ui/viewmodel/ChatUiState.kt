@@ -143,6 +143,10 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val sessions: List<SessionItem> = emptyList(),
     val activeSessionId: String? = null,
+    /** Stored id of the open chat — its identity. [activeSessionId] is only the
+     *  live id the gateway currently runs it under, and dies when the gateway
+     *  reclaims the session. */
+    val activeSessionKey: String? = null,
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     val inputText: String = "",
     val isSending: Boolean = false,
