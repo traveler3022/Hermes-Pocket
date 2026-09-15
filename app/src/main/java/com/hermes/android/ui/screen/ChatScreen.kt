@@ -357,6 +357,23 @@ fun ChatScreen(
         }
     }
 
+    // The badge and picker follow the open chat's model (session.info), not config.yaml's default.
+    LaunchedEffect(uiState.sessionInfoSeq) {
+        uiState.sessionModel?.let { configViewModel.onSessionModel(uiState.activeSessionId, it, uiState.sessionProvider) }
+    }
+
+    LaunchedEffect(configState.modelSwitchNotice) {
+        configState.modelSwitchNotice?.let { notice ->
+            // Clear AFTER showing: clearing changes this effect's key and would cancel the snackbar.
+            snackbarHostState.showSnackbar(message = notice, duration = SnackbarDuration.Short)
+            configViewModel.clearModelSwitchNotice()
+        }
+    }
+
+    configState.modelSwitchConfirm?.let { confirm ->
+        ModelSwitchConfirmDialog(confirm, configViewModel::confirmModelSwitch, configViewModel::dismissModelSwitchConfirm)
+    }
+
     // Feature #23: Save draft when input changes (debounced via LaunchedEffect)
     LaunchedEffect(uiState.inputText) {
         if (uiState.inputText.isNotEmpty()) {
@@ -822,7 +839,7 @@ fun ChatScreen(
                     onModelChange = {
                         configViewModel.selectModel(it, uiState.activeSessionId, uiState.activeSessionKey)
                     },
-                    onModelMenuOpened = configViewModel::loadModels,
+                    onModelMenuOpened = { configViewModel.loadModels(uiState.activeSessionId) },
                 )
             }
         }

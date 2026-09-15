@@ -176,6 +176,12 @@ data class ChatUiState(
     // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
     // chat input bar, mirrors the same setting in Settings > General.
     val reasoningLevel: String = "medium",
+    // The open chat's model from its latest session.info (reports a queued
+    // mid-turn pick while pending). [sessionInfoSeq] bumps on every event so a
+    // repeat of the same model still re-syncs the picker.
+    val sessionModel: String? = null,
+    val sessionProvider: String? = null,
+    val sessionInfoSeq: Int = 0,
     // Client-side display name shown in the top bar / drawer header. Purely
     // cosmetic (local prefs) — does not affect the agent's actual identity
     // (SOUL.md / display.personality on the server).
