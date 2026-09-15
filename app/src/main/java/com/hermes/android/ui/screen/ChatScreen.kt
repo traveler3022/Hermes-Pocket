@@ -189,6 +189,7 @@ fun ChatScreen(
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
+    var showModelSheet by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -533,19 +534,6 @@ fun ChatScreen(
                                 } else {
                                     ConnectionIndicator(uiState.connectionState)
                                 }
-                                // Which model is answering, at a glance. Read
-                                // only — switching happens in the composer's
-                                // menu, next to reasoning effort, so this slot
-                                // keeps its existing tap target.
-                                configState.activeModel?.takeIf { it.isNotBlank() }?.let { model ->
-                                    Text(
-                                        text = model,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
                             }
                         }
                         HxHeaderCircleButton(
@@ -832,14 +820,12 @@ fun ChatScreen(
                     onSteer = viewModel::steerAgent,
                     onAttachFile = viewModel::attachFromUri,
                     onRemoveAttachment = viewModel::removeAttachment,
-                    reasoningLevel = uiState.reasoningLevel,
-                    onReasoningLevelChange = viewModel::setReasoningLevel,
-                    models = configState.availableModels,
                     activeModel = configState.activeModel,
-                    onModelChange = {
-                        configViewModel.selectModel(it, uiState.activeSessionId, uiState.activeSessionKey)
+                    onModelClick = {
+                        // Fetch the catalogue (and this chat's running model) when the sheet opens.
+                        configViewModel.loadModels(uiState.activeSessionId)
+                        showModelSheet = true
                     },
-                    onModelMenuOpened = { configViewModel.loadModels(uiState.activeSessionId) },
                 )
             }
         }
@@ -922,6 +908,24 @@ fun ChatScreen(
                 onDismiss = { showContext = false },
             )
         }
+    }
+
+    if (showModelSheet) {
+        ModelPickerSheet(
+            models = configState.availableModels,
+            favorites = configState.favoriteModels,
+            activeModel = configState.activeModel,
+            activeProvider = configState.activeProvider,
+            reasoningLevel = uiState.reasoningLevel,
+            isLoading = configState.isLoadingModels,
+            onSelectModel = {
+                configViewModel.selectModel(it, uiState.activeSessionId, uiState.activeSessionKey)
+                showModelSheet = false
+            },
+            onToggleFavorite = configViewModel::toggleFavoriteModel,
+            onReasoningLevelChange = viewModel::setReasoningLevel,
+            onDismiss = { showModelSheet = false },
+        )
     }
 
     // Rename dialog — client-side display name only (top bar / drawer header).

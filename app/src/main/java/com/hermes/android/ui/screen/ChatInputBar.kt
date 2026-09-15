@@ -168,12 +168,8 @@ internal fun InputBar(
     onSteer: () -> Unit = {},
     onAttachFile: (Uri) -> Unit = {},
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
-    reasoningLevel: String = "medium",
-    onReasoningLevelChange: (String) -> Unit = {},
-    models: List<ModelOption> = emptyList(),
     activeModel: String? = null,
-    onModelChange: (ModelOption) -> Unit = {},
-    onModelMenuOpened: () -> Unit = {},
+    onModelClick: () -> Unit = {},
 ) {
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -253,120 +249,46 @@ internal fun InputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Declutter: attach + reasoning-effort used to be two separate
-            // buttons next to the composer. Collapsed into one "+" so the
-            // bar's default state is just "type and send" — the extras are
-            // one tap away instead of always competing for attention.
-            var extrasMenuOpen by remember { mutableStateOf(false) }
-            Box {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .hxSoftShadow(radius = 8.dp, shape = CircleShape)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable(enabled = !isAttaching) {
-                            extrasMenuOpen = true
-                            // The catalogue comes from the gateway; ask for it
-                            // when the menu opens rather than holding a stale
-                            // list from whenever the screen was composed.
-                            onModelMenuOpened()
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isAttaching) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = t("More", "بیشتر"),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                DropdownMenu(
-                    expanded = extrasMenuOpen,
-                    onDismissRequest = { extrasMenuOpen = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(t("Attach file", "پیوست فایل")) },
-                        leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
-                        onClick = {
-                            extrasMenuOpen = false
-                            filePicker.launch("*/*")
-                        },
+            // "+" attaches a file in one tap. Model and reasoning effort moved to
+            // the model chip's sheet: the old dropdown listed the whole catalogue
+            // (hundreds of models) with effort buried underneath.
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .hxSoftShadow(radius = 8.dp, shape = CircleShape)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(enabled = !isAttaching) { filePicker.launch("*/*") },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isAttaching) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = t("Attach file", "پیوست فایل"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (models.isNotEmpty()) {
-                        HorizontalDivider()
-                        Text(
-                            text = t("Model", "مدل"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
-                        models.forEach { model ->
-                            val selected = model.modelId == activeModel
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(
-                                            model.name,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                        Text(
-                                            model.provider,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        HxIcons.Sparkles,
-                                        contentDescription = null,
-                                        tint = if (selected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            LocalContentColor.current
-                                        },
-                                    )
-                                },
-                                onClick = {
-                                    onModelChange(model)
-                                    extrasMenuOpen = false
-                                },
-                            )
-                        }
-                    }
-                    HorizontalDivider()
-                    Text(
-                        text = t("Reasoning effort", "سطح استدلال"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                    reasoningLevels.forEach { level ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    reasoningLevelLabel(level),
-                                    fontWeight = if (level == reasoningLevel) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Psychology,
-                                    contentDescription = null,
-                                    tint = if (level == reasoningLevel) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                )
-                            },
-                            onClick = {
-                                onReasoningLevelChange(level)
-                                extrasMenuOpen = false
-                            },
-                        )
-                    }
                 }
+            }
+            // Claude-style model chip: the running model's short name, kept small
+            // so the composer stays uncluttered. Tap opens the model sheet.
+            Box(
+                modifier = Modifier
+                    .height(48.dp)
+                    .widthIn(max = 112.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .clickable(onClick = onModelClick)
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = activeModel?.takeIf { it.isNotBlank() }?.let(::shortModelName) ?: t("Model", "مدل"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Row(
                 modifier = Modifier
