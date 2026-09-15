@@ -173,10 +173,10 @@ fun ChatScreen(
     // — including the part that is easy to get wrong, which is telling the live
     // session about the change rather than only the next one. Reaching for it
     // here keeps one implementation of that rather than a second copy.
-    configViewModel: ConfigViewModel = hiltViewModel(),
+    modelPicker: com.hermes.android.ui.viewmodel.ModelPickerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val configState by configViewModel.uiState.collectAsStateWithLifecycle()
+    val modelPickerState by modelPicker.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -356,23 +356,6 @@ fun ChatScreen(
             }
             viewModel.clearErrorEvent()
         }
-    }
-
-    // The badge and picker follow the open chat's model (session.info), not config.yaml's default.
-    LaunchedEffect(uiState.sessionInfoSeq) {
-        uiState.sessionModel?.let { configViewModel.onSessionModel(uiState.activeSessionId, it, uiState.sessionProvider) }
-    }
-
-    LaunchedEffect(configState.modelSwitchNotice) {
-        configState.modelSwitchNotice?.let { notice ->
-            // Clear AFTER showing: clearing changes this effect's key and would cancel the snackbar.
-            snackbarHostState.showSnackbar(message = notice, duration = SnackbarDuration.Short)
-            configViewModel.clearModelSwitchNotice()
-        }
-    }
-
-    configState.modelSwitchConfirm?.let { confirm ->
-        ModelSwitchConfirmDialog(confirm, configViewModel::confirmModelSwitch, configViewModel::dismissModelSwitchConfirm)
     }
 
     // Feature #23: Save draft when input changes (debounced via LaunchedEffect)
@@ -820,12 +803,8 @@ fun ChatScreen(
                     onSteer = viewModel::steerAgent,
                     onAttachFile = viewModel::attachFromUri,
                     onRemoveAttachment = viewModel::removeAttachment,
-                    activeModel = configState.activeModel,
-                    onModelClick = {
-                        // Fetch the catalogue (and this chat's running model) when the sheet opens.
-                        configViewModel.loadModels(uiState.activeSessionId)
-                        showModelSheet = true
-                    },
+                    activeModel = modelPickerState.activeModel,
+                    onModelClick = { showModelSheet = true },
                 )
             }
         }
@@ -910,23 +889,14 @@ fun ChatScreen(
         }
     }
 
-    if (showModelSheet) {
-        ModelPickerSheet(
-            models = configState.availableModels,
-            favorites = configState.favoriteModels,
-            activeModel = configState.activeModel,
-            activeProvider = configState.activeProvider,
-            reasoningLevel = uiState.reasoningLevel,
-            isLoading = configState.isLoadingModels,
-            onSelectModel = {
-                configViewModel.selectModel(it, uiState.activeSessionId, uiState.activeSessionKey)
-                showModelSheet = false
-            },
-            onToggleFavorite = configViewModel::toggleFavoriteModel,
-            onReasoningLevelChange = viewModel::setReasoningLevel,
-            onDismiss = { showModelSheet = false },
-        )
-    }
+    ChatModelPicker(
+        viewModel = modelPicker,
+        chat = uiState,
+        showSheet = showModelSheet,
+        snackbarHostState = snackbarHostState,
+        onReasoningLevelChange = viewModel::setReasoningLevel,
+        onDismissSheet = { showModelSheet = false },
+    )
 
     // Rename dialog — client-side display name only (top bar / drawer header).
     if (showRenameAssistantDialog) {
