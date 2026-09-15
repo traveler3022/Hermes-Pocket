@@ -76,7 +76,7 @@ internal fun ModelPickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
