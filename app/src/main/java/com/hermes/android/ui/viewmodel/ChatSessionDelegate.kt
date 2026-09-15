@@ -99,6 +99,59 @@ internal class ChatSessionDelegate(
         }
     }
 
+    /**
+     * Rebuild the open chat from the server after the socket came back: the
+     * stream missed whatever the gateway pushed while it was down, so the
+     * server's transcript replaces the local one.
+     *
+     * [storedId] goes first — a live id dies once the gateway reaps a
+     * clientless session, while the stored id resumes the same transcript
+     * under a new live id. Returns whether a turn is still running, or null
+     * when nothing was applied.
+     */
+    suspend fun recover(
+        state: MutableStateFlow<ChatUiState>,
+        liveId: String,
+        storedId: String?,
+    ): Boolean? {
+        val attached = try {
+            if (storedId != null) {
+                sessionRepository.attach(storedId)
+            } else {
+                sessionRepository.attach(liveId, preferLive = true)
+            }
+        } catch (e: GatewayException) {
+            if (e.message?.startsWith("RPC error") == true) {
+                // The server no longer knows either id: land on the most recent
+                // chat instead of leaving the screen bound to a dead one.
+                Timber.w("[Chat] Recovery of $liveId refused (${e.message}); reopening most recent session")
+                createOrResume(state)
+            } else {
+                Timber.w("[Chat] Recovery of $liveId failed: ${e.message}")
+            }
+            return null
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Recovery of $liveId failed")
+            return null
+        }
+        val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+        val snapshot = parseSessionHistory(attached.raw)
+        var applied = false
+        state.update { current ->
+            // The user may have switched chats while the snapshot was in flight.
+            if (current.activeSessionId != liveId) return@update current
+            applied = true
+            current.copy(
+                activeSessionId = attached.liveId,
+                messages = mergeRecoveredTranscript(snapshot, current.messages),
+                isSending = running,
+            )
+        }
+        if (!applied) return null
+        Timber.i("[Chat] Recovered $liveId as ${attached.liveId}: ${snapshot.size} messages, running=$running")
+        return running
+    }
+
     suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }
@@ -217,4 +270,23 @@ internal class ChatSessionDelegate(
     }
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
+}
+
+/**
+ * The server snapshot wins, except for the user's own trailing messages it
+ * never received (a send that died with the socket): those stay on screen so
+ * the text is not lost. An empty snapshot means the payload carried no
+ * transcript, not that the chat is empty, so the local one is kept.
+ */
+internal fun mergeRecoveredTranscript(
+    snapshot: List<ChatMessage>,
+    local: List<ChatMessage>,
+): List<ChatMessage> {
+    if (snapshot.isEmpty()) return local
+    val trailingUsers = local.takeLastWhile { it is ChatMessage.User }.filterIsInstance<ChatMessage.User>()
+    val serverTail = snapshot.filterIsInstance<ChatMessage.User>().takeLast(trailingUsers.size)
+    val unsent = trailingUsers.filterNot { mine ->
+        serverTail.any { it.text.contains(mine.text.trim()) }
+    }
+    return snapshot + unsent
 }

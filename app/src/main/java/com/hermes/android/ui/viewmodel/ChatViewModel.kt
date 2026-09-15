@@ -159,7 +159,10 @@ class ChatViewModel @Inject constructor(
         eventCollectionJob?.cancel()
         viewModelScope.launch {
             connectionWatchJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                var wasConnected = false
                 gatewayClient.connectionState.collect { state ->
+                    val cameUp = state is ConnectionState.Connected && !wasConnected
+                    wasConnected = state is ConnectionState.Connected
                     val chatState = when (state) {
                         is ConnectionState.Disconnected -> ChatConnectionState.Disconnected
                         is ConnectionState.Connecting -> ChatConnectionState.Connecting
@@ -179,11 +182,17 @@ class ChatViewModel @Inject constructor(
 
                     if (state is ConnectionState.Connected) {
                         val liveId = state.sessionId
-                        if (liveId != null && liveId != _uiState.value.activeSessionId) {
-                            _uiState.update { it.copy(activeSessionId = liveId) }
-                            launch { sessionDelegate.loadHistory(_uiState, liveId) }
-                        } else if (liveId == null && _uiState.value.activeSessionId == null) {
-                            launch { sessionDelegate.createOrResume(_uiState) }
+                        val activeId = _uiState.value.activeSessionId
+                        when {
+                            // Back from a drop: the stream missed whatever the gateway
+                            // pushed meanwhile, so the open chat is rebuilt from the
+                            // server instead of trusting what is on screen.
+                            activeId != null -> if (cameUp) launch { recoverActiveSession(activeId) }
+                            liveId != null -> {
+                                _uiState.update { it.copy(activeSessionId = liveId) }
+                                launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                            }
+                            else -> launch { sessionDelegate.createOrResume(_uiState) }
                         }
                         loadReasoningLevel()
                     }
@@ -210,6 +219,15 @@ class ChatViewModel @Inject constructor(
 
     fun retryConnection() {
         connectAndCollect()
+    }
+
+    /** Rebuild the open chat from the server's snapshot of [liveId]. */
+    private suspend fun recoverActiveSession(liveId: String) {
+        streamingDelegate.reset()
+        val storedId = storedIdByLiveId[liveId]
+        sessionDelegate.recover(_uiState, liveId, storedId) ?: return
+        val newId = _uiState.value.activeSessionId
+        if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
     }
 
     // ── Session management (coordinated via delegate) ────────────────────
