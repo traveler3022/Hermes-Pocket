@@ -75,6 +75,10 @@ class ChatViewModel @Inject constructor(
     // can be published under the id the rows are actually keyed by.
     private val storedIdByLiveId = mutableMapOf<String, String>()
 
+    // Set when a reconnect landed mid-turn: the snapshot had no reply yet and
+    // the stream lost its start, so the reply is fetched once the turn ends.
+    private var recoverOnTurnEnd = false
+
     private val attachmentDelegate = ChatAttachmentDelegate(
         gatewayClient, hermesRuntime, context, viewModelScope,
     )
@@ -222,10 +226,10 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Rebuild the open chat from the server's snapshot of [liveId]. */
-    private suspend fun recoverActiveSession(liveId: String) {
+    private suspend fun recoverActiveSession(liveId: String, turnEnded: Boolean = false) {
         streamingDelegate.reset()
         val storedId = storedIdByLiveId[liveId]
-        sessionDelegate.recover(_uiState, liveId, storedId) ?: return
+        recoverOnTurnEnd = sessionDelegate.recover(_uiState, liveId, storedId, turnEnded) ?: return
         val newId = _uiState.value.activeSessionId
         if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
     }
@@ -878,6 +882,11 @@ class ChatViewModel @Inject constructor(
                     activeTodos = emptyList(),
                 ) }
                 streamingDelegate.reset()
+                if (recoverOnTurnEnd) {
+                    recoverOnTurnEnd = false
+                    val sid = _uiState.value.activeSessionId
+                    if (sid != null) viewModelScope.launch { recoverActiveSession(sid, turnEnded = true) }
+                }
             }
 
             is GatewayEvent.ThinkingDelta -> {
