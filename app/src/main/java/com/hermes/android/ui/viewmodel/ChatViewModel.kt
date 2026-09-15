@@ -10,6 +10,7 @@ import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
+import com.hermes.android.ui.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -300,7 +301,21 @@ class ChatViewModel @Inject constructor(
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
-        val sessionId = _uiState.value.activeSessionId ?: return
+        // No live session yet (still connecting, or the last one was reclaimed).
+        // This used to `return` silently: the send button did nothing at all,
+        // with no error, no spinner and no hint that anything was wrong, so the
+        // only reading available to the user was "the app is broken". Say so,
+        // and keep what they typed.
+        val sessionId = _uiState.value.activeSessionId ?: run {
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(
+                tForContext(
+                    context,
+                    "Not connected yet — the message was not sent.",
+                    "هنوز متصل نشده‌ایم — پیام ارسال نشد.",
+                ),
+            )) }
+            return
+        }
 
         clearDraft()
 
@@ -358,19 +373,27 @@ class ChatViewModel @Inject constructor(
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
         if (text.isEmpty()) return
-        val steerMsg = ChatMessage.User(
-            id = UUID.randomUUID().toString(),
-            timestamp = System.currentTimeMillis(),
-            text = "\u21B3 $text",
-        )
-        _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
-        clearDraft()
         viewModelScope.launch {
+            // Resolve the session BEFORE touching the transcript or the composer.
+            // The old order appended the steer bubble and cleared the input box
+            // first, so when there turned out to be no live turn the user was
+            // left with a message on screen that had never been sent and an
+            // empty composer they could not retrieve it from — their text was
+            // simply gone.
             val sessionId = sessionDelegate.resolveLiveSessionId(_uiState)
             if (sessionId == null) {
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(
+                    tForContext(context, "No active turn to steer", "تراکنش فعالی برای هدایت وجود ندارد"),
+                )) }
                 return@launch
             }
+            val steerMsg = ChatMessage.User(
+                id = UUID.randomUUID().toString(),
+                timestamp = System.currentTimeMillis(),
+                text = "\u21B3 $text",
+            )
+            _uiState.update { it.copy(messages = it.messages + steerMsg, inputText = "") }
+            clearDraft()
             try {
                 val params = buildJsonObject {
                     put("session_id", sessionId)
