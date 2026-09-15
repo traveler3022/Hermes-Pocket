@@ -45,8 +45,12 @@ internal class ChatSessionDelegate(
                 ?.get("session_id")
                 ?.let { it as? JsonPrimitive }
                 ?.content
+            val storedId = ((result as? JsonObject)?.get("stored_session_id") as? JsonPrimitive)
+                ?.takeIf { it.isString }
+                ?.content
+                ?.takeIf { it.isNotBlank() }
             if (sessionId != null) {
-                state.update { it.copy(activeSessionId = sessionId, isSending = false) }
+                state.update { it.copy(activeSessionId = sessionId, activeSessionKey = storedId, isSending = false) }
                 Timber.i("[Chat] Session created: $sessionId")
             }
         } catch (e: GatewayException) {
@@ -64,6 +68,9 @@ internal class ChatSessionDelegate(
             val history = parseSessionHistory(attached.raw)
             state.update { it.copy(
                 activeSessionId = liveSessionId,
+                // A drawer row hands over the stored id itself; a live id
+                // (notification tap) resolves to itself and names no key.
+                activeSessionKey = attached.storedId ?: sessionId.takeIf { it != liveSessionId },
                 messages = history,
                 showSessionDrawer = false,
                 errorEvent = null,
@@ -145,6 +152,7 @@ internal class ChatSessionDelegate(
             applied = true
             current.copy(
                 activeSessionId = attached.liveId,
+                activeSessionKey = attached.storedId ?: current.activeSessionKey,
                 messages = mergeRecoveredTranscript(snapshot, current.messages),
                 isSending = running,
             )

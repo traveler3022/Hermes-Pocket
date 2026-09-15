@@ -52,7 +52,15 @@ class SessionRepository @Inject constructor(
     data class AttachedSession(
         val liveId: String,
         val raw: JsonObject,
-    )
+    ) {
+        /** The stored id the server bound [liveId] to, when the payload names it. */
+        val storedId: String?
+            get() = (raw["stored_session_id"] ?: raw["session_key"])
+                .let { it as? kotlinx.serialization.json.JsonPrimitive }
+                ?.takeIf { it.isString }
+                ?.content
+                ?.takeIf { it.isNotBlank() }
+    }
 
     /**
      * Attach to a session given EITHER id kind.

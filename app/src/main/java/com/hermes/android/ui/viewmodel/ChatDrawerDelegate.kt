@@ -88,6 +88,7 @@ internal class ChatDrawerDelegate(
                 if (state.value.activeSessionId == sessionId) {
                     state.update { it.copy(
                         activeSessionId = null,
+                        activeSessionKey = null,
                         messages = emptyList(),
                     ) }
                     createNewSession(state)
