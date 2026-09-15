@@ -328,9 +328,13 @@ fun ChatScreen(
     //
     // scrollToItem (instant) is used instead of animateScrollToItem so there
     // is no animation in flight to be cancelled/restarted by the next event.
-    val lastUserMessageId = uiState.messages.lastOrNull { it is ChatMessage.User }?.id
+    //
+    // The index must come from visibleMessages — the list the LazyColumn
+    // renders. uiState.messages still holds the tool-call cards it hides, so
+    // its index pointed further down and pushed the message above the screen.
+    val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
     LaunchedEffect(lastUserMessageId) {
-        val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
+        val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
             listState.scrollToItem(lastUserIndex)
         }
@@ -771,8 +775,15 @@ fun ChatScreen(
                         // in composition with a stable key so the collapse is
                         // a smooth ease-out instead of a jump cut.
                         item(key = "streaming-tail-spacer") {
+                            // One viewport tall — just enough to lift the user
+                            // message to the top. A fixed 600dp overshot once
+                            // the composer grew and the viewport shrank.
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            val viewportHeight by remember {
+                                derivedStateOf { with(density) { listState.layoutInfo.viewportSize.height.toDp() } }
+                            }
                             val spacerHeight by animateDpAsState(
-                                targetValue = if (isAwaitingReply) 600.dp else 0.dp,
+                                targetValue = if (isAwaitingReply) viewportHeight else 0.dp,
                                 animationSpec = tween(durationMillis = 450),
                                 label = "streamingTailSpacer",
                             )
