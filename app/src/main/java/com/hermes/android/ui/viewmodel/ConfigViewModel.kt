@@ -423,10 +423,11 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun selectModel(model: ModelOption) {
+    /** [liveSessionId]/[storedSessionId]: the open chat, when called from it. */
+    fun selectModel(model: ModelOption, liveSessionId: String? = null, storedSessionId: String? = null) {
         viewModelScope.launch {
             try {
-                val error = applyHermesModelSwitch(model.provider, model.modelId)
+                val error = applyHermesModelSwitch(model.provider, model.modelId, liveSessionId, storedSessionId)
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(errorMessage = error)
                     return@launch
@@ -461,28 +462,37 @@ class ConfigViewModel @Inject constructor(
      *     • `--provider` pins the provider (else Hermes infers it from the model)
      *     • `--global` persists the choice to config.yaml so new sessions inherit it
      *
-     * We target the most-recent live session so the running agent switches too.
+     * The server resolves `session_id` against LIVE ids only; without one it
+     * answers 4001 "config.set model requires a live session". So we use the
+     * open chat's live id when given (re-attaching its stored id if reclaimed),
+     * else attach `session.most_recent`'s STORED id to obtain a live one.
      * Returns null on success, or a user-facing error string on failure.
      */
-    private suspend fun applyHermesModelSwitch(provider: String, model: String): String? {
-        val sid = try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-        } catch (e: Exception) {
-            null
-        }
+    private suspend fun applyHermesModelSwitch(
+        provider: String,
+        model: String,
+        liveSessionId: String? = null,
+        storedSessionId: String? = null,
+    ): String? {
         val value = buildString {
             append(model)
             if (provider.isNotBlank()) append(" --provider ").append(provider)
             append(" --global")
         }
-        val params = buildJsonObject {
+        fun params(sid: String?) = buildJsonObject {
             put("key", "model")
             put("value", value)
             if (!sid.isNullOrBlank()) put("session_id", sid)
-        }
+        }.toMap()
         return try {
-            gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
+            val live = liveSessionId?.takeIf { it.isNotBlank() }
+            if (live != null) {
+                sessionRepository.onLiveSession(live, storedSessionId, onRebound = {}) { sid ->
+                    gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid))
+                }
+            } else {
+                gatewayClient.request(GatewayMethods.CONFIG_SET, params(mostRecentLiveId()))
+            }
             null
         } catch (e: GatewayException) {
             // 4009 = session busy (mid-turn). Hermes rejects model swaps while a
@@ -494,6 +504,19 @@ class ConfigViewModel @Inject constructor(
                 "Failed to switch model: $m"
             }
         }
+    }
+
+    /** Live id for `session.most_recent`'s stored id; null when there is none (JsonNull ≠ "null"). */
+    private suspend fun mostRecentLiveId(): String? = try {
+        val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
+        ((mr as? JsonObject)?.get("session_id") as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sessionRepository.attach(it).liveId }
+    } catch (e: Exception) {
+        Timber.w(e, "[Config] could not attach most recent session for model switch")
+        null
     }
 
     // ── Tools ─────────────────────────────────────────────────────────────

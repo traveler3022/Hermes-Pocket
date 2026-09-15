@@ -819,7 +819,9 @@ fun ChatScreen(
                     onReasoningLevelChange = viewModel::setReasoningLevel,
                     models = configState.availableModels,
                     activeModel = configState.activeModel,
-                    onModelChange = configViewModel::selectModel,
+                    onModelChange = {
+                        configViewModel.selectModel(it, uiState.activeSessionId, uiState.activeSessionKey)
+                    },
                     onModelMenuOpened = configViewModel::loadModels,
                 )
             }
