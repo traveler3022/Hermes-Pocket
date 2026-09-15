@@ -113,6 +113,7 @@ internal class ChatSessionDelegate(
         state: MutableStateFlow<ChatUiState>,
         liveId: String,
         storedId: String?,
+        turnEnded: Boolean = false,
     ): Boolean? {
         val attached = try {
             if (storedId != null) {
@@ -134,7 +135,8 @@ internal class ChatSessionDelegate(
             Timber.w(e, "[Chat] Recovery of $liveId failed")
             return null
         }
-        val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+        // message.complete goes out before the server clears `running`.
+        val running = !turnEnded && (attached.raw["running"] as? JsonPrimitive)?.content == "true"
         val snapshot = parseSessionHistory(attached.raw)
         var applied = false
         state.update { current ->
