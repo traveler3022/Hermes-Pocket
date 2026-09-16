@@ -355,6 +355,7 @@ internal fun MessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    planTodos: List<com.hermes.android.ui.viewmodel.TodoItemUi> = emptyList(),
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -380,6 +381,7 @@ internal fun MessageBubble(
                 onBranch = onBranch,
                 onDownloadFile = onDownloadFile,
                 traceItems = traceItems,
+                planTodos = planTodos,
             )
         }
 
