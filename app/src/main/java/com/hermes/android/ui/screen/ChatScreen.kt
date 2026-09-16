@@ -292,6 +292,26 @@ fun ChatScreen(
         }
     }
 
+    // The agent's live plan (todos) belongs in the thinking sheet of the turn
+    // that is running now, nowhere else: not on the chat surface, not on older
+    // messages. The owner is whichever assistant message carries the newest
+    // trace — the turn's ending message when narration folds, the latest
+    // fragment when it does not — and only while the turn is still in flight.
+    // `isLastAssistant` cannot be reused here: it is false while streaming.
+    // Keyed on visibleMessages: it is a plain value, not a State, so without
+    // the key the derivation would keep reading the first list forever.
+    val livePlanOwnerId by remember(visibleMessages) {
+        derivedStateOf {
+            val turnRunning = uiState.isSending ||
+                uiState.messages.any { it is ChatMessage.ToolCall && it.isRunning } ||
+                uiState.messages.any { it is ChatMessage.Assistant && it.isStreaming }
+            if (!turnRunning || uiState.activeTodos.isEmpty()) return@derivedStateOf null
+            val lastUser = visibleMessages.indexOfLast { it is ChatMessage.User }
+            val lastAssistant = visibleMessages.indexOfLast { it is ChatMessage.Assistant }
+            if (lastAssistant > lastUser) visibleMessages[lastAssistant].id else null
+        }
+    }
+
     // What the agent is doing right now (null = idle). Derived, not stored —
     // the running tool cards / streaming flags already carry the state.
     // Shown in the connection-status slot of the top bar while a turn runs
@@ -752,6 +772,7 @@ fun ChatScreen(
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 traceItems = turnWork[message.id].orEmpty(),
+                                planTodos = if (message.id == livePlanOwnerId) uiState.activeTodos else emptyList(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToClarifyBatch = viewModel::respondToClarifyBatch,

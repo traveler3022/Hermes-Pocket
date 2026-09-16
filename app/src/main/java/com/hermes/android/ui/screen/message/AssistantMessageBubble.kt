@@ -63,6 +63,7 @@ internal fun AssistantMessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    planTodos: List<com.hermes.android.ui.viewmodel.TodoItemUi> = emptyList(),
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -91,6 +92,7 @@ internal fun AssistantMessageBubble(
                             items = traceItems,
                             isStreaming = message.isStreaming,
                             messageId = message.id,
+                            planTodos = planTodos,
                         )
                     }
                     // A turn can end on a tool rather than a sentence, leaving
