@@ -13,9 +13,25 @@ internal class ChatStreamingDelegate(
     private val state: MutableStateFlow<ChatUiState>,
 ) {
     private var activeAssistantMessageId: String? = null
+
+    /**
+     * Guards the two delta buffers.
+     *
+     * [enqueueDelta] runs on whatever thread the gateway event collector is on
+     * (Dispatchers.IO, via the OkHttp reader), while [flushBuffer] runs on the
+     * ViewModel scope (Main). `StringBuilder` is not thread-safe, and the read
+     * path here is a non-atomic `toString()` then `setLength(0)` pair: a delta
+     * that lands between those two calls is appended to a builder that is about
+     * to be cleared, so it never reaches the screen. The user sees a reply with
+     * a few characters missing out of the middle, which is both invisible in
+     * testing and impossible to reproduce on demand.
+     */
+    private val bufferLock = Any()
     private val streamingBuffer = StringBuilder()
     private val reasoningBuffer = StringBuilder()
     private val sealedInterimTexts = mutableListOf<String>()
+
+    @Volatile
     private var streamingFlushJob: Job? = null
 
     val currentAssistantMessageId: String? get() = activeAssistantMessageId
@@ -23,8 +39,10 @@ internal class ChatStreamingDelegate(
     fun onMessageStart(): String {
         streamingFlushJob?.cancel()
         streamingFlushJob = null
-        streamingBuffer.setLength(0)
-        reasoningBuffer.setLength(0)
+        synchronized(bufferLock) {
+            streamingBuffer.setLength(0)
+            reasoningBuffer.setLength(0)
+        }
         val msgId = java.util.UUID.randomUUID().toString()
         activeAssistantMessageId = msgId
         return msgId
@@ -32,21 +50,33 @@ internal class ChatStreamingDelegate(
 
     fun enqueueDelta(text: String, isReasoning: Boolean = false) {
         if (text.isEmpty()) return
-        (if (isReasoning) reasoningBuffer else streamingBuffer).append(text)
+        synchronized(bufferLock) {
+            (if (isReasoning) reasoningBuffer else streamingBuffer).append(text)
+        }
         if (streamingFlushJob?.isActive == true) return
         streamingFlushJob = scope.launch {
             delay(STREAM_FLUSH_INTERVAL_MS)
-            flushBuffer()
+            // Clear the handle BEFORE flushing. The other order left a window
+            // between flushBuffer() returning and the field going null in which
+            // an arriving delta saw isActive == true, skipped scheduling, and
+            // then sat in the buffer with nothing queued to drain it — so the
+            // last few tokens of a turn only appeared if another delta happened
+            // to follow.
             streamingFlushJob = null
+            flushBuffer()
         }
     }
 
     fun flushBuffer() {
-        if (streamingBuffer.isEmpty() && reasoningBuffer.isEmpty()) return
-        val chunk = streamingBuffer.toString()
-        streamingBuffer.setLength(0)
-        val reasoningChunk = reasoningBuffer.toString()
-        reasoningBuffer.setLength(0)
+        val chunk: String
+        val reasoningChunk: String
+        synchronized(bufferLock) {
+            if (streamingBuffer.isEmpty() && reasoningBuffer.isEmpty()) return
+            chunk = streamingBuffer.toString()
+            streamingBuffer.setLength(0)
+            reasoningChunk = reasoningBuffer.toString()
+            reasoningBuffer.setLength(0)
+        }
         val targetId = activeAssistantMessageId
         state.update { it.copy(
             messages = it.messages.updateFirst({ msg ->
@@ -101,8 +131,10 @@ internal class ChatStreamingDelegate(
     fun reset() {
         streamingFlushJob?.cancel()
         streamingFlushJob = null
-        streamingBuffer.setLength(0)
-        reasoningBuffer.setLength(0)
+        synchronized(bufferLock) {
+            streamingBuffer.setLength(0)
+            reasoningBuffer.setLength(0)
+        }
         sealedInterimTexts.clear()
         activeAssistantMessageId = null
     }

@@ -77,6 +77,36 @@ class ChatStreamingDelegateTest {
         assertEquals("And here is why.", delegate.withoutSealedInterims("The answer is 42.\n\nAnd here is why."))
     }
 
+    /**
+     * Regression: the two delta buffers were plain `StringBuilder`s written from
+     * the gateway's IO thread and drained from the ViewModel scope, and the
+     * drain was a non-atomic `toString()` then `setLength(0)`. A delta that
+     * landed between those two calls went into a builder that was about to be
+     * cleared and never reached the screen.
+     *
+     * This drives both sides concurrently and asserts that every character
+     * enqueued is present once the turn is flushed — no silent holes.
+     */
+    @Test
+    fun `concurrent deltas and flushes lose nothing`() {
+        startTurn()
+
+        val chunks = 500
+        val writer = Thread {
+            repeat(chunks) { delegate.enqueueDelta("x") }
+        }
+        val drainer = Thread {
+            repeat(chunks) { delegate.flushBuffer() }
+        }
+        writer.start()
+        drainer.start()
+        writer.join()
+        drainer.join()
+        delegate.flushBuffer()
+
+        assertEquals("x".repeat(chunks), assistants()[0].text)
+    }
+
     @Test
     fun `reset forgets the sealed interims of the finished turn`() {
         startTurn()
