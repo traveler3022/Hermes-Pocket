@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.hermes.android.R
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.hermes.android.ui.i18n.tForContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -69,23 +70,23 @@ class ApprovalNotificationManager @Inject constructor(
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle("Tool approval required: $toolName")
+            .setContentTitle(tForContext(context, "Tool approval required: $toolName", "نیاز به تأیید ابزار: $toolName"))
             .setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("$description\n\nCommand:\n$command")
+                .bigText("$description\n\n${tForContext(context, "Command", "دستور")}:\n$command")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .addAction(
                 android.R.drawable.checkbox_on_background,
-                "Approve",
+                tForContext(context, "Approve", "تأیید"),
                 actionPendingIntent(ApprovalActionReceiver.CHOICE_ONCE, ""),
             )
 
         if (allowPermanent) {
             builder.addAction(
                 android.R.drawable.star_on,
-                "Always",
+                tForContext(context, "Always", "همیشه"),
                 actionPendingIntent(ApprovalActionReceiver.CHOICE_ALWAYS, "_always"),
             )
         }
@@ -93,7 +94,7 @@ class ApprovalNotificationManager @Inject constructor(
         val notification = builder
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Deny",
+                tForContext(context, "Deny", "رد"),
                 actionPendingIntent(ApprovalActionReceiver.CHOICE_DENY, "_deny"),
             )
             .setAutoCancel(true)
@@ -115,10 +116,14 @@ class ApprovalNotificationManager @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                context.getString(R.string.notification_channel_approval_name),
+                tForContext(context, "Tool Approvals", "تأیید ابزارها"),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = context.getString(R.string.notification_channel_approval_desc)
+                description = tForContext(
+                    context,
+                    "High-priority notifications for tool approval requests",
+                    "اعلان‌های فوری برای درخواست تأیید ابزار",
+                )
                 enableVibration(true)
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
