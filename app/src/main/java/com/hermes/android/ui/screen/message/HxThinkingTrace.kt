@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
+import com.hermes.android.ui.viewmodel.TodoItemUi
+import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.delay
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
@@ -309,6 +311,7 @@ internal fun HxThinkingTrace(
     isStreaming: Boolean,
     messageId: String,
     modifier: Modifier = Modifier,
+    planTodos: List<TodoItemUi> = emptyList(),
 ) {
     if (items.isEmpty()) return
     val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
@@ -386,6 +389,7 @@ internal fun HxThinkingTrace(
                 items = items,
                 isComplete = !isStreaming,
                 elapsedSeconds = elapsedSeconds,
+                planTodos = planTodos,
             )
         }
     }
@@ -424,6 +428,7 @@ private fun HxThinkingSheetContent(
     items: List<HxTraceItem>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
+    planTodos: List<TodoItemUi>,
 ) {
     Column(
         modifier = Modifier
@@ -437,6 +442,7 @@ private fun HxThinkingSheetContent(
             items = items,
             isComplete = isComplete,
             elapsedSeconds = elapsedSeconds,
+            planTodos = planTodos,
         )
     }
 }
@@ -446,6 +452,7 @@ private fun HxReasoningTimeline(
     items: List<HxTraceItem>,
     isComplete: Boolean,
     elapsedSeconds: Long?,
+    planTodos: List<TodoItemUi>,
 ) {
     // Flattened first so "is this the last row?" is a question about rows, not
     // about items — one reasoning block can be several rows, or none.
@@ -456,8 +463,31 @@ private fun HxReasoningTimeline(
     // the latest step is under the reader's thumb instead of below the fold.
     // The rail still runs unbroken from the top row down to the oldest one,
     // which is now the only row with nothing below it.
+    // The agent's plan, handed in only while its turn is running: steps still
+    // waiting sit on top in the order they will run, like a queue, and the step
+    // in progress heads the work below them. A queued step drops into that slot
+    // once it starts, so the newest thing stays at the top. Finished steps are
+    // already told by the work rows themselves. The message can stop streaming
+    // while a tool runs, so a live plan also holds back the "done" row.
+    val queued = planTodos.filter { it.status == TodoStatus.PENDING }
+    val current = planTodos.firstOrNull { it.status == TodoStatus.IN_PROGRESS }
+    val planLive = planTodos.isNotEmpty()
+
     Column {
-        if (isComplete) {
+        queued.forEachIndexed { index, todo ->
+            HxPlanQueueRow(
+                text = todo.content,
+                isLast = index == queued.lastIndex && current == null && rows.isEmpty(),
+            )
+        }
+        if (current != null) {
+            HxTimelineRow(
+                title = current.content,
+                detail = "",
+                isLast = rows.isEmpty(),
+            )
+        }
+        if (isComplete && !planLive) {
             HxTimelineRow(
                 title = doneLabel(elapsedSeconds, toolCount),
                 detail = t("Done", "تمام"),
@@ -530,6 +560,30 @@ private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = bui
 
             is HxTraceItem.Tool -> add(TimelineRow.Tool(item.call))
         }
+    }
+}
+
+/** A plan step that has not started yet: muted, on the same rail, so the queue
+ *  reads as the continuation of the work below it. */
+@Composable
+private fun HxPlanQueueRow(text: String, isLast: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(RailTextGap),
+    ) {
+        HxTimelineGlyph(icon = null, isLast = isLast)
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = if (isLast) 0.dp else RowBottomGap),
+        )
     }
 }
 
