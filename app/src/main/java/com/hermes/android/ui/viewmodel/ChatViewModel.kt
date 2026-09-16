@@ -373,27 +373,19 @@ class ChatViewModel @Inject constructor(
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
         if (text.isEmpty()) return
+        val steerMsg = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = "\u21B3 $text",
+        )
+        _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
+        clearDraft()
         viewModelScope.launch {
-            // Resolve the session BEFORE touching the transcript or the composer.
-            // The old order appended the steer bubble and cleared the input box
-            // first, so when there turned out to be no live turn the user was
-            // left with a message on screen that had never been sent and an
-            // empty composer they could not retrieve it from — their text was
-            // simply gone.
             val sessionId = sessionDelegate.resolveLiveSessionId(_uiState)
             if (sessionId == null) {
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(
-                    tForContext(context, "No active turn to steer", "تراکنش فعالی برای هدایت وجود ندارد"),
-                )) }
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
                 return@launch
             }
-            val steerMsg = ChatMessage.User(
-                id = UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
-                text = "\u21B3 $text",
-            )
-            _uiState.update { it.copy(messages = it.messages + steerMsg, inputText = "") }
-            clearDraft()
             try {
                 val params = buildJsonObject {
                     put("session_id", sessionId)
