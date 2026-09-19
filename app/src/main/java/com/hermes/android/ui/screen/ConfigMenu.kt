@@ -1,42 +1,48 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.i18n.t
 
 /**
- * The Settings root, restructured as the Control Center (approved design E):
- * a live connection card, live stat tiles (active model / 30-day usage -
- * `insights.get` was a backend capability no UI ever surfaced), then the
- * domain list with live values in the subtitles
- * where the data is already loaded.
+ * The Settings root (Control Center), laid out like Aether's settings hub:
+ * a few grouped cards of navigation rows, with everything else nested one
+ * level down so the root stays short.
  */
 @Composable
 internal fun SettingsMenu(
@@ -54,27 +60,30 @@ internal fun SettingsMenu(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp),
+            .padding(horizontal = 20.dp)
+            .padding(top = 12.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         val (connColor, connLabel) = when (connection.state) {
             com.hermes.android.ui.viewmodel.ChatConnectionState.Connected ->
                 MaterialTheme.colorScheme.primary to t("Connected", "متصل")
             com.hermes.android.ui.viewmodel.ChatConnectionState.Connecting ->
-                MaterialTheme.colorScheme.tertiary to t("Connecting\u2026", "در حال اتصال\u2026")
+                MaterialTheme.colorScheme.tertiary to t("Connecting…", "در حال اتصال…")
             com.hermes.android.ui.viewmodel.ChatConnectionState.Reconnecting ->
-                MaterialTheme.colorScheme.tertiary to t("Reconnecting\u2026", "اتصال دوباره\u2026")
+                MaterialTheme.colorScheme.tertiary to t("Reconnecting…", "اتصال دوباره…")
             com.hermes.android.ui.viewmodel.ChatConnectionState.Failed ->
                 MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
             com.hermes.android.ui.viewmodel.ChatConnectionState.Disconnected ->
                 MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
         }
-        Spacer(Modifier.height(12.dp))
-        com.hermes.android.ui.design.SettingsGroup {
+
+        // Connection
+        SettingsCardGroup {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onNavigateToRuntime)
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                    .padding(horizontal = 16.dp, vertical = 15.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -82,7 +91,7 @@ internal fun SettingsMenu(
                         text = serverUrl.ifBlank { t("No server configured", "سروری تنظیم نشده") },
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = t("Server & connection settings", "تنظیمات سرور و اتصال"),
@@ -92,133 +101,143 @@ internal fun SettingsMenu(
                 }
                 com.hermes.android.ui.design.StatusChip(label = connLabel, color = connColor)
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onNavigateToSetup)
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(t("Setup wizard", "راه‌اندازی اولیه"), style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = t("Runtime, AI provider, API key and model", "محیط اجرا، ارائه‌دهنده، کلید API و مدل"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            StatTile(
-                value = state.activeModel ?: "\u2014",
-                label = t("Active model", "مدل فعال"),
-            )
-            StatTile(
-                value = state.insights?.let { "${it.sessions}" } ?: "\u2014",
-                label = t("Sessions / 30d", "جلسه / ۳۰ روز"),
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Setup wizard", "راه‌اندازی اولیه"),
+                subtitle = t("Runtime, AI provider, API key and model", "محیط اجرا، ارائه‌دهنده، کلید API و مدل"),
+                icon = Icons.Default.AutoAwesome,
+                onClick = onNavigateToSetup,
             )
         }
 
-        val tiles = listOf(
-            DomainSpec(
+        // Agent
+        SettingsCardGroup {
+            SettingsNavRow(
                 title = t("General Settings", "تنظیمات عمومی"),
                 subtitle = t(
-                    "Approval: ${state.approvalMode} \u00B7 platforms, memory, advanced",
-                    "تأیید: ${approvalModeFa(state.approvalMode)} \u00B7 پلتفرم\u200Cها، حافظه، پیشرفته",
+                    "Approval: ${state.approvalMode} · platforms, memory, advanced",
+                    "تأیید: ${approvalModeFa(state.approvalMode)} · پلتفرم‌ها، حافظه، پیشرفته",
                 ),
-            DomainSpec(
-                title = t("Models", "مدل\u200Cها"),
+                icon = Icons.Default.Settings,
+                onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Models", "مدل‌ها"),
                 subtitle = state.activeModel?.let { model ->
-                    "${state.activeProvider ?: "?"} / $model"
-                } ?: t("Model, API keys", "مدل، کلید API"),
+                    "${state.activeProvider ?: "?"} / $model · ${state.reasoning}"
+                } ?: t("Model, API keys, reasoning", "مدل، کلید API، عمق تفکر"),
                 icon = Icons.Default.SwapHoriz,
                 onClick = { onOpen(SettingsSection.MODELS) },
-            ),
-                icon = Icons.Default.Security,
-                onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
-            ),
-            DomainSpec(
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
                 title = t("Tools", "ابزارها"),
                 subtitle = if (state.availableTools.isNotEmpty()) {
                     val enabled = state.availableTools.count { it.enabled }
                     t(
-                        "$enabled of ${state.availableTools.size} toolsets on",
-                        "$enabled از ${state.availableTools.size} گروه فعال",
+                        "$enabled of ${state.availableTools.size} toolsets · plugins, skills, scheduler",
+                        "$enabled از ${state.availableTools.size} گروه · افزونه‌ها، مهارت‌ها، زمان‌بندی",
                     )
                 } else {
-                    t("Toolsets, plugins, skills", "ابزارها، افزونه\u200Cها، مهارت\u200Cها")
+                    t("Toolsets, plugins, skills, scheduler", "ابزارها، افزونه‌ها، مهارت‌ها، زمان‌بندی")
                 },
-                icon = Icons.Default.Key,
+                icon = Icons.Default.Build,
                 onClick = { onOpen(SettingsSection.TOOLS) },
-            ),
-            DomainSpec(
+            )
+        }
+
+        // Workspace
+        SettingsCardGroup {
+            SettingsNavRow(
                 title = t("Linux (Alpine)", "لینوکس (Alpine)"),
                 subtitle = t("Terminal, files, packages", "ترمینال، فایل‌ها، بسته‌ها"),
                 icon = Icons.Default.Terminal,
                 onClick = onNavigateToLinux,
-            ),
-            DomainSpec(
-                title = t("Scheduler", "زمان\u200Cبندی"),
-                subtitle = t("Scheduled agent jobs", "کارهای زمان\u200Cبندی\u200Cشده"),
-                icon = Icons.Default.Schedule,
-                onClick = onNavigateToCron,
-            ),
-            DomainSpec(
-                title = t("Projects", "پروژه\u200Cها"),
-                subtitle = t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Projects", "پروژه‌ها"),
+                subtitle = state.insights?.let {
+                    t("${it.sessions} sessions in ${it.days} days", "${it.sessions} گفتگو در ${it.days} روز")
+                } ?: t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
                 icon = Icons.Default.Folder,
                 onClick = onNavigateToProjects,
-            ),
-            DomainSpec(
+            )
+        }
+
+        // App
+        SettingsCardGroup {
+            SettingsNavRow(
                 title = t("Appearance", "ظاهر"),
                 subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
-                icon = Icons.Default.Language,
+                icon = Icons.Default.Palette,
                 onClick = { onOpen(SettingsSection.APPEARANCE) },
-            ),
-            DomainSpec(
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
                 title = t("About", "درباره"),
-                subtitle = t("Version and updates", "نسخه و به\u200Cروزرسانی"),
+                subtitle = t("Version and updates", "نسخه و به‌روزرسانی"),
                 icon = Icons.Default.Info,
                 onClick = { onOpen(SettingsSection.ABOUT) },
-            ),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            tiles.chunked(2).forEach { rowTiles ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowTiles.forEach { spec ->
-                        com.hermes.android.ui.design.DomainTile(
-                            title = spec.title,
-                            subtitle = spec.subtitle,
-                            icon = spec.icon,
-                            onClick = spec.onClick,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (rowTiles.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
+            )
         }
     }
 }
 
-/** One entry of the Control Center domain grid. */
-internal data class DomainSpec(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val onClick: () -> Unit,
-)
+/** A rounded card holding a stack of settings rows (Aether's card group). */
+@Composable
+internal fun SettingsCardGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+        content = content,
+    )
+}
+
+/** One tappable row that opens a sub-page: icon, title, one-line subtitle, chevron. */
+@Composable
+internal fun SettingsNavRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
 
 /** Persian labels for approvals.mode values (hub subtitle). */
 internal fun approvalModeFa(mode: String): String = when (mode) {

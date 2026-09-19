@@ -67,10 +67,7 @@ internal fun GeneralSettingsSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
+        SettingsCardGroup {
             SettingsNavRow(
                 title = t("Platforms", "پلتفرم\u200Cها"),
                 subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
@@ -95,39 +92,6 @@ internal fun GeneralSettingsSection(
         ApprovalCard(state, viewModel)
         PersonalityCard(state, viewModel)
         SoulCard(state, viewModel)
-    }
-}
-
-/** One tappable row of a settings card that opens a sub-page. */
-@Composable
-internal fun SettingsNavRow(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
