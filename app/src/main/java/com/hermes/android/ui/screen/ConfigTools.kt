@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
@@ -94,7 +93,7 @@ import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
 /**
- * Tools folder: Plugins, Skills and Scheduler sub-pages on top, then the toolset
+ * Tools folder: Plugins and Skills sub-pages on top, then the toolset
  * switches.
  */
 @Composable
@@ -103,7 +102,6 @@ internal fun ToolsTab(
     viewModel: ConfigViewModel,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSkills: () -> Unit,
-    onNavigateToCron: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -111,7 +109,10 @@ internal fun ToolsTab(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "__tools_folders") {
-            SettingsCardGroup {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
                 SettingsNavRow(
                     title = t("Plugins", "افزونه\u200Cها"),
                     subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
@@ -124,13 +125,6 @@ internal fun ToolsTab(
                     subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
                     icon = Icons.Default.Star,
                     onClick = onNavigateToSkills,
-                )
-                com.hermes.android.ui.design.GroupDivider()
-                SettingsNavRow(
-                    title = t("Scheduler", "زمان\u200Cبندی"),
-                    subtitle = t("Scheduled agent jobs", "کارهای زمان\u200Cبندی\u200Cشده"),
-                    icon = Icons.Default.Schedule,
-                    onClick = onNavigateToCron,
                 )
             }
         }

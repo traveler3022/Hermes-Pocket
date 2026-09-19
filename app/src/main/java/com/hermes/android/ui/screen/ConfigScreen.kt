@@ -196,7 +196,6 @@ fun ConfigScreen(
                     viewModel = viewModel,
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
-                    onNavigateToCron = onNavigateToCron,
                 )
                 SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
                 SettingsSection.ABOUT -> AboutSection()
