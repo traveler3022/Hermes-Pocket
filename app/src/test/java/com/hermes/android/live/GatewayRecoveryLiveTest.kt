@@ -7,6 +7,7 @@ import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.OkHttpGatewayClient
+import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatSessionDelegate
 import com.hermes.android.ui.viewmodel.ChatUiState
@@ -273,7 +274,7 @@ class GatewayRecoveryLiveTest {
                 coerceInputValues = true
                 encodeDefaults = false
             }
-            gateway = OkHttpGatewayClient(http, json, mockk<Context>(relaxed = true))
+            gateway = OkHttpGatewayClient(http, json, StdioGatewayHub(), mockk<Context>(relaxed = true))
             gateways += gateway
             scope.launch(start = CoroutineStart.UNDISPATCHED) { gateway.events.collect { events += it } }
             repo = SessionRepository(gateway, NoTasks)

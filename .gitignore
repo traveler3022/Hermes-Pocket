@@ -17,6 +17,9 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+# ...except the shared debug key: every debug build must be signed alike so a new
+# debug APK installs over the previous one (it protects nothing; it is public on purpose).
+!app/debug.keystore
 
 # IDE
 .idea/

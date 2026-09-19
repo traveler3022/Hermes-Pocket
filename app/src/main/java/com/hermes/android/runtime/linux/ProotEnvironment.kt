@@ -49,7 +49,11 @@ class ProotEnvironment @Inject constructor(
     /** Host path of a file inside the guest, e.g. `/root/.hermes/logs/x.log`. */
     fun guestFile(guestPath: String): File = File(rootfsDir, guestPath.removePrefix("/"))
 
-    fun processBuilder(command: String, extraEnv: Map<String, String> = emptyMap()): ProcessBuilder {
+    fun processBuilder(
+        command: String,
+        extraEnv: Map<String, String> = emptyMap(),
+        mergeStderr: Boolean = true,
+    ): ProcessBuilder {
         prepareHost()
         val args = mutableListOf(
             prootBinary.absolutePath,
@@ -73,7 +77,7 @@ class ProotEnvironment @Inject constructor(
 
         return ProcessBuilder(args).apply {
             directory(baseDir)
-            redirectErrorStream(true)
+            redirectErrorStream(mergeStderr)
             environment().apply {
                 remove("LD_PRELOAD")
                 put("PROOT_TMP_DIR", hostTmpDir.absolutePath)

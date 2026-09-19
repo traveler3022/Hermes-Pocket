@@ -3,8 +3,7 @@ package com.hermes.android.runtime.linux
 import android.content.Context
 import android.content.Intent
 import android.os.StatFs
-import com.hermes.android.gateway.ConnectionState
-import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.GatewayHandle
 import com.hermes.android.runtime.HermesRuntime
@@ -20,34 +19,47 @@ import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
-import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Hermes inside the bundled Alpine rootfs run by proot — no Termux or other host app needed.
- * Mirrors Aether's bundled-Linux design; the app talks to `hermes dashboard` over
- * the same WebSocket API the Termux runtime uses.
+ * Mirrors Aether's bundled-Linux design: like Aether's `node bridge.mjs`, the gateway is a
+ * child process (`python -m tui_gateway.entry`) spoken to over stdin/stdout via
+ * [StdioGatewayHub] — no web server, port, token, or dial-and-retry.
  */
 @Singleton
 class ProotLinuxRuntime @Inject constructor(
     @ApplicationContext private val context: Context,
     private val environment: ProotEnvironment,
     private val rootfsInstaller: RootfsInstaller,
-    private val gatewayClient: GatewayClient,
+    private val stdioHub: StdioGatewayHub,
 ) : HermesRuntime {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        stdioHub.fileRoot = environment.rootfsDir
+        // The gateway client reconnecting while no process runs (e.g. it exited) restarts it.
+        stdioHub.restartHandler = {
+            scope.launch {
+                runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway restart failed") }
+            }
+        }
+    }
 
     override val type: RuntimeType = RuntimeType.PROOT_LINUX
 
@@ -191,20 +203,25 @@ class ProotLinuxRuntime @Inject constructor(
         if (!isHermesInstalled()) throw IllegalStateException("Install Hermes in the built-in Linux runtime first.")
 
         stopProcess()
-        gatewayClient.disconnect()
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
         val process = withContext(Dispatchers.IO) {
-            environment.processBuilder(
-                command = GATEWAY_SCRIPT,
-                extraEnv = mapOf("HERMES_DASHBOARD_SESSION_TOKEN" to sessionToken()),
-            ).redirectOutput(ProcessBuilder.Redirect.to(logFile)).start()
+            environment.processBuilder(command = GATEWAY_SCRIPT, mergeStderr = false)
+                .redirectError(ProcessBuilder.Redirect.to(logFile))
+                .start()
         }
-        process.outputStream.close()
         gatewayProcess = process
+        stdioHub.attach(process) { exitCode ->
+            if (gatewayProcess === process) {
+                gatewayProcess = null
+                if (_state.value is RuntimeState.Running) {
+                    _state.value = RuntimeState.Error("Hermes gateway exited ($exitCode)")
+                }
+            }
+        }
 
         val handle = GatewayHandle(pid = null, startedAt = System.currentTimeMillis(), webSocketUrl = getWebSocketUrl())
-        if (!waitForGatewayReady(process)) {
+        if (!stdioHub.awaitReady(GATEWAY_READY_TIMEOUT_MS)) {
             val tail = runCatching { logFile.readLines().takeLast(15).joinToString("\n") }.getOrDefault("")
             stopProcess()
             val message = "Gateway did not start. Last log lines:\n$tail"
@@ -228,6 +245,7 @@ class ProotLinuxRuntime @Inject constructor(
     private suspend fun stopProcess() = withContext(Dispatchers.IO) {
         val process = gatewayProcess ?: return@withContext
         gatewayProcess = null
+        stdioHub.detach()
         process.destroy()
         if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly()
     }
@@ -250,38 +268,17 @@ class ProotLinuxRuntime @Inject constructor(
         return result.output.replace(AnsiEscape, "")
     }
 
-    override suspend fun isHealthy(): Boolean {
-        if (_state.value !is RuntimeState.Running || gatewayProcess?.isAlive != true) return false
-        return try {
-            gatewayClient.connect(url = getWebSocketUrl(), connectTimeoutMs = 5_000) is ConnectionState.Connected
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            false
-        }
-    }
+    override suspend fun isHealthy(): Boolean =
+        _state.value is RuntimeState.Running && gatewayProcess?.isAlive == true && stdioHub.isReady
 
-    override fun getWebSocketUrl(): String = "ws://$GATEWAY_HOST:$GATEWAY_PORT/api/ws?token=${sessionToken()}"
+    override fun getWebSocketUrl(): String = StdioGatewayHub.URL
+
+    override fun hostFileForGuestPath(guestPath: String): File? =
+        environment.guestFile(guestPath.replaceFirst(Regex("^~(?=/|$)"), "/root"))
 
     override fun launchHostApp(): Boolean = false
 
     override fun getInstallInstructions(): InstallInstructions? = null
-
-    private suspend fun waitForGatewayReady(process: Process): Boolean =
-        withTimeoutOrNull(GATEWAY_READY_TIMEOUT_MS) {
-            while (process.isAlive) {
-                val connected = try {
-                    gatewayClient.connect(url = getWebSocketUrl(), connectTimeoutMs = 2_000) is ConnectionState.Connected
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    false
-                }
-                if (connected) return@withTimeoutOrNull true
-                delay(1_000)
-            }
-            false
-        } ?: false
 
     private suspend fun readHermesVersion(): String? {
         if (!environment.isRootfsInstalled) return null
@@ -303,29 +300,13 @@ class ProotLinuxRuntime @Inject constructor(
 
     private fun freeBytes(): Long = runCatching { StatFs(context.filesDir.path).availableBytes }.getOrDefault(0L)
 
-    private fun sessionToken(): String {
-        prefs.getString(KEY_SESSION_TOKEN, null)?.let { return it }
-        val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
-        val token = android.util.Base64.encodeToString(
-            bytes,
-            android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP,
-        )
-        prefs.edit().putString(KEY_SESSION_TOKEN, token).apply()
-        return token
-    }
-
     private class InstallFailure(message: String) : Exception(message)
 
     companion object {
         private const val PREFS_NAME = "hermes_linux_runtime"
         private const val KEY_VERSION = "hermes_version"
-        private const val KEY_SESSION_TOKEN = "session_token"
-        private const val GATEWAY_HOST = "127.0.0.1"
-
-        // Distinct from the Termux runtime's 9119 so both can coexist without cross-talk.
-        private const val GATEWAY_PORT = 9120
         private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
-        private const val GATEWAY_LOG = "/root/.hermes/logs/gateway_stdout.log"
+        private const val GATEWAY_LOG = "/root/.hermes/logs/gateway_stderr.log"
         private const val MIN_FREE_BYTES = 1_000_000_000L
         private val AnsiEscape = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 
@@ -377,18 +358,18 @@ class ProotLinuxRuntime @Inject constructor(
             "${'$'}UV" cache clean || true
         """.trimIndent()
 
+        // Same launch as Hermes' TUI (ui-tui/src/gatewayClient.ts startSpawnedGateway):
+        // `python -m tui_gateway.entry` from the source root, JSON-RPC lines on stdio.
         private val GATEWAY_SCRIPT = """
             export HERMES_HOME=/root/.hermes
-            mkdir -p "${'$'}HERMES_HOME/web_dist_placeholder/assets"
-            [ -f "${'$'}HERMES_HOME/web_dist_placeholder/index.html" ] || \
-                echo '<!doctype html><title>Hermes2</title><p>WebSocket API only.</p>' > "${'$'}HERMES_HOME/web_dist_placeholder/index.html"
-            export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
-            # A gateway orphaned by a previous app process would hold the port. Stop it by PID:
-            # a pkill -f pattern also matches this script's own command line and kills it.
+            REPO="${'$'}HERMES_HOME/hermes-agent"
+            # A gateway orphaned by a previous app process would still be running. Stop it by
+            # PID: a pkill -f pattern also matches this script's own command line and kills it.
             PIDFILE="${'$'}HERMES_HOME/gateway.pid"
             if [ -f "${'$'}PIDFILE" ]; then kill "${'$'}(cat "${'$'}PIDFILE")" 2>/dev/null && sleep 1; rm -f "${'$'}PIDFILE"; fi
             echo ${'$'}${'$'} > "${'$'}PIDFILE"
-            exec hermes dashboard --host $GATEWAY_HOST --port $GATEWAY_PORT --no-open --skip-build
+            export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
+            exec "${'$'}REPO/venv/bin/python" -u -m tui_gateway.entry
         """.trimIndent()
     }
 }

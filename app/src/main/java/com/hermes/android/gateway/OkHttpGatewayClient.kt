@@ -26,6 +26,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
+import java.io.IOException
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -59,6 +60,7 @@ import kotlin.math.min
 class OkHttpGatewayClient @Inject constructor(
     private val httpClient: OkHttpClient,
     private val json: Json,
+    private val stdioHub: StdioGatewayHub,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : GatewayClient {
 
@@ -209,7 +211,6 @@ class OkHttpGatewayClient @Inject constructor(
             oldSocket?.close(1000, "reconnecting")
             eventSequence.reset()
 
-            val request = Request.Builder().url(url).build()
             val listener = GatewayWebSocketListener { state ->
                 when (state) {
                     is WsState.Opened -> {
@@ -242,10 +243,18 @@ class OkHttpGatewayClient @Inject constructor(
                 }
             }
 
-            val newSocket = httpClient.newWebSocket(request, listener)
+            // The built-in Linux runtime's gateway is a child process on stdio; everything
+            // else (Termux, remote) is a real WebSocket.
+            val stdio = StdioGatewayHub.handles(url)
+            val newSocket = if (stdio) {
+                stdioHub.open(listener)
+            } else {
+                httpClient.newWebSocket(Request.Builder().url(url).build(), listener)
+            }
             synchronized(this) {
                 webSocket = newSocket
             }
+            if (stdio) stdioHub.activate(newSocket)
 
             // Wait for ready or timeout
             withTimeoutOrNull(timeoutMs) {
@@ -375,6 +384,13 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     override suspend fun downloadFile(url: String): ByteArray = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        if (url.startsWith("file:")) {
+            return@withContext try {
+                stdioHub.readFile(url)
+            } catch (e: IOException) {
+                throw GatewayException("Download failed: ${e.message}")
+            }
+        }
         val request = Request.Builder().url(url).get().build()
         // Create a client with a read timeout for downloads (the shared httpClient
         // has readTimeout=0 for WebSocket, which is wrong for one-shot downloads).

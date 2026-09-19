@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.util.Base64
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -143,6 +144,10 @@ internal class ChatAttachmentDelegate(
         val path = if (raw.startsWith("file://")) raw.removePrefix("file://") else raw
         if (!path.startsWith("/") && !path.startsWith("~")) return raw
         val ws = hermesRuntime.getWebSocketUrl()
+        // The built-in runtime has no web server: its files are read straight from the rootfs.
+        if (StdioGatewayHub.handles(ws)) {
+            return hermesRuntime.hostFileForGuestPath(path)?.let { Uri.fromFile(it).toString() } ?: raw
+        }
         val base = ws.replaceFirst("ws://", "http://").replaceFirst("wss://", "https://")
             .substringBefore("/api/ws")
         val token = ws.substringAfter("token=", "").substringBefore('&')

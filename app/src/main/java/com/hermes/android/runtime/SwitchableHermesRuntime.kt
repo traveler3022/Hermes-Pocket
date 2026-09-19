@@ -102,6 +102,7 @@ class SwitchableHermesRuntime @Inject constructor(
     override suspend fun runDoctor(): String = active.runDoctor()
     override suspend fun isHealthy(): Boolean = active.isHealthy()
     override fun getWebSocketUrl(): String = active.getWebSocketUrl()
+    override fun hostFileForGuestPath(guestPath: String): java.io.File? = active.hostFileForGuestPath(guestPath)
     override fun launchHostApp(): Boolean = active.launchHostApp()
     override fun getInstallInstructions(): InstallInstructions? = active.getInstallInstructions()
 }

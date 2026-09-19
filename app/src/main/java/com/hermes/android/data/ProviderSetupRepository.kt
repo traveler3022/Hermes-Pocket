@@ -1,7 +1,10 @@
 package com.hermes.android.data
 
 import android.content.Context
+import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
+import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,15 +42,21 @@ sealed interface DefaultModelResult {
 }
 
 /**
- * First-run provider setup over the `hermes dashboard` REST API (the same server the
- * app's WebSocket talks to). Unlike `config.set model`, these endpoints work before any
- * chat session exists, and they apply to every runtime (built-in Linux, Termux, remote).
+ * First-run provider setup. Termux and remote runtimes use the `hermes dashboard` REST API
+ * (the server their WebSocket talks to). The built-in Linux runtime has no web server — its
+ * gateway is a stdio child process — so there the key is probed from the app, saved and listed
+ * through gateway JSON-RPC, and the default model is written by a small script run in the
+ * rootfs. Unlike `config.set model`, none of this needs a chat session.
  */
 @Singleton
 class ProviderSetupRepository @Inject constructor(
     private val runtime: HermesRuntime,
     okHttpClient: OkHttpClient,
+    private val gateway: GatewayClient,
+    private val linux: ProotEnvironment,
 ) {
+    private val viaStdio: Boolean get() = StdioGatewayHub.handles(runtime.getWebSocketUrl())
+
     private val http = okHttpClient.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -67,6 +76,7 @@ class ProviderSetupRepository @Inject constructor(
 
     /** Live-probes the key (or, for custom endpoints, the base URL) before it is saved. */
     suspend fun checkKey(provider: SetupProvider, apiKey: String, baseUrl: String = ""): KeyCheck {
+        if (viaStdio) return probeKey(provider, apiKey, baseUrl)
         val body = if (provider.needsBaseUrl) {
             buildJsonObject { put("key", "OPENAI_BASE_URL"); put("value", baseUrl); put("api_key", apiKey) }
         } else {
@@ -84,11 +94,15 @@ class ProviderSetupRepository @Inject constructor(
     /** Custom endpoints store their key with the model assignment instead of in .env. */
     suspend fun saveKey(provider: SetupProvider, apiKey: String) {
         if (provider.needsBaseUrl) return
+        if (viaStdio) {
+            rpc("model.save_key", buildJsonObject { put("slug", provider.slug); put("api_key", apiKey) })
+            return
+        }
         call("PUT", "/api/env", buildJsonObject { put("key", provider.envVar); put("value", apiKey) })
     }
 
     suspend fun models(provider: SetupProvider): List<String> {
-        val result = call("GET", "/api/model/options", null)
+        val result = if (viaStdio) rpc("model.options", buildJsonObject {}) else call("GET", "/api/model/options", null)
         val row = (result["providers"] as? JsonArray)
             ?.mapNotNull { it as? JsonObject }
             ?.firstOrNull { it.text("slug") == provider.slug }
@@ -103,6 +117,16 @@ class ProviderSetupRepository @Inject constructor(
         baseUrl: String = "",
         confirmed: Boolean = false,
     ): DefaultModelResult {
+        if (viaStdio) {
+            val args = buildJsonObject {
+                put("provider", provider.slug)
+                put("model", model)
+                put("base_url", if (provider.needsBaseUrl) baseUrl else "")
+                put("api_key", if (provider.needsBaseUrl) apiKey else "")
+                put("confirm", confirmed)
+            }
+            return applyDefaultModel(runSetupScript("set_model", args))
+        }
         val body = buildJsonObject {
             put("scope", "main")
             put("provider", provider.slug)
@@ -113,7 +137,10 @@ class ProviderSetupRepository @Inject constructor(
             }
             if (confirmed) put("confirm_expensive_model", true)
         }
-        val result = call("POST", "/api/model/set", body)
+        return applyDefaultModel(call("POST", "/api/model/set", body))
+    }
+
+    private fun applyDefaultModel(result: JsonObject): DefaultModelResult {
         if (result.bool("confirm_required")) {
             return DefaultModelResult.NeedsConfirm(result.text("confirm_message") ?: "This model is expensive. Use it anyway?")
         }
@@ -123,6 +150,7 @@ class ProviderSetupRepository @Inject constructor(
 
     /** True once config.yaml names a concrete provider (i.e. setup already happened elsewhere). */
     suspend fun hasConfiguredModel(): Boolean {
+        if (viaStdio) return runSetupScript("has_model", buildJsonObject {}).bool("configured")
         val info = call("GET", "/api/model/info", null)
         val provider = info.text("provider")
         return !provider.isNullOrBlank() && provider != "auto"
@@ -147,6 +175,70 @@ class ProviderSetupRepository @Inject constructor(
         }
     }
 
+    private suspend fun rpc(method: String, params: JsonObject): JsonObject {
+        gateway.connect(url = StdioGatewayHub.URL)
+        return gateway.request(method, params.toMap()) as? JsonObject ?: JsonObject(emptyMap())
+    }
+
+    /** Runs [SETUP_SCRIPT] in the rootfs; arguments travel in the environment, not the command line. */
+    private suspend fun runSetupScript(command: String, args: JsonObject): JsonObject = withContext(Dispatchers.IO) {
+        val script = linux.guestFile(SETUP_SCRIPT_PATH)
+        script.parentFile?.mkdirs()
+        script.writeText(SETUP_SCRIPT)
+        val result = linux.run(
+            command = "cd \"\$HERMES_HOME/hermes-agent\" && \"\$HERMES_HOME/hermes-agent/venv/bin/python\" -u $SETUP_SCRIPT_PATH $command",
+            extraEnv = mapOf("HERMES_HOME" to "/root/.hermes", "PYTHONPATH" to "/root/.hermes/hermes-agent", "HERMES2_ARGS" to args.toString()),
+        )
+        val line = result.output.lineSequence().lastOrNull { it.startsWith(RESULT_MARKER) }
+            ?: throw IOException("Setup helper failed: ${result.output.takeLast(300)}")
+        json.parseToJsonElement(line.removePrefix(RESULT_MARKER)).jsonObject
+    }
+
+    /** Probes a key (or custom endpoint) directly, mirroring the dashboard's /api/providers/validate. */
+    private suspend fun probeKey(provider: SetupProvider, apiKey: String, baseUrl: String): KeyCheck = withContext(Dispatchers.IO) {
+        val unknown = KeyCheck(ok = true, reachable = false, message = "")
+        val request = if (provider.needsBaseUrl) {
+            val url = baseUrl.trimEnd('/') + "/models"
+            Request.Builder().url(url.toHttpUrl()).apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
+        } else {
+            val (url, bearer) = CredentialProbes[provider.envVar] ?: return@withContext unknown
+            if (provider.envVar == "GEMINI_API_KEY" && apiKey.startsWith("AQ.")) return@withContext unknown
+            val builder = url.toHttpUrl().newBuilder()
+            if (!bearer) builder.addQueryParameter("key", apiKey)
+            Request.Builder().url(builder.build()).apply { if (bearer) header("Authorization", "Bearer $apiKey") }
+        }.header("Accept", "application/json").build()
+
+        val response = try {
+            http.newCall(request).execute()
+        } catch (e: Exception) {
+            val where = if (provider.needsBaseUrl) request.url.toString() else "the provider"
+            return@withContext KeyCheck(ok = false, reachable = false, message = "Could not reach $where.")
+        }
+        response.use {
+            val text = it.body?.string().orEmpty()
+            when {
+                provider.needsBaseUrl -> {
+                    val models = modelIds(text)
+                    if (models.isEmpty() && !it.isSuccessful) {
+                        KeyCheck(false, true, "${request.url} answered HTTP ${it.code}.")
+                    } else {
+                        KeyCheck(true, true, "", models)
+                    }
+                }
+                it.code == 401 || it.code == 403 ->
+                    KeyCheck(false, true, "That API key was rejected. Double-check it and try again.")
+                it.code == 429 || it.isSuccessful -> KeyCheck(true, true, "")
+                else -> KeyCheck(false, true, "Provider returned HTTP ${it.code} for this key.")
+            }
+        }
+    }
+
+    /** OpenAI `/models` shape: `{"data":[{"id":…}]}`. */
+    private fun modelIds(body: String): List<String> {
+        val data = runCatching { json.parseToJsonElement(body).jsonObject["data"] as? JsonArray }.getOrNull() ?: return emptyList()
+        return data.mapNotNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content }
+    }
+
     /** ws://host:port/api/ws?token=T → (http://host:port, T). */
     private fun dashboardEndpoint(): Pair<String, String> {
         val ws = runtime.getWebSocketUrl()
@@ -161,6 +253,53 @@ class ProviderSetupRepository @Inject constructor(
 
     private companion object {
         val JsonMedia = "application/json".toMediaType()
+        const val RESULT_MARKER = "HERMES2_RESULT "
+        const val SETUP_SCRIPT_PATH = "/root/.hermes/hermes2_setup.py"
+
+        /** env var → (probe URL, key sent as bearer header rather than `?key=`). */
+        val CredentialProbes = mapOf(
+            "OPENROUTER_API_KEY" to ("https://openrouter.ai/api/v1/key" to true),
+            "OPENAI_API_KEY" to ("https://api.openai.com/v1/models" to true),
+            "XAI_API_KEY" to ("https://api.x.ai/v1/models" to true),
+            "GEMINI_API_KEY" to ("https://generativelanguage.googleapis.com/v1beta/models" to false),
+        )
+
+        // Same code path as the dashboard's POST /api/model/set and GET /api/model/info, minus the
+        // web server. Prints one `HERMES2_RESULT {json}` line; anything else on stdout is noise.
+        val SETUP_SCRIPT = """
+            import json, os, sys
+
+            def emit(obj):
+                print("$RESULT_MARKER" + json.dumps(obj), flush=True)
+
+            def has_model(args):
+                from hermes_cli.config import load_config
+                cfg = load_config().get("model", "")
+                provider = cfg.get("provider", "") if isinstance(cfg, dict) else ""
+                emit({"configured": bool(provider) and provider != "auto"})
+
+            def set_model(args):
+                from hermes_cli.config import load_config
+                from hermes_cli.web_server_config import _apply_model_assignment_sync, _prepare_main_assignment
+                provider, model = args["provider"], args["model"]
+                base_url, api_key = args.get("base_url", ""), args.get("api_key", "")
+                if not args.get("confirm"):
+                    try:
+                        from hermes_cli.model_selection_guards import combined_selection_warning
+                        warning = combined_selection_warning(model, provider=provider, base_url=base_url)
+                    except Exception:
+                        warning = None
+                    if warning is not None:
+                        return emit({"ok": False, "confirm_required": True, "confirm_message": warning.message})
+                prepared = _prepare_main_assignment(load_config(), provider, model, base_url, api_key)
+                _apply_model_assignment_sync("main", provider, model, "", base_url, api_key, prepared=prepared)
+                emit({"ok": True})
+
+            try:
+                {"has_model": has_model, "set_model": set_model}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
+            except Exception as e:
+                emit({"ok": False, "detail": str(getattr(e, "detail", None) or e)})
+        """.trimIndent()
     }
 }
 

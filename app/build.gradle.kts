@@ -42,6 +42,14 @@ android {
     }
 
     signingConfigs {
+        // Fixed, committed debug key. CI runners otherwise mint a fresh ~/.android/debug.keystore
+        // per run, so each debug APK had a different signature and could not update the last one.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             if (releaseStorePath != null) {
                 storeFile = file(releaseStorePath)
