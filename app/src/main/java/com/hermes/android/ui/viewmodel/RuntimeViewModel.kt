@@ -253,7 +253,11 @@ class RuntimeViewModel @Inject constructor(
             try {
                 val result = runtimeManager.runtime.install(emitter)
                 when (result) {
-                    is InstallResult.Success -> Timber.i("[Runtime] Install succeeded")
+                    is InstallResult.Success -> {
+                        Timber.i("[Runtime] Install succeeded")
+                        // The built-in runtime has no host app to hop through, so go straight to running.
+                        if (runtimeChoice.value == RuntimeChoiceUi.BuiltInLinux) startGateway()
+                    }
                     is InstallResult.Failure -> {
                         Timber.e("[Runtime] Install failed: ${result.reason}")
                         _errorMessage.value = result.reason

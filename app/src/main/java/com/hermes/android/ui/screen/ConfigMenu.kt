@@ -58,6 +58,7 @@ internal fun SettingsMenu(
     onNavigateToProjects: () -> Unit,
     onNavigateToPet: () -> Unit,
     onNavigateToBilling: () -> Unit,
+    onNavigateToSetup: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -100,6 +101,21 @@ internal fun SettingsMenu(
                     )
                 }
                 com.hermes.android.ui.design.StatusChip(label = connLabel, color = connColor)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToSetup)
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(t("Setup wizard", "راه‌اندازی اولیه"), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = t("Runtime, AI provider, API key and model", "محیط اجرا، ارائه‌دهنده، کلید API و مدل"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 

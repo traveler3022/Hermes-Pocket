@@ -29,6 +29,9 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @javax.inject.Inject
+    lateinit var setupState: com.hermes.android.data.SetupState
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -77,6 +80,7 @@ class MainActivity : ComponentActivity() {
                         color = MaterialTheme.colorScheme.background,
                     ) {
                         HermesNavHost(
+                            startInSetup = !setupState.isComplete,
                             sharedText = sharedText,
                             notificationSessionId = notificationSessionId,
                             themeModeState = themeModeState,
@@ -146,6 +150,7 @@ class MainActivity : ComponentActivity() {
  * Navigation graph for the entire app.
  *
  * Routes:
+ * - `setup` — first-run setup (runtime, provider, API key, model)
  * - `chat` — main chat screen
  * - `config` — settings & configuration
  * - `platforms` — platform credentials
@@ -157,6 +162,7 @@ class MainActivity : ComponentActivity() {
  */
 @Composable
 private fun HermesNavHost(
+    startInSetup: Boolean = false,
     sharedText: String? = null,
     notificationSessionId: String? = null,
     themeModeState: ThemeModeState? = null,
@@ -166,8 +172,18 @@ private fun HermesNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = "chat",
+        startDestination = if (startInSetup) "setup" else "chat",
     ) {
+        composable("setup") {
+            com.hermes.android.ui.screen.SetupScreen(
+                onFinished = {
+                    if (!navController.popBackStack("config", inclusive = false)) {
+                        navController.navigate("chat") { popUpTo("setup") { inclusive = true } }
+                    }
+                },
+            )
+        }
+
         composable(
             route = "chat?sharedText={sharedText}&resumeSessionId={resumeSessionId}",
             arguments = listOf(
@@ -213,6 +229,7 @@ private fun HermesNavHost(
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToPet = { navController.navigate("pet") },
                 onNavigateToBilling = { navController.navigate("billing") },
+                onNavigateToSetup = { navController.navigate("setup") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
             )

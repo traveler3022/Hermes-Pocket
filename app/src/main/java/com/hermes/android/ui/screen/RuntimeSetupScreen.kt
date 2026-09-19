@@ -283,6 +283,11 @@ fun RuntimeSetupScreen(
                         InstalledContent(
                             hermesVersion = state.hermesVersion,
                             onStartGateway = { viewModel.startGateway() },
+                            startLabel = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
+                                t("Start Hermes", "اجرای Hermes")
+                            } else {
+                                "Start Agent Gateway (Termux)"
+                            },
                         )
                     }
 
