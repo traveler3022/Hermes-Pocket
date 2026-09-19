@@ -35,14 +35,18 @@ object GatewayModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
-            timber.log.Timber.d("[OkHttp] $message")
+            // Redact token from log output to prevent credential leakage
+            val redacted = message.replace(Regex("token=[^&\\s]+"), "token=REDACTED")
+            timber.log.Timber.d("[OkHttp] $redacted")
         }.apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .pingInterval(30, TimeUnit.SECONDS)
+            .pingInterval(15, TimeUnit.SECONDS) // ping every 15s; if pong
+            // doesn't arrive, OkHttp fires onFailure → reconnect kicks in.
+            // 15s is low enough to detect stale connections through TLS proxies.
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.SECONDS) // WebSocket — no read timeout
             .writeTimeout(15, TimeUnit.SECONDS)

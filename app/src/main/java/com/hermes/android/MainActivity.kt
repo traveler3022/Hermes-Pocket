@@ -96,17 +96,37 @@ class MainActivity : ComponentActivity() {
         com.hermes.android.service.HermesGatewayService.start(this)
     }
 
+    /**
+     * Ask, at most once per install, to be exempt from battery optimization.
+     *
+     * This used to run unconditionally in [onCreate], so a user who declined
+     * got the same system dialog thrown in their face on every single app
+     * launch, forever, with no way to make it stop short of granting it. That
+     * is the kind of nagging that gets an app uninstalled — and it fired before
+     * the first frame was even drawn, so a brand-new user's first experience of
+     * Hermes was a permission dialog for an app they had not seen yet.
+     *
+     * Now: asked once, remembered, and never again. The exemption is a
+     * nice-to-have for keeping the gateway socket alive in Doze, not a
+     * requirement — the reconnect loop and the network callback already recover
+     * from being killed.
+     */
     @Suppress("BatteryLife")
     private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:$packageName")
-                }
-                startActivity(intent)
-            }
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BATTERY_PROMPT_SHOWN, false)) return
+
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+
+        prefs.edit().putBoolean(KEY_BATTERY_PROMPT_SHOWN, true).apply()
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:$packageName")
         }
+        // A device with no Settings activity for this action (some ROMs strip
+        // it) must not take the whole app down on launch.
+        runCatching { startActivity(intent) }
+            .onFailure { timber.log.Timber.w(it, "[Main] battery optimization dialog unavailable") }
     }
 
     private fun extractSharedText(intent: Intent?): String? {
@@ -114,6 +134,11 @@ class MainActivity : ComponentActivity() {
             return intent.getStringExtra(Intent.EXTRA_TEXT)
         }
         return null
+    }
+
+    private companion object {
+        const val PREFS_NAME = "hermes_prefs"
+        const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
     }
 }
 

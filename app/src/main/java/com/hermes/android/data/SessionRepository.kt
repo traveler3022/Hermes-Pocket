@@ -1,6 +1,7 @@
 package com.hermes.android.data
 
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -52,7 +53,15 @@ class SessionRepository @Inject constructor(
     data class AttachedSession(
         val liveId: String,
         val raw: JsonObject,
-    )
+    ) {
+        /** The stored id the server bound [liveId] to, when the payload names it. */
+        val storedId: String?
+            get() = (raw["stored_session_id"] ?: raw["session_key"])
+                .let { it as? kotlinx.serialization.json.JsonPrimitive }
+                ?.takeIf { it.isString }
+                ?.content
+                ?.takeIf { it.isNotBlank() }
+    }
 
     /**
      * Attach to a session given EITHER id kind.
@@ -78,6 +87,35 @@ class SessionRepository @Inject constructor(
         val liveId = obj.str("session_id").ifBlank { sessionId }
         return AttachedSession(liveId = liveId, raw = obj)
     }
+
+    /**
+     * Run a session-scoped RPC on [liveId], re-attaching through [storedId]
+     * once when the gateway no longer holds that live id. The gateway only
+     * accepts live ids and answers a reclaimed one (orphan reap, idle timeout,
+     * LRU evict) with 4001/4007, expecting the client to resume the stored id;
+     * this is the one place that does. Those codes mean the request was
+     * rejected before it ran, so the retry cannot duplicate it. [onRebound]
+     * sees the new attachment before the retry goes out.
+     */
+    suspend fun <T> onLiveSession(
+        liveId: String,
+        storedId: String?,
+        onRebound: (AttachedSession) -> Unit,
+        call: suspend (liveId: String) -> T,
+    ): T {
+        try {
+            return call(liveId)
+        } catch (e: GatewayException) {
+            if (storedId == null || !e.isSessionGone()) throw e
+            Timber.w("[Repo] live session $liveId is gone (${e.message}); re-attaching $storedId")
+            val attached = attach(storedId)
+            onRebound(attached)
+            return call(attached.liveId)
+        }
+    }
+
+    private fun GatewayException.isSessionGone(): Boolean =
+        message.orEmpty().let { it.startsWith("RPC error 4001:") || it.startsWith("RPC error 4007:") }
 
     // ── Tasks (delegation) ─────────────────────────────────────────────────
 
@@ -154,14 +192,8 @@ class SessionRepository @Inject constructor(
                 if (it.provider.isNotBlank()) put("provider", it.provider)
             }
         }.toElementMap()
-        // NOTE: Pocket calls this with `trackSession = false` so launching a
-        // background task doesn't steal the client's "current session" focus.
-        // Termux's GatewayClient/OkHttpGatewayClient (connection layer,
-        // deliberately left untouched) has no trackSession param at all, so
-        // that protection isn't available here yet — every session.create
-        // behaves as trackSession=true, same as it always has in this app.
         val created = gatewayClient.request(
-            GatewayMethods.SESSION_CREATE, createParams,
+            GatewayMethods.SESSION_CREATE, createParams, trackSession = false,
         ) as? JsonObject ?: throw IllegalStateException("session.create: non-object payload")
 
         val liveId = created.str("session_id")
@@ -373,6 +405,76 @@ class SessionRepository @Inject constructor(
         return result?.bool("paused") ?: paused
     }
 
+    // ── Context window (breakdown + manual compression) ────────────────────
+
+    data class ContextCategory(val id: String, val label: String, val tokens: Int)
+
+    data class ContextBreakdown(
+        val categories: List<ContextCategory>,
+        val used: Int,
+        val max: Int,
+        val percent: Int,
+        val model: String,
+    )
+
+    /** What is filling this LIVE session's context window, largest first. */
+    suspend fun contextBreakdown(liveSessionId: String): ContextBreakdown {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_CONTEXT_BREAKDOWN,
+            buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
+        ) as? JsonObject ?: return ContextBreakdown(emptyList(), 0, 0, 0, "")
+        val categories = (result["categories"] as? JsonArray).orEmpty()
+            .mapNotNull { it as? JsonObject }
+            .map { ContextCategory(it.str("id"), it.str("label"), it.int("tokens")) }
+            .sortedByDescending { it.tokens }
+        return ContextBreakdown(
+            categories = categories,
+            used = result.int("context_used"),
+            max = result.int("context_max"),
+            percent = result.int("context_percent"),
+            model = result.str("model"),
+        )
+    }
+
+    /**
+     * Outcome of a manual compress. The server answers in several shapes: a
+     * finished local run, an "still running" ack from a compute host, and a
+     * skip when another compressor holds the lock.
+     */
+    data class CompressionResult(
+        val status: String,
+        val beforeTokens: Int,
+        val afterTokens: Int,
+        val removedMessages: Int,
+        val message: String,
+    )
+
+    /**
+     * Compress a LIVE session's history. [focusTopic] tells the summarizer what
+     * to preserve. The server refuses with 4009 while a turn is running, so the
+     * caller has to interrupt first.
+     */
+    suspend fun compressSession(liveSessionId: String, focusTopic: String = ""): CompressionResult {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_COMPRESS,
+            buildJsonObject {
+                put("session_id", liveSessionId)
+                if (focusTopic.isNotBlank()) put("focus_topic", focusTopic.trim())
+            }.toElementMap(),
+        ) as? JsonObject ?: return CompressionResult("unknown", 0, 0, 0, "")
+        // The lock-held shape carries no status field, only compressed=false.
+        val status = result.str("status").ifBlank {
+            if (result.bool("lock_held") == true) "busy" else "unknown"
+        }
+        return CompressionResult(
+            status = status,
+            beforeTokens = result.int("before_tokens"),
+            afterTokens = result.int("after_tokens"),
+            removedMessages = result.int("removed"),
+            message = result.str("message"),
+        )
+    }
+
     // ── Rollback / undo (git-checkpoint diff + restore) ────────────────────
 
     data class Checkpoint(val hash: String, val timestamp: String, val message: String)
@@ -435,6 +537,9 @@ class SessionRepository @Inject constructor(
 
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.content ?: ""
+
+    private fun JsonObject.int(key: String): Int =
+        (this[key] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toInt() ?: 0
 
     private fun JsonObject.toElementMap(): Map<String, JsonElement> =
         entries.associate { (k, v) -> k to v }

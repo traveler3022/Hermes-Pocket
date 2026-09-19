@@ -34,8 +34,8 @@ android {
         applicationId = "com.hermes.android"
         minSdk = 29    // Android 10 per ADR-012
         targetSdk = 35 // Latest Stable per ADR-012
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 26
+        versionName = "2.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -54,7 +54,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -152,9 +153,6 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
-
-    // Markdown rendering (Fix S4F01)
-    implementation(libs.compose.markdown)
 
     // Coil (image loading for HermesMarkdown)
     implementation(libs.coil.compose)

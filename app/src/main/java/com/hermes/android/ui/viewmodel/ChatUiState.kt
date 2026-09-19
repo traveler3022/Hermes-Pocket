@@ -46,6 +46,12 @@ sealed class ChatMessage {
         val error: String?,
         val isRunning: Boolean,
         val durationS: Double?,
+        /** The assistant message that was streaming when this tool started, and
+         *  how much of its reasoning had arrived by then. The gateway streams a
+         *  whole turn's reasoning into one message, so this is the only record of
+         *  which part came before the tool and which after. Unset for history. */
+        val reasoningOwnerId: String? = null,
+        val reasoningMark: Int = 0,
     ) : ChatMessage()
 
     /** Status/error line. */
@@ -65,6 +71,12 @@ sealed class ChatMessage {
         val choices: List<String>?,
         val answered: Boolean = false,
         val kind: InteractiveKind = InteractiveKind.CLARIFY,
+        /** Clarify: more than one of [choices] may be picked. */
+        val multiSelect: Boolean = false,
+        /** Batch clarify: several questions answered together (instead of [question]/[choices]). */
+        val questions: List<ClarifyQuestionUi> = emptyList(),
+        /** The server withdrew the request (timeout, interrupt) before it was answered. */
+        val expired: Boolean = false,
     ) : ChatMessage()
 
     /** Sub-agent execution card. */
@@ -78,6 +90,14 @@ sealed class ChatMessage {
 }
 
 enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+
+/** One question of a batch clarify card. */
+data class ClarifyQuestionUi(
+    val qid: String,
+    val question: String,
+    val choices: List<String>?,
+    val multiSelect: Boolean,
+)
 
 /**
  * One entry of the agent's live task list (from tool.start/tool.complete
@@ -115,6 +135,8 @@ data class PendingApprovalUi(
     /** When false the "always allow" choice must not be offered
      *  (mirrors upstream allow_permanent). */
     val allowPermanent: Boolean = true,
+    /** The `srq-…` id `request.cancel` names when the server withdraws this approval. */
+    val serverRequestId: String = "",
 )
 
 /**
@@ -143,6 +165,10 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val sessions: List<SessionItem> = emptyList(),
     val activeSessionId: String? = null,
+    /** Stored id of the open chat — its identity. [activeSessionId] is only the
+     *  live id the gateway currently runs it under, and dies when the gateway
+     *  reclaims the session. */
+    val activeSessionKey: String? = null,
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     val inputText: String = "",
     val isSending: Boolean = false,
@@ -164,11 +190,20 @@ data class ChatUiState(
     val isAttaching: Boolean = false,
     // Agent's live task list for the current turn (empty = no plan to show)
     val activeTodos: List<TodoItemUi> = emptyList(),
+    // Turn state of every live session, so the drawer can show which other
+    // chats are working and which replied while the user was away.
+    val sessionActivity: Map<String, SessionActivity> = emptyMap(),
     // Tool-approval request awaiting the user's decision (modal sheet).
     val pendingApproval: PendingApprovalUi? = null,
     // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
     // chat input bar, mirrors the same setting in Settings > General.
     val reasoningLevel: String = "medium",
+    // The open chat's model from its latest session.info (reports a queued
+    // mid-turn pick while pending). [sessionInfoSeq] bumps on every event so a
+    // repeat of the same model still re-syncs the picker.
+    val sessionModel: String? = null,
+    val sessionProvider: String? = null,
+    val sessionInfoSeq: Int = 0,
     // Client-side display name shown in the top bar / drawer header. Purely
     // cosmetic (local prefs) — does not affect the agent's actual identity
     // (SOUL.md / display.personality on the server).

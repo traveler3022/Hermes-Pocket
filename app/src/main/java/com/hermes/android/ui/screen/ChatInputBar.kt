@@ -54,7 +54,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -137,9 +136,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -148,6 +149,7 @@ import com.hermes.android.ui.viewmodel.DrawerRenameState
 import com.hermes.android.ui.viewmodel.InteractiveKind
 import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
+import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
@@ -166,8 +168,8 @@ internal fun InputBar(
     onSteer: () -> Unit = {},
     onAttachFile: (Uri) -> Unit = {},
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
-    reasoningLevel: String = "medium",
-    onReasoningLevelChange: (String) -> Unit = {},
+    activeModel: String? = null,
+    onModelClick: () -> Unit = {},
 ) {
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -234,87 +236,24 @@ internal fun InputBar(
                 }
             }
         }
-        // One continuous rounded pill holding every control — matches the
-        // reference (ChatGPT): icons and field share a single floating
-        // surface instead of a bordered field plus separately-floating
-        // buttons with no shared background.
-        Row(
+        // Claude/ChatGPT-style composer: one rounded surface, the text on top
+        // and an action row under it — attach and the model button on the
+        // start side, send/steer/stop on the end. Model and effort live in the
+        // model button's sheet; the button stays quiet so the conversation,
+        // not the controls, carries the visual weight.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(28.dp))
+                .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
+                .clip(RoundedCornerShape(26.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(4.dp),
         ) {
-            // Declutter: attach + reasoning-effort used to be two separate
-            // buttons next to the composer. Collapsed into one "+" so the
-            // bar's default state is just "type and send" — the extras are
-            // one tap away instead of always competing for attention.
-            var extrasMenuOpen by remember { mutableStateOf(false) }
-            Box {
-                IconButton(
-                    onClick = { if (!isAttaching) extrasMenuOpen = true },
-                    enabled = !isAttaching,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (isAttaching) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = t("More", "بیشتر"),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                DropdownMenu(
-                    expanded = extrasMenuOpen,
-                    onDismissRequest = { extrasMenuOpen = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(t("Attach file", "پیوست فایل")) },
-                        leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
-                        onClick = {
-                            extrasMenuOpen = false
-                            filePicker.launch("*/*")
-                        },
-                    )
-                    HorizontalDivider()
-                    Text(
-                        text = t("Reasoning effort", "سطح استدلال"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                    reasoningLevels.forEach { level ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    reasoningLevelLabel(level),
-                                    fontWeight = if (level == reasoningLevel) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Psychology,
-                                    contentDescription = null,
-                                    tint = if (level == reasoningLevel) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                )
-                            },
-                            onClick = {
-                                onReasoningLevelChange(level)
-                                extrasMenuOpen = false
-                            },
-                        )
-                    }
-                }
-            }
             TextField(
                 value = text,
                 onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
@@ -326,71 +265,94 @@ internal fun InputBar(
                     disabledIndicatorColor = Color.Transparent,
                 ),
             )
-            if (isSending) {
-                // Mid-turn the agent is running. Two DIFFERENT things can be
-                // meant by "send while it's replying", and neither replaces
-                // the other:
-                //  - Steer (session.steer): folds a note into the CURRENT
-                //    turn without interrupting it — but verified against
-                //    Hermes' own docs, the text only actually lands "after
-                //    the next tool call" (appended to a tool result). For a
-                //    turn with no tool calls (a plain text answer), it just
-                //    queues and never gets delivered — steer alone can look
-                //    completely broken for ordinary chatty replies.
-                //  - A normal Send: submits as a new prompt. The gateway's
-                //    prompt.submit handler explicitly does NOT reject this
-                //    mid-turn — it queues it and interrupts the live turn
-                //    (_handle_busy_submit), i.e. exactly "send a message
-                //    that cuts in", which is what most users expect from a
-                //    chat app. This used to be unreachable: the button was
-                //    swapped out entirely while isSending.
-                // Stop (full interrupt, no follow-up) stays available too.
-                if (text.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                IconButton(
+                    onClick = { filePicker.launch("*/*") },
+                    enabled = !isAttaching,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    if (isAttaching) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = t("Attach file", "پیوست فایل"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                ComposerModelButton(activeModel = activeModel, onClick = onModelClick)
+                Spacer(Modifier.weight(1f))
+                if (isSending) {
+                    // Mid-turn the agent is running. Two DIFFERENT things can be
+                    // meant by "send while it's replying", and neither replaces
+                    // the other:
+                    //  - Steer (session.steer): folds a note into the CURRENT
+                    //    turn without interrupting it — but verified against
+                    //    Hermes' own docs, the text only actually lands "after
+                    //    the next tool call" (appended to a tool result). For a
+                    //    turn with no tool calls (a plain text answer), it just
+                    //    queues and never gets delivered — steer alone can look
+                    //    completely broken for ordinary chatty replies.
+                    //  - A normal Send: submits as a new prompt. The gateway's
+                    //    prompt.submit handler explicitly does NOT reject this
+                    //    mid-turn — it queues it and interrupts the live turn
+                    //    (_handle_busy_submit), i.e. exactly "send a message
+                    //    that cuts in", which is what most users expect from a
+                    //    chat app. This used to be unreachable: the button was
+                    //    swapped out entirely while isSending.
+                    // Stop (full interrupt, no follow-up) stays available too.
+                    if (text.isNotBlank()) {
+                        IconButton(
+                            onClick = onSteer,
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                HxIcons.GitBranch,
+                                contentDescription = t("Steer the agent", "هدایت عامل"),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        IconButton(
+                            onClick = onSend,
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     IconButton(
-                        onClick = onSteer,
+                        onClick = onStop,
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
-                            Icons.Default.CallSplit,
-                            contentDescription = t("Steer the agent", "هدایت عامل"),
-                            tint = MaterialTheme.colorScheme.primary,
+                            Icons.Default.Stop,
+                            contentDescription = t("Stop", "توقف"),
+                            tint = MaterialTheme.colorScheme.error,
                         )
                     }
+                } else {
                     IconButton(
                         onClick = onSend,
+                        // An attachment-only message (no typed text) is valid —
+                        // sendMessage() already handles it — so the button must
+                        // not be gated on text alone, or a picked file/image can
+                        // never actually be sent.
+                        enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
-                            contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
-                            tint = MaterialTheme.colorScheme.primary,
+                            contentDescription = t("Send", "ارسال"),
                         )
                     }
-                }
-                IconButton(
-                    onClick = onStop,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Stop,
-                        contentDescription = t("Stop", "توقف"),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                }
-            } else {
-                IconButton(
-                    onClick = onSend,
-                    // An attachment-only message (no typed text) is valid —
-                    // sendMessage() already handles it — so the button must
-                    // not be gated on text alone, or a picked file/image can
-                    // never actually be sent.
-                    enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = t("Send", "ارسال"),
-                    )
                 }
             }
         }

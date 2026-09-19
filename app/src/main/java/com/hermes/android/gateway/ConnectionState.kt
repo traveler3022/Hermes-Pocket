@@ -11,7 +11,7 @@ package com.hermes.android.gateway
  *                                          │                                          │
  *                                          └──(connect failed)──► Reconnecting ───┘
  *                                                                                      │
- *                                                                                      └──(max retries)──► Disconnected
+ *                                                                                      └──(max retries / permanent error)──► Failed
  * ```
  *
  * UI observes [GatewayClient.connectionState] and renders accordingly.

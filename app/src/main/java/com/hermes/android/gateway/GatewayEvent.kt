@@ -61,6 +61,22 @@ sealed class GatewayEvent {
         val info: Map<String, kotlinx.serialization.json.JsonElement>,
     ) : GatewayEvent()
 
+    /**
+     * The gateway auto-named a session. [storedSessionId] is the stored key the
+     * drawer rows are keyed by — not the live id this event was emitted under.
+     */
+    data class SessionTitle(
+        override val sessionId: String?,
+        val storedSessionId: String,
+        val title: String,
+    ) : GatewayEvent()
+
+    /** The session list moved (any surface). Session-less: refetch, don't map. */
+    data class SessionsChanged(override val sessionId: String?) : GatewayEvent()
+
+    /** Frames for [sessionId] were lost on this socket (client-side, from the seq stamp). */
+    data class EventGap(override val sessionId: String) : GatewayEvent()
+
     // ── Message streaming (the main chat flow) ────────────────────────────
 
     /** Assistant message started. */
@@ -73,6 +89,17 @@ sealed class GatewayEvent {
         val rendered: String?,
     ) : GatewayEvent()
 
+    /**
+     * Assistant commentary the agent emitted mid-turn — text alongside a tool
+     * call, or the answer it drafted before a verify-on-stop retry. Without it
+     * that text is lost, because [MessageComplete] replaces the streaming
+     * bubble with the final answer only.
+     */
+    data class MessageInterim(
+        override val sessionId: String?,
+        val text: String,
+    ) : GatewayEvent()
+
     /** Assistant message finished. */
     data class MessageComplete(
         override val sessionId: String?,
@@ -80,6 +107,8 @@ sealed class GatewayEvent {
         val rendered: String?,
         val reasoning: String?,
         val usage: Map<String, Long>?,
+        /** [text] is a rerun of text already sealed by [MessageInterim]. */
+        val responsePreviewed: Boolean = false,
     ) : GatewayEvent()
 
     /** Thinking text chunk (reasoning models). */
@@ -118,6 +147,18 @@ sealed class GatewayEvent {
         val content: String,
         val status: String, // "pending" | "in_progress" | "completed" | "cancelled"
     )
+
+    /**
+     * Authoritative full snapshot of the agent's task list.
+     *
+     * The server emits this whenever the state changes, while the `todos`
+     * field riding along on tool.start/tool.complete only ships when tool
+     * progress is enabled for the session.
+     */
+    data class TodoUpdated(
+        override val sessionId: String?,
+        val todos: List<TodoItem>,
+    ) : GatewayEvent()
 
     /** Tool execution started. */
     data class ToolStart(
@@ -171,14 +212,39 @@ sealed class GatewayEvent {
         val description: String,
         val patternKeys: List<String>,
         val allowPermanent: Boolean = true,
+        /** The approval queue entry's id — what `approval.respond` resolves. */
+        val requestId: String = "",
+        /** The `srq-…` id `request.cancel` names when the server withdraws it. */
+        val serverRequestId: String = "",
     ) : GatewayEvent()
 
-    /** Agent asks a clarifying question. */
+    /**
+     * Agent asks a clarifying question. [requestId] is the server request id
+     * the answer goes back to. A batch carries [questions] instead of
+     * [question]/[choices].
+     */
     data class ClarifyRequest(
         override val sessionId: String?,
         val requestId: String,
         val question: String,
         val choices: List<String>?,
+        val multiSelect: Boolean = false,
+        val questions: List<ClarifyQuestion> = emptyList(),
+    ) : GatewayEvent()
+
+    /** One question of a batch [ClarifyRequest]. */
+    data class ClarifyQuestion(
+        val qid: String,
+        val question: String,
+        val choices: List<String>?,
+        val multiSelect: Boolean,
+    )
+
+    /** The server withdrew server request [requestId] (timeout, interrupt, session close). */
+    data class RequestCancel(
+        override val sessionId: String?,
+        val requestId: String,
+        val method: String,
     ) : GatewayEvent()
 
     /** Sudo password needed. */

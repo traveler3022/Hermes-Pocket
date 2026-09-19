@@ -61,6 +61,8 @@ data class ConfigUiState(
     val consoleEntries: List<ConsoleEntry> = emptyList(),
     val isConsoleRunning: Boolean = false,
     val gatewayLog: List<String> = emptyList(),
+    // A model pick the gateway flagged (cost / data policy / large context) awaiting the user.
+    val modelSwitchConfirm: ModelSwitchConfirm? = null,
 )
 
 /** One command + its result in the Advanced screen's console. */
@@ -75,6 +77,8 @@ data class ModelOption(
     val modelId: String,
     val name: String,
     val requiresApiKey: Boolean,
+    // Provider display name from model.options (row `name`); blank → show [provider].
+    val providerName: String = "",
 )
 
 data class ToolOption(

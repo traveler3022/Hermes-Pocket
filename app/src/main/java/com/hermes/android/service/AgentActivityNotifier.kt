@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import com.hermes.android.MainActivity
 import com.hermes.android.R
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.hermes.android.ui.i18n.tForContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,17 +40,20 @@ class AgentActivityNotifier @Inject constructor(
     fun showTurnComplete(sessionId: String?, preview: String) {
         show(
             key = sessionId ?: "turn",
-            title = context.getString(R.string.notification_agent_reply_title),
+            title = tForContext(context, "Hermes finished a reply", "هرمس پاسخ را تمام کرد"),
             preview = preview,
             sessionId = sessionId,
         )
     }
 
+    /** Fallback body when a finished session has no preview to show. */
+    fun taskFinishedText(): String = tForContext(context, "Task finished", "کار تمام شد")
+
     /** A prompt.background task finished (result is ephemeral — show it). */
     fun showBackgroundTaskComplete(taskId: String, sessionId: String?, preview: String) {
         show(
             key = "bg_$taskId",
-            title = context.getString(R.string.notification_task_done_title),
+            title = tForContext(context, "Background task finished", "کار پس‌زمینه تمام شد"),
             preview = preview,
             sessionId = sessionId,
         )
@@ -89,10 +93,14 @@ class AgentActivityNotifier @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                context.getString(R.string.notification_channel_agent_name),
+                tForContext(context, "Agent Activity", "فعالیت ایجنت"),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
-                description = context.getString(R.string.notification_channel_agent_desc)
+                description = tForContext(
+                    context,
+                    "Results of tasks and replies that finish while the app is in the background",
+                    "نتیجهٔ کارها و پاسخ‌هایی که وقتی اپ در پس‌زمینه است تمام می‌شوند",
+                )
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)

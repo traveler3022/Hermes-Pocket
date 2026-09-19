@@ -148,7 +148,7 @@ class AgentEventObserver @Inject constructor(
             val preview = row?.str("preview").orEmpty().ifBlank { title }
             Timber.i("[AgentObserver] session $id completed while offline — notifying from sync")
             if (!foregroundState.isForeground) {
-                notifier.showTurnComplete(id, preview.ifBlank { "Task finished" })
+                notifier.showTurnComplete(id, preview.ifBlank { notifier.taskFinishedText() })
             }
         }
     }

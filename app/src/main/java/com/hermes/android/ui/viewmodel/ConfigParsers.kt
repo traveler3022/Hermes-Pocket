@@ -19,6 +19,7 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
         providersArr.flatMap { providerEl ->
             val providerObj = providerEl as? JsonObject ?: return@flatMap emptyList()
             val slug = providerObj["slug"]?.let { (it as? JsonPrimitive)?.content } ?: ""
+            val providerName = providerObj["name"]?.let { (it as? JsonPrimitive)?.content } ?: ""
             val models = providerObj["models"] as? kotlinx.serialization.json.JsonArray ?: return@flatMap emptyList()
             models.mapNotNull { modelEl ->
                 val modelId = (modelEl as? JsonPrimitive)?.content ?: return@mapNotNull null
@@ -27,6 +28,7 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
                     modelId = modelId,
                     name = modelId,
                     requiresApiKey = providerObj["authenticated"]?.let { (it as? JsonPrimitive)?.content } == "false",
+                    providerName = providerName,
                 )
             }
         }
