@@ -348,7 +348,10 @@ class ProotLinuxRuntime @Inject constructor(
                 git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
             fi
             cd "${'$'}REPO"
+            # Bytecode at install time, not on the first (and every failed-cache) import:
+            # a cold gateway start drops by about a quarter.
             export UV_PYTHON=/usr/bin/python3 UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
+            export UV_COMPILE_BYTECODE=1
             if ! "${'$'}UV" sync --locked --no-dev --extra web; then
                 echo "uv.lock sync failed — falling back to resolving from PyPI"
                 [ -x venv/bin/python ] || "${'$'}UV" venv venv
@@ -364,6 +367,8 @@ class ProotLinuxRuntime @Inject constructor(
             venv/bin/python tools/skills_sync.py || cp -r skills/* "${'$'}HERMES_HOME/skills/" 2>/dev/null || true
             echo "git" > .install_method
             "${'$'}UV" cache clean || true
+            echo "Precompiling Hermes for faster startup…"
+            venv/bin/python -m compileall -q -j 0 agent tools tui_gateway hermes_cli || true
         """.trimIndent()
 
         // Same launch as Hermes' TUI (ui-tui/src/gatewayClient.ts startSpawnedGateway):
@@ -379,6 +384,10 @@ class ProotLinuxRuntime @Inject constructor(
             export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
             # Tools the agent runs (xdotool, scrot, GUI apps) land on the app's VNC desktop.
             export DISPLAY=:99
+            # Settings the app owns (BROWSER_CDP_URL, …). Env beats config.yaml, so the app
+            # never has to spend seconds in `hermes config set` to change them.
+            ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
+            [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
             exec "${'$'}REPO/venv/bin/python" -u -m tui_gateway.entry
         """.trimIndent()
     }

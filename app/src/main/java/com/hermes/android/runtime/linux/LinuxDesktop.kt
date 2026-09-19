@@ -1,6 +1,7 @@
 package com.hermes.android.runtime.linux
 
 import android.content.Context
+import com.hermes.android.gateway.StdioGatewayHub
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -44,6 +45,7 @@ import javax.inject.Singleton
 class LinuxDesktop @Inject constructor(
     @ApplicationContext context: Context,
     private val environment: ProotEnvironment,
+    private val stdioHub: StdioGatewayHub,
 ) {
     enum class Resolution(val width: Int, val height: Int, val titleEn: String, val titleFa: String) {
         PHONE(1080, 2040, "Phone (portrait)", "گوشی (عمودی)"),
@@ -170,13 +172,17 @@ class LinuxDesktop @Inject constructor(
     /** Called once Hermes itself is up: keep the agent's browser ready if it uses this one. */
     suspend fun onHermesStarted() {
         if (!_settings.value.agentBrowser || !isInstalled()) return
-        applyAgentBrowser(true)
         start()
     }
 
-    /** Sets or clears `browser.cdp_url`; Hermes reads it on each browser call. */
+    /**
+     * Points Hermes' browser tools at this Chromium. The next gateway start reads
+     * `BROWSER_CDP_URL` from the env file [writeGuestFiles] wrote — free. Only a gateway that
+     * is already running needs `hermes config`, which costs seconds of Python startup, so it
+     * runs just for that case.
+     */
     suspend fun applyAgentBrowser(enabled: Boolean): Result<Unit> = runCatching {
-        if (!environment.isRootfsInstalled) return@runCatching
+        if (!environment.isRootfsInstalled || !stdioHub.isReady) return@runCatching
         val command = if (enabled) {
             "hermes config set browser.cdp_url http://127.0.0.1:$CdpPort"
         } else {
@@ -273,6 +279,10 @@ class LinuxDesktop @Inject constructor(
         )
         stateDir.resolve("desktop.env").setReadable(false, false)
         stateDir.resolve("desktop.env").setReadable(true, true)
+        // Read by the gateway script at startup — the env wins over config.yaml.
+        stateDir.resolve("gateway.env").writeText(
+            if (current.agentBrowser) "export BROWSER_CDP_URL=http://127.0.0.1:$CdpPort\n" else "",
+        )
         writeSkill()
     }
 
