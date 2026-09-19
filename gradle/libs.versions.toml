@@ -1,4 +1,5 @@
 [versions]
+termux-terminal = "v0.118.1"
 agp = "8.7.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
@@ -43,6 +44,8 @@ coroutinesTest = "1.9.0"
 androidxTestCore = "1.6.1"
 
 [libraries]
+# Termux terminal emulator + view (Apache-2.0), the terminal Aether embeds for its Alpine shell.
+termux-terminal-view = { group = "com.github.termux.termux-app", name = "terminal-view", version.ref = "termux-terminal" }
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }

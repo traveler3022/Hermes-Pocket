@@ -44,6 +44,7 @@ class ProotEnvironment @Inject constructor(
 
     fun markRootfsReady() {
         File(rootfsDir, READY_MARKER).writeText(System.currentTimeMillis().toString())
+        LinuxDocumentsProvider.notifyRootsChanged(context)
     }
 
     /** Host path of a file inside the guest, e.g. `/root/.hermes/logs/x.log`. */
@@ -53,7 +54,38 @@ class ProotEnvironment @Inject constructor(
         command: String,
         extraEnv: Map<String, String> = emptyMap(),
         mergeStderr: Boolean = true,
-    ): ProcessBuilder {
+    ): ProcessBuilder =
+        ProcessBuilder(prootArgs(listOf("/bin/sh", "-lc", command), extraEnv)).apply {
+            directory(baseDir)
+            redirectErrorStream(mergeStderr)
+            environment().apply {
+                remove("LD_PRELOAD")
+                putAll(hostEnv())
+            }
+        }
+
+    /**
+     * An interactive Alpine shell for a terminal emulator (Aether's `createTerminalLaunchSpec`):
+     * the same proot invocation as [processBuilder], but `sh -i` on the emulator's pty.
+     */
+    fun terminalLaunchSpec(): TerminalLaunchSpec {
+        val shellEnv = mapOf(
+            "HERMES_HOME" to "/root/.hermes",
+            "COLORTERM" to "truecolor",
+            "PS1" to "alpine:\\w# ",
+        )
+        val args = prootArgs(listOf("/bin/sh", "-i"), shellEnv)
+        // The emulator replaces the whole environment, so the host side needs PATH too.
+        val env = hostEnv() + mapOf("PATH" to "/system/bin", "HOME" to baseDir.absolutePath, "TERM" to "xterm-256color")
+        return TerminalLaunchSpec(
+            executable = args.first(),
+            arguments = args.toTypedArray(),
+            environment = env.map { (key, value) -> "$key=$value" }.toTypedArray(),
+            workingDirectory = baseDir.absolutePath,
+        )
+    }
+
+    private fun prootArgs(guestCommand: List<String>, extraEnv: Map<String, String>): List<String> {
         prepareHost()
         val args = mutableListOf(
             prootBinary.absolutePath,
@@ -73,19 +105,15 @@ class ProotEnvironment @Inject constructor(
         }
         args += listOf("-w", "/root", "/usr/bin/env", "-i")
         (GuestEnv + extraEnv).forEach { (key, value) -> args += "$key=$value" }
-        args += listOf("/bin/sh", "-lc", command)
-
-        return ProcessBuilder(args).apply {
-            directory(baseDir)
-            redirectErrorStream(mergeStderr)
-            environment().apply {
-                remove("LD_PRELOAD")
-                put("PROOT_TMP_DIR", hostTmpDir.absolutePath)
-                put("PROOT_LOADER", prootLoader.absolutePath)
-                put("LD_LIBRARY_PATH", "${hostLibDir.absolutePath}:${nativeDir.absolutePath}")
-            }
-        }
+        args += guestCommand
+        return args
     }
+
+    private fun hostEnv(): Map<String, String> = mapOf(
+        "PROOT_TMP_DIR" to hostTmpDir.absolutePath,
+        "PROOT_LOADER" to prootLoader.absolutePath,
+        "LD_LIBRARY_PATH" to "${hostLibDir.absolutePath}:${nativeDir.absolutePath}",
+    )
 
     /** Runs [command] to completion, streaming each output line to [onLine]. */
     suspend fun run(
@@ -131,12 +159,19 @@ class ProotEnvironment @Inject constructor(
     private fun isReadable(file: File): Boolean =
         runCatching { file.inputStream().use { it.read() } }.isSuccess
 
+    class TerminalLaunchSpec(
+        val executable: String,
+        val arguments: Array<String>,
+        val environment: Array<String>,
+        val workingDirectory: String,
+    )
+
     data class CommandResult(val exitCode: Int, val output: String) {
         val ok: Boolean get() = exitCode == 0
     }
 
     companion object {
-        private const val READY_MARKER = ".hermes2-alpine-ready"
+        const val READY_MARKER = ".hermes2-alpine-ready"
         private const val OUTPUT_TAIL_LINES = 200
 
         private val GuestEnv = mapOf(

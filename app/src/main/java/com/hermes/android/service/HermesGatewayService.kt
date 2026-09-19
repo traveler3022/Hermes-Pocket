@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.hermes.android.MainActivity
 import com.hermes.android.R
@@ -24,6 +23,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import com.hermes.android.ui.i18n.tForContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -41,35 +41,41 @@ class HermesGatewayService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob())
     private var connectionWatchJob: Job? = null
-    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         Timber.i("[GatewayService] onCreate")
         createNotificationChannel()
-        acquireWakeLock()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("[GatewayService] onStartCommand")
-        startForeground(NOTIFICATION_ID, buildNotification("Connecting to Hermes gateway…"))
+        startForeground(NOTIFICATION_ID, buildNotification(tr("Connecting to Hermes gateway…", "در حال اتصال به گیت‌وی هرمس…")))
+
+        // Proactive notifications: watch gateway events for the whole life of
+        // the background connection (ChatViewModel's collector dies with the
+        // UI; this one doesn't). Idempotent across restarts.
+        agentEventObserver.start(scope)
 
         connectionWatchJob?.cancel()
         connectionWatchJob = scope.launch {
-            // Proactive notifications: watch gateway events for the whole life of
-            // the background connection (ChatViewModel's collector dies with the
-            // UI; this one doesn't). Idempotent across restarts.
-            agentEventObserver.start(scope)
-
             launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 gatewayClient.connectionState.collect { state ->
+                    if (state is ConnectionState.Connected) {
+                        // Connected is normal — dismiss notification completely so it doesn't clutter the screen
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        return@collect
+                    }
                     val text = when (state) {
-                        is ConnectionState.Disconnected -> "Disconnected"
-                        is ConnectionState.Connecting -> "Connecting…"
-                        is ConnectionState.Connected -> "Gateway running"
+                        is ConnectionState.Disconnected -> tr("Disconnected", "قطع شد")
+                        is ConnectionState.Connecting -> tr("Connecting…", "در حال اتصال…")
+                        is ConnectionState.Connected -> return@collect
+                        // Show WHY — an endless "attempt N" with no reason is
+                        // undebuggable from the phone.
                         is ConnectionState.Reconnecting ->
-                            "Reconnecting (attempt ${state.attempt})…"
-                        is ConnectionState.Failed -> "Connection failed: ${state.reason}"
+                            tr("Reconnecting (attempt ${state.attempt})", "اتصال دوباره (تلاش ${state.attempt})") +
+                                (state.lastError?.let { ": $it" } ?: "…")
+                        is ConnectionState.Failed -> tr("Connection failed", "اتصال ناموفق بود") + ": ${state.reason}"
                     }
                     updateNotification(text)
                 }
@@ -81,51 +87,51 @@ class HermesGatewayService : Service() {
                     gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
                 } catch (e: Exception) {
                     Timber.e(e, "[GatewayService] Failed to start/connect gateway")
-                    updateNotification("Gateway unavailable: ${e.message ?: "unknown error"}")
+                    updateNotification(tr("Gateway unavailable", "گیت‌وی در دسترس نیست") + ": ${e.message ?: tr("unknown error", "خطای نامشخص")}")
                 }
             }
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private suspend fun ensureRuntimeGatewayStarted() {
         when (val state = hermesRuntime.state.value) {
             is RuntimeState.Running -> return
             is RuntimeState.Installed -> {
-                updateNotification("Starting Hermes gateway…")
+                updateNotification(tr("Starting Hermes gateway…", "در حال راه‌اندازی گیت‌وی هرمس…"))
                 hermesRuntime.startGateway()
                 return
             }
             is RuntimeState.NotDetected,
             is RuntimeState.Error -> {
-                updateNotification("Detecting Hermes runtime…")
+                updateNotification(tr("Detecting Hermes runtime…", "در حال شناسایی محیط اجرای هرمس…"))
                 when (val detection = hermesRuntime.detect()) {
                     is DetectionResult.Missing -> {
-                        updateNotification("Termux setup required")
+                        updateNotification(tr("Runtime setup required", "نیاز به راه‌اندازی محیط اجرا"))
                         throw IllegalStateException(detection.title)
                     }
                     is DetectionResult.Incompatible -> {
-                        updateNotification("Runtime incompatible")
+                        updateNotification(tr("Runtime incompatible", "محیط اجرا سازگار نیست"))
                         throw IllegalStateException(detection.reason)
                     }
                     is DetectionResult.Available -> Unit
                 }
                 if (hermesRuntime.state.value is RuntimeState.Installed) {
-                    updateNotification("Starting Hermes gateway…")
+                    updateNotification(tr("Starting Hermes gateway…", "در حال راه‌اندازی گیت‌وی هرمس…"))
                     hermesRuntime.startGateway()
                     return
                 }
-                updateNotification("Hermes install required")
+                updateNotification(tr("Hermes install required", "نیاز به نصب هرمس"))
                 throw IllegalStateException("Hermes is not installed yet")
             }
             is RuntimeState.Detected -> {
-                updateNotification("Hermes install required")
+                updateNotification(tr("Hermes install required", "نیاز به نصب هرمس"))
                 throw IllegalStateException("Hermes is not installed yet")
             }
             RuntimeState.Detecting,
             RuntimeState.Installing -> {
-                updateNotification("Runtime is busy…")
+                updateNotification(tr("Runtime is busy…", "محیط اجرا مشغول است…"))
                 throw IllegalStateException("Runtime is busy: $state")
             }
         }
@@ -137,42 +143,34 @@ class HermesGatewayService : Service() {
         connectionWatchJob?.cancel()
         scope.launch { gatewayClient.disconnect() }
         scope.cancel()
-        releaseWakeLock()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Timber.i("[GatewayService] onTaskRemoved — stopping service")
+        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    // ── WakeLock ─────────────────────────────────────────────────────────
-
-    private fun acquireWakeLock() {
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hermes:gateway").apply {
-            acquire()
-        }
-        Timber.i("[GatewayService] WakeLock acquired")
-    }
-
-    private fun releaseWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-            Timber.i("[GatewayService] WakeLock released")
-        }
-        wakeLock = null
-    }
 
     // ── Notification ──────────────────────────────────────────────────────
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // Clean up legacy channel to avoid cached LOW importance on existing installs
+            try {
+                manager.deleteNotificationChannel("hermes_gateway")
+            } catch (_: Exception) { }
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.notification_channel_gateway_name),
-                NotificationManager.IMPORTANCE_LOW,
+                tr("Gateway Service", "سرویس گیت‌وی"),
+                NotificationManager.IMPORTANCE_MIN,
             ).apply {
-                description = getString(R.string.notification_channel_gateway_desc)
+                description = tr("Keeps the Hermes gateway running in the background", "گیت‌وی هرمس را در پس‌زمینه فعال نگه می‌دارد")
                 setShowBadge(false)
             }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
     }
@@ -186,15 +184,19 @@ class HermesGatewayService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.gateway_notification_title))
+            .setContentTitle(tr("Hermes Gateway", "گیت‌وی هرمس"))
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
     }
+
+    // Notification text follows the in-app language choice, not only the
+    // device locale, so it matches what the user sees inside the app.
+    private fun tr(en: String, fa: String): String = tForContext(this, en, fa)
 
     private fun updateNotification(text: String) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -202,7 +204,7 @@ class HermesGatewayService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "hermes_gateway"
+        private const val CHANNEL_ID = "hermes_gateway_service"
         private const val NOTIFICATION_ID = 1
 
         fun start(context: Context) {

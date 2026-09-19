@@ -1,5 +1,7 @@
 package com.hermes.android
 
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -32,15 +34,15 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var setupState: com.hermes.android.data.SetupState
 
+    @javax.inject.Inject
+    lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val permissionsToRequest = mutableListOf<String>()
-            if (checkSelfPermission("com.termux.permission.RUN_COMMAND") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add("com.termux.permission.RUN_COMMAND")
-            }
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add("android.permission.POST_NOTIFICATIONS")
             }
@@ -50,6 +52,7 @@ class MainActivity : ComponentActivity() {
         }
 
         requestBatteryOptimizationExemption()
+        requestTermuxPermissionWhenSelected()
 
         val sharedText = extractSharedText(intent)
         // Set when the user taps an agent-activity notification ("task done"):
@@ -115,6 +118,24 @@ class MainActivity : ComponentActivity() {
      * requirement — the reconnect loop and the network callback already recover
      * from being killed.
      */
+    /**
+     * Termux's RUN_COMMAND permission only matters to the Termux runtime; the built-in Linux
+     * runtime never talks to Termux, so ask only while Termux is the selected runtime —
+     * including when the user switches to it later.
+     */
+    private fun requestTermuxPermissionWhenSelected() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        lifecycleScope.launch {
+            runtimeSelection.selected.collect { type ->
+                if (type == com.hermes.android.runtime.RuntimeType.TERMUX &&
+                    checkSelfPermission(TERMUX_RUN_COMMAND) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissions(arrayOf(TERMUX_RUN_COMMAND), 1002)
+                }
+            }
+        }
+    }
+
     @Suppress("BatteryLife")
     private fun requestBatteryOptimizationExemption() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -143,6 +164,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val PREFS_NAME = "hermes_prefs"
         const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
+        const val TERMUX_RUN_COMMAND = "com.termux.permission.RUN_COMMAND"
     }
 }
 
@@ -226,6 +248,7 @@ private fun HermesNavHost(
                 onNavigateToSkills = { navController.navigate("skills") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
+                onNavigateToLinux = { navController.navigate("linux") },
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToPet = { navController.navigate("pet") },
                 onNavigateToBilling = { navController.navigate("billing") },
@@ -294,6 +317,21 @@ private fun HermesNavHost(
 
         composable("cron") {
             com.hermes.android.ui.screen.CronScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("linux") {
+            com.hermes.android.ui.screen.LinuxToolsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenTerminal = { navController.navigate("linux/terminal") },
+            )
+        }
+
+        composable("linux/terminal") {
+            val tools: com.hermes.android.ui.viewmodel.LinuxToolsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+            com.hermes.android.ui.screen.LinuxTerminalScreen(
+                createLaunchSpec = tools::terminalLaunchSpec,
                 onNavigateBack = { navController.popBackStack() },
             )
         }

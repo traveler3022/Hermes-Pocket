@@ -98,6 +98,20 @@
             android:name=".service.ApprovalActionReceiver"
             android:exported="false" />
 
+        <!-- Built-in Alpine files in Android's Files app / document picker (Aether's provider).
+             Guarded by MANAGE_DOCUMENTS, so only the system DocumentsUI can bind to it. -->
+        <provider
+            android:name=".runtime.linux.LinuxDocumentsProvider"
+            android:authorities="${applicationId}.linux.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- WorkManager initialization — custom Configuration via Hilt -->
         <provider
             android:name="androidx.startup.InitializationProvider"

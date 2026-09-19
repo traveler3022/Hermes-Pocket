@@ -53,8 +53,11 @@ class ProotLinuxRuntime @Inject constructor(
 
     init {
         stdioHub.fileRoot = environment.rootfsDir
-        // The gateway client reconnecting while no process runs (e.g. it exited) restarts it.
-        stdioHub.restartHandler = {
+        // The gateway client reconnecting while no process runs (e.g. it exited) restarts it —
+        // but not after a deliberate stop, which leaves the state Installed.
+        stdioHub.restartHandler = handler@{
+            val state = _state.value
+            if (state !is RuntimeState.Error && state !is RuntimeState.Running) return@handler
             scope.launch {
                 runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway restart failed") }
             }

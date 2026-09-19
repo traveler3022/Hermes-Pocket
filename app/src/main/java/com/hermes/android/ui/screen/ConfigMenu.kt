@@ -59,6 +59,7 @@ internal fun SettingsMenu(
     onNavigateToPet: () -> Unit,
     onNavigateToBilling: () -> Unit,
     onNavigateToSetup: () -> Unit = {},
+    onNavigateToLinux: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -176,6 +177,12 @@ internal fun SettingsMenu(
                 },
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.TOOLS) },
+            ),
+            DomainSpec(
+                title = t("Linux (Alpine)", "لینوکس (Alpine)"),
+                subtitle = t("Terminal, files, packages", "ترمینال، فایل‌ها، بسته‌ها"),
+                icon = Icons.Default.Terminal,
+                onClick = onNavigateToLinux,
             ),
             DomainSpec(
                 title = t("Skills", "مهارت\u200Cها"),

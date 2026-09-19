@@ -95,7 +95,11 @@ class ProviderSetupRepository @Inject constructor(
     suspend fun saveKey(provider: SetupProvider, apiKey: String) {
         if (provider.needsBaseUrl) return
         if (viaStdio) {
-            rpc("model.save_key", buildJsonObject { put("slug", provider.slug); put("api_key", apiKey) })
+            // Same write as the dashboard's PUT /api/env (model.save_key rejects registry-less
+            // providers such as OpenRouter), then have the running gateway re-read .env.
+            val saved = runSetupScript("save_key", buildJsonObject { put("env_var", provider.envVar); put("value", apiKey) })
+            if (!saved.bool("ok")) throw IOException(saved.text("detail") ?: "Could not save the key")
+            rpc("reload.env", buildJsonObject {})
             return
         }
         call("PUT", "/api/env", buildJsonObject { put("key", provider.envVar); put("value", apiKey) })
@@ -272,6 +276,11 @@ class ProviderSetupRepository @Inject constructor(
             def emit(obj):
                 print("$RESULT_MARKER" + json.dumps(obj), flush=True)
 
+            def save_key(args):
+                from hermes_cli.credential_lifecycle import save_provider_env_credential
+                save_provider_env_credential(args["env_var"], args["value"])
+                emit({"ok": True})
+
             def has_model(args):
                 from hermes_cli.config import load_config
                 cfg = load_config().get("model", "")
@@ -296,7 +305,7 @@ class ProviderSetupRepository @Inject constructor(
                 emit({"ok": True})
 
             try:
-                {"has_model": has_model, "set_model": set_model}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
+                {"has_model": has_model, "save_key": save_key, "set_model": set_model}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
             except Exception as e:
                 emit({"ok": False, "detail": str(getattr(e, "detail", None) or e)})
         """.trimIndent()
