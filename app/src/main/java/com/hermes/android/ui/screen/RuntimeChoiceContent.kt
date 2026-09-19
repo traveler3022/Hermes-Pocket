@@ -59,10 +59,10 @@ internal fun BuiltInLinuxDetectedContent(
             )
             Text(
                 t(
-                    "Downloads Ubuntu (~30 MB), then installs Hermes Agent into it. " +
-                        "Needs about 2 GB free and a stable connection; takes 5–15 minutes.",
-                    "اوبونتو (حدود ۳۰ مگابایت) دانلود می‌شود و Hermes Agent داخلش نصب می‌شود. " +
-                        "حدود ۲ گیگابایت فضای خالی و اینترنت پایدار لازم است؛ ۵ تا ۱۵ دقیقه طول می‌کشد.",
+                    "Alpine Linux is built into the app; Hermes Agent and its Python packages " +
+                        "are downloaded into it. Needs about 1 GB free and a stable connection.",
+                    "لینوکس Alpine داخل خود اپ است؛ Hermes Agent و پکیج‌های پایتونش داخل آن دانلود می‌شوند. " +
+                        "حدود ۱ گیگابایت فضای خالی و اینترنت پایدار لازم است.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,

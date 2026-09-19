@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Fetches the proot binaries used by the built-in Linux runtime from Termux's
-# official aarch64 package repository and installs them as jniLibs, so Android
-# extracts them into nativeLibraryDir (the only app location that may execve()
-# on targetSdk >= 29).
+# Fetches the built-in Linux runtime: proot from Termux's official aarch64
+# packages (installed as jniLibs, so Android extracts them into nativeLibraryDir,
+# the only app location that may execve() on targetSdk >= 29) and the Alpine
+# minirootfs (bundled as an asset).
 set -euo pipefail
 
 REPO="https://packages-cf.termux.dev/apt/termux-main"
@@ -33,3 +33,12 @@ install -m 0755 "$PREFIX/libexec/proot/loader" "$OUT/libproot-loader.so"
 install -m 0755 "$(readlink -f "$PREFIX/lib/libtalloc.so.2")" "$OUT/libtalloc.so"
 install -m 0755 "$PREFIX/lib/libandroid-shmem.so" "$OUT/libandroid-shmem.so"
 ls -l "$OUT"
+
+ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/aarch64/alpine-minirootfs-3.23.6-aarch64.tar.gz"
+ALPINE_SHA256="b17a57958e29735ff0e6e64254d958e65903687a70ca30cc430b33a965ad49d7"
+ASSETS="$ROOT/app/src/main/assets/linux"
+mkdir -p "$ASSETS"
+curl -fsSL --retry 3 "$ALPINE_URL" -o "$WORK/alpine.tar.gz"
+echo "$ALPINE_SHA256  $WORK/alpine.tar.gz" | sha256sum -c - >/dev/null
+install -m 0644 "$WORK/alpine.tar.gz" "$ASSETS/alpine-minirootfs-aarch64.tar.gz"
+ls -l "$ASSETS"

@@ -13,9 +13,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Runs commands inside an Ubuntu rootfs via proot, the same approach Aether uses
- * for its bundled Alpine. proot and its loader ship as jniLibs because
- * nativeLibraryDir is the only app location that may execve() on targetSdk >= 29.
+ * Runs commands inside the bundled Alpine rootfs via proot, the same approach Aether uses.
+ * proot and its loader ship as jniLibs because nativeLibraryDir is the only app location
+ * that may execve() on targetSdk >= 29.
  */
 @Singleton
 class ProotEnvironment @Inject constructor(
@@ -48,7 +48,6 @@ class ProotEnvironment @Inject constructor(
         val args = mutableListOf(
             prootBinary.absolutePath,
             "--kill-on-exit",
-            "--link2symlink",
             "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev",
@@ -64,7 +63,7 @@ class ProotEnvironment @Inject constructor(
         }
         args += listOf("-w", "/root", "/usr/bin/env", "-i")
         (GuestEnv + extraEnv).forEach { (key, value) -> args += "$key=$value" }
-        args += listOf("/bin/bash", "-lc", command)
+        args += listOf("/bin/sh", "-lc", command)
 
         return ProcessBuilder(args).apply {
             directory(baseDir)
@@ -127,7 +126,7 @@ class ProotEnvironment @Inject constructor(
     }
 
     companion object {
-        private const val READY_MARKER = ".hermes2-rootfs-ready"
+        private const val READY_MARKER = ".hermes2-alpine-ready"
         private const val OUTPUT_TAIL_LINES = 200
 
         private val GuestEnv = mapOf(
@@ -136,11 +135,10 @@ class ProotEnvironment @Inject constructor(
             "LANG" to "C.UTF-8",
             "TERM" to "xterm-256color",
             "TMPDIR" to "/tmp",
-            "DEBIAN_FRONTEND" to "noninteractive",
             "PATH" to "/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         )
 
-        // Android denies apps these /proc entries; tools like psutil and apt read them.
+        // Android denies apps these /proc entries; tools like psutil read them.
         private val FakeProcFiles = mapOf(
             "loadavg" to "0.12 0.07 0.02 2/165 765\n",
             "uptime" to "124.08 932.80\n",

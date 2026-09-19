@@ -1,6 +1,8 @@
 package com.hermes.android.runtime.linux
 
+import android.content.Context
 import android.system.Os
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -8,75 +10,31 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Downloads, verifies and unpacks the Ubuntu Base rootfs used by [ProotLinuxRuntime]. */
+/** Unpacks the Alpine minirootfs bundled in the APK (same approach as Aether). */
 @Singleton
 class RootfsInstaller @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val environment: ProotEnvironment,
 ) {
 
-    /** [onProgress] receives a message and a 0–100 fraction of this step. */
-    suspend fun install(onProgress: (String, Int) -> Unit) = withContext(Dispatchers.IO) {
-        val archive = File(environment.baseDir, "rootfs.tar.gz")
+    suspend fun install(onProgress: (String) -> Unit) = withContext(Dispatchers.IO) {
         environment.baseDir.mkdirs()
-        download(archive, onProgress)
-
-        onProgress("Extracting Ubuntu…", 60)
+        onProgress("Extracting Alpine Linux…")
         val staging = File(environment.baseDir, "rootfs.staging")
         deleteTree(staging)
         staging.mkdirs()
-        GZIPInputStream(archive.inputStream().buffered(), 64 * 1024).use { extractTar(it, staging) }
-        archive.delete()
-
+        context.assets.open(ROOTFS_ASSET).use { asset ->
+            GZIPInputStream(asset.buffered(), 64 * 1024).use { extractTar(it, staging) }
+        }
         configure(staging)
         deleteTree(environment.rootfsDir)
         if (!staging.renameTo(environment.rootfsDir)) throw IOException("Could not move rootfs into place")
         environment.markRootfsReady()
-        onProgress("Ubuntu is ready", 100)
-    }
-
-    private suspend fun download(target: File, onProgress: (String, Int) -> Unit) {
-        if (target.isFile && sha256(target) == ROOTFS_SHA256) return
-        val partial = File(target.path + ".part")
-        val connection = URL(ROOTFS_URL).openConnection() as HttpURLConnection
-        connection.connectTimeout = 20_000
-        connection.readTimeout = 60_000
-        try {
-            if (connection.responseCode != 200) throw IOException("Rootfs download failed: HTTP ${connection.responseCode}")
-            val total = connection.contentLengthLong.takeIf { it > 0 }
-            var done = 0L
-            var lastPercent = -1
-            connection.inputStream.use { input ->
-                partial.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        done += read
-                        val percent = total?.let { (done * 55 / it).toInt() } ?: 0
-                        if (percent != lastPercent) {
-                            lastPercent = percent
-                            onProgress("Downloading Ubuntu (${done / 1_048_576} MB)…", percent)
-                        }
-                    }
-                }
-            }
-        } finally {
-            connection.disconnect()
-        }
-        if (sha256(partial) != ROOTFS_SHA256) {
-            partial.delete()
-            throw IOException("Rootfs checksum mismatch — download was corrupted, try again")
-        }
-        partial.renameTo(target)
+        onProgress("Alpine Linux is ready")
     }
 
     private fun configure(root: File) {
@@ -85,10 +43,6 @@ class RootfsInstaller @Inject constructor(
             writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
         }
         File(root, "etc/hosts").writeText("127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n")
-        // proot cannot switch to the unprivileged _apt user.
-        File(root, "etc/apt/apt.conf.d/99hermes2").writeText(
-            "APT::Sandbox::User \"root\";\nAcquire::Retries \"3\";\n",
-        )
         File(root, "tmp").apply { mkdirs(); Os.chmod(path, 0b111_111_111 or 0x200) }
         File(root, "root").mkdirs()
     }
@@ -216,23 +170,8 @@ class RootfsInstaller @Inject constructor(
         }
     }
 
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
     companion object {
-        private const val ROOTFS_URL =
-            "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.5-base-arm64.tar.gz"
-        private const val ROOTFS_SHA256 = "a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2"
+        private const val ROOTFS_ASSET = "linux/alpine-minirootfs-aarch64.tar.gz"
     }
 }
 

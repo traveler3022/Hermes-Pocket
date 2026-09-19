@@ -37,7 +37,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Hermes inside an Ubuntu rootfs run by proot — no Termux or other host app needed.
+ * Hermes inside the bundled Alpine rootfs run by proot — no Termux or other host app needed.
  * Mirrors Aether's bundled-Linux design; the app talks to `hermes dashboard` over
  * the same WebSocket API the Termux runtime uses.
  */
@@ -91,7 +91,7 @@ class ProotLinuxRuntime @Inject constructor(
         if (free < MIN_FREE_BYTES) {
             return PrerequisiteResult.Blocked(
                 title = "Not enough storage",
-                instructions = "Installing Ubuntu + Hermes needs about ${MIN_FREE_BYTES / 1_000_000_000} GB free; " +
+                instructions = "Installing Alpine + Hermes needs about ${MIN_FREE_BYTES / 1_000_000_000} GB free; " +
                     "only ${free / 1_000_000} MB is available.",
             )
         }
@@ -109,17 +109,14 @@ class ProotLinuxRuntime @Inject constructor(
 
         return try {
             if (!environment.isRootfsInstalled) {
-                rootfsInstaller.install { message, fraction -> report("rootfs", message, fraction * 25 / 100) }
+                rootfsInstaller.install { message -> report("rootfs", message, 5) }
             }
 
-            report("packages", "Installing base packages (apt)…", 26)
-            runStage("packages", PACKAGES_SCRIPT, 26, 40, installLog, ::report)
+            report("packages", "Installing Python and git (apk)…", 10)
+            runStage("packages", PACKAGES_SCRIPT, 10, 30, installLog, ::report)
 
-            report("hermes", "Running the Hermes Agent installer…", 41)
-            runStage("hermes", HERMES_INSTALL_SCRIPT, 41, 90, installLog, ::report)
-
-            report("web", "Checking dashboard WebSocket dependencies…", 91)
-            runStage("web", WEB_EXTRA_SCRIPT, 91, 95, installLog, ::report)
+            report("hermes", "Downloading Hermes Agent and its Python packages…", 31)
+            runStage("hermes", HERMES_INSTALL_SCRIPT, 31, 95, installLog, ::report)
 
             report("verify", "Checking hermes --version…", 96)
             val version = readHermesVersion()
@@ -157,7 +154,7 @@ class ProotLinuxRuntime @Inject constructor(
             val clean = line.replace(AnsiEscape, "").trim()
             if (clean.isNotEmpty()) {
                 lines++
-                // Line counts are the only progress signal apt/install.sh give us; creep towards endPercent.
+                // Line counts are the only progress signal apk/uv give us; creep towards endPercent.
                 val span = endPercent - startPercent
                 report(stage, clean.take(160), startPercent + span * lines / (lines + 60))
             }
@@ -286,7 +283,7 @@ class ProotLinuxRuntime @Inject constructor(
 
     private fun currentInfo() = RuntimeInfo(
         type = RuntimeType.PROOT_LINUX,
-        version = "Ubuntu 24.04 (proot)",
+        version = "Alpine 3.23 (proot)",
         path = environment.rootfsDir.absolutePath,
         diskFreeBytes = freeBytes(),
         hermesVersion = prefs.getString(KEY_VERSION, null),
@@ -317,41 +314,48 @@ class ProotLinuxRuntime @Inject constructor(
         private const val GATEWAY_PORT = 9120
         private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
         private const val GATEWAY_LOG = "/root/.hermes/logs/gateway_stdout.log"
-        private const val MIN_FREE_BYTES = 2_000_000_000L
+        private const val MIN_FREE_BYTES = 1_000_000_000L
         private val AnsiEscape = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 
         private val PACKAGES_SCRIPT = """
             set -e
-            apt-get update
-            apt-get install -y --no-install-recommends ca-certificates curl git xz-utils procps libatomic1 build-essential python3-dev libffi-dev
+            apk add --no-cache --no-chown python3 git curl ca-certificates bash procps-ng libstdc++ libgcc
         """.trimIndent()
 
+        // install.sh has no Alpine support, so this mirrors its steps: clone, locked uv sync
+        // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
         private val HERMES_INSTALL_SCRIPT = """
-            set -eo pipefail
-            mkdir -p /root/.hermes/logs
-            curl -fsSL --retry 3 https://hermes-agent.nousresearch.com/install.sh -o /root/hermes_install.sh
-            bash /root/hermes_install.sh --skip-setup --non-interactive < /dev/null
-        """.trimIndent()
-
-        // The app needs `hermes dashboard`'s /api/ws, which lives in the [web] extra.
-        private val WEB_EXTRA_SCRIPT = """
             set -e
-            HERMES_BIN="$(command -v hermes || true)"
-            for repo in /usr/local/lib/hermes-agent /root/.hermes/hermes-agent; do
-                [ -x "${'$'}repo/venv/bin/python" ] && REPO="${'$'}repo" && break
-            done
-            [ -n "${'$'}REPO" ] || { echo "Hermes venv not found (hermes at ${'$'}HERMES_BIN)"; exit 1; }
-            PY="${'$'}REPO/venv/bin/python"
-            if ! "${'$'}PY" -c "import fastapi, uvicorn, starlette" >/dev/null 2>&1; then
-                echo "Installing Hermes dashboard web extra…"
-                cd "${'$'}REPO"
-                if [ -x /root/.hermes/bin/uv ]; then
-                    /root/.hermes/bin/uv pip install --python "${'$'}PY" -e '.[web]'
-                else
-                    "${'$'}PY" -m pip install -e '.[web]'
-                fi
+            export HERMES_HOME=/root/.hermes
+            REPO="${'$'}HERMES_HOME/hermes-agent"
+            mkdir -p "${'$'}HERMES_HOME"/bin "${'$'}HERMES_HOME"/logs
+            if [ ! -x "${'$'}HERMES_HOME/bin/uv" ]; then
+                curl -LsSf --retry 3 https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${'$'}HERMES_HOME/bin" UV_NO_MODIFY_PATH=1 sh
             fi
-            echo "Dashboard dependencies OK"
+            UV="${'$'}HERMES_HOME/bin/uv"
+            if [ -d "${'$'}REPO/.git" ]; then
+                git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
+            else
+                rm -rf "${'$'}REPO"
+                git clone --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
+            fi
+            cd "${'$'}REPO"
+            export UV_PYTHON=/usr/bin/python3 UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
+            if ! "${'$'}UV" sync --locked --no-dev --extra web; then
+                echo "uv.lock sync failed — falling back to resolving from PyPI"
+                [ -x venv/bin/python ] || "${'$'}UV" venv venv
+                "${'$'}UV" pip install --python venv/bin/python -e '.[web]'
+            fi
+            ln -sf "${'$'}REPO/venv/bin/hermes" /usr/local/bin/hermes
+
+            mkdir -p "${'$'}HERMES_HOME"/cron "${'$'}HERMES_HOME"/sessions "${'$'}HERMES_HOME"/pairing "${'$'}HERMES_HOME"/hooks \
+                "${'$'}HERMES_HOME"/image_cache "${'$'}HERMES_HOME"/audio_cache "${'$'}HERMES_HOME"/memories "${'$'}HERMES_HOME"/skills
+            [ -f "${'$'}HERMES_HOME/.env" ] || cp .env.example "${'$'}HERMES_HOME/.env" 2>/dev/null || touch "${'$'}HERMES_HOME/.env"
+            chmod 600 "${'$'}HERMES_HOME/.env"
+            [ -f "${'$'}HERMES_HOME/config.yaml" ] || cp cli-config.yaml.example "${'$'}HERMES_HOME/config.yaml" 2>/dev/null || true
+            venv/bin/python tools/skills_sync.py || cp -r skills/* "${'$'}HERMES_HOME/skills/" 2>/dev/null || true
+            echo "git" > .install_method
+            "${'$'}UV" cache clean || true
         """.trimIndent()
 
         private val GATEWAY_SCRIPT = """
