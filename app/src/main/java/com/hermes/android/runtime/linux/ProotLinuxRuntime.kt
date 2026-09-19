@@ -113,7 +113,10 @@ class ProotLinuxRuntime @Inject constructor(
             }
 
             report("packages", "Installing Python and git (apk)…", 10)
-            runStage("packages", PACKAGES_SCRIPT, 10, 30, installLog, ::report)
+            runStage("packages", PACKAGES_SCRIPT, 10, 25, installLog, ::report, verify = PACKAGES_VERIFY)
+
+            report("node", "Installing Node.js and npm (apk)…", 26)
+            runStage("node", NODE_SCRIPT, 26, 30, installLog, ::report, verify = NODE_VERIFY)
 
             report("hermes", "Downloading Hermes Agent and its Python packages…", 31)
             runStage("hermes", HERMES_INSTALL_SCRIPT, 31, 95, installLog, ::report)
@@ -146,6 +149,7 @@ class ProotLinuxRuntime @Inject constructor(
         endPercent: Int,
         log: StringBuilder,
         report: (String, String, Int?) -> Unit,
+        verify: String? = null,
     ) {
         var lines = 0
         val stageLog = StringBuilder()
@@ -162,6 +166,14 @@ class ProotLinuxRuntime @Inject constructor(
         log.append(stageLog)
         environment.guestFile("/root/.hermes/logs").mkdirs()
         environment.guestFile("/root/.hermes/logs/app-install.log").appendText(stageLog.toString())
+        // apk exits 1 with "failed to write database: Permission denied" on Android: it
+        // commits its db via O_TMPFILE + linkat(), and SELinux forbids hard links in app
+        // storage. The packages are unpacked anyway, so — like Aether's
+        // installPackageProfile — accept the stage when the installed tools actually run.
+        if (!result.ok && verify != null && environment.run(verify).ok) {
+            log.appendLine("[$stage] exit ${result.exitCode}, but '$verify' succeeded — continuing")
+            return
+        }
         if (!result.ok) {
             throw InstallFailure("Stage '$stage' failed (exit ${result.exitCode}): ${result.output.lines().lastOrNull { it.isNotBlank() }.orEmpty()}")
         }
@@ -321,6 +333,13 @@ class ProotLinuxRuntime @Inject constructor(
             set -e
             apk add --no-cache --no-chown python3 git curl ca-certificates bash procps-ng libstdc++ libgcc
         """.trimIndent()
+        private const val PACKAGES_VERIFY = "python3 --version && git --version && curl --version && bash --version"
+
+        private val NODE_SCRIPT = """
+            set -e
+            apk add --no-cache --no-chown nodejs npm
+        """.trimIndent()
+        private const val NODE_VERIFY = "node --version && npm --version"
 
         // install.sh has no Alpine support, so this mirrors its steps: clone, locked uv sync
         // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
@@ -337,7 +356,7 @@ class ProotLinuxRuntime @Inject constructor(
                 git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
             else
                 rm -rf "${'$'}REPO"
-                git clone --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
+                git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
             fi
             cd "${'$'}REPO"
             export UV_PYTHON=/usr/bin/python3 UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
@@ -364,9 +383,11 @@ class ProotLinuxRuntime @Inject constructor(
             [ -f "${'$'}HERMES_HOME/web_dist_placeholder/index.html" ] || \
                 echo '<!doctype html><title>Hermes2</title><p>WebSocket API only.</p>' > "${'$'}HERMES_HOME/web_dist_placeholder/index.html"
             export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
-            # A gateway orphaned by a previous app process would hold the port. The [h] keeps
-            # pkill from matching this script's own command line.
-            pkill -f "[h]ermes dashboard --host $GATEWAY_HOST --port $GATEWAY_PORT" 2>/dev/null && sleep 1
+            # A gateway orphaned by a previous app process would hold the port. Stop it by PID:
+            # a pkill -f pattern also matches this script's own command line and kills it.
+            PIDFILE="${'$'}HERMES_HOME/gateway.pid"
+            if [ -f "${'$'}PIDFILE" ]; then kill "${'$'}(cat "${'$'}PIDFILE")" 2>/dev/null && sleep 1; rm -f "${'$'}PIDFILE"; fi
+            echo ${'$'}${'$'} > "${'$'}PIDFILE"
             exec hermes dashboard --host $GATEWAY_HOST --port $GATEWAY_PORT --no-open --skip-build
         """.trimIndent()
     }
