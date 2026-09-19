@@ -107,7 +107,6 @@ import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
-import com.hermes.android.ui.theme.TopBarDisplay
 
 /**
  * Configuration screen — model picker, tool toggles, config viewer.
@@ -185,8 +184,6 @@ fun ConfigScreen(
                     onNavigateToPlatforms = onNavigateToPlatforms,
                 )
                 SettingsSection.APPEARANCE -> GeneralTab(
-                    state = uiState,
-                    viewModel = viewModel,
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
@@ -194,7 +191,11 @@ fun ConfigScreen(
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
                 SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
                 SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel) }
-                SettingsSection.PERSONALITY -> SettingsFolder { PersonalityCard(uiState, viewModel) }
+                SettingsSection.PERSONALITY -> PersonalitySection(
+                    state = uiState,
+                    viewModel = viewModel,
+                    onOpen = { section = it },
+                )
                 SettingsSection.SOUL -> SettingsFolder { SoulCard(uiState, viewModel) }
                 SettingsSection.TOOLSETS -> ToolsetsSection(uiState, viewModel)
                 SettingsSection.TOOLS -> ToolsTab(
@@ -220,15 +221,15 @@ internal enum class SettingsSection(
     val parent: SettingsSection? = null,
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
+    APPEARANCE("Appearance", "ظاهر", GENERAL_SETTINGS),
     APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
     PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
-    SOUL("SOUL.md", "SOUL.md", GENERAL_SETTINGS),
-    MEMORY("Memory", "حافظه", GENERAL_SETTINGS),
+    SOUL("SOUL.md", "SOUL.md", PERSONALITY),
+    MEMORY("Memory", "حافظه", PERSONALITY),
     ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     TOOLS("Tools", "ابزارها"),
     TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
-    APPEARANCE("Appearance", "ظاهر"),
     ABOUT("About", "درباره"),
 }

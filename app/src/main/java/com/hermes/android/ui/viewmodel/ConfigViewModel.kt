@@ -57,7 +57,6 @@ class ConfigViewModel @Inject constructor(
 
     init {
         loadAll()
-        loadAvatarUri()
         loadHubStats()
         collectGatewayLog()
     }
@@ -236,45 +235,6 @@ class ConfigViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    /**
-     * Client-side avatar image shown next to agent replies in chat. The
-     * picked image is copied into app-private storage (not just a
-     * content:// reference, which isn't guaranteed to survive a reboot
-     * without extra permission plumbing) and referenced by a stable file
-     * path saved to prefs — same file/key ChatViewModel reads, no gateway
-     * RPC involved.
-     */
-    fun loadAvatarUri() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
-        _uiState.value = _uiState.value.copy(avatarUri = path)
-    }
-
-    fun setAvatarUri(source: Uri) {
-        viewModelScope.launch {
-            try {
-                val dest = java.io.File(context.filesDir, "assistant_avatar.jpg")
-                context.contentResolver.openInputStream(source)?.use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
-                } ?: throw java.io.IOException("Could not open picked image")
-                prefs.edit().putString(KEY_ASSISTANT_AVATAR, dest.absolutePath).apply()
-                _uiState.value = _uiState.value.copy(avatarUri = dest.absolutePath)
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to save avatar image")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to save avatar image: ${e.message}",
-                )
-            }
-        }
-    }
-
-    fun clearAvatarUri() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        if (!saved.isNullOrBlank()) java.io.File(saved).delete()
-        prefs.edit().remove(KEY_ASSISTANT_AVATAR).apply()
-        _uiState.value = _uiState.value.copy(avatarUri = null)
     }
 
     /**
@@ -1393,6 +1353,5 @@ class ConfigViewModel @Inject constructor(
     private companion object {
         // Same key ChatViewModel reads from the shared "hermes_chat_prefs"
         // file — keep these in sync if either changes.
-        const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
     }
 }

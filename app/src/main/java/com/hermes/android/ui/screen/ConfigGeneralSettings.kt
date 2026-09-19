@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Card
@@ -69,6 +70,13 @@ internal fun GeneralSettingsSection(
     SettingsFolder {
         SettingsCardGroup {
             SettingsNavRow(
+                title = t("Appearance", "ظاهر"),
+                subtitle = t("Language, theme, font", "زبان، تم، فونت"),
+                icon = Icons.Default.Palette,
+                onClick = { onOpen(SettingsSection.APPEARANCE) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
                 title = t("Command Approval", "تأیید فرمان‌ها"),
                 subtitle = t(state.approvalMode, approvalModeFa(state.approvalMode)),
                 icon = Icons.Default.Security,
@@ -77,17 +85,12 @@ internal fun GeneralSettingsSection(
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
                 title = t("Personality", "شخصیت"),
-                subtitle = state.personality.ifBlank { t("Default", "پیش‌فرض") },
+                subtitle = t(
+                    "Preset, SOUL.md, memory",
+                    "پریست، SOUL.md، حافظه",
+                ),
                 icon = Icons.Default.Face,
                 onClick = { onOpen(SettingsSection.PERSONALITY) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            SettingsNavRow(
-                title = "SOUL.md",
-                subtitle = state.soulMd.lineSequence().firstOrNull { it.isNotBlank() }
-                    ?: t("Persistent identity", "هویت پایدار عامل"),
-                icon = Icons.Default.Description,
-                onClick = { onOpen(SettingsSection.SOUL) },
             )
         }
         SettingsCardGroup {
@@ -96,13 +99,6 @@ internal fun GeneralSettingsSection(
                 subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
-            )
-            com.hermes.android.ui.design.GroupDivider()
-            SettingsNavRow(
-                title = t("Memory", "حافظه"),
-                subtitle = "USER.md \u00B7 MEMORY.md",
-                icon = Icons.Default.Psychology,
-                onClick = { onOpen(SettingsSection.MEMORY) },
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
@@ -179,6 +175,34 @@ internal fun SettingsNavRow(
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(14.dp),
         )
+    }
+}
+
+/** Personality folder: the preset, plus SOUL.md and the memory files. */
+@Composable
+internal fun PersonalitySection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+    onOpen: (SettingsSection) -> Unit,
+) {
+    SettingsFolder {
+        PersonalityCard(state, viewModel)
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = "SOUL.md",
+                subtitle = state.soulMd.lineSequence().firstOrNull { it.isNotBlank() }
+                    ?: t("Persistent identity", "هویت پایدار عامل"),
+                icon = Icons.Default.Description,
+                onClick = { onOpen(SettingsSection.SOUL) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Memory", "حافظه"),
+                subtitle = "USER.md \u00B7 MEMORY.md",
+                icon = Icons.Default.Psychology,
+                onClick = { onOpen(SettingsSection.MEMORY) },
+            )
+        }
     }
 }
 

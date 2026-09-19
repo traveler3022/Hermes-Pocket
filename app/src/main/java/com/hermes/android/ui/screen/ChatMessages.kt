@@ -339,7 +339,6 @@ internal fun MessageBubble(
     message: ChatMessage,
     grouped: Boolean = false,
     isLastInGroup: Boolean = true,
-    avatarUri: String? = null,
     searchQuery: String = "",
     isLastAssistant: Boolean = false,
     isSending: Boolean = false,

@@ -310,7 +310,6 @@ fun ChatScreen(
     // the same prefs key) — re-read it every time this screen re-enters
     // composition so a change made there shows up on return.
     LaunchedEffect(Unit) {
-        viewModel.loadAssistantAvatar()
     }
 
     // When a new message arrives, scroll the latest USER message to the TOP
@@ -686,7 +685,6 @@ fun ChatScreen(
                                 } else {
                                     EmptyChatHero(
                                         assistantName = uiState.assistantName,
-                                        avatarUri = uiState.assistantAvatarPath,
                                         onSuggestionClick = viewModel::sendSuggestion,
                                         modifier = Modifier.fillParentMaxSize(),
                                     )
@@ -739,7 +737,6 @@ fun ChatScreen(
                                 message = message,
                                 grouped = grouped,
                                 isLastInGroup = isLastInGroup,
-                                avatarUri = uiState.assistantAvatarPath,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
@@ -959,7 +956,6 @@ fun ChatScreen(
 @Composable
 private fun EmptyChatHero(
     assistantName: String,
-    avatarUri: String?,
     onSuggestionClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -998,20 +994,11 @@ private fun EmptyChatHero(
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            if (avatarUri != null) {
-                AsyncImage(
-                    model = avatarUri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Text(
-                    text = assistantName.take(1),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
+            Text(
+                text = assistantName.take(1),
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(

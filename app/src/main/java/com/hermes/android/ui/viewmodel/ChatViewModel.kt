@@ -100,7 +100,6 @@ class ChatViewModel @Inject constructor(
     init {
         loadDraft()
         loadAssistantName()
-        loadAssistantAvatar()
         connectAndCollect()
         loadCommandCatalog()
     }
@@ -614,7 +613,7 @@ class ChatViewModel @Inject constructor(
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
-    // ── Display name / avatar ────────────────────────────────────────────
+    // ── Display name ─────────────────────────────────────────────────────
 
     private fun loadAssistantName() {
         val saved = prefs.getString(KEY_ASSISTANT_NAME, null)
@@ -628,12 +627,6 @@ class ChatViewModel @Inject constructor(
         if (trimmed.isEmpty()) return
         prefs.edit().putString(KEY_ASSISTANT_NAME, trimmed).apply()
         _uiState.update { it.copy(assistantName = trimmed) }
-    }
-
-    fun loadAssistantAvatar() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
-        _uiState.update { it.copy(assistantAvatarPath = path) }
     }
 
     // ── Search ───────────────────────────────────────────────────────────
@@ -1267,7 +1260,6 @@ class ChatViewModel @Inject constructor(
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
-        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
     }
 

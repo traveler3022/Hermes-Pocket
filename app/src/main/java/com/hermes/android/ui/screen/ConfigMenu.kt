@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -129,8 +128,8 @@ internal fun SettingsMenu(
             DomainSpec(
                 title = t("General Settings", "تنظیمات عمومی"),
                 subtitle = t(
-                    "Approval: ${state.approvalMode} \u00B7 platforms, memory, advanced",
-                    "تأیید: ${approvalModeFa(state.approvalMode)} \u00B7 پلتفرم\u200Cها، حافظه، پیشرفته",
+                    "Appearance, approval, personality, platforms",
+                    "ظاهر، تأیید، شخصیت، پلتفرم\u200Cها، پیشرفته",
                 ),
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
@@ -174,12 +173,6 @@ internal fun SettingsMenu(
                 subtitle = t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
                 icon = Icons.Default.Folder,
                 onClick = onNavigateToProjects,
-            ),
-            DomainSpec(
-                title = t("Appearance", "ظاهر"),
-                subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
-                icon = Icons.Default.Language,
-                onClick = { onOpen(SettingsSection.APPEARANCE) },
             ),
             DomainSpec(
                 title = t("About", "درباره"),

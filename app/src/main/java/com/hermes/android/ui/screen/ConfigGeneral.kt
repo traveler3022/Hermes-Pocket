@@ -43,14 +43,10 @@ import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
-import com.hermes.android.ui.theme.TopBarDisplay
-import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun GeneralTab(
-    state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -61,6 +57,40 @@ internal fun GeneralTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (appLanguageState != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = t("Language", "زبان"),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppLanguage.entries.forEach { lang ->
+                            val label = when (lang) {
+                                AppLanguage.AUTO -> t("Auto", "خودکار")
+                                AppLanguage.ENGLISH -> "English"
+                                AppLanguage.FARSI -> "فارسی"
+                            }
+                            androidx.compose.material3.FilterChip(
+                                selected = appLanguageState.language == lang,
+                                onClick = { appLanguageState.updateLanguage(lang) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (themeModeState != null) {
             Text(
                 text = t("Appearance", "ظاهر"),
@@ -217,179 +247,5 @@ internal fun GeneralTab(
             }
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = t("Top bar", "نوار بالا"),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = t("Display in top bar", "نمایش در نوار بالا"),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    TopBarDisplay.entries.forEach { mode ->
-                        androidx.compose.material3.FilterChip(
-                            selected = themeModeState?.topBarDisplay == mode,
-                            onClick = { themeModeState?.updateTopBarDisplay(mode) },
-                            label = { Text(t(mode.displayEn, mode.displayFa), maxLines = 1) },
-                        )
-                    }
-                }
-                HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                Text(
-                    text = t("Assistant name", "نام دستیار"),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                OutlinedTextField(
-                    value = themeModeState?.assistantName ?: "Hermes",
-                    onValueChange = { themeModeState?.updateAssistantName(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text(t("Hermes", "هرمس")) },
-                )
-                if (themeModeState?.topBarDisplay == TopBarDisplay.AVATAR) {
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    Text(
-                        text = t("Avatar size", "اندازه آواتار"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            text = "A",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Slider(
-                            value = (themeModeState?.avatarSizeDp ?: 36).toFloat(),
-                            onValueChange = { themeModeState?.updateAvatarSizeDp(it.toInt()) },
-                            valueRange = 28f..48f,
-                            steps = 9,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = "A",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = "${themeModeState?.avatarSizeDp ?: 36} dp",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, top = 2.dp),
-                    )
-                }
-            }
-        }
-
-        if (appLanguageState != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = t("Language", "زبان"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AppLanguage.entries.forEach { lang ->
-                            val label = when (lang) {
-                                AppLanguage.AUTO -> t("Auto", "خودکار")
-                                AppLanguage.ENGLISH -> "English"
-                                AppLanguage.FARSI -> "فارسی"
-                            }
-                            androidx.compose.material3.FilterChip(
-                                selected = appLanguageState.language == lang,
-                                onClick = { appLanguageState.updateLanguage(lang) },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Text(
-            text = t("Avatar", "آواتار"),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Column {
-                    Text(
-                        text = t("Avatar", "آواتار"),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    val avatarPicker = rememberLauncherForActivityResult(
-                        ActivityResultContracts.GetContent(),
-                    ) { uri -> uri?.let { viewModel.setAvatarUri(it) } }
-                    Row(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                                .clickable { avatarPicker.launch("image/*") },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (state.avatarUri != null) {
-                                AsyncImage(
-                                    model = state.avatarUri,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            } else {
-                                Text(
-                                    text = "\u2695",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            }
-                        }
-                        OutlinedButton(onClick = { avatarPicker.launch("image/*") }) {
-                            Text(t("Upload image", "آپلود عکس"))
-                        }
-                        if (state.avatarUri != null) {
-                            TextButton(onClick = { viewModel.clearAvatarUri() }) {
-                                Text(t("Reset", "بازنشانی"))
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }

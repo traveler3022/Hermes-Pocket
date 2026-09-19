@@ -51,7 +51,6 @@ data class ConfigUiState(
     val mcpServersText: String = "",
     val isLoadingMcp: Boolean = false,
     // Client-side avatar image (local file path, null = default icon).
-    val avatarUri: String? = null,
     // ── Control Center stats (design E) ──
     // 30-day aggregate from insights.get (reuses SessionsViewModel's type).
     val insights: InsightsData? = null,

@@ -210,7 +210,6 @@ data class ChatUiState(
     val assistantName: String = "Hermes",
     // Client-side avatar image (local file path), customized from Settings.
     // Null shows the default icon.
-    val assistantAvatarPath: String? = null,
 )
 
 /**
