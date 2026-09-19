@@ -37,10 +37,12 @@ class AgentActivityNotifier @Inject constructor(
     }
 
     /** A live chat turn finished while the app was backgrounded. */
-    fun showTurnComplete(sessionId: String?, preview: String) {
+    fun showTurnComplete(sessionId: String?, preview: String, sessionTitle: String? = null) {
         show(
             key = sessionId ?: "turn",
-            title = tForContext(context, "Hermes finished a reply", "هرمس پاسخ را تمام کرد"),
+            title = sessionTitle?.takeIf { it.isNotBlank() }
+                ?: tForContext(context, "Hermes replied", "پاسخ Hermes آماده است"),
+            status = tForContext(context, "Done", "تمام شد"),
             preview = preview,
             sessionId = sessionId,
         )
@@ -54,34 +56,25 @@ class AgentActivityNotifier @Inject constructor(
         show(
             key = "bg_$taskId",
             title = tForContext(context, "Background task finished", "کار پس‌زمینه تمام شد"),
+            status = tForContext(context, "Background", "پس‌زمینه"),
             preview = preview,
             sessionId = sessionId,
         )
     }
 
-    private fun show(key: String, title: String, preview: String, sessionId: String?) {
-        val text = preview.trim().take(400).ifEmpty { return }
+    private fun show(key: String, title: String, status: String, preview: String, sessionId: String?) {
+        val text = plainText(preview).take(600).ifEmpty { return }
         Timber.i("[AgentNotify] $title (key=$key, session=$sessionId)")
 
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (!sessionId.isNullOrBlank()) putExtra(EXTRA_SESSION_ID, sessionId)
-        }
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            key.hashCode(),
-            tapIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+        val notification = HermesNotifications.builder(context, CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(text.take(120))
+            .setContentText(text.lineSequence().first().take(140))
+            .setSubText(status)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setContentIntent(contentIntent)
+            .setContentIntent(HermesNotifications.openApp(context, sessionId))
+            .setGroup(GROUP_RESULTS)
+            .setShowWhen(true)
             .setAutoCancel(true)
             .build()
 
@@ -89,11 +82,21 @@ class AgentActivityNotifier @Inject constructor(
         manager.notify(key.hashCode(), notification)
     }
 
+    /** Replies are Markdown; a notification shows plain text. */
+    private fun plainText(markdown: String): String = markdown
+        .replace(Regex("```[a-zA-Z0-9]*\\n?"), "")
+        .replace(Regex("(?m)^#{1,6}\\s+"), "")
+        .replace(Regex("(?m)^\\s*[-*+]\\s+"), "• ")
+        .replace(Regex("\\*\\*|__|`"), "")
+        .replace(Regex("\\[([^\\]]+)]\\([^)]+\\)"), "$1")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                tForContext(context, "Agent Activity", "فعالیت ایجنت"),
+                tForContext(context, "Replies & results", "پاسخ‌ها و نتیجه‌ها"),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = tForContext(
@@ -102,13 +105,13 @@ class AgentActivityNotifier @Inject constructor(
                     "نتیجهٔ کارها و پاسخ‌هایی که وقتی اپ در پس‌زمینه است تمام می‌شوند",
                 )
             }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            HermesNotifications.ensureChannel(context, channel)
         }
     }
 
     companion object {
         private const val CHANNEL_ID = "hermes_agent_activity"
+        private const val GROUP_RESULTS = "hermes_results"
 
         /** Intent extra: session to resume when the notification is tapped. */
         const val EXTRA_SESSION_ID = "hermes.notification.session_id"

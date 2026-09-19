@@ -68,35 +68,31 @@ class ApprovalNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle(tForContext(context, "Tool approval required: $toolName", "نیاز به تأیید ابزار: $toolName"))
-            .setContentText(description)
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("$description\n\n${tForContext(context, "Command", "دستور")}:\n$command")
-            )
+        val summary = description.ifBlank { toolName }
+        val details = buildString {
+            append(summary)
+            if (command.isNotBlank()) append("\n\n").append(command.take(800))
+        }
+        val builder = HermesNotifications.builder(context, CHANNEL_ID)
+            .setContentTitle(tForContext(context, "Hermes needs your approval", "Hermes اجازه می‌خواهد"))
+            .setContentText(summary)
+            .setSubText(toolName)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(details))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .addAction(
-                android.R.drawable.checkbox_on_background,
-                tForContext(context, "Approve", "تأیید"),
-                actionPendingIntent(ApprovalActionReceiver.CHOICE_ONCE, ""),
-            )
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(HermesNotifications.openApp(context, sessionId))
+            .addAction(0, tForContext(context, "Allow", "اجازه"), actionPendingIntent(ApprovalActionReceiver.CHOICE_ONCE, ""))
 
         if (allowPermanent) {
             builder.addAction(
-                android.R.drawable.star_on,
-                tForContext(context, "Always", "همیشه"),
+                0,
+                tForContext(context, "Always allow", "همیشه"),
                 actionPendingIntent(ApprovalActionReceiver.CHOICE_ALWAYS, "_always"),
             )
         }
 
         val notification = builder
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                tForContext(context, "Deny", "رد"),
-                actionPendingIntent(ApprovalActionReceiver.CHOICE_DENY, "_deny"),
-            )
+            .addAction(0, tForContext(context, "Deny", "رد"), actionPendingIntent(ApprovalActionReceiver.CHOICE_DENY, "_deny"))
             .setAutoCancel(true)
             .build()
 
@@ -126,8 +122,7 @@ class ApprovalNotificationManager @Inject constructor(
                 )
                 enableVibration(true)
             }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            HermesNotifications.ensureChannel(context, channel)
         }
     }
 

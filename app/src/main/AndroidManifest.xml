@@ -98,6 +98,11 @@
             android:name=".service.ApprovalActionReceiver"
             android:exported="false" />
 
+        <!-- "Stop" on the "Hermes is working" notification -->
+        <receiver
+            android:name=".service.AgentStopReceiver"
+            android:exported="false" />
+
         <!-- Built-in Alpine files in Android's Files app / document picker (Aether's provider).
              Guarded by MANAGE_DOCUMENTS, so only the system DocumentsUI can bind to it. -->
         <provider
