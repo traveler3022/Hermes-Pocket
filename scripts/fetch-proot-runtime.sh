@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fetches the proot binaries used by the built-in Linux runtime from Termux's
+# official aarch64 package repository and installs them as jniLibs, so Android
+# extracts them into nativeLibraryDir (the only app location that may execve()
+# on targetSdk >= 29).
+set -euo pipefail
+
+REPO="https://packages-cf.termux.dev/apt/termux-main"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/app/src/main/jniLibs/arm64-v8a"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+fetch() {
+  local path="$1" sha="$2"
+  local file="$WORK/$(basename "$path")"
+  curl -fsSL --retry 3 "$REPO/$path" -o "$file"
+  echo "$sha  $file" | sha256sum -c - >/dev/null
+  (cd "$WORK" && ar x "$file" && tar xf data.tar.* && rm -f data.tar.* control.tar.* debian-binary)
+}
+
+fetch pool/main/p/proot/proot_5.1.107.92_aarch64.deb \
+  1f1c983509701f6826f568482c70673ee453a9ba38c9f5fa445a472d6b7524e9
+fetch pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb \
+  ac81ad623d74c209718b9f3acb2dd702cc8a88c431e820d212229910b4db29da
+fetch pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb \
+  0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6
+
+PREFIX="$WORK/data/data/com.termux/files/usr"
+mkdir -p "$OUT"
+install -m 0755 "$PREFIX/bin/proot" "$OUT/libproot.so"
+install -m 0755 "$PREFIX/libexec/proot/loader" "$OUT/libproot-loader.so"
+install -m 0755 "$(readlink -f "$PREFIX/lib/libtalloc.so.2")" "$OUT/libtalloc.so"
+install -m 0755 "$PREFIX/lib/libandroid-shmem.so" "$OUT/libandroid-shmem.so"
+ls -l "$OUT"

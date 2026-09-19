@@ -29,6 +29,9 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
+/** Which on-device runtime hosts Hermes. */
+enum class RuntimeChoiceUi { BuiltInLinux, Termux }
+
 /** One-shot side-effects emitted by [RuntimeViewModel] for the UI to handle. */
 sealed interface RuntimeEffect {
     /** Start the foreground gateway service. */
@@ -85,6 +88,24 @@ class RuntimeViewModel @Inject constructor(
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, GatewayConnectionUi(ChatConnectionState.Disconnected))
+
+    val runtimeChoice: StateFlow<RuntimeChoiceUi> = runtimeManager.selectedRuntime
+        .map { it.toChoice() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, runtimeManager.selectedRuntime.value.toChoice())
+
+    private fun RuntimeType.toChoice() =
+        if (this == RuntimeType.TERMUX) RuntimeChoiceUi.Termux else RuntimeChoiceUi.BuiltInLinux
+
+    fun selectRuntime(choice: RuntimeChoiceUi) {
+        if (_installing.value) {
+            _errorMessage.value = "Wait for the current install to finish before switching runtimes."
+            return
+        }
+        runtimeManager.selectRuntime(
+            if (choice == RuntimeChoiceUi.Termux) RuntimeType.TERMUX else RuntimeType.PROOT_LINUX,
+        )
+        detect()
+    }
 
     /** Current remote-server connection settings (URL + token). */
     val serverConfig: kotlinx.coroutines.flow.StateFlow<RemoteServerConfig> =
@@ -259,7 +280,7 @@ class RuntimeViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to start gateway")
-                _errorMessage.value = e.message ?: "Failed to start gateway in Termux"
+                _errorMessage.value = e.message ?: "Failed to start gateway"
             }
         }
     }
@@ -288,7 +309,11 @@ class RuntimeViewModel @Inject constructor(
         viewModelScope.launch {
             _errorMessage.value = null
             try {
-                _logs.value = "Fetching logs from Termux (saving to /sdcard/Download/hermes_logs.txt)..."
+                _logs.value = if (runtimeChoice.value == RuntimeChoiceUi.Termux) {
+                    "Fetching logs from Termux (saving to /sdcard/Download/hermes_logs.txt)..."
+                } else {
+                    "Reading logs from the built-in Linux runtime…"
+                }
                 runtimeManager.runtime.fetchLogs()
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to fetch logs")
@@ -301,7 +326,7 @@ class RuntimeViewModel @Inject constructor(
         viewModelScope.launch {
             _errorMessage.value = null
             try {
-                _logs.value = "Running hermes doctor inside Termux…"
+                _logs.value = "Running hermes doctor…"
                 _logs.value = runtimeManager.runtime.runDoctor()
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to run doctor")

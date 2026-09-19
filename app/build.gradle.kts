@@ -93,6 +93,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // proot runs from nativeLibraryDir, so the .so files must exist on disk.
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     testOptions {

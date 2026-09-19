@@ -71,6 +71,7 @@ import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
 import com.hermes.android.ui.viewmodel.InstallProgressUi
+import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 import com.hermes.android.ui.viewmodel.RuntimeEffect
 import com.hermes.android.ui.viewmodel.RuntimeUiState
 import com.hermes.android.ui.viewmodel.RuntimeViewModel
@@ -103,6 +104,7 @@ fun RuntimeSetupScreen(
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val serverConfig by viewModel.serverConfig.collectAsStateWithLifecycle()
     val isRemote = viewModel.isRemoteRuntime
+    val runtimeChoice by viewModel.runtimeChoice.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -217,16 +219,29 @@ fun RuntimeSetupScreen(
                     Text(t("Server setup guide", "راهنمای راه‌اندازی سرور"))
                 }
             } else {
-                // ── Legacy Termux flow (unchanged) ─────────────────────────
+                // ── On-device flow: built-in Linux or Termux ───────────────
                 Text(
                     text = "Hermes",
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
+                RuntimeChoiceRow(
+                    selected = runtimeChoice,
+                    enabled = !installing,
+                    onSelect = { viewModel.selectRuntime(it) },
+                )
                 Text(
-                    text = "Termux & Hermes Agent Gateway Connection",
+                    text = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
+                        t(
+                            "Ubuntu runs inside this app — no Termux needed",
+                            "اوبونتو داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس",
+                        )
+                    } else {
+                        "Termux & Hermes Agent Gateway Connection"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -242,7 +257,12 @@ fun RuntimeSetupScreen(
                         CircularProgressIndicator()
                     }
 
-                    is RuntimeUiState.Detected -> {
+                    is RuntimeUiState.Detected -> if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
+                        BuiltInLinuxDetectedContent(
+                            diskFreeBytes = state.diskFreeBytes,
+                            onStartInstall = { viewModel.startInstall() },
+                        )
+                    } else {
                         DetectedContent(
                             version = state.version,
                             diskFreeBytes = state.diskFreeBytes,
