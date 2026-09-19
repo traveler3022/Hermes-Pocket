@@ -53,8 +53,6 @@ data class ConfigUiState(
     // Client-side avatar image (local file path, null = default icon).
     val avatarUri: String? = null,
     // ── Control Center stats (design E) ──
-    // First balance line from credits.view, or null (not logged in / failed).
-    val creditsSummary: String? = null,
     // 30-day aggregate from insights.get (reuses SessionsViewModel's type).
     val insights: InsightsData? = null,
     // ── Advanced: command console + gateway log (design I) ──

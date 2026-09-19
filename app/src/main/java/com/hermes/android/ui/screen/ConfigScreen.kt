@@ -30,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ExpandLess
@@ -43,7 +42,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
@@ -129,8 +127,6 @@ fun ConfigScreen(
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToLinux: () -> Unit = {},
     onNavigateToProjects: () -> Unit = {},
-    onNavigateToPet: () -> Unit = {},
-    onNavigateToBilling: () -> Unit = {},
     onNavigateToSetup: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
@@ -161,7 +157,7 @@ fun ConfigScreen(
     com.hermes.android.ui.design.HermesScaffold(
         title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Control Center", "میز فرمان"),
         subtitle = if (section == null) t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه") else null,
-        onBack = { if (section != null) section = null else onNavigateBack() },
+        onBack = { if (section != null) section = section?.parent else onNavigateBack() },
         snackbarHostState = snackbarHostState,
     ) { padding ->
         Box(
@@ -178,24 +174,29 @@ fun ConfigScreen(
                     onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToLinux = onNavigateToLinux,
                     onNavigateToSetup = onNavigateToSetup,
-                    onNavigateToPlatforms = onNavigateToPlatforms,
-                    onNavigateToPlugins = onNavigateToPlugins,
-                    onNavigateToSkills = onNavigateToSkills,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToProjects = onNavigateToProjects,
-                    onNavigateToPet = onNavigateToPet,
-                    onNavigateToBilling = onNavigateToBilling,
                 )
-                SettingsSection.GENERAL -> GeneralTab(
+                SettingsSection.GENERAL_SETTINGS -> GeneralSettingsSection(
+                    state = uiState,
+                    viewModel = viewModel,
+                    onOpen = { section = it },
+                    onNavigateToPlatforms = onNavigateToPlatforms,
+                )
+                SettingsSection.APPEARANCE -> GeneralTab(
                     state = uiState,
                     viewModel = viewModel,
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                SettingsSection.BEHAVIOR -> BehaviorSection(uiState, viewModel)
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
-                SettingsSection.TOOLS -> ToolsTab(uiState, viewModel)
+                SettingsSection.TOOLS -> ToolsTab(
+                    state = uiState,
+                    viewModel = viewModel,
+                    onNavigateToPlugins = onNavigateToPlugins,
+                    onNavigateToSkills = onNavigateToSkills,
+                )
                 SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
                 SettingsSection.ABOUT -> AboutSection()
             }
@@ -203,15 +204,20 @@ fun ConfigScreen(
     }
 }
 
-/** Top-level Settings categories (drill-down targets). */
-internal enum class SettingsSection(val titleEn: String, val titleFa: String) {
-    GENERAL("General", "عمومی"),
-    BEHAVIOR("Agent Behavior", "رفتار عامل"),
-    MEMORY("Memory", "حافظه"),
+/**
+ * Settings categories (drill-down targets). [parent] is where the back arrow
+ * returns to; null means the Control Center menu.
+ */
+internal enum class SettingsSection(
+    val titleEn: String,
+    val titleFa: String,
+    val parent: SettingsSection? = null,
+) {
+    GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
+    MEMORY("Memory", "حافظه", GENERAL_SETTINGS),
+    ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     TOOLS("Tools", "ابزارها"),
-    ADVANCED("Advanced", "پیشرفته"),
+    APPEARANCE("Appearance", "ظاهر"),
     ABOUT("About", "درباره"),
 }
-
-

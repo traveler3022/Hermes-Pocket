@@ -199,6 +199,10 @@ internal fun ModelsTab(
         }
 
         // ── Cross-provider model search ──
+        item(key = "__reasoning") {
+            ReasoningCard(state, viewModel)
+        }
+
         item(key = "__model_search") {
             OutlinedTextField(
                 value = modelSearch,

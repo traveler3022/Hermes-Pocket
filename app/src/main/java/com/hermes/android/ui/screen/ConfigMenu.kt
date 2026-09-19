@@ -12,18 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Pets
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.MaterialTheme
@@ -39,9 +33,9 @@ import com.hermes.android.ui.i18n.t
 
 /**
  * The Settings root, restructured as the Control Center (approved design E):
- * a live connection card, live stat tiles (active model / credits / 30-day
- * usage - `credits.view` and `insights.get` were backend capabilities no UI
- * ever surfaced), then the domain list with live values in the subtitles
+ * a live connection card, live stat tiles (active model / 30-day usage -
+ * `insights.get` was a backend capability no UI ever surfaced), then the
+ * domain list with live values in the subtitles
  * where the data is already loaded.
  */
 @Composable
@@ -51,13 +45,8 @@ internal fun SettingsMenu(
     serverUrl: String,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToRuntime: () -> Unit,
-    onNavigateToPlatforms: () -> Unit,
-    onNavigateToPlugins: () -> Unit,
-    onNavigateToSkills: () -> Unit,
     onNavigateToCron: () -> Unit,
     onNavigateToProjects: () -> Unit,
-    onNavigateToPet: () -> Unit,
-    onNavigateToBilling: () -> Unit,
     onNavigateToSetup: () -> Unit = {},
     onNavigateToLinux: () -> Unit = {},
 ) {
@@ -131,16 +120,18 @@ internal fun SettingsMenu(
                 label = t("Active model", "مدل فعال"),
             )
             StatTile(
-                value = state.creditsSummary ?: "\u2014",
-                label = t("Credits", "اعتبار"),
-            )
-            StatTile(
                 value = state.insights?.let { "${it.sessions}" } ?: "\u2014",
                 label = t("Sessions / 30d", "جلسه / ۳۰ روز"),
             )
         }
 
         val tiles = listOf(
+            DomainSpec(
+                title = t("General Settings", "تنظیمات عمومی"),
+                subtitle = t(
+                    "Approval: ${state.approvalMode} \u00B7 platforms, memory, advanced",
+                    "تأیید: ${approvalModeFa(state.approvalMode)} \u00B7 پلتفرم\u200Cها، حافظه، پیشرفته",
+                ),
             DomainSpec(
                 title = t("Models", "مدل\u200Cها"),
                 subtitle = state.activeModel?.let { model ->
@@ -149,20 +140,8 @@ internal fun SettingsMenu(
                 icon = Icons.Default.SwapHoriz,
                 onClick = { onOpen(SettingsSection.MODELS) },
             ),
-            DomainSpec(
-                title = t("Behavior", "رفتار"),
-                subtitle = t(
-                    "Approval: ${state.approvalMode} \u00B7 ${state.reasoning}",
-                    "تأیید: ${approvalModeFa(state.approvalMode)} \u00B7 تفکر: ${state.reasoning}",
-                ),
                 icon = Icons.Default.Security,
-                onClick = { onOpen(SettingsSection.BEHAVIOR) },
-            ),
-            DomainSpec(
-                title = t("Memory", "حافظه"),
-                subtitle = t("USER.md \u00B7 MEMORY.md", "USER.md \u00B7 MEMORY.md"),
-                icon = Icons.Default.Psychology,
-                onClick = { onOpen(SettingsSection.MEMORY) },
+                onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
             ),
             DomainSpec(
                 title = t("Tools", "ابزارها"),
@@ -173,7 +152,7 @@ internal fun SettingsMenu(
                         "$enabled از ${state.availableTools.size} گروه فعال",
                     )
                 } else {
-                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                    t("Toolsets, plugins, skills", "ابزارها، افزونه\u200Cها، مهارت\u200Cها")
                 },
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.TOOLS) },
@@ -185,28 +164,10 @@ internal fun SettingsMenu(
                 onClick = onNavigateToLinux,
             ),
             DomainSpec(
-                title = t("Skills", "مهارت\u200Cها"),
-                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
-                icon = Icons.Default.Star,
-                onClick = onNavigateToSkills,
-            ),
-            DomainSpec(
-                title = t("Plugins", "افزونه\u200Cها"),
-                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
-                icon = Icons.Default.Extension,
-                onClick = onNavigateToPlugins,
-            ),
-            DomainSpec(
                 title = t("Scheduler", "زمان\u200Cبندی"),
                 subtitle = t("Scheduled agent jobs", "کارهای زمان\u200Cبندی\u200Cشده"),
                 icon = Icons.Default.Schedule,
                 onClick = onNavigateToCron,
-            ),
-            DomainSpec(
-                title = t("Platforms", "پلتفرم\u200Cها"),
-                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
-                icon = Icons.Default.Link,
-                onClick = onNavigateToPlatforms,
             ),
             DomainSpec(
                 title = t("Projects", "پروژه\u200Cها"),
@@ -215,28 +176,10 @@ internal fun SettingsMenu(
                 onClick = onNavigateToProjects,
             ),
             DomainSpec(
-                title = t("Billing", "صورتحساب"),
-                subtitle = t("Balance and auto-reload", "موجودی و شارژ خودکار"),
-                icon = Icons.Default.AccountBalanceWallet,
-                onClick = onNavigateToBilling,
-            ),
-            DomainSpec(
-                title = t("Pet", "پت"),
-                subtitle = t("Adopt and manage your pet", "انتخاب و مدیریت پت"),
-                icon = Icons.Default.Pets,
-                onClick = onNavigateToPet,
-            ),
-            DomainSpec(
-                title = t("Advanced", "پیشرفته"),
-                subtitle = t("env \u00B7 MCP \u00B7 console \u00B7 log", "env \u00B7 MCP \u00B7 کنسول \u00B7 لاگ"),
-                icon = Icons.Default.Terminal,
-                onClick = { onOpen(SettingsSection.ADVANCED) },
-            ),
-            DomainSpec(
                 title = t("Appearance", "ظاهر"),
                 subtitle = t("Theme, font, avatar, language", "تم، فونت، آواتار، زبان"),
                 icon = Icons.Default.Language,
-                onClick = { onOpen(SettingsSection.GENERAL) },
+                onClick = { onOpen(SettingsSection.APPEARANCE) },
             ),
             DomainSpec(
                 title = t("About", "درباره"),

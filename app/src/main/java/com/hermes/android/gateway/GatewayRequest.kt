@@ -82,7 +82,6 @@ object GatewayMethods {
 
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
-    const val CREDITS_VIEW = "credits.view"
 
     // Delegation v1 (Task Desk)
     const val SESSION_ACTIVE_LIST = "session.active_list"
@@ -112,17 +111,4 @@ object GatewayMethods {
     const val PDF_ATTACH = "pdf.attach"
     const val LLM_ONESHOT = "llm.oneshot"
 
-    // Billing (read + auto-reload only; charge/step_up deliberately not wired
-    // from mobile — see BillingRepository kdoc)
-    const val BILLING_STATE = "billing.state"
-    const val BILLING_AUTO_RELOAD = "billing.auto_reload"
-
-    // Pet
-    const val PET_GALLERY = "pet.gallery"
-    const val PET_THUMB = "pet.thumb"
-    const val PET_SELECT = "pet.select"
-    const val PET_REMOVE = "pet.remove"
-    const val PET_RENAME = "pet.rename"
-    const val PET_DISABLE = "pet.disable"
-    const val PET_SCALE = "pet.scale"
 }

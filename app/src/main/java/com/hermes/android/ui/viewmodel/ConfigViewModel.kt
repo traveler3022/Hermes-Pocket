@@ -1270,30 +1270,11 @@ class ConfigViewModel @Inject constructor(
     // ── Control Center stats (design E) ───────────────────────────────────
 
     /**
-     * Live numbers for the Settings hub's stat tiles: credit balance
-     * (`credits.view` — a backend capability that was never surfaced in any
-     * UI before) and 30-day usage (`insights.get`). Both are best-effort:
-     * a failure leaves the tile empty instead of raising an error banner.
+     * Live numbers for the Settings hub's stat tiles: 30-day usage
+     * (`insights.get`). Best-effort: a failure leaves the tile empty instead
+     * of raising an error banner.
      */
     fun loadHubStats() {
-        viewModelScope.launch {
-            try {
-                val result = gatewayClient.request(GatewayMethods.CREDITS_VIEW)
-                val obj = result as? JsonObject
-                val loggedIn = (obj?.get("logged_in") as? JsonPrimitive)?.content == "true"
-                val balance = (obj?.get("balance_lines") as? JsonArray)
-                    ?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
-                _uiState.value = _uiState.value.copy(
-                    creditsSummary = when {
-                        balance != null -> balance
-                        loggedIn -> null
-                        else -> null
-                    },
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "[Config] credits.view failed (tile stays empty)")
-            }
-        }
         viewModelScope.launch {
             try {
                 val params = buildJsonObject { put("days", 30) }

@@ -250,8 +250,6 @@ private fun HermesNavHost(
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToLinux = { navController.navigate("linux") },
                 onNavigateToProjects = { navController.navigate("projects") },
-                onNavigateToPet = { navController.navigate("pet") },
-                onNavigateToBilling = { navController.navigate("billing") },
                 onNavigateToSetup = { navController.navigate("setup") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
@@ -271,18 +269,6 @@ private fun HermesNavHost(
                         popUpTo("chat") { inclusive = true }
                     }
                 },
-            )
-        }
-
-        composable("pet") {
-            com.hermes.android.ui.screen.PetScreen(
-                onNavigateBack = { navController.popBackStack() },
-            )
-        }
-
-        composable("billing") {
-            com.hermes.android.ui.screen.BillingScreen(
-                onNavigateBack = { navController.popBackStack() },
             )
         }
 
