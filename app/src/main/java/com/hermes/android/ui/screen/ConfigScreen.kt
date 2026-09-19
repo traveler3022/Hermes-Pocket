@@ -147,6 +147,8 @@ fun ConfigScreen(
     // out of Settings), so Settings can grow deep without one giant scroll.
     var section by remember { mutableStateOf<SettingsSection?>(null) }
 
+    androidx.activity.compose.BackHandler(enabled = section != null) { section = section?.parent }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -179,7 +181,6 @@ fun ConfigScreen(
                 )
                 SettingsSection.GENERAL_SETTINGS -> GeneralSettingsSection(
                     state = uiState,
-                    viewModel = viewModel,
                     onOpen = { section = it },
                     onNavigateToPlatforms = onNavigateToPlatforms,
                 )
@@ -190,10 +191,15 @@ fun ConfigScreen(
                     appLanguageState = appLanguageState,
                 )
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
-                SettingsSection.MODELS -> ModelsTab(uiState, viewModel)
+                SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
+                SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
+                SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel) }
+                SettingsSection.PERSONALITY -> SettingsFolder { PersonalityCard(uiState, viewModel) }
+                SettingsSection.SOUL -> SettingsFolder { SoulCard(uiState, viewModel) }
+                SettingsSection.TOOLSETS -> ToolsetsSection(uiState, viewModel)
                 SettingsSection.TOOLS -> ToolsTab(
                     state = uiState,
-                    viewModel = viewModel,
+                    onOpen = { section = it },
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
                 )
@@ -214,10 +220,15 @@ internal enum class SettingsSection(
     val parent: SettingsSection? = null,
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
+    APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
+    PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
+    SOUL("SOUL.md", "SOUL.md", GENERAL_SETTINGS),
     MEMORY("Memory", "حافظه", GENERAL_SETTINGS),
     ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    REASONING("Reasoning depth", "عمق تفکر", MODELS),
     TOOLS("Tools", "ابزارها"),
+    TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
     APPEARANCE("Appearance", "ظاهر"),
     ABOUT("About", "درباره"),
 }

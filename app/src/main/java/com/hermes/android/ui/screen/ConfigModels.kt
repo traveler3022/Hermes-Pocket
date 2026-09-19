@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -107,6 +108,7 @@ internal fun ModelSwitchConfirmDialog(
 internal fun ModelsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
+    onOpen: (SettingsSection) -> Unit,
 ) {
     state.modelSwitchConfirm?.let { confirm ->
         ModelSwitchConfirmDialog(confirm, viewModel::confirmModelSwitch, viewModel::dismissModelSwitchConfirm)
@@ -200,7 +202,14 @@ internal fun ModelsTab(
 
         // ── Cross-provider model search ──
         item(key = "__reasoning") {
-            ReasoningCard(state, viewModel)
+            SettingsCardGroup {
+                SettingsNavRow(
+                    title = t("Reasoning depth", "عمق تفکر"),
+                    subtitle = state.reasoning,
+                    icon = Icons.Default.Lightbulb,
+                    onClick = { onOpen(SettingsSection.REASONING) },
+                )
+            }
         }
 
         item(key = "__model_search") {

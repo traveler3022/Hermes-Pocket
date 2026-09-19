@@ -5,6 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +18,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Terminal
@@ -42,13 +48,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
- * General settings: the agent-wide switches (command approval, personality,
- * SOUL.md) plus the entry points for Platforms, Memory and Advanced.
+ * General settings folder, laid out like Aether's settings pages: each item
+ * is one row that opens its own page, so this screen stays a short list.
  * Every control maps to a real server write — approvals.mode /
  * display.personality via config.set, SOUL.md via the verified shell.exec
  * pattern.
@@ -56,21 +63,34 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 @Composable
 internal fun GeneralSettingsSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToPlatforms: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
+    SettingsFolder {
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = t("Command Approval", "تأیید فرمان‌ها"),
+                subtitle = t(state.approvalMode, approvalModeFa(state.approvalMode)),
+                icon = Icons.Default.Security,
+                onClick = { onOpen(SettingsSection.APPROVAL) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Personality", "شخصیت"),
+                subtitle = state.personality.ifBlank { t("Default", "پیش‌فرض") },
+                icon = Icons.Default.Face,
+                onClick = { onOpen(SettingsSection.PERSONALITY) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = "SOUL.md",
+                subtitle = state.soulMd.lineSequence().firstOrNull { it.isNotBlank() }
+                    ?: t("Persistent identity", "هویت پایدار عامل"),
+                icon = Icons.Default.Description,
+                onClick = { onOpen(SettingsSection.SOUL) },
+            )
+        }
+        SettingsCardGroup {
             SettingsNavRow(
                 title = t("Platforms", "پلتفرم\u200Cها"),
                 subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
@@ -92,13 +112,35 @@ internal fun GeneralSettingsSection(
                 onClick = { onOpen(SettingsSection.ADVANCED) },
             )
         }
-        ApprovalCard(state, viewModel)
-        PersonalityCard(state, viewModel)
-        SoulCard(state, viewModel)
     }
 }
 
-/** One tappable row of a settings card that opens a sub-page. */
+/** Scrollable page body for a settings folder or a single-setting page. */
+@Composable
+internal fun SettingsFolder(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        content = content,
+    )
+}
+
+/** A rounded card holding a stack of rows (Aether's card group). */
+@Composable
+internal fun SettingsCardGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        content = content,
+    )
+}
+
+/** One tappable row that opens a sub-page: icon, title, one-line subtitle, chevron. */
 @Composable
 internal fun SettingsNavRow(
     title: String,
@@ -110,23 +152,32 @@ internal fun SettingsNavRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
+            .padding(horizontal = 16.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
+        Spacer(Modifier.width(8.dp))
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(14.dp),
         )
     }
 }

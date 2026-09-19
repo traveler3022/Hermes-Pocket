@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -92,57 +93,66 @@ import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
-/**
- * Tools folder: Plugins and Skills sub-pages on top, then the toolset
- * switches.
- */
+/** Tools folder: Toolsets, Plugins and Skills, one row each. */
 @Composable
 internal fun ToolsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
-    viewModel: ConfigViewModel,
+    onOpen: (SettingsSection) -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSkills: () -> Unit,
 ) {
+    SettingsFolder {
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = t("Toolsets", "گروه\u200Cهای ابزار"),
+                subtitle = if (state.availableTools.isNotEmpty()) {
+                    val enabled = state.availableTools.count { it.enabled }
+                    t(
+                        "$enabled of ${state.availableTools.size} on",
+                        "$enabled از ${state.availableTools.size} فعال",
+                    )
+                } else {
+                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                },
+                icon = Icons.Default.Build,
+                onClick = { onOpen(SettingsSection.TOOLSETS) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Plugins", "افزونه\u200Cها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToPlugins,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Skills", "مهارت\u200Cها"),
+                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
+                icon = Icons.Default.Star,
+                onClick = onNavigateToSkills,
+            )
+        }
+    }
+}
+
+/** The toolset switches. */
+@Composable
+internal fun ToolsetsSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    if (state.isLoadingTools) {
+        LoadingIndicator(t("Loading tools…", "در حال بارگذاری ابزارها…"))
+        return
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item(key = "__tools_folders") {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                SettingsNavRow(
-                    title = t("Plugins", "افزونه\u200Cها"),
-                    subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
-                    icon = Icons.Default.Extension,
-                    onClick = onNavigateToPlugins,
-                )
-                com.hermes.android.ui.design.GroupDivider()
-                SettingsNavRow(
-                    title = t("Skills", "مهارت\u200Cها"),
-                    subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
-                    icon = Icons.Default.Star,
-                    onClick = onNavigateToSkills,
-                )
-            }
-        }
-        item(key = "__tools_header") {
-            Text(
-                text = t("Toolsets", "گروه\u200Cهای ابزار"),
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        if (state.isLoadingTools) {
-            item(key = "__tools_loading") {
-                LoadingIndicator(t("Loading tools…", "در حال بارگذاری ابزارها…"))
-            }
-        } else {
-            items(state.availableTools, key = { it.name }) { tool ->
-                ToolRow(tool, viewModel)
-            }
+        items(state.availableTools, key = { it.name }) { tool ->
+            ToolRow(tool, viewModel)
         }
     }
 }
