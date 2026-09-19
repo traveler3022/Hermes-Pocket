@@ -1,7 +1,6 @@
 package com.hermes.android.runtime.linux
 
 import android.content.Context
-import android.os.Build
 import android.system.Os
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +29,15 @@ class ProotEnvironment @Inject constructor(
     private val prootBinary = File(nativeDir, "libproot.so")
     private val prootLoader = File(nativeDir, "libproot-loader.so")
 
+    /** ABI Android extracted our jniLibs for (nativeLibraryDir ends in lib/arm64 or lib/x86_64). */
+    val abi: String? = when (nativeDir.name) {
+        "arm64" -> "arm64-v8a"
+        "x86_64" -> "x86_64"
+        else -> null
+    }
+
     val isSupportedDevice: Boolean
-        get() = Build.SUPPORTED_ABIS.contains("arm64-v8a") && prootBinary.isFile && prootLoader.isFile
+        get() = abi != null && prootBinary.isFile && prootLoader.isFile
 
     val isRootfsInstalled: Boolean
         get() = File(rootfsDir, READY_MARKER).isFile

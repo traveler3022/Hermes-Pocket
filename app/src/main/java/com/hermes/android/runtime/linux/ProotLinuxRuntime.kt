@@ -71,7 +71,7 @@ class ProotLinuxRuntime @Inject constructor(
         if (_state.value is RuntimeState.Installing) return DetectionResult.Available(currentInfo())
         _state.value = RuntimeState.Detecting
         if (!environment.isSupportedDevice) {
-            val reason = "The built-in Linux runtime needs a 64-bit ARM (arm64-v8a) device."
+            val reason = "The built-in Linux runtime needs a 64-bit ARM or x86_64 device."
             _state.value = RuntimeState.Error(reason)
             return DetectionResult.Incompatible(reason)
         }
@@ -84,7 +84,7 @@ class ProotLinuxRuntime @Inject constructor(
         if (!environment.isSupportedDevice) {
             return PrerequisiteResult.Blocked(
                 title = "Device not supported",
-                instructions = "The built-in Linux runtime needs a 64-bit ARM (arm64-v8a) device. Use the Termux runtime instead.",
+                instructions = "The built-in Linux runtime needs a 64-bit ARM or x86_64 device. Use the Termux runtime instead.",
             )
         }
         val free = freeBytes()

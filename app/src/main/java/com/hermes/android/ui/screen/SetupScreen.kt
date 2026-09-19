@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -150,7 +151,7 @@ private fun StepHeader(step: SetupStep, onBack: () -> Unit) {
 }
 
 @Composable
-private fun WelcomeStep(onStart: () -> Unit) {
+private fun ColumnScope.WelcomeStep(onStart: () -> Unit) {
     Spacer(Modifier.height(48.dp))
     Icon(
         Icons.Default.RocketLaunch,
@@ -181,7 +182,7 @@ private fun WelcomeStep(onStart: () -> Unit) {
 }
 
 @Composable
-private fun RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> Unit) {
+private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val choice by viewModel.runtimeChoice.collectAsStateWithLifecycle()
     val installing by viewModel.installing.collectAsStateWithLifecycle()

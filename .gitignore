@@ -3,7 +3,7 @@
 *.zip
 *.gz
 *.tar
-!app/src/main/assets/linux/alpine-minirootfs-aarch64.tar.gz
+!app/src/main/assets/linux/alpine-minirootfs-*.tar.gz
 
 # Build directories
 build/

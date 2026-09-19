@@ -27,7 +27,7 @@ class RootfsInstaller @Inject constructor(
         val staging = File(environment.baseDir, "rootfs.staging")
         deleteTree(staging)
         staging.mkdirs()
-        context.assets.open(ROOTFS_ASSET).use { asset ->
+        context.assets.open("linux/alpine-minirootfs-${environment.abi}.tar.gz").use { asset ->
             GZIPInputStream(asset.buffered(), 64 * 1024).use { extractTar(it, staging) }
         }
         configure(staging)
@@ -168,10 +168,6 @@ class RootfsInstaller @Inject constructor(
             if (skipped > 0) remaining -= skipped
             else if (read() < 0) throw IOException("Truncated tar entry") else remaining--
         }
-    }
-
-    companion object {
-        private const val ROOTFS_ASSET = "linux/alpine-minirootfs-aarch64.tar.gz"
     }
 }
 
