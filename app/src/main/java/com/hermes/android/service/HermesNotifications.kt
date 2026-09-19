@@ -9,7 +9,6 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.hermes.android.MainActivity
 import com.hermes.android.R
-import com.hermes.android.ui.i18n.tForContext
 
 /**
  * One look for every Hermes notification: the Hermes glyph, the brand color, one channel
@@ -48,23 +47,4 @@ object HermesNotifications {
         manager.createNotificationChannel(channel)
     }
 
-    /** Human label for the step an agent is on, from the tool it is running. */
-    fun stepLabel(context: Context, toolName: String?): String {
-        val name = toolName.orEmpty().lowercase()
-        return when {
-            name.isEmpty() -> tForContext(context, "Thinking…", "در حال فکر کردن…")
-            name.startsWith("terminal") || name == "process" || name.startsWith("shell") ->
-                tForContext(context, "Running a command…", "در حال اجرای دستور…")
-            name.contains("file") || name == "patch" || name.startsWith("search_files") ->
-                tForContext(context, "Working with files…", "در حال کار با فایل‌ها…")
-            name.startsWith("web") -> tForContext(context, "Searching the web…", "در حال جستجو در وب…")
-            name.startsWith("browser") -> tForContext(context, "Using the browser…", "در حال کار با مرورگر…")
-            name.startsWith("delegate") || name.startsWith("subagent") ->
-                tForContext(context, "Working with a sub-agent…", "در حال کار با زیرعامل…")
-            name.contains("image") || name.contains("vision") ->
-                tForContext(context, "Working with images…", "در حال کار با تصویر…")
-            name.contains("memory") -> tForContext(context, "Updating memory…", "در حال به‌روزرسانی حافظه…")
-            else -> tForContext(context, "Using $toolName…", "در حال استفاده از $toolName…")
-        }
-    }
 }

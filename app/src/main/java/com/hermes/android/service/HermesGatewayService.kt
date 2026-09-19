@@ -35,10 +35,10 @@ import javax.inject.Inject
  * Keeps the gateway connection (and, for the built-in runtime, Hermes itself) alive.
  *
  * Notification design, after Aether's foreground service: nothing is shown while Hermes is
- * connected and idle. While a turn runs, the service is in the foreground with a live
- * "Hermes is working" card — session, current step, elapsed time, and a Stop button — and
- * holds a partial wake lock so the work continues with the screen off. While connecting or
- * failing, a quiet status line explains why.
+ * connected and idle. While a turn runs, the service is in the foreground with one quiet
+ * "Hermes is working" card — the session and a Stop button, nothing that changes per tool
+ * call — and holds a partial wake lock so the work continues with the screen off. While
+ * connecting or failing, a quiet status line explains why.
  */
 @AndroidEntryPoint
 class HermesGatewayService : Service() {
@@ -69,7 +69,9 @@ class HermesGatewayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Timber.i("[GatewayService] onStartCommand")
         // startForegroundService() requires startForeground() promptly, whatever comes next.
-        promote(statusNotification(tr("Connecting to Hermes…", "در حال اتصال به Hermes…")))
+        val connecting = tr("Connecting to Hermes…", "در حال اتصال به Hermes…")
+        shownKey = connecting
+        promote(statusNotification(connecting))
 
         // Proactive notifications: watch gateway events for the whole life of
         // the background connection (ChatViewModel's collector dies with the
@@ -103,14 +105,23 @@ class HermesGatewayService : Service() {
         return START_NOT_STICKY
     }
 
+    /** What the card currently says, so an unchanged render is not re-posted. */
+    private var shownKey: String? = null
+
     private fun render(state: ConnectionState, work: AgentWork?, text: String?) {
         when {
             work != null -> {
-                promote(workingNotification(work, reconnecting = state !is ConnectionState.Connected))
+                val reconnecting = state !is ConnectionState.Connected
+                val key = "work:${work.sessions}:$reconnecting"
+                if (key != shownKey) {
+                    shownKey = key
+                    promote(workingNotification(work, reconnecting))
+                }
                 holdWakeLock(true)
             }
             state is ConnectionState.Connected -> {
                 holdWakeLock(false)
+                shownKey = null
                 dismiss()
             }
             else -> {
@@ -125,7 +136,10 @@ class HermesGatewayService : Service() {
                     is ConnectionState.Failed -> tr("Connection failed", "اتصال ناموفق بود") + ": ${state.reason}"
                     is ConnectionState.Connected -> return
                 }
-                promote(statusNotification(line))
+                if (line != shownKey) {
+                    shownKey = line
+                    promote(statusNotification(line))
+                }
             }
         }
     }
@@ -224,28 +238,26 @@ class HermesGatewayService : Service() {
         val sessionTitle = work.sessions.values.firstOrNull { it.isNotBlank() }
         val title = when {
             !single -> tr("Hermes is working on ${work.sessions.size} tasks", "Hermes روی ${work.sessions.size} کار کار می‌کند")
-            sessionTitle != null -> sessionTitle
             else -> tr("Hermes is working", "Hermes در حال کار است")
         }
-        val step = if (reconnecting) {
-            tr("Reconnecting…", "در حال اتصال دوباره…")
-        } else {
-            HermesNotifications.stepLabel(this, work.toolName)
+        // One line that holds still for the whole turn: the session (or why it
+        // went quiet). Per-tool steps, the chronometer and the progress bar
+        // redrew the card every few seconds, which reads as a notification
+        // that keeps popping up.
+        val line = when {
+            reconnecting -> tr("Reconnecting…", "در حال اتصال دوباره…")
+            single -> sessionTitle ?: tr("Tap to open", "برای باز کردن بزنید")
+            else -> tr("Tap to open", "برای باز کردن بزنید")
         }
         return HermesNotifications.builder(this, WORKING_CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(step)
-            .setSubText(if (single && sessionTitle != null) tr("Working", "در حال کار") else null)
+            .setContentText(line)
             .setContentIntent(HermesNotifications.openApp(this, if (single) sessionId else null))
-            .setProgress(0, 0, true)
-            .setUsesChronometer(true)
-            .setWhen(work.startedAt)
-            .setShowWhen(true)
+            .setShowWhen(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(0, tr("Stop", "توقف"), AgentStopReceiver.pendingIntent(this, work.sessions.keys))
             .build()
     }

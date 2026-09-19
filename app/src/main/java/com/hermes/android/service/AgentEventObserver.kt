@@ -41,10 +41,9 @@ import javax.inject.Singleton
  * finishes. That requires an out-of-band push channel (FCM); without it the
  * notification lands on the next reconnect (screen-on / network return).
  */
-/** What Hermes is doing right now: running sessions (id → title), current tool, since when. */
+/** What Hermes is doing right now: the running sessions (id → title), since when. */
 data class AgentWork(
     val sessions: Map<String, String>,
-    val toolName: String?,
     val startedAt: Long,
 )
 
@@ -68,16 +67,12 @@ class AgentEventObserver @Inject constructor(
     /** Non-null while any turn is in flight — drives the "Hermes is working" notification. */
     val work: StateFlow<AgentWork?> = _work.asStateFlow()
 
-    @Volatile
-    private var currentTool: String? = null
-
     private fun publishWork() {
         val sessions = watched.toMap()
         _work.value = if (sessions.isEmpty()) {
-            currentTool = null
             null
         } else {
-            AgentWork(sessions, currentTool, _work.value?.startedAt ?: System.currentTimeMillis())
+            AgentWork(sessions, _work.value?.startedAt ?: System.currentTimeMillis())
         }
     }
 
@@ -94,19 +89,17 @@ class AgentEventObserver @Inject constructor(
                 when (event) {
                     is GatewayEvent.MessageStart -> {
                         event.sessionId?.let { watched.putIfAbsent(it, "") }
-                        currentTool = null
                         publishWork()
                         // A lost completion event must not leave "working" up forever.
                         if (gatewayClient.connectionState.value is ConnectionState.Connected) ensureReconcileLoop(scope)
                     }
                     is GatewayEvent.ToolStart -> {
-                        event.sessionId?.let { watched.putIfAbsent(it, "") }
-                        currentTool = event.name
-                        publishWork()
-                    }
-                    is GatewayEvent.ToolComplete -> {
-                        currentTool = null
-                        publishWork()
+                        // Tool steps do not change the notification (one quiet
+                        // "working" card, not a live play-by-play) — they only
+                        // matter for a session nobody told us about yet.
+                        event.sessionId?.let {
+                            if (watched.putIfAbsent(it, "") == null) publishWork()
+                        }
                     }
                     is GatewayEvent.MessageComplete -> {
                         val title = event.sessionId?.let { watched.remove(it) }
