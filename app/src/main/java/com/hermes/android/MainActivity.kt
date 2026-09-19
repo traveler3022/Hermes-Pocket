@@ -311,6 +311,20 @@ private fun HermesNavHost(
             com.hermes.android.ui.screen.LinuxToolsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onOpenTerminal = { navController.navigate("linux/terminal") },
+                onOpenDesktop = { navController.navigate("linux/desktop") },
+            )
+        }
+
+        composable("linux/desktop") {
+            com.hermes.android.ui.screen.LinuxDesktopScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenViewer = { navController.navigate("linux/desktop/viewer") },
+            )
+        }
+
+        composable("linux/desktop/viewer") {
+            com.hermes.android.ui.screen.LinuxDesktopViewerScreen(
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 

@@ -2,6 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.runtime.linux.LinuxDesktop
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -21,6 +22,8 @@ data class PackageProfile(
     val titleFa: String,
     val packages: List<String>,
     val verify: String,
+    /** Runs after `apk add`, e.g. an npm install the profile also needs. */
+    val postInstall: String? = null,
 )
 
 data class LinuxToolsUiState(
@@ -73,7 +76,11 @@ class LinuxToolsViewModel @Inject constructor(
             val command = "apk add --no-cache --no-chown ${profile.packages.joinToString(" ")}"
             _state.update { it.copy(installing = profile.id, log = listOf("$ $command"), error = null) }
             try {
-                val result = environment.run(command) { line -> appendLog(line) }
+                var result = environment.run(command) { line -> appendLog(line) }
+                profile.postInstall?.let { post ->
+                    appendLog("$ $post")
+                    result = environment.run(post) { line -> appendLog(line) }
+                }
                 // apk can exit 1 on Android ("failed to write database") after installing everything.
                 val ok = result.ok || environment.run(profile.verify).ok
                 _state.update {
@@ -113,11 +120,12 @@ class LinuxToolsViewModel @Inject constructor(
             "else echo '$STATUS_PREFIX${profile.id} missing'; fi"
     }
 
-    private companion object {
-        const val STATUS_PREFIX = "HERMES2_PROFILE "
-        const val LOG_LINES = 12
+    companion object {
+        const val DesktopProfileId = "desktop"
+        private const val STATUS_PREFIX = "HERMES2_PROFILE "
+        private const val LOG_LINES = 12
 
-        val Profiles = listOf(
+        private val Profiles = listOf(
             PackageProfile(
                 "python", "Python tools", "ابزارهای پایتون",
                 listOf("python3", "py3-pip", "py3-virtualenv"),
@@ -137,6 +145,12 @@ class LinuxToolsViewModel @Inject constructor(
                 "ssh", "SSH client", "کلاینت SSH",
                 listOf("openssh-client"),
                 "ssh -V",
+            ),
+            PackageProfile(
+                DesktopProfileId, "Browser & desktop (VNC)", "مرورگر و دسکتاپ (VNC)",
+                LinuxDesktop.Packages,
+                LinuxDesktop.VerifyCommand,
+                postInstall = LinuxDesktop.PostInstall,
             ),
         )
     }

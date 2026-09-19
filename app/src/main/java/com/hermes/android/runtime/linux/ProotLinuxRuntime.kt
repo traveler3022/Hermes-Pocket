@@ -47,6 +47,7 @@ class ProotLinuxRuntime @Inject constructor(
     private val environment: ProotEnvironment,
     private val rootfsInstaller: RootfsInstaller,
     private val stdioHub: StdioGatewayHub,
+    private val desktop: LinuxDesktop,
 ) : HermesRuntime {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -232,12 +233,16 @@ class ProotLinuxRuntime @Inject constructor(
             throw IllegalStateException(message)
         }
         _state.value = RuntimeState.Running(currentInfo(), handle)
+        // The agent's browser is this Alpine's Chromium; bring it up alongside Hermes.
+        scope.launch { runCatching { desktop.onHermesStarted() } }
         handle
     }
 
     override suspend fun stopGateway(): StopResult = gatewayMutex.withLock {
         return try {
             stopProcess()
+            // Nothing is left to browse with Hermes down.
+            runCatching { desktop.stop() }
             _state.value = if (isHermesInstalled()) RuntimeState.Installed(currentInfo()) else RuntimeState.Detected(currentInfo())
             StopResult.Success
         } catch (e: Exception) {
@@ -372,6 +377,8 @@ class ProotLinuxRuntime @Inject constructor(
             if [ -f "${'$'}PIDFILE" ]; then kill "${'$'}(cat "${'$'}PIDFILE")" 2>/dev/null && sleep 1; rm -f "${'$'}PIDFILE"; fi
             echo ${'$'}${'$'} > "${'$'}PIDFILE"
             export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
+            # Tools the agent runs (xdotool, scrot, GUI apps) land on the app's VNC desktop.
+            export DISPLAY=:99
             exec "${'$'}REPO/venv/bin/python" -u -m tui_gateway.entry
         """.trimIndent()
     }

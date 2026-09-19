@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
@@ -49,11 +50,16 @@ import com.hermes.android.ui.viewmodel.LinuxToolsViewModel
 fun LinuxToolsScreen(
     onNavigateBack: () -> Unit,
     onOpenTerminal: () -> Unit,
+    onOpenDesktop: () -> Unit,
     viewModel: LinuxToolsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val desktopNotInstalled = t(
+        "Install “Browser & desktop (VNC)” below first.",
+        "اول بستهٔ «مرورگر و دسکتاپ (VNC)» را از پایین همین صفحه نصب کنید.",
+    )
     val filesUnavailable = t(
         "No Files app found. Open your file manager and pick “Hermes”.",
         "برنامهٔ Files پیدا نشد. فایل‌منیجر گوشی را باز کنید و «Hermes» را انتخاب کنید.",
@@ -110,6 +116,22 @@ fun LinuxToolsScreen(
                     subtitle = t("Browse Alpine in Android's Files app", "مرور فایل‌های Alpine در برنامهٔ Files اندروید"),
                     icon = Icons.Default.Folder,
                     onClick = { if (!openFiles(context)) viewModel.showMessage(filesUnavailable) },
+                )
+                GroupDivider()
+                SettingRow(
+                    title = t("Browser & desktop", "مرورگر و دسکتاپ"),
+                    subtitle = t(
+                        "The Chromium the agent browses with, on a VNC screen",
+                        "همان Chromium که عامل با آن کار می‌کند، روی یک صفحهٔ VNC",
+                    ),
+                    icon = Icons.Default.DesktopWindows,
+                    onClick = {
+                        if (state.installed[LinuxToolsViewModel.DesktopProfileId] == false) {
+                            viewModel.showMessage(desktopNotInstalled)
+                        } else {
+                            onOpenDesktop()
+                        }
+                    },
                 )
             }
 
