@@ -27,8 +27,19 @@ class RootfsInstaller @Inject constructor(
         val staging = File(environment.baseDir, "rootfs.staging")
         deleteTree(staging)
         staging.mkdirs()
-        context.assets.open("linux/alpine-minirootfs-${environment.abi}.tar.gz").use { asset ->
-            GZIPInputStream(asset.buffered(), 64 * 1024).use { extractTar(it, staging) }
+        // The APK build un-gzips *.gz assets and drops the extension, so the rootfs may be
+        // packaged as either name. Same candidate list as Aether's AlpineRootfsAssetCandidates.
+        val base = "linux/alpine-minirootfs-${environment.abi}"
+        val compressed = "$base.tar.gz"
+        val plain = "$base.tar"
+        when {
+            assetExists(compressed) -> context.assets.open(compressed).use { asset ->
+                GZIPInputStream(asset.buffered(), 64 * 1024).use { extractTar(it, staging) }
+            }
+            assetExists(plain) -> context.assets.open(plain).use { asset ->
+                extractTar(asset.buffered(64 * 1024), staging)
+            }
+            else -> throw IOException("Alpine rootfs is missing from this build ($compressed or $plain)")
         }
         configure(staging)
         deleteTree(environment.rootfsDir)
@@ -36,6 +47,9 @@ class RootfsInstaller @Inject constructor(
         environment.markRootfsReady()
         onProgress("Alpine Linux is ready")
     }
+
+    private fun assetExists(path: String): Boolean =
+        runCatching { context.assets.open(path).use { true } }.getOrDefault(false)
 
     private fun configure(root: File) {
         File(root, "etc/resolv.conf").apply {
