@@ -25,6 +25,8 @@ sealed class ChatMessage {
         override val timestamp: Long,
         val text: String,
         val attachments: List<PendingAttachment> = emptyList(),
+        /** Typed before the gateway was live; goes out by itself once it is. */
+        val queued: Boolean = false,
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */
@@ -159,6 +161,19 @@ data class DrawerRenameState(
 )
 
 /**
+ * A prompt the user sent while Hermes was still booting. Hermes takes seconds to come
+ * up inside Alpine, and making the user watch that and then retype is the worst of both
+ * worlds; the message waits here and leaves as soon as there is a session to send it to.
+ */
+data class QueuedPrompt(
+    /** Id of the [ChatMessage.User] bubble already on screen for this prompt. */
+    val bubbleId: String,
+    /** Fully expanded text (prompt plus any attachment refs) to hand the gateway. */
+    val outgoing: String,
+    val isSlashCommand: Boolean,
+)
+
+/**
  * Overall state of the Chat screen.
  */
 data class ChatUiState(
@@ -169,7 +184,13 @@ data class ChatUiState(
      *  live id the gateway currently runs it under, and dies when the gateway
      *  reclaims the session. */
     val activeSessionKey: String? = null,
+    /** Waiting for a live session; sent the moment one exists. */
+    val queuedPrompt: QueuedPrompt? = null,
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
+    /** When the current connect attempt began (0 = not connecting); drives the wait UI. */
+    val connectingSince: Long = 0L,
+    /** This device's own rolling average for how long a cold start takes, in ms (0 = unknown). */
+    val bootEstimateMs: Long = 0L,
     val inputText: String = "",
     val isSending: Boolean = false,
     val errorEvent: ErrorEvent? = null,

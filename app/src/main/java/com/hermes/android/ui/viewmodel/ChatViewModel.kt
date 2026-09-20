@@ -10,13 +10,14 @@ import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
-import com.hermes.android.ui.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -158,6 +159,27 @@ class ChatViewModel @Inject constructor(
 
     // ── Connection ───────────────────────────────────────────────────────
 
+    /**
+     * Rolling average of how long this device takes to get a live gateway. Hermes is a
+     * large Python agent starting under proot, so the honest answer is "tens of seconds";
+     * measuring it per device beats a hardcoded guess that is wrong on every phone.
+     */
+    private val bootEstimate: Long
+        get() = prefs.getLong(KEY_BOOT_ESTIMATE_MS, 0L)
+
+    private fun recordBootDuration() {
+        val startedAt = _uiState.value.connectingSince
+        if (startedAt == 0L) return
+        val elapsed = System.currentTimeMillis() - startedAt
+        // Reconnects to an already-live gateway finish instantly and would drag the
+        // estimate down to nothing; only real starts belong in the average.
+        if (elapsed < MIN_BOOT_SAMPLE_MS || elapsed > MAX_BOOT_SAMPLE_MS) return
+        val previous = prefs.getLong(KEY_BOOT_ESTIMATE_MS, 0L)
+        val blended = if (previous == 0L) elapsed else (previous * 2 + elapsed) / 3
+        prefs.edit().putLong(KEY_BOOT_ESTIMATE_MS, blended).apply()
+    }
+
+
     private fun connectAndCollect() {
         connectionWatchJob?.cancel()
         eventCollectionJob?.cancel()
@@ -174,7 +196,24 @@ class ChatViewModel @Inject constructor(
                         is ConnectionState.Reconnecting -> ChatConnectionState.Reconnecting
                         is ConnectionState.Failed -> ChatConnectionState.Failed
                     }
-                    _uiState.update { it.copy(connectionState = chatState) }
+                    // Timing for the wait UI: an opaque spinner is what makes a slow start
+                    // feel broken, so the screen gets both the elapsed time and this
+                    // device's own measured estimate to show progress against.
+                    val connecting = chatState == ChatConnectionState.Connecting ||
+                        chatState == ChatConnectionState.Reconnecting
+                    _uiState.update { current ->
+                        val startedAt = when {
+                            connecting && current.connectingSince == 0L -> System.currentTimeMillis()
+                            connecting -> current.connectingSince
+                            else -> 0L
+                        }
+                        current.copy(
+                            connectionState = chatState,
+                            connectingSince = startedAt,
+                            bootEstimateMs = bootEstimate,
+                        )
+                    }
+                    if (chatState == ChatConnectionState.Connected) recordBootDuration()
 
                     if (state is ConnectionState.Disconnected ||
                         state is ConnectionState.Failed
@@ -201,6 +240,15 @@ class ChatViewModel @Inject constructor(
                         if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
                     }
+                }
+            }
+
+            // Every path that lands on a live session goes through activeSessionId, so
+            // watching it covers create, resume, activate and post-reconnect recovery
+            // without threading a flush call through each of them.
+            launch {
+                _uiState.map { it.activeSessionId }.distinctUntilChanged().collect { sessionId ->
+                    if (sessionId != null) flushQueuedPrompt(sessionId)
                 }
             }
 
@@ -300,21 +348,7 @@ class ChatViewModel @Inject constructor(
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
-        // No live session yet (still connecting, or the last one was reclaimed).
-        // This used to `return` silently: the send button did nothing at all,
-        // with no error, no spinner and no hint that anything was wrong, so the
-        // only reading available to the user was "the app is broken". Say so,
-        // and keep what they typed.
-        val sessionId = _uiState.value.activeSessionId ?: run {
-            _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(
-                tForContext(
-                    context,
-                    "Not connected yet — the message was not sent.",
-                    "هنوز متصل نشده‌ایم — پیام ارسال نشد.",
-                ),
-            )) }
-            return
-        }
+        val sessionId = _uiState.value.activeSessionId
 
         clearDraft()
 
@@ -324,24 +358,62 @@ class ChatViewModel @Inject constructor(
             else -> (text + "\n" + refs.joinToString("\n")).trim()
         }
 
+        // No live session yet — Hermes is still booting inside Alpine, which takes
+        // seconds. Park the prompt instead of rejecting it: the bubble goes up now and
+        // [flushQueuedPrompt] sends it the moment a session exists, so the boot wait
+        // costs the user nothing but time they were already spending.
+        val queued = sessionId == null
         val userMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
             text = text,
             attachments = attachments,
+            queued = queued,
         )
         _uiState.update { it.copy(
             messages = _uiState.value.messages + userMsg,
             inputText = "",
-            isSending = true,
+            isSending = !queued,
             pendingAttachments = emptyList(),
             activeTodos = emptyList(),
+            queuedPrompt = if (queued) {
+                QueuedPrompt(
+                    bubbleId = userMsg.id,
+                    outgoing = outgoing,
+                    isSlashCommand = text.startsWith("/"),
+                )
+            } else {
+                it.queuedPrompt
+            },
         ) }
+        if (queued) return
 
         if (text.startsWith("/")) {
-            handleSlashCommand(text, sessionId)
+            handleSlashCommand(text, sessionId!!)
         } else {
-            sendPrompt(outgoing, sessionId)
+            sendPrompt(outgoing, sessionId!!)
+        }
+    }
+
+    /**
+     * Sends whatever the user typed while Hermes was booting. Called on every
+     * transition into a live session; a no-op when nothing is parked.
+     */
+    private fun flushQueuedPrompt(sessionId: String) {
+        val pending = _uiState.value.queuedPrompt ?: return
+        _uiState.update { state ->
+            state.copy(
+                queuedPrompt = null,
+                isSending = true,
+                messages = state.messages.map {
+                    if (it is ChatMessage.User && it.id == pending.bubbleId) it.copy(queued = false) else it
+                },
+            )
+        }
+        if (pending.isSlashCommand) {
+            handleSlashCommand(pending.outgoing, sessionId)
+        } else {
+            sendPrompt(pending.outgoing, sessionId)
         }
     }
 
@@ -1259,6 +1331,11 @@ class ChatViewModel @Inject constructor(
     companion object {
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
+        private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
+        /** Below this, the gateway was already up and we only re-dialled. */
+        private const val MIN_BOOT_SAMPLE_MS = 1_500L
+        /** Above this, something stalled; averaging it in would poison the estimate. */
+        private const val MAX_BOOT_SAMPLE_MS = 180_000L
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
     }

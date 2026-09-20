@@ -529,7 +529,11 @@ fun ChatScreen(
                                 if (agentActivity != null) {
                                     AgentWorkingIndicator(agentActivity)
                                 } else {
-                                    ConnectionIndicator(uiState.connectionState)
+                                    ConnectionIndicator(
+                                        state = uiState.connectionState,
+                                        connectingSince = uiState.connectingSince,
+                                        bootEstimateMs = uiState.bootEstimateMs,
+                                    )
                                 }
                             }
                         }

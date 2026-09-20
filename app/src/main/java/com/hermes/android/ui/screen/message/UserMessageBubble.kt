@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -158,6 +159,27 @@ internal fun UserMessageBubble(
                                 contentDescription = if (isExpanded) t("Collapse", "جمع کردن") else t("Expand", "باز کردن"),
                                 modifier = Modifier.size(18.dp),
                                 tint = bubbleTextColor.copy(alpha = 0.6f),
+                            )
+                        }
+                    }
+                    // Sent before Hermes finished booting: say so on the bubble itself, so
+                    // the message does not read as delivered-and-ignored while it waits.
+                    if (message.queued) {
+                        Row(
+                            modifier = Modifier.padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = bubbleTextColor.copy(alpha = 0.6f),
+                            )
+                            Text(
+                                text = t("Waiting for Hermes\u2026", "در انتظار آماده شدن Hermes\u2026"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = bubbleTextColor.copy(alpha = 0.6f),
                             )
                         }
                     }
