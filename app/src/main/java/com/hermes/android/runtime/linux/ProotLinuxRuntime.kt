@@ -182,10 +182,9 @@ class ProotLinuxRuntime @Inject constructor(
         log.append(stageLog)
         environment.guestFile("/root/.hermes/logs").mkdirs()
         environment.guestFile("/root/.hermes/logs/app-install.log").appendText(stageLog.toString())
-        // apk exits 1 with "failed to write database: Permission denied" on Android: it
-        // commits its db via O_TMPFILE + linkat(), and SELinux forbids hard links in app
-        // storage. The packages are unpacked anyway, so — like Aether's
-        // installPackageProfile — accept the stage when the installed tools actually run.
+        // proot's --link2symlink stops apk's db commit (O_TMPFILE + linkat) from being denied
+        // by SELinux, but if apk still exits non-zero after unpacking everything — like
+        // Aether's installPackageProfile — accept the stage when the installed tools run.
         if (!result.ok && verify != null && environment.run(verify).ok) {
             log.appendLine("[$stage] exit ${result.exitCode}, but '$verify' succeeded — continuing")
             return

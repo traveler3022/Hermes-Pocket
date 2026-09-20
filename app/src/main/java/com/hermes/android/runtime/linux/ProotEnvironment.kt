@@ -90,6 +90,9 @@ class ProotEnvironment @Inject constructor(
         val args = mutableListOf(
             prootBinary.absolutePath,
             "--kill-on-exit",
+            // apk commits its db via O_TMPFILE + linkat(), which SELinux denies in app storage
+            // ("failed to write database: Permission denied"); proot turns those into symlinks.
+            "--link2symlink",
             "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev",
@@ -180,6 +183,10 @@ class ProotEnvironment @Inject constructor(
             "LANG" to "C.UTF-8",
             "TERM" to "xterm-256color",
             "TMPDIR" to "/tmp",
+            // Alpine ships a PEP 668 EXTERNALLY-MANAGED marker, so the agent's own `pip install`
+            // fails even as root. This rootfs is Hermes' private sandbox, not a system to protect.
+            "PIP_BREAK_SYSTEM_PACKAGES" to "1",
+            "UV_BREAK_SYSTEM_PACKAGES" to "1",
             "PATH" to "/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         )
 
