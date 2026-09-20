@@ -26,6 +26,9 @@ class HermesApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var appForegroundState: com.hermes.android.service.AppForegroundState
 
+    @Inject
+    lateinit var connectionJournal: com.hermes.android.diagnostics.ConnectionJournal
+
     override fun onCreate() {
         super.onCreate()
 
@@ -33,6 +36,12 @@ class HermesApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        // Kept in every build, not just debug: the connection problems worth chasing
+        // happen on someone's own phone, hours from any adb cable, and logcat is gone by
+        // the time they get reported. Planted before anything else runs so the very
+        // first dial of this process is already on the record.
+        Timber.plant(com.hermes.android.diagnostics.JournalTree(connectionJournal))
+        connectionJournal.noteProcessStart()
         // Foreground tracking for proactive notifications: the event observer
         // only notifies when no Activity is visible.
         registerActivityLifecycleCallbacks(appForegroundState)

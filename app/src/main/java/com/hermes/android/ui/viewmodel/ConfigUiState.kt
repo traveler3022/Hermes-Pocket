@@ -58,6 +58,8 @@ data class ConfigUiState(
     val consoleEntries: List<ConsoleEntry> = emptyList(),
     val isConsoleRunning: Boolean = false,
     val gatewayLog: List<String> = emptyList(),
+    /** Tail of the on-device connection journal, loaded on demand (it reads from disk). */
+    val connectionJournal: String = "",
     // A model pick the gateway flagged (cost / data policy / large context) awaiting the user.
     val modelSwitchConfirm: ModelSwitchConfirm? = null,
 )

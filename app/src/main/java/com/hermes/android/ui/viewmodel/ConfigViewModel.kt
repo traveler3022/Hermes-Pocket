@@ -45,6 +45,7 @@ class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val sessionRepository: com.hermes.android.data.SessionRepository,
     private val modelSwitcher: ModelSwitcher,
+    private val connectionJournal: com.hermes.android.diagnostics.ConnectionJournal,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -59,6 +60,23 @@ class ConfigViewModel @Inject constructor(
         loadAll()
         loadHubStats()
         collectGatewayLog()
+    }
+
+    /**
+     * Reads the connection journal off disk. On demand rather than in init: it is a file
+     * read that only matters when somebody has opened Advanced to look at it, and it is
+     * the one log here that outlives the process, so it must be re-read to be current.
+     */
+    fun loadConnectionJournal() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val tail = connectionJournal.tail()
+            _uiState.value = _uiState.value.copy(connectionJournal = tail)
+        }
+    }
+
+    fun clearConnectionJournal() {
+        connectionJournal.clear()
+        _uiState.value = _uiState.value.copy(connectionJournal = "")
     }
 
     fun loadAll() {

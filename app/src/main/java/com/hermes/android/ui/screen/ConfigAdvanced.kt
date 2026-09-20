@@ -352,6 +352,68 @@ internal fun AdvancedSection(
         }
 
         Text(
+            text = t("Connection Log", "لاگ اتصال"),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = t(
+                        "Every connect, drop and retry, with what the phone was doing at the " +
+                            "time — kept on disk across restarts. Copy this when reporting a " +
+                            "dropped connection.",
+                        "هر اتصال، قطعی و تلاش دوباره، همراه با وضعیت گوشی در همان لحظه — روی " +
+                            "حافظه می‌ماند و با بسته شدن برنامه پاک نمی‌شود. موقع گزارش قطعی، " +
+                            "همین را کپی کنید.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                // Loaded here rather than in the ViewModel's init: it is a disk read whose
+                // only reader is this card, and it has to be re-read to be current.
+                LaunchedEffect(Unit) { viewModel.loadConnectionJournal() }
+                if (state.connectionJournal.isNotEmpty()) {
+                    Text(
+                        text = state.connectionJournal,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                    Button(
+                        onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(state.connectionJournal))
+                        },
+                        enabled = state.connectionJournal.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                    ) { Text(t("Copy", "کپی")) }
+                    OutlinedButton(
+                        onClick = { viewModel.loadConnectionJournal() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(t("Refresh", "تازه‌سازی")) }
+                    OutlinedButton(
+                        onClick = { viewModel.clearConnectionJournal() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(t("Clear", "پاک کردن")) }
+                }
+            }
+        }
+
+        Text(
             text = t("Current Configuration", "پیکربندی فعلی"),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
