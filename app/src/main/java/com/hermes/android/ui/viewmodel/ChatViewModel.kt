@@ -338,6 +338,10 @@ class ChatViewModel @Inject constructor(
                 activeSessionKey = null,
                 activeTodos = emptyList(),
                 pendingApproval = null,
+                // Starting a new chat mid-turn dropped the session id while isSending
+                // stayed true; if session.new then failed nothing ever cleared it and
+                // the composer stayed locked.
+                isSending = false,
             ) }
             sessionDelegate.create(_uiState)
         }
@@ -498,7 +502,11 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopGeneration() {
-        val sessionId = _uiState.value.activeSessionId ?: return
+        // The state reset comes first and unconditionally. Stop is the only way out of
+        // isSending, and returning early on a missing session id — which happens when a
+        // new chat is started mid-turn and session.new then fails — left the button
+        // pressed with nothing able to release it: Send disabled, Stop inert, forever.
+        val sessionId = _uiState.value.activeSessionId
         streamingDelegate.finalizeOrphanedMessage("(stopped)")
         _uiState.update { it.copy(
             messages = _uiState.value.messages.updateAll({ msg ->
@@ -508,6 +516,7 @@ class ChatViewModel @Inject constructor(
             },
             isSending = false,
         ) }
+        if (sessionId == null) return
         viewModelScope.launch {
             try {
                 val params = buildJsonObject { put("session_id", sessionId) }

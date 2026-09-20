@@ -110,6 +110,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxSpace
@@ -185,6 +187,8 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
@@ -303,7 +307,29 @@ fun ChatScreen(
 
     // Keep drawer state in sync with ViewModel state.
     LaunchedEffect(uiState.showSessionDrawer) {
-        if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
+        if (uiState.showSessionDrawer) {
+            drawerState.open()
+        } else {
+            drawerState.close()
+        }
+    }
+
+    // ...and the ViewModel in sync with the drawer. The sheet closes by paths the
+    // ViewModel never hears about — the scrim, a swipe, the back gesture, Settings
+    // and Tasks — after which showSessionDrawer was still true, so the next tap on
+    // the hamburger toggled it to false and the drawer simply did not open. Every
+    // second tap did nothing.
+    //
+    // Hiding the keyboard lives here rather than in the effect above so it also
+    // covers the drawer being swiped open: otherwise the keyboard stays up and
+    // covers the buttons at the foot of the sheet.
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        } else if (uiState.showSessionDrawer) {
+            viewModel.closeSessionDrawer()
+        }
     }
 
     // The avatar is customized from Settings (a separate ViewModel writing

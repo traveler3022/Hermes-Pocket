@@ -8,8 +8,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -25,8 +27,7 @@ internal class ChatSessionDelegate(
     suspend fun createOrResume(state: MutableStateFlow<ChatUiState>) {
         val mostRecentId = try {
             val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-                ?.takeIf { it.isNotBlank() }
+            (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
         } catch (e: Exception) {
             Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
             null
@@ -41,10 +42,7 @@ internal class ChatSessionDelegate(
     suspend fun create(state: MutableStateFlow<ChatUiState>) {
         try {
             val result = gatewayClient.request(GatewayMethods.SESSION_CREATE)
-            val sessionId = (result as? JsonObject)
-                ?.get("session_id")
-                ?.let { it as? JsonPrimitive }
-                ?.content
+            val sessionId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
             val storedId = ((result as? JsonObject)?.get("stored_session_id") as? JsonPrimitive)
                 ?.takeIf { it.isString }
                 ?.content
@@ -243,7 +241,7 @@ internal class ChatSessionDelegate(
                 GatewayMethods.SESSION_BRANCH,
                 jsonToElementMap(buildJsonObject { put("session_id", sid) }),
             )
-            val newId = ((result as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
+            val newId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
             loadList(state)
             if (newId != null) {
                 resume(state, newId)
@@ -263,7 +261,7 @@ internal class ChatSessionDelegate(
     suspend fun resolveLiveSessionId(state: MutableStateFlow<ChatUiState>): String? {
         return try {
             val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            ((mr as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
+            (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
         } catch (e: Exception) {
             null
         } ?: state.value.activeSessionId
@@ -387,3 +385,15 @@ internal fun List<ChatMessage>.withReplyLanded(
         reasoning = reasoning?.takeIf { it.isNotBlank() },
     )
 }
+
+/**
+ * A session id the gateway actually gave us, or null.
+ *
+ * `JsonNull` is a `JsonPrimitive`, and its `.content` is the four-character string
+ * "null" — which sailed straight into activeSessionId and produced a stream of
+ * `session.activate session_id='null'` calls against a session that never existed.
+ * `contentOrNull` handles JsonNull; the literal check covers a server that sends the
+ * string "null" in a JSON string.
+ */
+private fun JsonElement?.sessionIdOrNull(): String? =
+    (this as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
