@@ -1017,6 +1017,13 @@ class ChatViewModel @Inject constructor(
                     event.text
                 }
                 val streamingId = streamingDelegate.currentAssistantMessageId
+                // Nothing on screen to settle AND nothing in the frame: the reply
+                // exists only in the stored history (a turn this screen never saw
+                // stream — muted, queued or auto-continued — or lost frames).
+                val replyOnlyInHistory = finalText.isBlank() && _uiState.value.messages.none { msg ->
+                    msg is ChatMessage.Assistant && msg.isStreaming &&
+                        (streamingId == null || msg.id == streamingId)
+                }
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.withReplyLanded(
                         streamingId, finalText, event.reasoning,
@@ -1036,7 +1043,7 @@ class ChatViewModel @Inject constructor(
                     activeTodos = emptyList(),
                 ) }
                 streamingDelegate.reset()
-                if (recoverOnTurnEnd) {
+                if (recoverOnTurnEnd || replyOnlyInHistory) {
                     recoverOnTurnEnd = false
                     val sid = _uiState.value.activeSessionId
                     if (sid != null) viewModelScope.launch { recoverActiveSession(sid, turnEnded = true) }
