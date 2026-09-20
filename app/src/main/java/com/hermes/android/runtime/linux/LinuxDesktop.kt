@@ -86,18 +86,42 @@ class LinuxDesktop @Inject constructor(
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<Settings> = _settings.asStateFlow()
 
-    /** noVNC's page for the in-app viewer; carries the VNC password when one is required. */
+    /** noVNC's page for the in-app viewer; carries the VNC password, which is never empty. */
     val viewerUrl: String
         get() {
-            val current = _settings.value
-            val password = if (current.vncLan && current.vncPassword.isNotEmpty()) {
-                "&password=" + URLEncoder.encode(current.vncPassword, "UTF-8")
-            } else {
-                ""
-            }
+            val password = URLEncoder.encode(_settings.value.effectiveVncPassword, "UTF-8")
             return "http://127.0.0.1:$NoVncPort/vnc_lite.html?autoconnect=true&scale=true&show_dot=true" +
-                "&path=websockify$password"
+                "&path=websockify&password=$password"
         }
+
+    /**
+     * The password Xvnc enforces: the user's when they share on the LAN, an auto-generated
+     * per-install secret otherwise.
+     *
+     * There is no such thing as a private loopback on Android — 127.0.0.1 is the same
+     * interface for every app on the device, and INTERNET is a permission users are never
+     * asked about. An unauthenticated Xvnc (`-SecurityTypes None`) therefore handed any
+     * installed app full view and control of this desktop, including whatever the user is
+     * signed into in its Chromium. `-localhost` does not help: it only excludes the LAN.
+     */
+    private val Settings.effectiveVncPassword: String
+        get() = if (vncLan && vncPassword.isNotEmpty()) vncPassword else localVncSecret
+
+    /** Per-install VNC secret, so the desktop is never reachable without one. */
+    private val localVncSecret: String by lazy {
+        prefs.getString(KEY_VNC_SECRET, null)?.takeIf { it.isNotBlank() }
+            ?: newVncSecret().also { prefs.edit().putString(KEY_VNC_SECRET, it).apply() }
+    }
+
+    /**
+     * A fresh VNC secret. VncAuth's DES key is 8 bytes and `vncpasswd` silently truncates
+     * anything longer, so 8 characters is the whole budget — spend it on a wide alphabet.
+     */
+    private fun newVncSecret(): String {
+        val alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val random = java.security.SecureRandom()
+        return (1..8).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
+    }
 
     /** Chromium, the X server, noVNC and agent-browser are all present. */
     suspend fun isInstalled(): Boolean =
@@ -267,14 +291,16 @@ class LinuxDesktop @Inject constructor(
 
         val current = _settings.value
         val stateDir = environment.guestFile(StateDir).apply { mkdirs() }
-        val usePassword = current.vncLan && current.vncPassword.isNotEmpty()
+        val onLan = current.vncLan && current.vncPassword.isNotEmpty()
         stateDir.resolve("desktop.env").writeText(
             buildString {
                 appendLine("WIDTH=${current.resolution.width}")
                 appendLine("HEIGHT=${current.resolution.height}")
                 appendLine("HOMEPAGE=${shellQuote(current.homepage.ifBlank { DefaultHomepage })}")
-                appendLine("VNC_LAN=${if (usePassword) 1 else 0}")
-                if (usePassword) appendLine("VNC_PASSWORD=${shellQuote(current.vncPassword)}")
+                // VNC_LAN only decides whether Xvnc also listens off-device; the password
+                // below is enforced either way.
+                appendLine("VNC_LAN=${if (onLan) 1 else 0}")
+                appendLine("VNC_PASSWORD=${shellQuote(current.effectiveVncPassword)}")
             },
         )
         stateDir.resolve("desktop.env").setReadable(false, false)
@@ -369,6 +395,7 @@ class LinuxDesktop @Inject constructor(
         private const val KEY_HOMEPAGE = "homepage"
         private const val KEY_VNC_LAN = "vnc_lan"
         private const val KEY_VNC_PASSWORD = "vnc_password"
+        private const val KEY_VNC_SECRET = "vnc_local_secret"
 
         private const val StartTimeoutMillis = 60_000L
         private const val ScriptPath = "/usr/local/bin/hermes-desktop"
@@ -441,13 +468,17 @@ class LinuxDesktop @Inject constructor(
             CHROME_BIN="${'$'}(command -v chromium-browser || command -v chromium || true)"
             if [ -z "${'$'}CHROME_BIN" ]; then echo "Chromium is not installed"; exit 1; fi
 
-            if [ "${'$'}VNC_LAN" = 1 ] && [ -n "${'$'}VNC_PASSWORD" ]; then
-                printf '%s\n' "${'$'}VNC_PASSWORD" | vncpasswd -f > "${'$'}STATE/vncpasswd"
-                chmod 600 "${'$'}STATE/vncpasswd"
-                VNC_ACCESS="-SecurityTypes VncAuth -PasswordFile ${'$'}STATE/vncpasswd"
-            else
-                VNC_ACCESS="-SecurityTypes None -localhost"
+            # Always authenticate. Every app on an Android device shares 127.0.0.1, so an
+            # open Xvnc is an open door, not a local-only convenience. A stale desktop.env
+            # without a password gets a random one — the viewer failing to connect is the
+            # safe outcome; an unauthenticated desktop is not.
+            if [ -z "${'$'}VNC_PASSWORD" ]; then
+                VNC_PASSWORD=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)
             fi
+            printf '%s\n' "${'$'}VNC_PASSWORD" | vncpasswd -f > "${'$'}STATE/vncpasswd"
+            chmod 600 "${'$'}STATE/vncpasswd"
+            VNC_ACCESS="-SecurityTypes VncAuth -PasswordFile ${'$'}STATE/vncpasswd"
+            [ "${'$'}VNC_LAN" = 1 ] || VNC_ACCESS="${'$'}VNC_ACCESS -localhost"
 
             cleanup() {
                 trap - EXIT INT TERM
@@ -477,7 +508,7 @@ class LinuxDesktop @Inject constructor(
                         --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
                         --no-default-browser-check --password-store=basic \
                         --remote-debugging-address=127.0.0.1 --remote-debugging-port="${'$'}CDP_PORT" \
-                        --remote-allow-origins='*' --user-data-dir=$ProfileDir \
+                        --user-data-dir=$ProfileDir \
                         --window-size="${'$'}WIDTH,${'$'}HEIGHT" --window-position=0,0 --start-maximized \
                         --ozone-platform=x11 "${'$'}HOMEPAGE" || true
                     if [ ${'$'}(( ${'$'}(date +%s) - began )) -lt 15 ]; then fails=${'$'}((fails + 1)); else fails=0; fi
