@@ -27,7 +27,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,6 +90,8 @@ fun LinuxDesktopViewerScreen(
     var imeBridgeValue by remember { mutableStateOf(newImeBridgeValue()) }
     var errorMessage by remember { mutableStateOf("") }
     var starting by remember { mutableStateOf(true) }
+    /** false = touchpad (one finger nudges the pointer); true = the pointer follows the finger. */
+    var directTouch by remember { mutableStateOf(false) }
 
     fun showKeyboard() {
         imeBridgeValue = newImeBridgeValue()
@@ -101,7 +105,7 @@ fun LinuxDesktopViewerScreen(
     fun connect() {
         scope.launch {
             starting = true
-            viewModel.start()
+            viewModel.startViewing()
                 .onSuccess {
                     errorMessage = ""
                     webView?.loadUrl(viewModel.viewerUrl)
@@ -130,6 +134,9 @@ fun LinuxDesktopViewerScreen(
             webView?.stopLoading()
             webView?.destroy()
             webView = null
+            // Leaving the screen kills the stream: nothing of this desktop is reachable
+            // from anywhere while nobody is looking at it.
+            viewModel.stopViewing()
         }
     }
 
@@ -154,6 +161,21 @@ fun LinuxDesktopViewerScreen(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
+            IconButton(
+                onClick = {
+                    directTouch = !directTouch
+                    webView?.setPointerMode(if (directTouch) "touch" else "pad")
+                },
+            ) {
+                Icon(
+                    imageVector = if (directTouch) Icons.Default.TouchApp else Icons.Default.Mouse,
+                    contentDescription = if (directTouch) {
+                        t("Touch mode — tap where you want", "حالت لمس — هرجا بزنی همان‌جا")
+                    } else {
+                        t("Touchpad mode — drag to move the pointer", "حالت ماوس — با کشیدن نشانگر را ببر")
+                    },
+                )
+            }
             IconButton(onClick = { showKeyboard() }) {
                 Icon(Icons.Default.Keyboard, contentDescription = t("Keyboard", "کیبورد"))
             }
@@ -174,6 +196,7 @@ fun LinuxDesktopViewerScreen(
                     onRemoteLeftClick = { _, y ->
                         scope.launch { if (viewModel.shouldShowKeyboard(y)) showKeyboard() }
                     },
+                    pointerMode = { if (directTouch) "touch" else "pad" },
                     onCreated = { webView = it },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -220,6 +243,7 @@ fun LinuxDesktopViewerScreen(
 private fun DesktopVncWebView(
     url: String,
     onRemoteLeftClick: (Int, Int) -> Unit,
+    pointerMode: () -> String,
     onCreated: (WebView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -236,6 +260,8 @@ private fun DesktopVncWebView(
                     override fun onPageFinished(view: WebView, pageUrl: String?) {
                         super.onPageFinished(view, pageUrl)
                         view.evaluateJavascript(ViewportScript, null)
+                        // A reconnect rebuilds the input layer; the user's choice outlives it.
+                        view.setPointerMode(pointerMode())
                     }
                 }
                 settings.javaScriptEnabled = true
@@ -267,6 +293,18 @@ private class DesktopBridge(
 
 private fun WebView.sendVncText(text: String) {
     evaluateJavascript("window.hermesVncInput && window.hermesVncInput.sendText(${JSONObject.quote(text)});", null)
+}
+
+/**
+ * Sets the pointer mode, surviving the race with the input layer's own install: the global
+ * is what [ViewportScript] reads when it comes up, the call is what a live layer listens to.
+ */
+private fun WebView.setPointerMode(mode: String) {
+    evaluateJavascript(
+        "window.hermesVncPointerMode = ${JSONObject.quote(mode)};" +
+            "window.hermesVncInput && window.hermesVncInput.setPointerMode(${JSONObject.quote(mode)});",
+        null,
+    )
 }
 
 private fun WebView.sendVncKey(key: String) {
@@ -399,6 +437,14 @@ private val ViewportScript = """
         let scrollFrame = 0;
         let gestureActive = false;
         let leftDragActive = false;
+        // 'pad' is the touchpad: one finger nudges the pointer. 'touch' puts the pointer
+        // exactly where the finger lands, the way the phone's own screen behaves.
+        let pointerMode = window.hermesVncPointerMode === 'touch' ? 'touch' : 'pad';
+        let zoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let pinchDistance = 0;
+        let pinching = false;
 
         const centroid = touches => {
           let x = 0;
@@ -422,6 +468,52 @@ private val ViewportScript = """
             x: rect.left + cursorX * rect.width / Math.max(1, canvas.width),
             y: rect.top + cursorY * rect.height / Math.max(1, canvas.height),
           };
+        };
+
+        const applyTransform = () => {
+          canvas.style.transformOrigin = '0 0';
+          canvas.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')';
+        };
+
+        // Keep the zoomed canvas covering the area it occupied at 1x — no dead margins.
+        const clampPan = () => {
+          const maxX = Math.max(0, canvas.offsetWidth * zoom - canvas.offsetWidth);
+          const maxY = Math.max(0, canvas.offsetHeight * zoom - canvas.offsetHeight);
+          panX = Math.min(0, Math.max(-maxX, panX));
+          panY = Math.min(0, Math.max(-maxY, panY));
+        };
+
+        /** Zooms to [nextZoom] leaving the pixel under the anchor where it is. */
+        const setZoom = (nextZoom, anchorX, anchorY) => {
+          const previous = zoom;
+          const next = Math.max(1, Math.min(4, nextZoom));
+          if (Math.abs(next - previous) < 0.001) return;
+          const rect = canvas.getBoundingClientRect();
+          const baseLeft = rect.left - panX;
+          const baseTop = rect.top - panY;
+          const unitX = (anchorX - rect.left) / previous;
+          const unitY = (anchorY - rect.top) / previous;
+          zoom = next;
+          panX = anchorX - unitX * zoom - baseLeft;
+          panY = anchorY - unitY * zoom - baseTop;
+          clampPan();
+          applyTransform();
+        };
+
+        const resetZoom = () => {
+          zoom = 1;
+          panX = 0;
+          panY = 0;
+          applyTransform();
+        };
+
+        /** Puts the pointer under the finger. getBoundingClientRect already includes zoom. */
+        const setCursorFromClient = (clientX, clientY) => {
+          const rect = canvas.getBoundingClientRect();
+          cursorX = Math.max(0, Math.min(canvas.width - 1,
+            (clientX - rect.left) * canvas.width / Math.max(1, rect.width)));
+          cursorY = Math.max(0, Math.min(canvas.height - 1,
+            (clientY - rect.top) * canvas.height / Math.max(1, rect.height)));
         };
 
         const dispatchMouse = (target, type, button, buttons) => {
@@ -588,6 +680,8 @@ private val ViewportScript = """
           maxTouches = 0;
           moved = false;
           gestureActive = false;
+          pinchDistance = 0;
+          pinching = false;
         };
 
         document.addEventListener('touchstart', event => {
@@ -610,6 +704,19 @@ private val ViewportScript = """
           startY = position.y;
           lastX = position.x;
           lastY = position.y;
+          if (event.touches.length === 2) {
+            pinchDistance = Math.hypot(
+              event.touches[0].clientX - event.touches[1].clientX,
+              event.touches[0].clientY - event.touches[1].clientY,
+            );
+            pinching = false;
+            // A second finger means zoom or scroll, never a drag left over from the first.
+            endLeftDrag();
+          } else if (event.touches.length === 1 && pointerMode === 'touch') {
+            setCursorFromClient(position.x, position.y);
+            emitMouse('mousemove', 0, 0);
+            beginLeftDrag();
+          }
         }, { capture: true, passive: false });
 
         document.addEventListener('touchmove', event => {
@@ -620,9 +727,32 @@ private val ViewportScript = """
           const deltaY = position.y - lastY;
           if (Math.hypot(position.x - startX, position.y - startY) > 8) moved = true;
           if (maxTouches === 1 && event.touches.length === 1) {
-            scheduleCursorMove(deltaX, deltaY);
+            if (pointerMode === 'touch') {
+              setCursorFromClient(position.x, position.y);
+              emitMouse('mousemove', 0, leftDragActive ? 1 : 0);
+            } else {
+              scheduleCursorMove(deltaX, deltaY);
+            }
           } else if (maxTouches === 2 && event.touches.length === 2) {
-            scheduleScroll(deltaX, deltaY);
+            const spread = Math.hypot(
+              event.touches[0].clientX - event.touches[1].clientX,
+              event.touches[0].clientY - event.touches[1].clientY,
+            );
+            if (pinchDistance === 0) pinchDistance = spread;
+            // Fingers changing their distance is a pinch; fingers keeping it and moving
+            // together is a scroll (or a pan, once there is something to pan over).
+            if (pinching || Math.abs(spread - pinchDistance) > 24) {
+              pinching = true;
+              setZoom(zoom * (spread / Math.max(1, pinchDistance)), position.x, position.y);
+              pinchDistance = spread;
+            } else if (zoom > 1) {
+              panX += deltaX;
+              panY += deltaY;
+              clampPan();
+              applyTransform();
+            } else {
+              scheduleScroll(deltaX, deltaY);
+            }
           } else if (maxTouches === 3 && event.touches.length === 3 && moved) {
             beginLeftDrag();
             scheduleCursorMove(deltaX, deltaY);
@@ -645,7 +775,9 @@ private val ViewportScript = """
           flushScroll();
           const isTap = !moved && performance.now() - startTime <= 450;
           if (isTap && maxTouches === 1) {
-            click();
+            // In direct-touch mode the finger landing already pressed the button, so
+            // clicking again here would double every tap.
+            if (pointerMode !== 'touch') click();
             // Tapping Chromium's address bar: select what is there, ready to be replaced.
             if (cursorY >= 34 && cursorY <= 100) {
               window.setTimeout(() => {
@@ -658,11 +790,13 @@ private val ViewportScript = """
             if (window.HermesDesktopBridge) {
               window.HermesDesktopBridge.onLeftClick(Math.round(cursorX), Math.round(cursorY));
             }
-          } else if (isTap && maxTouches === 2) {
+          } else if (isTap && maxTouches === 2 && !pinching) {
             sendGesture('twotap');
           }
           maxTouches = 0;
           gestureActive = false;
+          pinchDistance = 0;
+          pinching = false;
         }, { capture: true, passive: false });
 
         document.addEventListener('touchcancel', event => {
@@ -675,6 +809,12 @@ private val ViewportScript = """
 
         window.hermesVncInput = {
           sendKey,
+          setPointerMode(mode) {
+            endLeftDrag();
+            pointerMode = mode === 'touch' ? 'touch' : 'pad';
+            window.hermesVncPointerMode = pointerMode;
+          },
+          resetZoom,
           sendText(text) {
             for (const character of text) {
               if (character === '\n') {

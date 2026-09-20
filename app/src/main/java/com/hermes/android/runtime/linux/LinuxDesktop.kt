@@ -5,11 +5,14 @@ import com.hermes.android.gateway.StdioGatewayHub
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -80,11 +83,22 @@ class LinuxDesktop @Inject constructor(
     @Volatile
     private var process: Process? = null
 
+    /** websockify, held for as long as the user is watching. */
+    @Volatile
+    private var viewerProcess: Process? = null
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val _state = MutableStateFlow<State>(State.Stopped)
     val state: StateFlow<State> = _state.asStateFlow()
 
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<Settings> = _settings.asStateFlow()
+
+    private val _viewing = MutableStateFlow(false)
+
+    /** Whether the VNC bridge is up — i.e. the desktop is streamable right now. */
+    val viewing: StateFlow<Boolean> = _viewing.asStateFlow()
 
     /** noVNC's page for the in-app viewer; carries the VNC password, which is never empty. */
     val viewerUrl: String
@@ -166,6 +180,66 @@ class LinuxDesktop @Inject constructor(
 
     suspend fun stop() = mutex.withLock { stopLocked() }
 
+    /**
+     * Brings up the VNC bridge the user watches through, starting the desktop first if the
+     * agent has not already. Kept apart from [start] deliberately: the agent's browsing needs
+     * Chromium on the X display, not a live feed of it, so websockify only costs memory while
+     * somebody is actually looking — and nothing is streamable until the user asks.
+     */
+    suspend fun startViewer(): Result<Unit> {
+        start().onFailure { return Result.failure(it) }
+        return withContext(Dispatchers.IO) {
+            if (viewerProcess?.isAlive == true && portOpen(NoVncPort)) {
+                _viewing.value = true
+                return@withContext Result.success(Unit)
+            }
+            runCatching {
+                stopViewerProcess()
+                val log = environment.guestFile(LogPath).also { it.parentFile?.mkdirs() }
+                val started = environment.processBuilder("hermes-desktop view")
+                    .redirectOutput(ProcessBuilder.Redirect.to(log))
+                    .start()
+                    .also { it.outputStream.close() }
+                viewerProcess = started
+                check(waitForPort(NoVncPort)) { "The VNC bridge did not come up." }
+                _viewing.value = true
+            }.onFailure {
+                stopViewerProcess()
+                Timber.w(it, "[Desktop] Could not start the viewer bridge")
+            }
+        }
+    }
+
+    /**
+     * Fire-and-forget [stopViewer] on a scope that outlives the viewer screen — a ViewModel's
+     * own scope is already cancelled by the time its onDispose runs, which would have left
+     * the bridge up exactly when the user walked away from it.
+     */
+    fun stopViewerAsync() {
+        appScope.launch { stopViewer() }
+    }
+
+    /** Stops the VNC bridge; the desktop itself keeps running for the agent. */
+    suspend fun stopViewer() {
+        withContext(Dispatchers.IO) { stopViewerProcess() }
+        _viewing.value = false
+    }
+
+    private fun stopViewerProcess() {
+        val running = viewerProcess ?: return
+        viewerProcess = null
+        running.destroy()
+        if (!running.waitFor(3, TimeUnit.SECONDS)) running.destroyForcibly()
+    }
+
+    private suspend fun waitForPort(port: Int): Boolean {
+        repeat(40) {
+            if (portOpen(port)) return true
+            delay(100)
+        }
+        return false
+    }
+
     suspend fun restart(): Result<Unit> {
         stop()
         return start()
@@ -193,10 +267,15 @@ class LinuxDesktop @Inject constructor(
         return needsRestart && _state.value == State.Running
     }
 
-    /** Called once Hermes itself is up: keep the agent's browser ready if it uses this one. */
+    /**
+     * Called once Hermes itself is up. Writes the guest config and stops there: Chromium and
+     * its X server are several hundred megabytes of RAM that most sessions never touch, so
+     * the desktop now starts when something actually needs it — the agent's first browser
+     * call (the skill tells it to run `hermes-desktop start`) or the user opening the viewer.
+     */
     suspend fun onHermesStarted() {
-        if (!_settings.value.agentBrowser || !isInstalled()) return
-        start()
+        if (!_settings.value.agentBrowser || !environment.isRootfsInstalled) return
+        withContext(Dispatchers.IO) { runCatching { writeGuestFiles() } }
     }
 
     /**
@@ -254,6 +333,8 @@ class LinuxDesktop @Inject constructor(
             }
         }
         process = null
+        withContext(Dispatchers.IO) { stopViewerProcess() }
+        _viewing.value = false
         _state.value = State.Stopped
     }
 
@@ -271,9 +352,8 @@ class LinuxDesktop @Inject constructor(
         )
     }
 
-    private suspend fun isUp(): Boolean = withContext(Dispatchers.IO) {
-        portOpen(CdpPort) && portOpen(NoVncPort)
-    }
+    // The desktop is up when Chromium is; the noVNC bridge is a separate, user-driven thing.
+    private suspend fun isUp(): Boolean = withContext(Dispatchers.IO) { portOpen(CdpPort) }
 
     private fun portOpen(port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }
@@ -447,11 +527,19 @@ class LinuxDesktop @Inject constructor(
             case "${'$'}{1:-start}" in
                 status) if running; then echo running; exit 0; fi; echo stopped; exit 1 ;;
                 stop) stop_desktop; echo stopped; exit 0 ;;
+                # Runs in the foreground: whoever starts it owns it, and killing that
+                # process is what turns the stream off. proot's --kill-on-exit would reap a
+                # backgrounded one the moment this script returned.
+                view)
+                    running || { echo "the desktop is not running" >&2; exit 1; }
+                    for i in ${'$'}(seq 1 50); do [ -S "${'$'}STATE/vnc.sock" ] && break; sleep 0.1; done
+                    exec websockify --web=/usr/share/novnc \
+                        --unix-target="${'$'}STATE/vnc.sock" 127.0.0.1:"${'$'}NOVNC_PORT" ;;
                 wait)
                     for i in ${'$'}(seq 1 120); do running && { echo running; exit 0; }; sleep 0.5; done
                     echo "desktop did not start; see ${'$'}LOG" >&2; exit 1 ;;
                 start) ;;
-                *) echo "usage: hermes-desktop [start|stop|status|wait]" >&2; exit 2 ;;
+                *) echo "usage: hermes-desktop [start|stop|status|wait|view]" >&2; exit 2 ;;
             esac
 
             if running; then
@@ -477,12 +565,22 @@ class LinuxDesktop @Inject constructor(
             fi
             printf '%s\n' "${'$'}VNC_PASSWORD" | vncpasswd -f > "${'$'}STATE/vncpasswd"
             chmod 600 "${'$'}STATE/vncpasswd"
+            # No TCP port unless the user deliberately shares on the LAN: Xvnc listens on a
+            # unix socket inside the rootfs, which the Android sandbox really does keep to
+            # this app — unlike 127.0.0.1, which every app on the phone shares. websockify
+            # bridges that socket to the viewer, and only while somebody is watching.
+            rm -f "${'$'}STATE/vnc.sock"
             VNC_ACCESS="-SecurityTypes VncAuth -PasswordFile ${'$'}STATE/vncpasswd"
-            [ "${'$'}VNC_LAN" = 1 ] || VNC_ACCESS="${'$'}VNC_ACCESS -localhost"
+            VNC_ACCESS="${'$'}VNC_ACCESS -rfbunixpath ${'$'}STATE/vnc.sock -rfbunixmode 0600"
+            if [ "${'$'}VNC_LAN" = 1 ]; then
+                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport ${'$'}VNC_PORT"
+            else
+                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport -1"
+            fi
 
             cleanup() {
                 trap - EXIT INT TERM
-                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{NOVNC_PID:-} ${'$'}{OPENBOX_PID:-} ${'$'}{VNC_PID:-}; do
+                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{VNC_PID:-}; do
                     kill "${'$'}pid" 2>/dev/null || true
                 done
                 pkill -x chromium 2>/dev/null || true
@@ -491,7 +589,7 @@ class LinuxDesktop @Inject constructor(
             trap cleanup EXIT INT TERM
 
             # shellcheck disable=SC2086
-            Xvnc :99 -geometry "${'$'}{WIDTH}x${'$'}{HEIGHT}" -depth 24 ${'$'}VNC_ACCESS -rfbport "${'$'}VNC_PORT" \
+            Xvnc :99 -geometry "${'$'}{WIDTH}x${'$'}{HEIGHT}" -depth 24 ${'$'}VNC_ACCESS \
                 -AlwaysShared -extension MIT-SHM -nolock -ac &
             VNC_PID=${'$'}!
             echo ${'$'}${'$'} > "${'$'}PIDS"
@@ -523,10 +621,8 @@ class LinuxDesktop @Inject constructor(
                 kill -0 "${'$'}CHROME_LOOP" 2>/dev/null || exit 1
                 sleep 0.1
             done
-            websockify --web=/usr/share/novnc 127.0.0.1:"${'$'}NOVNC_PORT" 127.0.0.1:"${'$'}VNC_PORT" &
-            NOVNC_PID=${'$'}!
-            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP ${'$'}NOVNC_PID > "${'$'}PIDS"
-            echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT noVNC=${'$'}NOVNC_PORT VNC=${'$'}VNC_PORT"
+            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
+            echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
             wait "${'$'}VNC_PID"
         """.trimIndent() + "\n"
 
@@ -547,15 +643,24 @@ class LinuxDesktop @Inject constructor(
             # Built-in desktop (Hermes Android)
 
             Hermes runs inside Alpine Linux on the user's phone. The app provides a virtual
-            desktop — X display `:99`, openbox, Chromium — which the user watches live in the
-            app's VNC viewer (Linux → Browser & desktop). Anything you do there, they can see.
+            desktop — X display `:99`, openbox, Chromium — which the user can watch live in
+            the app's VNC viewer (Linux → Browser & desktop). Anything you do there, they can
+            see, but only while they have that screen open.
+
+            **The desktop is not running by default.** Chromium and its X server cost the
+            phone several hundred megabytes, so they start on demand and nothing streams
+            until the user asks for it.
 
             ## Browser
-            - The `browser_*` tools already drive this Chromium over CDP
-              (`browser.cdp_url = http://127.0.0.1:9222`). Prefer them for web pages.
-            - If a browser tool fails to connect, the desktop is down. Start it in the
-              background, then wait:
+            - Start the desktop before your first browser call of a session:
               `nohup hermes-desktop start >/dev/null 2>&1 &` then `hermes-desktop wait`.
+              It is idempotent and returns at once when the desktop is already up.
+            - The `browser_*` tools then drive this Chromium over CDP
+              (`browser.cdp_url = http://127.0.0.1:9222`). Prefer them for web pages.
+            - A browser tool that fails to connect means the desktop is down — start it as
+              above and retry.
+            - `hermes-desktop stop` when a long job no longer needs a browser; it gives the
+              phone its memory back.
             - Logins and cookies persist in `/root/.hermes/chrome-profile`.
 
             ## Whole desktop (VNC)

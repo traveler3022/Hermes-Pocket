@@ -46,6 +46,20 @@ class LinuxDesktopViewModel @Inject constructor(
         if (result.isSuccess) _ui.update { it.copy(restartPending = false) }
     }
 
+    /**
+     * What the viewer screen calls on the way in: brings the desktop up if nothing else has,
+     * then the VNC bridge on top of it.
+     */
+    suspend fun startViewing(): Result<Unit> = desktop.startViewer().also { result ->
+        if (result.isSuccess) _ui.update { it.copy(restartPending = false) }
+    }
+
+    /**
+     * On the way out. Nothing is streamable once the user stops looking — the bridge dies
+     * with the screen, while the desktop itself keeps serving the agent.
+     */
+    fun stopViewing() = desktop.stopViewerAsync()
+
     fun startInBackground() {
         viewModelScope.launch { start() }
     }
