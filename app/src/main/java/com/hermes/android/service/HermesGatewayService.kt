@@ -72,6 +72,11 @@ class HermesGatewayService : Service() {
         val connecting = tr("Connecting to Hermes…", "در حال اتصال به Hermes…")
         shownKey = connecting
         promote(statusNotification(connecting))
+        // ...and then take it straight back down if it doesn't match reality. MainActivity
+        // restarts the service on every foreground; when the gateway is already connected
+        // nothing re-emits (connect() no-ops, status stays null), so the render loop never
+        // ran again and this placeholder stayed pinned as "Connecting…" forever.
+        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value)
 
         // Proactive notifications: watch gateway events for the whole life of
         // the background connection (ChatViewModel's collector dies with the
