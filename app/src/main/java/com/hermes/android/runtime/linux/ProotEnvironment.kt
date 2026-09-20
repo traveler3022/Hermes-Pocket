@@ -90,8 +90,9 @@ class ProotEnvironment @Inject constructor(
         val args = mutableListOf(
             prootBinary.absolutePath,
             "--kill-on-exit",
-            // apk commits its db via O_TMPFILE + linkat(), which SELinux denies in app storage
-            // ("failed to write database: Permission denied"); proot turns those into symlinks.
+            // apk-tools 3 commits its db with O_TMPFILE + linkat() on /proc/self/fd, which
+            // Android denies in app-private storage ("failed to write database: Permission
+            // denied"). proot's handler copies such an fd into a real file instead.
             "--link2symlink",
             "-0",
             "-r", rootfsDir.absolutePath,
