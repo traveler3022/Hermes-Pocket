@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatUiState
 import com.hermes.android.ui.viewmodel.ModelPickerViewModel
 
@@ -77,8 +78,13 @@ internal fun ChatModelPicker(
     LaunchedEffect(chat.sessionInfoSeq) {
         chat.sessionModel?.let { viewModel.onSessionModel(chat.activeSessionId, it, chat.sessionProvider) }
     }
-    LaunchedEffect(showSheet) {
-        if (showSheet) viewModel.load(chat.activeSessionId)
+    // The first fetch runs when the view model is built — on a cold start that is
+    // before Hermes is up, so it fails and the sheet stays empty. Refetch once the
+    // gateway is reachable, and when the chat's live session appears or changes
+    // (its running model, not config.yaml's default, is what the sheet must show).
+    val connected = chat.connectionState == ChatConnectionState.Connected
+    LaunchedEffect(showSheet, chat.activeSessionId, connected) {
+        if (showSheet || (connected && state.models.isEmpty())) viewModel.load(chat.activeSessionId)
     }
     LaunchedEffect(state.notice) {
         state.notice?.let { notice ->

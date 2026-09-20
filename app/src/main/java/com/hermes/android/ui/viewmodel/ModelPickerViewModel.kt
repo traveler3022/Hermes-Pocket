@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +46,9 @@ class ModelPickerViewModel @Inject constructor(
     /** Live id + pick of a switch the gateway queued for the next turn (`deferred`). */
     private var pendingSwitch: Pair<String, ModelOption>? = null
 
+    /** The in-flight catalogue fetch; a newer [load] supersedes it so a slow stale reply can't land last. */
+    private var loadJob: Job? = null
+
     init {
         _uiState.update { it.copy(favorites = ModelFavorites.decode(prefs.getString(KEY_FAVORITES, null))) }
         load(null)
@@ -53,7 +58,8 @@ class ModelPickerViewModel @Inject constructor(
     fun load(liveSessionId: String?) {
         val sid = liveSessionId?.takeIf { it.isNotBlank() }
         _uiState.update { it.copy(isLoading = true) }
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             try {
                 val catalog = modelSwitcher.loadCatalog(sid)
                 _uiState.update { state ->
@@ -67,6 +73,8 @@ class ModelPickerViewModel @Inject constructor(
                         isLoading = false,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.w(e, "[ModelPicker] Failed to load models")
                 _uiState.update { it.copy(isLoading = false) }
