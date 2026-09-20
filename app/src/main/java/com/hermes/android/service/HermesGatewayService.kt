@@ -94,16 +94,29 @@ class HermesGatewayService : Service() {
             }
         }
 
-        connectionWatchJob?.cancel()
-        connectionWatchJob = scope.launch {
-            try {
-                status.value = null
-                ensureRuntimeGatewayStarted()
-                status.value = null
-                gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
-            } catch (e: Exception) {
-                Timber.e(e, "[GatewayService] Failed to start/connect gateway")
-                setStatus(tr("Hermes is unavailable", "Hermes در دسترس نیست") + ": ${e.message ?: tr("unknown error", "خطای نامشخص")}")
+        // Idempotent, like renderJob above — and for a much more expensive reason. This
+        // used to cancel whatever was in flight and begin again on every start request,
+        // and the app makes several per launch. Cancelling lands mid-boot, where
+        // startGateway() has spawned Alpine and is waiting on gateway.ready but has not
+        // reached RuntimeState.Running yet; the next attempt therefore sees "not
+        // running", calls stopProcess() on the half-booted gateway and starts a second
+        // one from nothing. Tens of seconds of work on a phone, thrown away and redone,
+        // because the app was asked twice to do something it was already doing.
+        //
+        // A finished job does not block a retry: connect() returns after one dial and
+        // leaves backoff to the client's own loop, so this is active only while the
+        // runtime is genuinely coming up.
+        if (connectionWatchJob?.isActive != true) {
+            connectionWatchJob = scope.launch {
+                try {
+                    status.value = null
+                    ensureRuntimeGatewayStarted()
+                    status.value = null
+                    gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
+                } catch (e: Exception) {
+                    Timber.e(e, "[GatewayService] Failed to start/connect gateway")
+                    setStatus(tr("Hermes is unavailable", "Hermes در دسترس نیست") + ": ${e.message ?: tr("unknown error", "خطای نامشخص")}")
+                }
             }
         }
 

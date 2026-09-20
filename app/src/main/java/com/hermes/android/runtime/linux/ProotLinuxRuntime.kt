@@ -205,6 +205,22 @@ class ProotLinuxRuntime @Inject constructor(
         if (current is RuntimeState.Running && gatewayProcess?.isAlive == true) return current.gateway
         if (!isHermesInstalled()) throw IllegalStateException("Install Hermes in the built-in Linux runtime first.")
 
+        // A start that was cancelled between the process coming up and the state being
+        // set leaves a live, ready gateway that nothing claims. stopProcess() below would
+        // kill a working Hermes and boot another one from scratch — tens of seconds, to
+        // arrive exactly where we already are. Adopt it instead.
+        val orphan = gatewayProcess
+        if (orphan?.isAlive == true && stdioHub.isReady) {
+            val adopted = GatewayHandle(
+                pid = null,
+                startedAt = System.currentTimeMillis(),
+                webSocketUrl = getWebSocketUrl(),
+            )
+            _state.value = RuntimeState.Running(currentInfo(), adopted)
+            Timber.i("[Runtime] Adopted an already-running gateway instead of restarting it")
+            return adopted
+        }
+
         stopProcess()
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
