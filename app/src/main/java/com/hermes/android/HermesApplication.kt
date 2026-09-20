@@ -40,7 +40,31 @@ class HermesApplication : Application(), Configuration.Provider {
         // catches task completions the live socket missed in Doze. Idempotent
         // (KEEP), so this every-launch call never resets the cadence.
         com.hermes.android.work.TaskSyncWorker.schedule(this)
+        // The gateway is the slowest part of a cold start — Hermes boots under proot —
+        // so it starts here instead of in MainActivity. Process init runs before the
+        // Activity exists, and every millisecond of that boot spent behind the first
+        // frame is a millisecond the user never waits for.
+        startGatewayEarly()
         Timber.i("HermesApplication initializing")
+    }
+
+    /**
+     * Starts the gateway only when this process came up for the UI.
+     *
+     * onCreate also runs for background process starts — TaskSyncWorker alone wakes it
+     * every 15 minutes — and from Android 12 a startForegroundService() call made from
+     * the background throws ForegroundServiceStartNotAllowedException. An unguarded call
+     * here would buy a faster launch with a crash. Declining costs nothing: MainActivity
+     * starts the service on every foreground regardless, so the slow path is simply the
+     * behaviour we already had.
+     */
+    private fun startGatewayEarly() {
+        val processState = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(processState)
+        val foreground = android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+        if (processState.importance > foreground) return
+        runCatching { com.hermes.android.service.HermesGatewayService.start(this) }
+            .onFailure { Timber.w(it, "[App] early gateway start refused; MainActivity will retry") }
     }
 
     /**

@@ -61,11 +61,6 @@ class MainActivity : ComponentActivity() {
             com.hermes.android.service.AgentActivityNotifier.EXTRA_SESSION_ID
         )
 
-        // Keep the gateway connection alive when the app is backgrounded.
-        // Started unconditionally on every launch; onStartCommand() handles
-        // "runtime not configured yet" gracefully.
-        com.hermes.android.service.HermesGatewayService.start(this)
-
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
 
@@ -99,7 +94,10 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Foreground = the strongest reconnect signal there is. onStartCommand
         // re-runs the connect path; it's a cheap no-op when already connected,
-        // and it cuts any pending backoff wait when we're offline.
+        // and it cuts any pending backoff wait when we're offline. This is also
+        // the launch-path fallback: HermesApplication starts the gateway during
+        // process init, but declines to when the process came up in the
+        // background, and onStart always follows onCreate.
         com.hermes.android.service.HermesGatewayService.start(this)
     }
 
