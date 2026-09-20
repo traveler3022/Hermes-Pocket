@@ -351,3 +351,39 @@ internal fun mergeRecoveredTranscript(
     }
     return snapshot + unsent
 }
+
+/**
+ * Settle the turn's reply into the transcript. The streaming bubble is
+ * finalized with [finalText]; when there is none to finalize (its MessageStart
+ * or deltas never landed, or a recovery replaced the transcript mid-turn) the
+ * reply is appended instead, so a finished turn can never vanish from the chat.
+ */
+internal fun List<ChatMessage>.withReplyLanded(
+    streamingId: String?,
+    finalText: String,
+    reasoning: String?,
+): List<ChatMessage> {
+    val hasBubble = any { it is ChatMessage.Assistant && it.isStreaming && (streamingId == null || it.id == streamingId) }
+    if (hasBubble) {
+        return updateFirst({ msg ->
+            msg is ChatMessage.Assistant && msg.isStreaming && (streamingId == null || msg.id == streamingId)
+        }) { msg ->
+            (msg as ChatMessage.Assistant).copy(
+                text = finalText.ifEmpty { msg.text },
+                isStreaming = false,
+                reasoning = reasoning?.takeIf { it.isNotBlank() } ?: msg.reasoning,
+            )
+        }
+    }
+    if (finalText.isBlank()) return this
+    // A recovery snapshot may already carry this reply; don't show it twice.
+    val lastReply = takeLastWhile { it !is ChatMessage.User }.filterIsInstance<ChatMessage.Assistant>().lastOrNull()
+    if (lastReply != null && lastReply.text.trim() == finalText.trim()) return this
+    return this + ChatMessage.Assistant(
+        id = java.util.UUID.randomUUID().toString(),
+        timestamp = System.currentTimeMillis(),
+        text = finalText,
+        isStreaming = false,
+        reasoning = reasoning?.takeIf { it.isNotBlank() },
+    )
+}

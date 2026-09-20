@@ -945,6 +945,16 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(messages = it.messages + assistantMsg) }
     }
 
+    /**
+     * Deltas stream into the bubble MessageStart opened. When that frame never
+     * reached the screen (a recovery reset the turn, or the socket dropped it),
+     * the bubble is missing and every token would be discarded — open one.
+     */
+    private fun ensureStreamingBubble() {
+        if (streamingDelegate.currentAssistantMessageId != null) return
+        openAssistantBubble(streamingDelegate.onMessageStart())
+    }
+
     private fun handleEvent(event: GatewayEvent) {
         val eventSid = event.sessionId
         val activeSid = _uiState.value.activeSessionId
@@ -970,6 +980,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageDelta -> {
+                ensureStreamingBubble()
                 streamingDelegate.enqueueDelta(event.text)
             }
 
@@ -1007,16 +1018,9 @@ class ChatViewModel @Inject constructor(
                 }
                 val streamingId = streamingDelegate.currentAssistantMessageId
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (streamingId == null || msg.id == streamingId)
-                    }) { msg ->
-                        (msg as ChatMessage.Assistant).copy(
-                            text = finalText.ifEmpty { msg.text },
-                            isStreaming = false,
-                            reasoning = event.reasoning?.takeIf { it.isNotBlank() } ?: msg.reasoning,
-                        )
-                    }.filterNot { msg ->
+                    messages = _uiState.value.messages.withReplyLanded(
+                        streamingId, finalText, event.reasoning,
+                    ).filterNot { msg ->
                         // The bubble sealInterim opened, on a turn that ended
                         // with nothing left to put in it.
                         msg is ChatMessage.Assistant && msg.id == streamingId &&
