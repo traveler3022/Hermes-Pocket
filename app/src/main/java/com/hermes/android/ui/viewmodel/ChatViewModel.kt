@@ -101,8 +101,28 @@ class ChatViewModel @Inject constructor(
     init {
         loadDraft()
         loadAssistantName()
+        watchForQueuedPromptFlush()
         connectAndCollect()
         loadCommandCatalog()
+    }
+
+    /**
+     * Sends a prompt parked during boot as soon as a session exists. Every path that
+     * lands on a live session goes through activeSessionId, so watching it covers
+     * create, resume, activate and post-reconnect recovery without threading a flush
+     * call through each of them.
+     *
+     * Started once from init, not from connectAndCollect: that function re-runs on
+     * every retry and cancels only connectionWatchJob and eventCollectionJob, so a
+     * watcher launched there would survive as a second, third, nth collector — and
+     * two of them racing the same parked prompt would send it twice.
+     */
+    private fun watchForQueuedPromptFlush() {
+        viewModelScope.launch {
+            _uiState.map { it.activeSessionId }.distinctUntilChanged().collect { sessionId ->
+                if (sessionId != null) flushQueuedPrompt(sessionId)
+            }
+        }
     }
 
     // ── Reasoning ────────────────────────────────────────────────────────
@@ -240,15 +260,6 @@ class ChatViewModel @Inject constructor(
                         if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
                     }
-                }
-            }
-
-            // Every path that lands on a live session goes through activeSessionId, so
-            // watching it covers create, resume, activate and post-reconnect recovery
-            // without threading a flush call through each of them.
-            launch {
-                _uiState.map { it.activeSessionId }.distinctUntilChanged().collect { sessionId ->
-                    if (sessionId != null) flushQueuedPrompt(sessionId)
                 }
             }
 
