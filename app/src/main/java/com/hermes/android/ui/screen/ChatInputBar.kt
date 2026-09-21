@@ -254,7 +254,7 @@ internal fun InputBar(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(t("Type a message...", "پیام بنویس...")) },
+                placeholder = { Text(t("Ask Hermes", "از هرمس بپرس")) },
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,

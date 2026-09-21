@@ -790,11 +790,8 @@ fun ChatScreen(
                                         )
                                     }
                                 } else {
-                                    EmptyChatHero(
-                                        assistantName = uiState.assistantName,
-                                        onSuggestionClick = viewModel::sendSuggestion,
-                                        modifier = Modifier.fillParentMaxSize(),
-                                    )
+                                    // A new chat opens empty: no greeting, no suggestions.
+                                    EmptyChatBody(Modifier.fillParentMaxSize())
                                 }
                             }
                         }
@@ -1050,141 +1047,6 @@ fun ChatScreen(
                     Text(t("Cancel", "انصراف"))
                 }
             },
-        )
-    }
-}
-
-
-/**
- * Welcoming zero-state for a fresh conversation: just the assistant's
- * identity. (The tappable starter prompts that used to sit below it were
- * removed on user request — a fresh session should open clean.)
- */
-@Composable
-private fun EmptyChatHero(
-    assistantName: String,
-    onSuggestionClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val suggestions = listOf(
-        SuggestionPill(
-            icon = Icons.Default.AutoAwesome,
-            title = t("What can you do?", "چه کارهایی بلدی؟"),
-            prompt = t("What can you help me with?", "چه کارهایی می‌تونی برام انجام بدی؟"),
-        ),
-        SuggestionPill(
-            icon = Icons.Default.RocketLaunch,
-            title = t("Server status", "وضعیت سرور"),
-            prompt = t("Check my server status", "وضعیت سرورم رو چک کن"),
-        ),
-        SuggestionPill(
-            icon = Icons.Default.Code,
-            title = t("Review code", "بررسی کد"),
-            prompt = t("Review the code in my last project", "کد پروژه‌ی آخرمو بررسی کن"),
-        ),
-        SuggestionPill(
-            icon = Icons.Default.Terminal,
-            title = t("Run a command", "اجرای دستور"),
-            prompt = t("Run a command on my server", "یه دستور روی سرورم اجرا کن"),
-        ),
-    )
-
-    Column(
-        modifier = modifier.padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = assistantName.take(1),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = t("Hi, I'm $assistantName", "سلام، من ${assistantName}م"),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = t(
-                "Your server, one message away",
-                "سرورت، فقط یه پیام فاصله داره",
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        // Aether-style suggestion grid: soft rounded pills with an icon,
-        // one tap away from kicking off a conversation.
-        Spacer(modifier = Modifier.height(28.dp))
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            suggestions.chunked(2).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    row.forEach { suggestion ->
-                        SuggestionChipPill(
-                            suggestion = suggestion,
-                            onClick = { onSuggestionClick(suggestion.prompt) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (row.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-private data class SuggestionPill(
-    val icon: ImageVector,
-    val title: String,
-    val prompt: String,
-)
-
-@Composable
-private fun SuggestionChipPill(
-    suggestion: SuggestionPill,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(18.dp))
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            suggestion.icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Text(
-            text = suggestion.title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
