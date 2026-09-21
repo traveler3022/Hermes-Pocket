@@ -42,6 +42,8 @@ class HermesApplication : Application(), Configuration.Provider {
         // first dial of this process is already on the record.
         Timber.plant(com.hermes.android.diagnostics.JournalTree(connectionJournal))
         connectionJournal.noteProcessStart()
+        installCrashRecorder()
+        registerActivityLifecycleCallbacks(LifecycleRecorder())
         // Foreground tracking for proactive notifications: the event observer
         // only notifies when no Activity is visible.
         registerActivityLifecycleCallbacks(appForegroundState)
@@ -55,6 +57,59 @@ class HermesApplication : Application(), Configuration.Provider {
         // frame is a millisecond the user never waits for.
         startGatewayEarly()
         Timber.i("HermesApplication initializing")
+    }
+
+    /**
+     * Writes a crash to the journal, in full, before the process dies — then lets the
+     * platform handle it as before. The background writer would never get to run.
+     */
+    private fun installCrashRecorder() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                connectionJournal.noteNow(
+                    "E [Crash] uncaught in thread \"${thread.name}\"\n" + java.io.StringWriter().also { error.printStackTrace(java.io.PrintWriter(it)) }.toString(),
+                )
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    /**
+     * Memory pressure is what precedes Android killing a backgrounded app; with this in
+     * the journal a LOW_MEMORY exit on the next start has its lead-up right above it.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val name = when (level) {
+            TRIM_MEMORY_UI_HIDDEN -> "UI_HIDDEN"
+            TRIM_MEMORY_RUNNING_MODERATE -> "RUNNING_MODERATE"
+            TRIM_MEMORY_RUNNING_LOW -> "RUNNING_LOW"
+            TRIM_MEMORY_RUNNING_CRITICAL -> "RUNNING_CRITICAL"
+            TRIM_MEMORY_BACKGROUND -> "BACKGROUND"
+            TRIM_MEMORY_MODERATE -> "MODERATE"
+            TRIM_MEMORY_COMPLETE -> "COMPLETE (next in line to be killed)"
+            else -> "level $level"
+        }
+        if (level == TRIM_MEMORY_UI_HIDDEN) Timber.i("[Memory] trim $name") else Timber.w("[Memory] trim $name")
+    }
+
+    /** When the app was on screen and when it was not — the other half of every drop. */
+    private class LifecycleRecorder : ActivityLifecycleCallbacks {
+        private var started = 0
+        override fun onActivityStarted(activity: android.app.Activity) {
+            if (started++ == 0) Timber.i("[Lifecycle] app came to the foreground")
+        }
+        override fun onActivityStopped(activity: android.app.Activity) {
+            if (--started == 0) Timber.i("[Lifecycle] app went to the background")
+        }
+        override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) = Unit
+        override fun onActivityResumed(activity: android.app.Activity) = Unit
+        override fun onActivityPaused(activity: android.app.Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+        override fun onActivityDestroyed(activity: android.app.Activity) {
+            Timber.i("[Lifecycle] ${activity.javaClass.simpleName} destroyed (finishing=${activity.isFinishing})")
+        }
     }
 
     /**

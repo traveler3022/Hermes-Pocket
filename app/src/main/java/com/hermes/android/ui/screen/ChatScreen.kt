@@ -461,8 +461,6 @@ fun ChatScreen(
                         }
                     },
                     unreadOf = { session -> uiState.sessionActivity[session.id]?.unreadReplies ?: 0 },
-                    sortNewest = uiState.drawerSortNewest,
-                    onToggleSort = viewModel::toggleDrawerSort,
                     destinations = rememberWorkspaceDestinations(
                         waitingCount = if (uiState.pendingApproval != null) 1 else 0,
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },

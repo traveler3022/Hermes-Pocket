@@ -54,11 +54,19 @@ class ProotLinuxRuntime @Inject constructor(
 
     init {
         stdioHub.fileRoot = environment.rootfsDir
-        // The gateway client reconnecting while no process runs (e.g. it exited) restarts it —
-        // but not after a deliberate stop, which leaves the state Installed.
+        // The gateway client reconnecting while no process runs starts one — after an exit,
+        // and on a cold start too. It used to act only in Error/Running, so right after the
+        // app launched (state NotDetected) the chat dialled into nothing for a minute or
+        // more, until the service happened to start Hermes. A deliberate stop still wins,
+        // and a start already under way is left to finish rather than queued behind.
         stdioHub.restartHandler = handler@{
+            if (stoppedDeliberately) return@handler
             val state = _state.value
-            if (state !is RuntimeState.Error && state !is RuntimeState.Running) return@handler
+            if (state is RuntimeState.Installing || state is RuntimeState.Detecting) return@handler
+            if (gatewayMutex.isLocked) {
+                Timber.i("[Linux] Gateway start already in progress — not starting another")
+                return@handler
+            }
             scope.launch {
                 runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway restart failed") }
             }
@@ -76,6 +84,10 @@ class ProotLinuxRuntime @Inject constructor(
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val installMutex = Mutex()
     private val gatewayMutex = Mutex()
+
+    /** Set by [stopGateway]; a reconnecting client must not bring Hermes back after that. */
+    @Volatile
+    private var stoppedDeliberately = false
 
     @Volatile
     private var gatewayProcess: Process? = null
@@ -201,6 +213,7 @@ class ProotLinuxRuntime @Inject constructor(
     }
 
     override suspend fun startGateway(): GatewayHandle = gatewayMutex.withLock {
+        stoppedDeliberately = false
         val current = _state.value
         if (current is RuntimeState.Running && gatewayProcess?.isAlive == true) return current.gateway
         if (!isHermesInstalled()) throw IllegalStateException("Install Hermes in the built-in Linux runtime first.")
@@ -220,6 +233,19 @@ class ProotLinuxRuntime @Inject constructor(
             Timber.i("[Runtime] Adopted an already-running gateway instead of restarting it")
             return adopted
         }
+        // Alive but not ready: a boot whose start was cancelled (its screen or service
+        // went away) is still coming up. Killing it would throw that work away and begin
+        // again from nothing, so give it the time a boot gets, and adopt it if it arrives.
+        if (orphan?.isAlive == true && stdioHub.awaitReady(GATEWAY_READY_TIMEOUT_MS)) {
+            val adopted = GatewayHandle(
+                pid = null,
+                startedAt = System.currentTimeMillis(),
+                webSocketUrl = getWebSocketUrl(),
+            )
+            _state.value = RuntimeState.Running(currentInfo(), adopted)
+            Timber.i("[Runtime] Waited for a gateway that was still booting and adopted it")
+            return adopted
+        }
 
         stopProcess()
         val logFile = environment.guestFile(GATEWAY_LOG)
@@ -231,6 +257,10 @@ class ProotLinuxRuntime @Inject constructor(
         }
         gatewayProcess = process
         stdioHub.attach(process) { exitCode ->
+            // Why Hermes itself went down is in its own stderr, not in the app: put the
+            // end of it in the journal next to the exit, where a report will include it.
+            val tail = runCatching { logFile.readLines().takeLast(EXIT_LOG_LINES).joinToString("\n") }.getOrDefault("")
+            Timber.w("[Linux] Gateway exited ($exitCode); last lines of its log:\n$tail")
             if (gatewayProcess === process) {
                 gatewayProcess = null
                 if (_state.value is RuntimeState.Running) {
@@ -254,6 +284,7 @@ class ProotLinuxRuntime @Inject constructor(
     }
 
     override suspend fun stopGateway(): StopResult = gatewayMutex.withLock {
+        stoppedDeliberately = true
         return try {
             stopProcess()
             // Nothing is left to browse with Hermes down.
@@ -329,6 +360,7 @@ class ProotLinuxRuntime @Inject constructor(
         private const val PREFS_NAME = "hermes_linux_runtime"
         private const val KEY_VERSION = "hermes_version"
         private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
+        private const val EXIT_LOG_LINES = 40
         private const val GATEWAY_LOG = "/root/.hermes/logs/gateway_stderr.log"
         private const val MIN_FREE_BYTES = 1_000_000_000L
         private val AnsiEscape = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
@@ -397,6 +429,10 @@ class ProotLinuxRuntime @Inject constructor(
             if [ -f "${'$'}PIDFILE" ]; then kill "${'$'}(cat "${'$'}PIDFILE")" 2>/dev/null && sleep 1; rm -f "${'$'}PIDFILE"; fi
             echo ${'$'}${'$'} > "${'$'}PIDFILE"
             export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
+            # Commands the gateway runs for the app (shell.exec → `python3 -`) must get
+            # Hermes' own interpreter, which has PyYAML and the rest; Alpine's system
+            # python3 does not ("No module named 'yaml'" on the settings screen).
+            export VIRTUAL_ENV="${'$'}REPO/venv" PATH="${'$'}REPO/venv/bin:${'$'}PATH"
             # Tools the agent runs (xdotool, scrot, GUI apps) land on the app's VNC desktop.
             export DISPLAY=:99
             # Settings the app owns (BROWSER_CDP_URL, …). Env beats config.yaml, so the app

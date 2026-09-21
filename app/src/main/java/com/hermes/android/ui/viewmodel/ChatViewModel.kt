@@ -973,6 +973,13 @@ class ChatViewModel @Inject constructor(
     private fun handleEvent(event: GatewayEvent) {
         val eventSid = event.sessionId
         val activeSid = _uiState.value.activeSessionId
+        // Turn boundaries in the journal, so a drop can be placed inside or between turns.
+        when (event) {
+            is GatewayEvent.MessageStart -> Timber.i("[Turn] start session=$eventSid active=${eventSid == activeSid}")
+            is GatewayEvent.MessageComplete -> Timber.i("[Turn] complete session=$eventSid chars=${event.text.length}")
+            is GatewayEvent.Error -> Timber.w("[Turn] error session=$eventSid: ${event.message?.take(300)}")
+            else -> Unit
+        }
         trackSessionActivity(event, eventSid, activeSid)
         if (eventSid != null && activeSid != null && eventSid != activeSid &&
             event !is GatewayEvent.ApprovalRequest &&

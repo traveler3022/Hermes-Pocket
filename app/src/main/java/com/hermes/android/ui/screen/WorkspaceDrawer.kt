@@ -57,8 +57,7 @@ internal enum class SessionPulse { None, Running, Waiting, Failed }
  *
  * "Show all" expands the list in place — the drawer keeps scrolling rather than
  * handing off to another screen. The search icon opens the Sessions screen.
- * The host orders the list (pinned first, then by [sortNewest]); the sort
- * button flips it.
+ * The host orders the list: pinned first, then by the drawer's sort setting.
  *
  * The shape is the ChatGPT/Claude split: a title row, a search affordance, a
  * small block of destinations, a divider, then plain session names — one line
@@ -85,8 +84,6 @@ internal fun WorkspaceDrawerSheet(
     onAccount: () -> Unit,
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
     unreadOf: (SessionItem) -> Int = { 0 },
-    sortNewest: Boolean = true,
-    onToggleSort: (() -> Unit)? = null,
     onSessionLongClick: (SessionItem) -> Unit = {},
     visibleSessions: Int = 6,
 ) {
@@ -110,18 +107,6 @@ internal fun WorkspaceDrawerSheet(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
-                if (onToggleSort != null) {
-                    IconButton(onClick = onToggleSort) {
-                        Icon(
-                            HxIcons.SortArrows,
-                            contentDescription = if (sortNewest) {
-                                t("Newest first — tap for oldest", "جدیدترین اول — برای قدیمی‌ترین بزن")
-                            } else {
-                                t("Oldest first — tap for newest", "قدیمی‌ترین اول — برای جدیدترین بزن")
-                            },
-                        )
-                    }
-                }
                 HxHeaderCircleButton(
                     icon = HxIcons.Search,
                     contentDescription = t("Search chats", "جستجو در گفتگوها"),

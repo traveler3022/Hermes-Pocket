@@ -64,10 +64,81 @@ class ConnectionJournal @Inject constructor(
         note("~~ $reason | $fields")
     }
 
-    /** Marks a fresh process. A gap here with no shutdown line above it means Android killed us. */
+    /**
+     * Writes [line] on the calling thread, before returning. Only for the moment the
+     * process is about to die (an uncaught exception): the background writer would
+     * never get to run.
+     */
+    fun noteNow(line: String) {
+        val prefix = synchronized(stamp) { stamp.format(Date()) }
+        runCatching {
+            if (!dir.exists()) dir.mkdirs()
+            rotateIfNeeded()
+            current.appendText("$prefix  $line\n")
+        }
+    }
+
+    /**
+     * Marks a fresh process, and says why the one before it ended.
+     *
+     * "The app just closed" has half a dozen causes that look identical from the
+     * outside — a crash, an ANR, Android reclaiming memory, the battery manager, the
+     * user swiping it away, an update. Android 11+ keeps the answer
+     * ([android.app.ApplicationExitInfo]); this copies every exit not yet recorded
+     * into the journal, so the reason sits right above the restart it caused.
+     */
     fun noteProcessStart() {
         note("== process start | ${deviceLine()} | ${appVersion()}")
+        runCatching { notePreviousExits() }.onFailure { note("W [Exit] could not read exit reasons: ${it.message}") }
         noteContext("startup")
+    }
+
+    private fun notePreviousExits() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val seen = prefs.getLong(KEY_LAST_EXIT, 0L)
+        val exits = am.getHistoricalProcessExitReasons(context.packageName, 0, 16)
+            .filter { it.timestamp > seen }
+            .sortedBy { it.timestamp }
+        for (exit in exits) {
+            val at = synchronized(stamp) { stamp.format(Date(exit.timestamp)) }
+            note(
+                "== previous process ended | reason=${exitReason(exit.reason)} | at $at" +
+                    " | ${exit.description ?: "-"} | status=${exit.status}" +
+                    " importance=${exit.importance} pss=${exit.pss}KB rss=${exit.rss}KB" +
+                    " process=${exit.processName}",
+            )
+            // ANRs and native crashes carry the system's own dump; Java crashes are
+            // already in the journal from the uncaught-exception handler.
+            if (exit.reason == REASON_ANR || exit.reason == REASON_CRASH_NATIVE) {
+                val trace = runCatching {
+                    exit.traceInputStream?.bufferedReader()?.useLines { it.take(TRACE_LINES).joinToString("\n") }
+                }.getOrNull()
+                if (!trace.isNullOrBlank()) note("   system trace:\n$trace")
+            }
+        }
+        exits.maxOfOrNull { it.timestamp }?.let { prefs.edit().putLong(KEY_LAST_EXIT, it).apply() }
+    }
+
+    private fun exitReason(reason: Int): String = when (reason) {
+        1 -> "EXIT_SELF"
+        2 -> "SIGNALED (killed by a signal)"
+        3 -> "LOW_MEMORY (Android reclaimed memory)"
+        4 -> "CRASH (uncaught exception)"
+        REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        REASON_ANR -> "ANR (app not responding)"
+        7 -> "INITIALIZATION_FAILURE"
+        8 -> "PERMISSION_CHANGE"
+        9 -> "EXCESSIVE_RESOURCE_USAGE (battery/CPU limits)"
+        10 -> "USER_REQUESTED (force stop / swipe away)"
+        11 -> "USER_STOPPED"
+        12 -> "DEPENDENCY_DIED"
+        13 -> "OTHER"
+        14 -> "FREEZER"
+        15 -> "PACKAGE_STATE_CHANGE"
+        16 -> "PACKAGE_UPDATED (app was updated)"
+        else -> "UNKNOWN($reason)"
     }
 
     /**
@@ -75,7 +146,7 @@ class ConnectionJournal @Inject constructor(
      * file is short. Capped at [lines] because this exists to be copied into a bug
      * report, and a report nobody can paste is a report nobody sends.
      */
-    fun tail(lines: Int = 400): String {
+    fun tail(lines: Int = 1500): String {
         val body = runCatching {
             val text = buildString {
                 if (rotated.exists()) append(rotated.readText())
@@ -137,6 +208,12 @@ class ConnectionJournal @Inject constructor(
 
     private companion object {
         /** Two of these at most on disk; large enough to hold a drop plus the retries after it. */
-        private const val MAX_BYTES = 192L * 1024L
+        private const val MAX_BYTES = 512L * 1024L
+
+        private const val PREFS = "diagnostics"
+        private const val KEY_LAST_EXIT = "last_recorded_exit"
+        private const val REASON_CRASH_NATIVE = 5
+        private const val REASON_ANR = 6
+        private const val TRACE_LINES = 80
     }
 }
