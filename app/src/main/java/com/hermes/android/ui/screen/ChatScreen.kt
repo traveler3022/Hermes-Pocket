@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +51,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -83,6 +87,7 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import com.hermes.android.ui.viewmodel.SessionItem
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -168,6 +173,7 @@ fun ChatScreen(
     onNavigateToSessions: () -> Unit = {},
     onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    onNavigateToCron: () -> Unit = {},
     sharedText: String? = null,
     resumeSessionId: String? = null,
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
@@ -194,6 +200,7 @@ fun ChatScreen(
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
+    var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
@@ -428,37 +435,71 @@ fun ChatScreen(
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
                 drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
             ) {
-                HermesDrawerContent(
-                    assistantName = uiState.assistantName,
-                    sessions = uiState.sessions,
+                // Pinned chats first; the rest keep the list's own order.
+                val drawerSessions = remember(uiState.sessions, uiState.drawerPinnedIds) {
+                    uiState.sessions.sortedByDescending { it.id in uiState.drawerPinnedIds }
+                }
+                val closeDrawerThen: (() -> Unit) -> Unit = { action ->
+                    scope.launch { drawerState.close() }
+                    action()
+                }
+                WorkspaceDrawerSheet(
+                    sessions = drawerSessions,
                     activeSessionId = uiState.activeSessionId,
-                    drawerSearchQuery = uiState.drawerSearchQuery,
-                    drawerSortNewest = uiState.drawerSortNewest,
-                    drawerPinnedIds = uiState.drawerPinnedIds,
-                    sessionActivity = uiState.sessionActivity,
-                    onSearchQueryChange = viewModel::updateDrawerSearch,
-                    onToggleSort = viewModel::toggleDrawerSort,
-                    onSessionClick = { sessionId ->
-                        viewModel.resumeSession(sessionId)
-                        scope.launch { drawerState.close() }
+                    pulseOf = { session ->
+                        when {
+                            uiState.pendingApproval?.sessionId == session.id -> SessionPulse.Waiting
+                            uiState.sessionActivity[session.id]?.isRunning == true -> SessionPulse.Running
+                            else -> SessionPulse.None
+                        }
                     },
-                    onRenameAssistant = { showRenameAssistantDialog = true },
-                    onTasks = {
-                        scope.launch { drawerState.close() }
-                        onNavigateToTasks()
-                    },
-                    onRenameSession = viewModel::drawerShowRename,
-                    onTogglePin = viewModel::drawerTogglePin,
-                    onDeleteSession = viewModel::drawerShowDelete,
-                    onNewChat = {
-                        viewModel.newConversation()
-                        scope.launch { drawerState.close() }
-                    },
-                    onSettings = {
-                        scope.launch { drawerState.close() }
-                        onNavigateToSettings()
-                    },
+                    destinations = rememberWorkspaceDestinations(
+                        waitingCount = if (uiState.pendingApproval != null) 1 else 0,
+                        onWorkbench = { closeDrawerThen(onNavigateToTasks) },
+                        onAgent = { closeDrawerThen(onNavigateToSettings) },
+                        onScheduled = { closeDrawerThen(onNavigateToCron) },
+                        onServer = { closeDrawerThen(onNavigateToRuntime) },
+                    ),
+                    onSearch = { closeDrawerThen(onNavigateToSessions) },
+                    onNewChat = { closeDrawerThen { viewModel.newConversation() } },
+                    onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
+                    onSessionLongClick = { session -> drawerMenuTarget = session },
+                    onShowAll = { closeDrawerThen(onNavigateToSessions) },
+                    onAccount = { closeDrawerThen(onNavigateToSettings) },
                 )
+
+                // ── Long-press menu: rename / pin / delete ─────────────────
+                drawerMenuTarget?.let { target ->
+                    val pinned = target.id in uiState.drawerPinnedIds
+                    AlertDialog(
+                        onDismissRequest = { drawerMenuTarget = null },
+                        title = {
+                            Text(target.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        },
+                        text = {
+                            Column {
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerShowRename(target.id, target.title)
+                                }) { Text(t("Rename", "تغییر نام")) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerTogglePin(target.id)
+                                }) { Text(if (pinned) t("Unpin", "برداشتن سنجاق") else t("Pin", "سنجاق")) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerShowDelete(target.id)
+                                }) {
+                                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { drawerMenuTarget = null }) { Text(t("Cancel", "لغو")) }
+                        },
+                    )
+                }
 
                 // ── Rename dialog ──────────────────────────────────────────
                 uiState.drawerRenameTarget?.let { rename ->
@@ -564,15 +605,44 @@ fun ChatScreen(
                             }
                         }
                         HxHeaderCircleButton(
-                            icon = Icons.Default.DataUsage,
-                            contentDescription = t("Context", "کانتکست"),
-                            onClick = { showContext = true },
+                            icon = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = t("New chat", "گفتگوی جدید"),
+                            onClick = { viewModel.newConversation() },
                         )
-                        HxHeaderCircleButton(
-                            icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = t("Search", "جستجو"),
-                            onClick = { viewModel.toggleSearch() },
-                        )
+                        Spacer(Modifier.width(8.dp))
+                        // Context and search moved behind ⋮ so the bar keeps
+                        // only new chat; nothing the old buttons did is gone.
+                        Box {
+                            var showOverflow by remember { mutableStateOf(false) }
+                            HxHeaderCircleButton(
+                                icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.MoreVert,
+                                contentDescription = if (uiState.showSearch) t("Close search", "بستن جستجو") else t("More", "بیشتر"),
+                                onClick = {
+                                    if (uiState.showSearch) viewModel.toggleSearch() else showOverflow = true
+                                },
+                            )
+                            DropdownMenu(
+                                expanded = showOverflow,
+                                onDismissRequest = { showOverflow = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(t("Search messages", "جستجو در پیام‌ها")) },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    onClick = {
+                                        showOverflow = false
+                                        viewModel.toggleSearch()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(t("Context", "کانتکست")) },
+                                    leadingIcon = { Icon(Icons.Default.DataUsage, contentDescription = null) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showContext = true
+                                    },
+                                )
+                            }
+                        }
                     }
                     // Feature #16: Search bar (below TopAppBar)
                     AnimatedVisibility(

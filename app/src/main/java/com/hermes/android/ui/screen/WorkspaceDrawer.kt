@@ -30,7 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -58,10 +57,8 @@ internal enum class SessionPulse { None, Running, Waiting, Failed }
 /**
  * The drawer as Workspace router (frame `7b`).
  *
- * Not yet wired into [ChatScreen], which still uses [HermesDrawerContent]:
- * this sheet drops in-drawer search, sort and pinning, and its destination
- * block needs routes the nav graph does not have yet. Landed as its own
- * component so the two can be compared on a device before the switch.
+ * The search icon and "show all" hand off to the Sessions screen, which has
+ * the full list with search; pinned chats are ordered first by the host.
  *
  * The shape is the ChatGPT/Claude split: a title row, a search affordance, a
  * small block of destinations, a divider, then plain session names — one line
@@ -91,10 +88,9 @@ internal fun WorkspaceDrawerSheet(
     onShowAll: (() -> Unit)? = null,
     visibleSessions: Int = 6,
 ) {
-    ModalDrawerSheet(
-        drawerContainerColor = MaterialTheme.colorScheme.surface,
-        drawerContentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
+    // Content only: the host's ModalDrawerSheet owns width, shape and colours,
+    // and the rename / delete dialogs that hang off it.
+    run {
         Column(Modifier.statusBarsPadding()) {
 
             // ── Title + search ───────────────────────────────────────────
