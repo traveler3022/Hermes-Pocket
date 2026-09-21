@@ -111,4 +111,26 @@ class BackgroundSessionTrackerTest {
         tracker.forget("A")
         assertNull(tracker.snapshot()["A"])
     }
+
+    @Test
+    fun `an error marks the chat failed and stops it running`() {
+        val tracker = BackgroundSessionTracker()
+        tracker.onTurnStart("A")
+        tracker.onError("A")
+        val a = tracker.snapshot().getValue("A")
+        assertEquals(true, a.failed)
+        assertEquals(false, a.isRunning)
+    }
+
+    @Test
+    fun `a new turn or opening the chat clears the failure`() {
+        val tracker = BackgroundSessionTracker()
+        tracker.onError("A")
+        tracker.onTurnStart("A")
+        assertEquals(false, tracker.snapshot().getValue("A").failed)
+
+        tracker.onError("B")
+        tracker.markRead("B")
+        assertEquals(false, tracker.snapshot().getValue("B").failed)
+    }
 }

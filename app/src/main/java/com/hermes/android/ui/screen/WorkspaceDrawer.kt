@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,7 +60,8 @@ internal enum class SessionPulse { None, Running, Waiting, Failed }
  * The drawer as Workspace router (frame `7b`).
  *
  * The search icon and "show all" hand off to the Sessions screen, which has
- * the full list with search; pinned chats are ordered first by the host.
+ * the full list with search. The host orders the list (pinned first, then by
+ * [sortNewest]); the sort button flips it.
  *
  * The shape is the ChatGPT/Claude split: a title row, a search affordance, a
  * small block of destinations, a divider, then plain session names — one line
@@ -84,6 +87,9 @@ internal fun WorkspaceDrawerSheet(
     onSessionClick: (SessionItem) -> Unit,
     onAccount: () -> Unit,
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
+    unreadOf: (SessionItem) -> Int = { 0 },
+    sortNewest: Boolean = true,
+    onToggleSort: (() -> Unit)? = null,
     onSessionLongClick: (SessionItem) -> Unit = {},
     onShowAll: (() -> Unit)? = null,
     visibleSessions: Int = 6,
@@ -106,6 +112,20 @@ internal fun WorkspaceDrawerSheet(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
+                if (onToggleSort != null) {
+                    IconButton(onClick = onToggleSort) {
+                        Icon(
+                            Icons.Default.Sort,
+                            contentDescription = if (sortNewest) {
+                                t("Newest first — tap for oldest", "جدیدترین اول — برای قدیمی‌ترین بزن")
+                            } else {
+                                t("Oldest first — tap for newest", "قدیمی‌ترین اول — برای جدیدترین بزن")
+                            },
+                            // Flipped when the order is flipped, so the icon says which way the list runs.
+                            modifier = Modifier.graphicsLayer { scaleY = if (sortNewest) 1f else -1f },
+                        )
+                    }
+                }
                 IconButton(onClick = onSearch) {
                     Icon(
                         Icons.Default.Search,
@@ -133,6 +153,7 @@ internal fun WorkspaceDrawerSheet(
                     DrawerSessionRow(
                         title = session.title,
                         pulse = pulseOf(session),
+                        unread = unreadOf(session),
                         isActive = session.id == activeSessionId,
                         onClick = { onSessionClick(session) },
                         onLongClick = { onSessionLongClick(session) },
@@ -249,6 +270,7 @@ private fun DrawerDestinationRow(destination: WorkspaceDestination) {
 private fun DrawerSessionRow(
     title: String,
     pulse: SessionPulse,
+    unread: Int,
     isActive: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -281,6 +303,21 @@ private fun DrawerSessionRow(
             SessionPulse.Waiting -> HermesAmber
             SessionPulse.Failed -> MaterialTheme.colorScheme.error
             SessionPulse.None -> null
+        }
+        if (unread > 0) {
+            Box(
+                Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    text = if (unread > 99) "99+" else unread.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
         }
         if (dot != null) {
             Spacer(

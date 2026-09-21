@@ -435,9 +435,14 @@ fun ChatScreen(
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
                 drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
             ) {
-                // Pinned chats first; the rest keep the list's own order.
-                val drawerSessions = remember(uiState.sessions, uiState.drawerPinnedIds) {
-                    uiState.sessions.sortedByDescending { it.id in uiState.drawerPinnedIds }
+                // Pinned chats first, each group by last update in the chosen order.
+                val drawerSessions = remember(uiState.sessions, uiState.drawerPinnedIds, uiState.drawerSortNewest) {
+                    val byTime = if (uiState.drawerSortNewest) {
+                        uiState.sessions.sortedByDescending { it.updatedAt }
+                    } else {
+                        uiState.sessions.sortedBy { it.updatedAt }
+                    }
+                    byTime.sortedByDescending { it.id in uiState.drawerPinnedIds }
                 }
                 val closeDrawerThen: (() -> Unit) -> Unit = { action ->
                     scope.launch { drawerState.close() }
@@ -450,9 +455,13 @@ fun ChatScreen(
                         when {
                             uiState.pendingApproval?.sessionId == session.id -> SessionPulse.Waiting
                             uiState.sessionActivity[session.id]?.isRunning == true -> SessionPulse.Running
+                            uiState.sessionActivity[session.id]?.failed == true -> SessionPulse.Failed
                             else -> SessionPulse.None
                         }
                     },
+                    unreadOf = { session -> uiState.sessionActivity[session.id]?.unreadReplies ?: 0 },
+                    sortNewest = uiState.drawerSortNewest,
+                    onToggleSort = viewModel::toggleDrawerSort,
                     destinations = rememberWorkspaceDestinations(
                         waitingCount = if (uiState.pendingApproval != null) 1 else 0,
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },

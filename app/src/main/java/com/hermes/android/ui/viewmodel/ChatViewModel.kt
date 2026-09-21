@@ -916,6 +916,12 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.MessageComplete -> {
                 backgroundSessions.onTurnEnd(sid, event.text, isActive = sid == activeSid); true
             }
+            is GatewayEvent.Error -> {
+                // The chat on screen shows its own error; only a chat the user
+                // is not looking at needs the drawer's red dot.
+                if (sid == activeSid) return
+                backgroundSessions.onError(sid); true
+            }
             is GatewayEvent.MessageDelta -> {
                 backgroundSessions.onDelta(sid, event.text)
                 val now = System.currentTimeMillis()

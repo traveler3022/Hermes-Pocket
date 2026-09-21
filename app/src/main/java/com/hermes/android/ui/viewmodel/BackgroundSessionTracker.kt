@@ -5,6 +5,8 @@ data class SessionActivity(
     val isRunning: Boolean = false,
     val unreadReplies: Int = 0,
     val preview: String = "",
+    /** The last turn ended in an error the user has not looked at yet. */
+    val failed: Boolean = false,
 )
 
 /**
@@ -28,7 +30,15 @@ internal class BackgroundSessionTracker {
         if (sessionId.isBlank()) return
         streamed.remove(sessionId)
         activity[sessionId] = (activity[sessionId] ?: SessionActivity())
-            .copy(isRunning = true, preview = "")
+            .copy(isRunning = true, preview = "", failed = false)
+    }
+
+    /** The gateway reported an error for this chat's turn. */
+    fun onError(sessionId: String) {
+        if (sessionId.isBlank()) return
+        streamed.remove(sessionId)
+        activity[sessionId] = (activity[sessionId] ?: SessionActivity())
+            .copy(isRunning = false, failed = true)
     }
 
     fun onDelta(sessionId: String, text: String) {
@@ -55,12 +65,12 @@ internal class BackgroundSessionTracker {
         )
     }
 
-    /** The user opened this chat: its replies are no longer unread. */
+    /** The user opened this chat: its replies are no longer unread, and its failure has been seen. */
     fun markRead(sessionId: String) {
         if (sessionId.isBlank()) return
         val current = activity[sessionId] ?: return
-        if (current.unreadReplies == 0) return
-        activity[sessionId] = current.copy(unreadReplies = 0)
+        if (current.unreadReplies == 0 && !current.failed) return
+        activity[sessionId] = current.copy(unreadReplies = 0, failed = false)
     }
 
     /** Drop a deleted session so its badge cannot outlive it. */
