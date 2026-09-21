@@ -615,6 +615,7 @@ fun ChatScreen(
                             icon = HxIcons.NewChat,
                             contentDescription = t("New chat", "گفتگوی جدید"),
                             onClick = { viewModel.newConversation() },
+                            iconSize = 25.dp,
                         )
                         Spacer(Modifier.width(8.dp))
                         // Context and search moved behind ⋮ so the bar keeps
