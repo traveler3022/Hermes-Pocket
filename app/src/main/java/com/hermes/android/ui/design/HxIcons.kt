@@ -116,6 +116,102 @@ object HxIcons {
             "M5 18H3",
         )
     }
+
+    // ── Chat chrome & drawer (frames 7a/7b) ──────────────────────────────
+
+    /** Two lines, the lower one shorter — opens the drawer. Drawn for this app. */
+    val MenuShort: ImageVector by lazy {
+        lucideIcon(
+            name = "MenuShort",
+            "M4 9h16",
+            "M4 15h9",
+        )
+    }
+
+    /**
+     * New chat: a speech bubble whose outline is broken into three arcs, with
+     * its tail at the lower left. Drawn for this app on a r=8 circle.
+     */
+    val NewChat: ImageVector by lazy {
+        lucideIcon(
+            name = "NewChat",
+            "M4.48 14.74A8 8 0 0 1 14.07 4.27",
+            "M17.66 6.34A8 8 0 0 1 19.73 14.07",
+            "M17.66 17.66A8 8 0 0 1 9.26 19.52",
+            "M4.48 14.74L3.6 20.4L7.6 18.9",
+        )
+    }
+
+    /** lucide `search` */
+    val Search: ImageVector by lazy {
+        lucideIcon(
+            name = "Search",
+            "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z",
+            "m21 21-4.3-4.3",
+        )
+    }
+
+    /** lucide `layout-grid` */
+    val LayoutGrid: ImageVector by lazy {
+        lucideIcon(
+            name = "LayoutGrid",
+            "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
+            "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
+            "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1Z",
+            "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1Z",
+        )
+    }
+
+    /** lucide `bot` */
+    val Bot: ImageVector by lazy {
+        lucideIcon(
+            name = "Bot",
+            "M12 8V4H8",
+            "M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z",
+            "M2 14h2",
+            "M20 14h2",
+            "M15 13v2",
+            "M9 13v2",
+        )
+    }
+
+    /** lucide `clock` */
+    val Clock: ImageVector by lazy {
+        lucideIcon(
+            name = "Clock",
+            "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z",
+            "M12 6v6l4 2",
+        )
+    }
+
+    /** lucide `server` */
+    val Server: ImageVector by lazy {
+        lucideIcon(
+            name = "Server",
+            "M4 2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z",
+            "M4 14h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2Z",
+            "M6 6h.01",
+            "M6 18h.01",
+        )
+    }
+
+    /** lucide `square-pen` */
+    val SquarePen: ImageVector by lazy {
+        lucideIcon(
+            name = "SquarePen",
+            "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",
+            "M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852Z",
+        )
+    }
+
+    /** lucide `user` */
+    val User: ImageVector by lazy {
+        lucideIcon(
+            name = "User",
+            "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2",
+            "M8 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z",
+        )
+    }
 }
 
 /**

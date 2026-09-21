@@ -18,30 +18,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SpaceDashboard
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.ui.design.HxHeaderCircleButton
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SessionItem
 
@@ -59,9 +55,10 @@ internal enum class SessionPulse { None, Running, Waiting, Failed }
 /**
  * The drawer as Workspace router (frame `7b`).
  *
- * The search icon and "show all" hand off to the Sessions screen, which has
- * the full list with search. The host orders the list (pinned first, then by
- * [sortNewest]); the sort button flips it.
+ * "Show all" expands the list in place — the drawer keeps scrolling rather than
+ * handing off to another screen. The search icon opens the Sessions screen.
+ * The host orders the list (pinned first, then by [sortNewest]); the sort
+ * button flips it.
  *
  * The shape is the ChatGPT/Claude split: a title row, a search affordance, a
  * small block of destinations, a divider, then plain session names — one line
@@ -91,11 +88,12 @@ internal fun WorkspaceDrawerSheet(
     sortNewest: Boolean = true,
     onToggleSort: (() -> Unit)? = null,
     onSessionLongClick: (SessionItem) -> Unit = {},
-    onShowAll: (() -> Unit)? = null,
     visibleSessions: Int = 6,
 ) {
     // Content only: the host's ModalDrawerSheet owns width, shape and colours,
     // and the rename / delete dialogs that hang off it.
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    val shown = if (showAll) sessions else sessions.take(visibleSessions)
     run {
         Column(Modifier.statusBarsPadding()) {
 
@@ -115,23 +113,20 @@ internal fun WorkspaceDrawerSheet(
                 if (onToggleSort != null) {
                     IconButton(onClick = onToggleSort) {
                         Icon(
-                            Icons.Default.Sort,
+                            HxIcons.SortArrows,
                             contentDescription = if (sortNewest) {
                                 t("Newest first — tap for oldest", "جدیدترین اول — برای قدیمی‌ترین بزن")
                             } else {
                                 t("Oldest first — tap for newest", "قدیمی‌ترین اول — برای جدیدترین بزن")
                             },
-                            // Flipped when the order is flipped, so the icon says which way the list runs.
-                            modifier = Modifier.graphicsLayer { scaleY = if (sortNewest) 1f else -1f },
                         )
                     }
                 }
-                IconButton(onClick = onSearch) {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = t("Search chats", "جستجو در گفتگوها"),
-                    )
-                }
+                HxHeaderCircleButton(
+                    icon = HxIcons.Search,
+                    contentDescription = t("Search chats", "جستجو در گفتگوها"),
+                    onClick = onSearch,
+                )
             }
 
             // ── Destinations ─────────────────────────────────────────────
@@ -147,7 +142,7 @@ internal fun WorkspaceDrawerSheet(
             // ── Sessions: names only ─────────────────────────────────────
             LazyColumn(Modifier.weight(1f)) {
                 items(
-                    items = sessions.take(visibleSessions),
+                    items = shown,
                     key = { it.id },
                 ) { session ->
                     DrawerSessionRow(
@@ -159,7 +154,7 @@ internal fun WorkspaceDrawerSheet(
                         onLongClick = { onSessionLongClick(session) },
                     )
                 }
-                if (onShowAll != null && sessions.size > visibleSessions) {
+                if (!showAll && sessions.size > visibleSessions) {
                     item {
                         Text(
                             text = t("Show all…", "مشاهده همه…"),
@@ -167,7 +162,7 @@ internal fun WorkspaceDrawerSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(onClick = onShowAll)
+                                .clickable { showAll = true }
                                 .padding(horizontal = 18.dp, vertical = 12.dp),
                         )
                     }
@@ -192,7 +187,7 @@ internal fun WorkspaceDrawerSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.Chat,
+                        HxIcons.SquarePen,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(18.dp),
@@ -214,7 +209,7 @@ internal fun WorkspaceDrawerSheet(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.Person,
+                            HxIcons.User,
                             contentDescription = t("Account", "حساب"),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(19.dp),
@@ -350,11 +345,11 @@ internal fun rememberWorkspaceDestinations(
 ): List<WorkspaceDestination> = listOf(
     WorkspaceDestination(
         label = t("Workbench", "میز کار"),
-        icon = Icons.Default.SpaceDashboard,
+        icon = HxIcons.LayoutGrid,
         badge = waitingCount,
         onClick = onWorkbench,
     ),
-    WorkspaceDestination(t("Agent", "عامل"), Icons.Default.Tune, null, onAgent),
-    WorkspaceDestination(t("Scheduled", "زمان‌بندی‌شده"), Icons.Default.Schedule, null, onScheduled),
-    WorkspaceDestination(t("Server", "سرور"), Icons.Default.Dns, null, onServer),
+    WorkspaceDestination(t("Agent", "عامل"), HxIcons.Bot, null, onAgent),
+    WorkspaceDestination(t("Scheduled", "زمان‌بندی‌شده"), HxIcons.Clock, null, onScheduled),
+    WorkspaceDestination(t("Server", "سرور"), HxIcons.Server, null, onServer),
 )

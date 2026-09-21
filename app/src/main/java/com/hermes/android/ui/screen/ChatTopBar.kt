@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -37,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxHeaderCircleButton
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import kotlinx.coroutines.delay
@@ -78,7 +77,7 @@ internal fun ChatTopBar(
     ) {
         Box {
             HxHeaderCircleButton(
-                icon = Icons.Default.Menu,
+                icon = HxIcons.MenuShort,
                 contentDescription = t("Open drawer", "باز کردن کشو"),
                 onClick = onOpenDrawer,
             )
@@ -113,7 +112,7 @@ internal fun ChatTopBar(
         }
 
         HxHeaderCircleButton(
-            icon = Icons.AutoMirrored.Filled.Chat,
+            icon = HxIcons.NewChat,
             contentDescription = t("New chat", "گفتگوی جدید"),
             onClick = onNewChat,
         )

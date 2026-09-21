@@ -121,6 +121,7 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
@@ -473,7 +474,6 @@ fun ChatScreen(
                     onNewChat = { closeDrawerThen { viewModel.newConversation() } },
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
-                    onShowAll = { closeDrawerThen(onNavigateToSessions) },
                     onAccount = { closeDrawerThen(onNavigateToSettings) },
                 )
 
@@ -590,7 +590,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         HxHeaderCircleButton(
-                            icon = Icons.Default.Menu,
+                            icon = HxIcons.MenuShort,
                             contentDescription = t("Sessions", "گفتگوها"),
                             onClick = { viewModel.toggleSessionDrawer() },
                         )
@@ -614,7 +614,7 @@ fun ChatScreen(
                             }
                         }
                         HxHeaderCircleButton(
-                            icon = Icons.AutoMirrored.Filled.Chat,
+                            icon = HxIcons.NewChat,
                             contentDescription = t("New chat", "گفتگوی جدید"),
                             onClick = { viewModel.newConversation() },
                         )
