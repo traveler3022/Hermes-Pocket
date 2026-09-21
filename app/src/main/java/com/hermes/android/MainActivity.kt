@@ -247,7 +247,6 @@ private fun HermesNavHost(
                 onNavigateToSkills = { navController.navigate("skills") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
-                onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToLinux = { navController.navigate("linux") },
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToSetup = { navController.navigate("setup") },
