@@ -634,7 +634,7 @@ fun ChatScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(t("Context", "کانتکست")) },
+                                    text = { Text(t("Stats", "آمار")) },
                                     leadingIcon = { Icon(Icons.Default.DataUsage, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
