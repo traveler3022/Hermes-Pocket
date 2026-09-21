@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -903,20 +904,24 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["tool_id"]?.jsonPrimitive?.content ?: "",
                 p["name"]?.jsonPrimitive?.content,
-                p["args_text"]?.jsonPrimitive?.content,
-                p["context"]?.jsonPrimitive?.content,
+                p["args_text"].asText(),
+                p["context"].asText(),
                 todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
+            // Tools return structured results (browser_exec, web_search, …):
+            // `result` and friends may be objects, not strings. Reading them as
+            // primitives threw, and the whole event was dropped — the card stayed
+            // "running" for good. Take them as text whatever their shape.
             "tool.complete" -> GatewayEvent.ToolComplete(
                 sid,
-                p["tool_id"]?.jsonPrimitive?.content ?: "",
-                p["name"]?.jsonPrimitive?.content,
-                p["result"]?.jsonPrimitive?.content,
-                p["result_text"]?.jsonPrimitive?.content,
-                p["summary"]?.jsonPrimitive?.content,
-                p["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull(),
-                p["inline_diff"]?.jsonPrimitive?.content,
-                error = p["error"]?.jsonPrimitive?.content,
+                p["tool_id"].asText() ?: "",
+                p["name"].asText(),
+                p["result"].asText(),
+                p["result_text"].asText(),
+                p["summary"].asText(),
+                p["duration_s"].asText()?.toDoubleOrNull(),
+                p["inline_diff"].asText(),
+                error = p["error"].asText(),
                 todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
             "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"]?.jsonPrimitive?.content)
@@ -1052,4 +1057,14 @@ class OkHttpGatewayClient @Inject constructor(
         private const val RECONNECT_BACKOFF_MAX_EXP = 4
         private const val MAX_RECONNECT_WINDOW_MS = 120_000L // 2 minutes
     }
+}
+
+/**
+ * A payload field as text: a string/number as itself, an object or array as its
+ * JSON, null/absent as null. For fields the gateway may send either way.
+ */
+internal fun JsonElement?.asText(): String? = when (this) {
+    null, is JsonNull -> null
+    is JsonPrimitive -> contentOrNull
+    else -> toString()
 }

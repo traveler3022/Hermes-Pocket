@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -54,11 +55,13 @@ class SwitchableHermesRuntimeTest {
     }
 
     @Test
-    fun `selecting the current runtime is a no-op`() {
+    fun `selecting the current runtime keeps the connection but records the choice`() {
         val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
 
         router.select(RuntimeType.PROOT_LINUX)
 
         coVerify(exactly = 0) { gatewayClient.disconnect() }
+        // A fresh install's default is not a choice until the user picks it.
+        verify { selection.select(RuntimeType.PROOT_LINUX) }
     }
 }

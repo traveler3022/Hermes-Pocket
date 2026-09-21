@@ -52,6 +52,9 @@ class HermesGatewayService : Service() {
     @Inject
     lateinit var agentEventObserver: AgentEventObserver
 
+    @Inject
+    lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var connectionWatchJob: Job? = null
     private var renderJob: Job? = null
@@ -167,6 +170,13 @@ class HermesGatewayService : Service() {
     }
 
     private suspend fun ensureRuntimeGatewayStarted() {
+        // A fresh install has only a default runtime, not the user's choice —
+        // starting it would install / boot built-in Linux for someone who wants
+        // Termux. Setup asks first.
+        if (!runtimeSelection.hasChosen.value) {
+            setStatus(tr("Choose where Hermes runs", "انتخاب کنید Hermes کجا اجرا شود"))
+            throw IllegalStateException("No runtime chosen yet")
+        }
         when (val state = hermesRuntime.state.value) {
             is RuntimeState.Running -> return
             is RuntimeState.Installed -> {

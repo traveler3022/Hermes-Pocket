@@ -37,6 +37,9 @@ class HermesRuntimeManager @Inject constructor(
     /** Runtime the user picked (Termux or built-in Linux); persisted across launches. */
     val selectedRuntime: StateFlow<RuntimeType> = selection.selected
 
+    /** False on a fresh install until the user picks Termux or built-in Linux. */
+    val runtimeChosen: StateFlow<Boolean> = selection.hasChosen
+
     fun selectRuntime(type: RuntimeType) = router.select(type)
 
     /** The active runtime instance. */

@@ -29,10 +29,24 @@ class RuntimeSelection @Inject constructor(
     private val _selected = MutableStateFlow(load(context))
     val selected: StateFlow<RuntimeType> = _selected.asStateFlow()
 
+    /**
+     * Whether the user has picked a runtime. A fresh install has not: [selected]
+     * then only holds a default, and nothing may start a runtime until the user
+     * says Termux or built-in. Anyone who already finished setup counts as having
+     * chosen, so an update never sends them back to the question.
+     */
+    private val _hasChosen = MutableStateFlow(
+        prefs.contains(KEY) ||
+            context.getSharedPreferences("hermes_setup", Context.MODE_PRIVATE).getBoolean("complete", false) ||
+            context.getSharedPreferences("hermes_runtime", Context.MODE_PRIVATE).getBoolean("installed", false),
+    )
+    val hasChosen: StateFlow<Boolean> = _hasChosen.asStateFlow()
+
     fun select(type: RuntimeType) {
         require(type in Selectable) { "Runtime $type is not selectable" }
         prefs.edit().putString(KEY, type.name).apply()
         _selected.value = type
+        _hasChosen.value = true
     }
 
     private fun load(context: Context): RuntimeType {
@@ -71,7 +85,11 @@ class SwitchableHermesRuntime @Inject constructor(
 
     fun select(type: RuntimeType) {
         val previous = active
-        if (selection.selected.value == type) return
+        if (selection.selected.value == type) {
+            // Picking the default still has to be recorded as a choice.
+            selection.select(type)
+            return
+        }
         selection.select(type)
         scope.launch {
             // The gateway client treats "already connected" as success regardless of URL.

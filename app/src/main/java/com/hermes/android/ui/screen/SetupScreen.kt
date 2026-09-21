@@ -189,11 +189,29 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     val progress by viewModel.installProgress.collectAsStateWithLifecycle()
     val error by viewModel.errorMessage.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val chosen by viewModel.runtimeChosen.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.detect() }
+    // Nothing is detected, installed or started until the user has picked:
+    // selectRuntime() runs detection for the runtime they chose.
+    LaunchedEffect(chosen) { if (chosen) viewModel.detect() }
 
     Text(t("Where should Hermes run?", "Hermes کجا اجرا شود؟"), style = MaterialTheme.typography.headlineSmall)
-    RuntimeChoiceRow(selected = choice, enabled = !installing, onSelect = viewModel::selectRuntime)
+    RuntimeChoiceRow(selected = choice.takeIf { chosen }, enabled = !installing, onSelect = viewModel::selectRuntime)
+    if (!chosen) {
+        Text(
+            t(
+                "Built-in Linux runs Hermes inside this app, with nothing else to install. " +
+                    "Termux uses the separate Termux app — pick it if you run Hermes there. " +
+                    "You can switch later in Settings.",
+                "لینوکس داخلی Hermes را داخل همین اپ اجرا می‌کند و چیز دیگری لازم نیست. " +
+                    "Termux از اپ جداگانه‌ی Termux استفاده می‌کند — اگر Hermes را آنجا اجرا می‌کنید این را بزنید. " +
+                    "بعداً از تنظیمات هم می‌شود عوضش کرد.",
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
     Text(
         if (choice == RuntimeChoiceUi.BuiltInLinux) {
             t(

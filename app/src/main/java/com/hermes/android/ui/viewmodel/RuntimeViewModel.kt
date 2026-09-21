@@ -93,6 +93,9 @@ class RuntimeViewModel @Inject constructor(
         .map { it.toChoice() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, runtimeManager.selectedRuntime.value.toChoice())
 
+    /** False until the user has picked a runtime; setup waits for that. */
+    val runtimeChosen: StateFlow<Boolean> = runtimeManager.runtimeChosen
+
     private fun RuntimeType.toChoice() =
         if (this == RuntimeType.TERMUX) RuntimeChoiceUi.Termux else RuntimeChoiceUi.BuiltInLinux
 

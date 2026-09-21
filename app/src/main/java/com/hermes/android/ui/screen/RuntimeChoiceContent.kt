@@ -19,7 +19,8 @@ import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 
 @Composable
 internal fun RuntimeChoiceRow(
-    selected: RuntimeChoiceUi,
+    /** Null while the user has not picked yet: neither chip is shown as chosen. */
+    selected: RuntimeChoiceUi?,
     enabled: Boolean,
     onSelect: (RuntimeChoiceUi) -> Unit,
 ) {
