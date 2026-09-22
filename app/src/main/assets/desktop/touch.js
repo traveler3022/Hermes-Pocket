@@ -1,10 +1,12 @@
-// Touch layer for the noVNC page: turns phone gestures into the mouse and keyboard events
-// noVNC listens for. Loaded by LinuxDesktopViewerScreen after every page load.
+// Touch layer for the noVNC page. Loaded by LinuxDesktopViewerScreen after every page load.
 //
-//   pad mode    one finger moves the pointer like a laptop touchpad, tap = click
-//   touch mode  the pointer jumps to the finger, which presses and drags
-//   both        two fingers scroll, pinch zooms (then pans), two-finger tap = right click,
-//               three fingers drag with the button held
+//   touch mode  noVNC's own gestures (core/input/gesturehandler.js), untouched: tap = click,
+//               double tap = double click, two-finger tap or long press = right click,
+//               one-finger drag = drag/select, two-finger drag = scroll, pinch = Ctrl+wheel
+//               (Chromium zooms the page). This layer only listens for taps.
+//   pad mode    this layer instead: one finger moves the pointer like a laptop touchpad,
+//               tap = click, two fingers scroll, pinch zooms the picture (then pans),
+//               two-finger tap = right click, three fingers drag with the button held
 (() => {
   const MAX_ZOOM = 4;
   const MOVE_SLOP = 8;
@@ -94,12 +96,6 @@
         x: r.left + pointer.x * r.width / Math.max(1, canvas.width),
         y: r.top + pointer.y * r.height / Math.max(1, canvas.height),
       };
-    };
-
-    const pointTo = (clientX, clientY) => {
-      const r = box();
-      pointer.x = clamp((clientX - r.left) * canvas.width / Math.max(1, r.width), 0, canvas.width - 1);
-      pointer.y = clamp((clientY - r.top) * canvas.height / Math.max(1, r.height), 0, canvas.height - 1);
     };
 
     const mouse = (type, buttons, target = canvas) => {
@@ -251,6 +247,7 @@
     };
 
     const onStart = event => {
+      if (mode === 'touch') return;
       const at = center(event.touches);
       if (!gesture) {
         if (!onCanvas(at)) return;
@@ -265,9 +262,6 @@
         gesture.spread = spread(event.touches);
         gesture.pinching = false;
         release();
-      } else if (event.touches.length === 1 && mode === 'touch') {
-        pointTo(at.x, at.y);
-        press();
       }
     };
 
@@ -281,12 +275,7 @@
       if (Math.hypot(at.x - gesture.origin.x, at.y - gesture.origin.y) > MOVE_SLOP) gesture.moved = true;
 
       if (gesture.fingers === 1 && fingers === 1) {
-        if (mode === 'touch') {
-          pointTo(at.x, at.y);
-          mouse('mousemove', holding ? 1 : 0);
-        } else {
-          moves.add(dx, dy);
-        }
+        moves.add(dx, dy);
       } else if (gesture.fingers === 2 && fingers === 2) {
         const now = spread(event.touches);
         if (!gesture.spread) gesture.spread = now;
@@ -318,13 +307,9 @@
       scrolls.flush();
       const quick = !gesture.moved && performance.now() - gesture.startedAt <= TAP_MS;
       if (quick && gesture.fingers === 1) {
-        // In touch mode the finger already pressed and released the button.
-        if (mode === 'pad') {
-          press();
-          release();
-        }
-        if (pointer.y >= ADDRESS_BAR[0] && pointer.y <= ADDRESS_BAR[1]) setTimeout(selectAll, 40);
-        if (window.HermesDeskBridge) window.HermesDeskBridge.onClick(Math.round(pointer.x), Math.round(pointer.y));
+        press();
+        release();
+        afterTap(pointer.x, pointer.y);
       } else if (quick && gesture.fingers === 2 && !gesture.pinching) {
         rightClick();
       }
@@ -337,6 +322,23 @@
       reset();
     };
 
+    // A tap in the address bar selects it for retyping; every tap tells the app where it
+    // landed, so it can bring up the keyboard over a text field.
+    const afterTap = (x, y) => {
+      if (y >= ADDRESS_BAR[0] && y <= ADDRESS_BAR[1]) setTimeout(selectAll, 40);
+      if (window.HermesDeskBridge) window.HermesDeskBridge.onClick(Math.round(x), Math.round(y));
+    };
+
+    // In touch mode noVNC turns a tap into a click itself; its 'onetap' gesture tells us where.
+    canvas.addEventListener('gesturestart', event => {
+      if (mode !== 'touch' || !event.detail || event.detail.type !== 'onetap') return;
+      const r = box();
+      afterTap(
+        clamp((event.detail.clientX - r.left) * canvas.width / Math.max(1, r.width), 0, canvas.width - 1),
+        clamp((event.detail.clientY - r.top) * canvas.height / Math.max(1, r.height), 0, canvas.height - 1),
+      );
+    });
+
     const options = { capture: true, passive: false };
     document.addEventListener('touchstart', onStart, options);
     document.addEventListener('touchmove', onMove, options);
@@ -346,9 +348,16 @@
 
     window.hermesDesk = {
       setMode(next) {
-        release();
+        reset();
         mode = next === 'touch' ? 'touch' : 'pad';
         window.hermesDeskMode = mode;
+        // noVNC maps touches through the canvas without our zoom; leave none behind.
+        if (mode === 'touch') {
+          view.scale = 1;
+          view.x = 0;
+          view.y = 0;
+          paint();
+        }
       },
       key,
       type(text) {
