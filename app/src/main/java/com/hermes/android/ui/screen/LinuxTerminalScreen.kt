@@ -25,7 +25,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -78,6 +77,7 @@ fun LinuxTerminalScreen(
                         modifiers = modifiers,
                         onTitle = { title = it.ifBlank { "Linux" } },
                         onReady = { terminal = it },
+                        onFinishedEnter = onNavigateBack,
                     )
                 }
             }
@@ -92,17 +92,12 @@ private fun TerminalPane(
     modifiers: StickyModifiers,
     onTitle: (String) -> Unit,
     onReady: (TerminalView) -> Unit,
+    onFinishedEnter: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val background = colors.background.toArgb()
     val foreground = colors.onBackground.toArgb()
     val fontPx = with(LocalDensity.current) { (12.dp.roundToPx() / 2 * 2).coerceAtLeast(MIN_FONT_PX) }
-    var session by remember { mutableStateOf<TerminalSession?>(null) }
-
-    DisposableEffect(session) {
-        val running = session
-        onDispose { running?.finishIfRunning() }
-    }
 
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -111,7 +106,7 @@ private fun TerminalPane(
             // so the scheme has to be right before the session exists.
             useColors(background, foreground)
             val view = TerminalView(context, null)
-            val client = TerminalClient(view, modifiers, fontPx, onTitle)
+            val client = TerminalClient(view, modifiers, fontPx, onTitle, onFinishedEnter)
             view.setTerminalViewClient(client)
             view.setTextSize(fontPx)
             view.setTypeface(Typeface.MONOSPACE)
@@ -121,13 +116,15 @@ private fun TerminalPane(
                 SCROLLBACK_ROWS, client,
             )
             view.attachSession(shell)
-            session = shell
             onReady(view)
             view.post { client.focusAndShowKeyboard() }
             view
         },
+        // The shell lives exactly as long as its view. finishIfRunning() is a SIGKILL, so it
+        // must never be reachable from an effect that restarts on recomposition.
+        onRelease = { view -> view.currentSession?.finishIfRunning() },
         update = { view ->
-            if (useColors(background, foreground)) session?.emulator?.mColors?.reset()
+            if (useColors(background, foreground)) view.currentSession?.emulator?.mColors?.reset()
             view.setBackgroundColor(background)
             view.onScreenUpdated()
         },
@@ -239,6 +236,7 @@ private class TerminalClient(
     private val modifiers: StickyModifiers,
     private var fontPx: Int,
     private val onTitle: (String) -> Unit,
+    private val onFinishedEnter: () -> Unit,
 ) : TerminalSessionClient, TerminalViewClient {
 
     fun focusAndShowKeyboard() = showKeyboard(view)
@@ -268,7 +266,12 @@ private class TerminalClient(
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = true
     override fun isTerminalViewSelected(): Boolean = view.hasFocus()
     override fun copyModeChanged(copyMode: Boolean) = Unit
-    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
+    // After the shell exits the library prints "press Enter"; Enter then leaves the screen.
+    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        if (session.isRunning || keyCode != KeyEvent.KEYCODE_ENTER) return false
+        onFinishedEnter()
+        return true
+    }
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
     override fun onEmulatorSet() = Unit
