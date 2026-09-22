@@ -1,6 +1,7 @@
 package com.hermes.android.runtime.linux
 
 import android.content.Context
+import com.hermes.android.R
 import com.hermes.android.gateway.StdioGatewayHub
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -29,6 +30,7 @@ import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
+import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -390,6 +392,25 @@ class LinuxDesktop @Inject constructor(
             if (current.agentBrowser) "export BROWSER_CDP_URL=http://127.0.0.1:$CdpPort\n" else "",
         )
         writeSkill()
+        writeFonts()
+    }
+
+    /**
+     * Persian in Chromium: the app's own Vazirmatn goes into the guest, and fontconfig picks it
+     * for Persian and Arabic text. Latin text keeps the system fonts.
+     */
+    private fun writeFonts() {
+        val dir = environment.guestFile(FontDir).apply { mkdirs() }
+        for ((resource, name) in BundledFonts) {
+            val target = File(dir, name)
+            if (target.isFile && target.length() > 0L) continue
+            context.resources.openRawResource(resource).use { input ->
+                target.outputStream().use { input.copyTo(it) }
+            }
+        }
+        // Rewritten only on change: a new rule costs the desktop a full font-cache rebuild.
+        val config = environment.guestFile(FontConfigPath).apply { parentFile?.mkdirs() }
+        if (!config.isFile || config.readText() != PersianFontConfig) config.writeText(PersianFontConfig)
     }
 
     /** Tells the agent how to use the desktop (screenshots, xdotool) beyond the browser tools. */
@@ -482,6 +503,49 @@ class LinuxDesktop @Inject constructor(
         private const val StateDir = "/root/.hermes/android"
         private const val ProfileDir = "/root/.hermes/chrome-profile"
         private const val LogPath = "/root/.hermes/logs/desktop.log"
+        private const val FontDir = "/usr/share/fonts/hermes"
+        private const val FontConfigPath = "/etc/fonts/conf.d/65-hermes-persian.conf"
+
+        private val BundledFonts = listOf(
+            R.font.vazirmatn_regular to "Vazirmatn-Regular.ttf",
+            R.font.vazirmatn_medium to "Vazirmatn-Medium.ttf",
+            R.font.vazirmatn_semibold to "Vazirmatn-SemiBold.ttf",
+            R.font.vazirmatn_bold to "Vazirmatn-Bold.ttf",
+        )
+
+        // Every font but Vazirmatn gives up the Arabic-script ranges at scan time, so Persian
+        // letters always fall back to Vazirmatn (DejaVu Sans' basic Arabic won otherwise), while
+        // Latin text keeps the system fonts. Pages marked Persian or Arabic get it first too.
+        private val PersianFontConfig = """
+            <?xml version="1.0"?>
+            <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+            <!-- Written by the Hermes Android app; edits are overwritten. -->
+            <fontconfig>
+              <match target="scan">
+                <test name="family" compare="not_eq" qual="all"><string>Vazirmatn</string></test>
+                <edit name="charset" mode="assign">
+                  <minus>
+                    <name>charset</name>
+                    <charset>
+                      <range><int>0x0600</int><int>0x06FF</int></range>
+                      <range><int>0x0750</int><int>0x077F</int></range>
+                      <range><int>0x08A0</int><int>0x08FF</int></range>
+                      <range><int>0xFB50</int><int>0xFDFF</int></range>
+                      <range><int>0xFE70</int><int>0xFEFF</int></range>
+                    </charset>
+                  </minus>
+                </edit>
+              </match>
+              <match target="pattern">
+                <test name="lang" compare="contains"><string>fa</string></test>
+                <edit name="family" mode="prepend" binding="strong"><string>Vazirmatn</string></edit>
+              </match>
+              <match target="pattern">
+                <test name="lang" compare="contains"><string>ar</string></test>
+                <edit name="family" mode="prepend" binding="strong"><string>Vazirmatn</string></edit>
+              </match>
+            </fontconfig>
+        """.trimIndent() + "\n"
 
         // Chromium's own toolbar (address bar) in the Phone layout — Aether's keyboard band.
         private const val BrowserUiTop = 34
@@ -553,6 +617,13 @@ class LinuxDesktop @Inject constructor(
             stop_desktop
             mkdir -p "${'$'}STATE" "${'$'}(dirname "${'$'}LOG")" $ProfileDir /tmp/.X11-unix
             exec >>"${'$'}LOG" 2>&1
+            # Persian font (see writeFonts()). Its scan rule only reaches fonts that are already
+            # cached through a full rebuild, so that runs once per change of the rule.
+            if [ ! -f "${'$'}STATE/fonts.stamp" ] || [ $FontConfigPath -nt "${'$'}STATE/fonts.stamp" ]; then
+                fc-cache -f >/dev/null 2>&1 && touch "${'$'}STATE/fonts.stamp"
+            else
+                fc-cache $FontDir >/dev/null 2>&1 || true
+            fi
             echo "=== hermes-desktop start ${'$'}(date) ${'$'}{WIDTH}x${'$'}{HEIGHT}"
             set -eu
             rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 $ProfileDir/SingletonLock \
