@@ -9,7 +9,6 @@ import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -36,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -94,17 +94,11 @@ private fun TerminalPane(
     onReady: (TerminalView) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val dark = isSystemInDarkTheme()
     val background = colors.background.toArgb()
     val foreground = colors.onBackground.toArgb()
-    val fontPx = with(LocalDensity.current) { 13.sp.roundToPx() }
+    val fontPx = with(LocalDensity.current) { (12.dp.roundToPx() / 2 * 2).coerceAtLeast(MIN_FONT_PX) }
     var session by remember { mutableStateOf<TerminalSession?>(null) }
 
-    LaunchedEffect(dark) {
-        TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND] = background
-        TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_FOREGROUND] = foreground
-        TerminalColors.COLOR_SCHEME.setCursorColorForBackground()
-    }
     DisposableEffect(session) {
         val running = session
         onDispose { running?.finishIfRunning() }
@@ -113,6 +107,9 @@ private fun TerminalPane(
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
+            // The emulator copies the scheme once, when it is created on the first layout,
+            // so the scheme has to be right before the session exists.
+            useColors(background, foreground)
             val view = TerminalView(context, null)
             val client = TerminalClient(view, modifiers, fontPx, onTitle)
             view.setTerminalViewClient(client)
@@ -130,10 +127,25 @@ private fun TerminalPane(
             view
         },
         update = { view ->
+            if (useColors(background, foreground)) session?.emulator?.mColors?.reset()
             view.setBackgroundColor(background)
             view.onScreenUpdated()
         },
     )
+}
+
+/** Makes [background] and [foreground] the terminal defaults; true when they changed. */
+private fun useColors(background: Int, foreground: Int): Boolean {
+    val defaults = TerminalColors.COLOR_SCHEME.mDefaultColors
+    if (defaults[TextStyle.COLOR_INDEX_BACKGROUND] == background &&
+        defaults[TextStyle.COLOR_INDEX_FOREGROUND] == foreground
+    ) {
+        return false
+    }
+    defaults[TextStyle.COLOR_INDEX_BACKGROUND] = background
+    defaults[TextStyle.COLOR_INDEX_FOREGROUND] = foreground
+    TerminalColors.COLOR_SCHEME.setCursorColorForBackground()
+    return true
 }
 
 /**
@@ -155,6 +167,8 @@ private sealed interface StripKey {
 private val StripKeys = listOf(
     StripKey.Code("Esc", KeyEvent.KEYCODE_ESCAPE),
     StripKey.Code("Tab", KeyEvent.KEYCODE_TAB),
+    StripKey.Code("Enter", KeyEvent.KEYCODE_ENTER),
+    StripKey.Code("⌫", KeyEvent.KEYCODE_DEL),
     StripKey.Code("←", KeyEvent.KEYCODE_DPAD_LEFT),
     StripKey.Code("↓", KeyEvent.KEYCODE_DPAD_DOWN),
     StripKey.Code("↑", KeyEvent.KEYCODE_DPAD_UP),
@@ -172,6 +186,15 @@ private val StripKeys = listOf(
 
 @Composable
 private fun KeyStrip(terminal: TerminalView?, modifiers: StickyModifiers) {
+    // Key labels keep their size under large system font settings, or the strip overflows.
+    val density = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
+        KeyStripRow(terminal, modifiers)
+    }
+}
+
+@Composable
+private fun KeyStripRow(terminal: TerminalView?, modifiers: StickyModifiers) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
             modifier = Modifier
@@ -182,6 +205,7 @@ private fun KeyStrip(terminal: TerminalView?, modifiers: StickyModifiers) {
         ) {
             StripButton("Ctrl", armed = modifiers.ctrl) { modifiers.ctrl = !modifiers.ctrl }
             StripButton("Alt", armed = modifiers.alt) { modifiers.alt = !modifiers.alt }
+            StripButton(t("Keyboard", "کیبورد")) { terminal?.let(::showKeyboard) }
             for (key in StripKeys) {
                 StripButton(key.label) {
                     val view = terminal ?: return@StripButton
@@ -217,11 +241,7 @@ private class TerminalClient(
     private val onTitle: (String) -> Unit,
 ) : TerminalSessionClient, TerminalViewClient {
 
-    fun focusAndShowKeyboard() {
-        view.requestFocus()
-        val input = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        input.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
-    }
+    fun focusAndShowKeyboard() = showKeyboard(view)
 
     // The library may ask several times while handling one key, so release after it is done.
     private fun read(armed: Boolean, release: () -> Unit): Boolean {
@@ -251,7 +271,7 @@ private class TerminalClient(
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
-    override fun onEmulatorSet() = view.onScreenUpdated()
+    override fun onEmulatorSet() = Unit
 
     override fun onTextChanged(changedSession: TerminalSession) = view.onScreenUpdated()
     override fun onTitleChanged(changedSession: TerminalSession) = onTitle(changedSession.title.orEmpty())
@@ -279,6 +299,12 @@ private class TerminalClient(
     override fun logVerbose(tag: String, message: String) = Timber.tag(tag).v(message)
     override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) = Timber.tag(tag).e(e, message)
     override fun logStackTrace(tag: String, e: Exception) = Timber.tag(tag).e(e)
+}
+
+private fun showKeyboard(view: TerminalView) {
+    view.requestFocus()
+    val input = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    input.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
 }
 
 private const val SCROLLBACK_ROWS = 2_000
