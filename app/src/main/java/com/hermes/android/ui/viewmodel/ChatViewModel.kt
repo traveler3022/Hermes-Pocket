@@ -1030,6 +1030,9 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageComplete -> {
+                // A recovery still waiting on its snapshot must not let that
+                // older snapshot mark this turn running again.
+                sessionDelegate.onTurnEnded()
                 streamingDelegate.flushBuffer()
                 // A previewed answer repeats text already sealed on screen; any
                 // other final text is new and follows the sealed commentary.

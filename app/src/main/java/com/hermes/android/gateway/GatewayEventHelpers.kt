@@ -12,6 +12,17 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 internal object GatewayEventHelpers {
 
+    /**
+     * Whether a `session.active_list` row's `status` means a turn is in flight.
+     * The gateway reports `working`, `waiting` (blocked on an approval or a
+     * question), `starting` or `idle` — never `streaming`, which is what this
+     * used to test for, so every busy session read as finished. `streaming`
+     * and `running` stay accepted for any build that does send them.
+     */
+    fun isBusySessionStatus(status: String): Boolean = status in BUSY_SESSION_STATUSES
+
+    private val BUSY_SESSION_STATUSES = setOf("working", "waiting", "streaming", "running")
+
     fun parseSkinMap(element: JsonElement): Map<String, String> {
         return try {
             element.jsonObject.toMap().mapValues { it.value.jsonPrimitive.content }

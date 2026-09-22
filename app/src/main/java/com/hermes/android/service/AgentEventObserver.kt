@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
+import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -60,6 +61,9 @@ class AgentEventObserver @Inject constructor(
     /** Live session id → last known title, for turns believed in-flight. */
     private val watched = ConcurrentHashMap<String, String>()
 
+    /** Sessions whose message.complete arrived since the last active_list request went out. */
+    private val endedDuringSync: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     private var reconcileJob: Job? = null
 
     private val _work = MutableStateFlow<AgentWork?>(null)
@@ -102,6 +106,7 @@ class AgentEventObserver @Inject constructor(
                         }
                     }
                     is GatewayEvent.MessageComplete -> {
+                        event.sessionId?.let { endedDuringSync.add(it) }
                         val title = event.sessionId?.let { watched.remove(it) }
                         publishWork()
                         if (!foregroundState.isForeground) {
@@ -157,6 +162,7 @@ class AgentEventObserver @Inject constructor(
     }
 
     private suspend fun reconcile() {
+        endedDuringSync.clear()
         val result = gatewayClient.request(GatewayMethods.SESSION_ACTIVE_LIST)
         val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
             ?.mapNotNull { it as? JsonObject } ?: return
@@ -167,12 +173,17 @@ class AgentEventObserver @Inject constructor(
         for (row in rows) {
             val id = row.str("id")
             if (id.isEmpty()) continue
-            if (row.str("status") == "streaming") streamingNow[id] = row
+            if (GatewayEventHelpers.isBusySessionStatus(row.str("status"))) streamingNow[id] = row
         }
 
         // Anything streaming server-side deserves watching (covers turns that
-        // started while this process wasn't alive to see message.start).
+        // started while this process wasn't alive to see message.start) —
+        // except a turn whose message.complete already landed: the gateway
+        // sends it before it clears `running`, so a row read in that gap still
+        // says busy, and watching it again would bring back "working" and
+        // announce the same reply a second time.
         for ((id, row) in streamingNow) {
+            if (id in endedDuringSync) continue
             rememberTitle(id, row.str("title"))
         }
 
@@ -182,7 +193,8 @@ class AgentEventObserver @Inject constructor(
         // from the synced preview.
         for ((id, title) in watched) {
             if (streamingNow.containsKey(id)) continue
-            watched.remove(id)
+            // The live message.complete may have taken it meanwhile, and notified.
+            if (watched.remove(id) == null) continue
             val row = rows.firstOrNull { it.str("id") == id }
             val preview = row?.str("preview").orEmpty().ifBlank { title }
             Timber.i("[AgentObserver] session $id completed while offline — notifying from sync")

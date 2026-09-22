@@ -24,6 +24,14 @@ internal class ChatSessionDelegate(
     private val scope: CoroutineScope,
     private val loadReasoningLevel: () -> Unit,
 ) {
+    /** Turn ends the open chat has seen, bumped by [onTurnEnded]; lets [recover] tell a snapshot is older than one. */
+    private var turnEnds = 0
+
+    /** The open chat's message.complete was handled. */
+    fun onTurnEnded() {
+        turnEnds++
+    }
+
     suspend fun createOrResume(state: MutableStateFlow<ChatUiState>) {
         val mostRecentId = try {
             val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
@@ -123,6 +131,7 @@ internal class ChatSessionDelegate(
         storedId: String?,
         turnEnded: Boolean = false,
     ): Boolean? {
+        val turnEndsBefore = turnEnds
         val attached = try {
             if (storedId != null) {
                 sessionRepository.attach(storedId)
@@ -143,8 +152,15 @@ internal class ChatSessionDelegate(
             Timber.w(e, "[Chat] Recovery of $liveId failed")
             return null
         }
+        // A message.complete handled while this snapshot was in flight is newer
+        // than it: the server may have read the transcript before storing the
+        // reply, and still reports `running` until well after sending the
+        // event. Taken at face value it re-marks the finished turn as running,
+        // and with the event already spent nothing ever clears that.
+        val endedMeanwhile = turnEnds != turnEndsBefore
         // message.complete goes out before the server clears `running`.
-        val running = !turnEnded && (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+        val running = !turnEnded && !endedMeanwhile &&
+            (attached.raw["running"] as? JsonPrimitive)?.content == "true"
         val snapshot = parseSessionHistory(attached.raw)
         var applied = false
         state.update { current ->
@@ -162,6 +178,12 @@ internal class ChatSessionDelegate(
         (attached.raw["open_requests"] as? kotlinx.serialization.json.JsonArray)
             ?.let(gatewayClient::redeliverServerRequests)
         Timber.i("[Chat] Recovered $liveId as ${attached.liveId}: ${snapshot.size} messages, running=$running")
+        if (endedMeanwhile) {
+            // Same refetch the turn end triggers when it comes after the
+            // recovery: the stored transcript now holds the reply.
+            Timber.i("[Chat] Turn ended during recovery of $liveId; refetching the settled transcript")
+            return recover(state, attached.liveId, attached.storedId ?: storedId, turnEnded = true)
+        }
         return running
     }
 
