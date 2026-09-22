@@ -133,4 +133,30 @@ class BackgroundSessionTrackerTest {
         tracker.markRead("B")
         assertEquals(false, tracker.snapshot().getValue("B").failed)
     }
+
+    @Test
+    fun `a settled chat still shown busy ends its turn once`() {
+        // message.complete went out while the socket was down; the settled
+        // session.info that follows the server clearing `running` ends it.
+        val tracker = BackgroundSessionTracker()
+        tracker.onTurnStart("A")
+        tracker.onDelta("A", "partial reply")
+
+        assertTrue(tracker.onSettled("A", isActive = false))
+        val a = tracker.snapshot().getValue("A")
+        assertFalse(a.isRunning)
+        assertEquals(1, a.unreadReplies)
+        assertEquals("partial reply", a.preview)
+
+        // The same frame for a chat already ended changes nothing.
+        assertFalse(tracker.onSettled("A", isActive = false))
+        assertEquals(1, tracker.snapshot().getValue("A").unreadReplies)
+    }
+
+    @Test
+    fun `settling a chat nobody saw running adds no badge`() {
+        val tracker = BackgroundSessionTracker()
+        assertFalse(tracker.onSettled("B", isActive = false))
+        assertNull(tracker.snapshot()["B"])
+    }
 }

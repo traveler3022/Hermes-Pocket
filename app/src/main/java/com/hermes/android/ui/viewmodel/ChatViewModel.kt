@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
+import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
@@ -80,6 +81,15 @@ class ChatViewModel @Inject constructor(
     // Set when a reconnect landed mid-turn: the snapshot had no reply yet and
     // the stream lost its start, so the reply is fetched once the turn ends.
     private var recoverOnTurnEnd = false
+
+    // A chat the user asked for (notification, drawer, task list) that has not
+    // opened yet. While it is pending the screen does not pick a chat on its
+    // own: on a cold start the connect path used to open the most recent one
+    // in parallel, and whichever answer landed last won.
+    private var requestedSessionId: String? = null
+    private var resumeJob: Job? = null
+    // The connect path opening a chat by itself; a requested one cancels it.
+    private var autoPickJob: Job? = null
 
     private val attachmentDelegate = ChatAttachmentDelegate(
         gatewayClient, hermesRuntime, context, viewModelScope,
@@ -246,16 +256,20 @@ class ChatViewModel @Inject constructor(
                     if (state is ConnectionState.Connected) {
                         val liveId = state.sessionId
                         val activeId = _uiState.value.activeSessionId
+                        val requested = requestedSessionId
                         when {
+                            // The asked-for chat opens instead; retried here when it
+                            // could not reach the gateway before the socket was up.
+                            requested != null -> if (resumeJob?.isActive != true) resumeSession(requested)
                             // Back from a drop: the stream missed whatever the gateway
                             // pushed meanwhile, so the open chat is rebuilt from the
                             // server instead of trusting what is on screen.
                             activeId != null -> if (cameUp) launch { recoverActiveSession(activeId) }
                             liveId != null -> {
                                 _uiState.update { it.copy(activeSessionId = liveId) }
-                                launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                                autoPickJob = launch { sessionDelegate.loadHistory(_uiState, liveId) }
                             }
-                            else -> launch { sessionDelegate.createOrResume(_uiState) }
+                            else -> autoPickJob = launch { sessionDelegate.createOrResume(_uiState) }
                         }
                         if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
@@ -311,9 +325,26 @@ class ChatViewModel @Inject constructor(
     }
 
     fun resumeSession(sessionId: String) {
-        viewModelScope.launch {
+        requestedSessionId = sessionId
+        autoPickJob?.cancel()
+        // Only the latest pick may land; an older one finishing late would
+        // replace the chat the user just chose.
+        resumeJob?.cancel()
+        resumeJob = viewModelScope.launch {
             streamingDelegate.reset()
-            sessionDelegate.resume(_uiState, sessionId)
+            val running = sessionDelegate.resume(_uiState, sessionId)
+            val opened = running != null
+            // Joined mid-turn: its start went by before this chat was open, so
+            // the reply is fetched once the turn ends. An idle chat drops the
+            // flag the previous chat may have left behind.
+            if (opened) recoverOnTurnEnd = running == true
+            // Keep asking on the next connect only when the gateway was not
+            // reachable; a refusal from the server will not change on retry.
+            if ((opened || gatewayClient.connectionState.value is ConnectionState.Connected) &&
+                requestedSessionId == sessionId
+            ) {
+                requestedSessionId = null
+            }
             // resume() resolves the clicked (stored) id to the live one the
             // events carry; clear the badge under either spelling.
             _uiState.value.activeSessionId?.let { backgroundSessions.markRead(it) }
@@ -900,15 +931,20 @@ class ChatViewModel @Inject constructor(
         // boundaries push immediately and the live preview is rate-limited.
         val publishNow = when (event) {
             is GatewayEvent.SessionInfo -> {
+                val settled = GatewayEventHelpers.isSettledSessionInfo(event.info) &&
+                    backgroundSessions.onSettled(sid, isActive = sid == activeSid)
                 val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
                 if (!stored.isNullOrBlank() && sid == activeSid) {
                     _uiState.update {
                         if (it.activeSessionId == sid && it.activeSessionKey == null) it.copy(activeSessionKey = stored) else it
                     }
                 }
-                if (stored.isNullOrBlank() || storedIdByLiveId[sid] == stored) return
-                storedIdByLiveId[sid] = stored
-                true
+                if (!stored.isNullOrBlank() && storedIdByLiveId[sid] != stored) {
+                    storedIdByLiveId[sid] = stored
+                    true
+                } else {
+                    settled
+                }
             }
             is GatewayEvent.MessageStart -> {
                 backgroundSessions.onTurnStart(sid); true
@@ -1030,6 +1066,9 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.MessageComplete -> {
+                // A recovery still waiting on its snapshot must not let that
+                // older snapshot mark this turn running again.
+                sessionDelegate.onTurnEnded()
                 streamingDelegate.flushBuffer()
                 // A previewed answer repeats text already sealed on screen; any
                 // other final text is new and follows the sealed commentary.
@@ -1321,6 +1360,20 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.SessionInfo -> {
+                // Busy only on a snapshot's word, and the turn's message.complete
+                // never reached this chat (it went out before the snapshot was
+                // answered, or while the socket was down): this frame, sent after
+                // the server cleared `running`, is the turn end. Settle it the
+                // way message.complete would, from the stored transcript.
+                if (recoverOnTurnEnd && eventSid != null && eventSid == activeSid &&
+                    GatewayEventHelpers.isSettledSessionInfo(event.info)
+                ) {
+                    Timber.i("[Turn] settled session=$eventSid without a message.complete; refetching")
+                    recoverOnTurnEnd = false
+                    sessionDelegate.onTurnEnded()
+                    _uiState.update { it.copy(isSending = false) }
+                    viewModelScope.launch { recoverActiveSession(eventSid, turnEnded = true) }
+                }
                 (event.info["reasoning_effort"] as? JsonPrimitive)?.content
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }

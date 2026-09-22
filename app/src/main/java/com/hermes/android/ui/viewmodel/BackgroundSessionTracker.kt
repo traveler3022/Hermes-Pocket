@@ -65,6 +65,18 @@ internal class BackgroundSessionTracker {
         )
     }
 
+    /**
+     * The server reports [sessionId] not running. A chat still shown busy lost
+     * its message.complete (it went out while the socket was down, or before a
+     * re-attach read `running` as still set); end its turn. Returns whether
+     * anything changed.
+     */
+    fun onSettled(sessionId: String, isActive: Boolean): Boolean {
+        if (activity[sessionId]?.isRunning != true) return false
+        onTurnEnd(sessionId, "", isActive)
+        return true
+    }
+
     /** The user opened this chat: its replies are no longer unread, and its failure has been seen. */
     fun markRead(sessionId: String) {
         if (sessionId.isBlank()) return

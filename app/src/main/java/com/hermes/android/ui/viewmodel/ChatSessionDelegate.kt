@@ -4,6 +4,7 @@ import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -24,11 +25,22 @@ internal class ChatSessionDelegate(
     private val scope: CoroutineScope,
     private val loadReasoningLevel: () -> Unit,
 ) {
+    /** Turn ends the open chat has seen, bumped by [onTurnEnded]; lets [recover] tell a snapshot is older than one. */
+    private var turnEnds = 0
+
+    /** The open chat's message.complete was handled. */
+    fun onTurnEnded() {
+        turnEnds++
+    }
+
     suspend fun createOrResume(state: MutableStateFlow<ChatUiState>) {
         val mostRecentId = try {
             val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
             (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
         } catch (e: Exception) {
+            // Cancelled because the user asked for a specific chat meanwhile:
+            // opening a new one here would bury it.
+            if (e is CancellationException) throw e
             Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
             null
         }
@@ -59,11 +71,16 @@ internal class ChatSessionDelegate(
         }
     }
 
-    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String) {
+    /**
+     * Returns null when [sessionId] could not be opened, otherwise whether a
+     * turn is still running in it.
+     */
+    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean? {
         try {
             val attached = sessionRepository.attach(sessionId)
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
+            val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
             state.update { it.copy(
                 activeSessionId = liveSessionId,
                 // A drawer row hands over the stored id itself; a live id
@@ -75,10 +92,10 @@ internal class ChatSessionDelegate(
                 sessionLoadedAt = System.currentTimeMillis(),
                 activeTodos = emptyList(),
                 pendingApproval = null,
-                // isSending tracks the turn of the session we just left. Leaving
-                // it set makes the input bar of the session we switched TO show
-                // a stop button instead of send, so the chat looks unusable.
-                isSending = false,
+                // isSending is this chat's own turn, not the one of the chat we
+                // just left: a busy chat (opened from its "working"
+                // notification, say) shows the stop button, an idle one send.
+                isSending = running,
             ) }
             loadReasoningLevel()
             // Questions the agent is still blocked on come back with the resume.
@@ -90,9 +107,13 @@ internal class ChatSessionDelegate(
                 Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
                 loadHistory(state, liveSessionId)
             }
+            return running
         } catch (e: Exception) {
+            // Superseded by another resume: not a failure to show.
+            if (e is CancellationException) throw e
             Timber.e(e, "[Chat] Failed to resume session")
             state.update { it.copy(errorEvent = ErrorEvent.Error("Failed to resume: ${e.message}")) }
+            return null
         }
     }
 
@@ -123,6 +144,7 @@ internal class ChatSessionDelegate(
         storedId: String?,
         turnEnded: Boolean = false,
     ): Boolean? {
+        val turnEndsBefore = turnEnds
         val attached = try {
             if (storedId != null) {
                 sessionRepository.attach(storedId)
@@ -143,8 +165,15 @@ internal class ChatSessionDelegate(
             Timber.w(e, "[Chat] Recovery of $liveId failed")
             return null
         }
+        // A message.complete handled while this snapshot was in flight is newer
+        // than it: the server may have read the transcript before storing the
+        // reply, and still reports `running` until well after sending the
+        // event. Taken at face value it re-marks the finished turn as running,
+        // and with the event already spent nothing ever clears that.
+        val endedMeanwhile = turnEnds != turnEndsBefore
         // message.complete goes out before the server clears `running`.
-        val running = !turnEnded && (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+        val running = !turnEnded && !endedMeanwhile &&
+            (attached.raw["running"] as? JsonPrimitive)?.content == "true"
         val snapshot = parseSessionHistory(attached.raw)
         var applied = false
         state.update { current ->
@@ -162,6 +191,12 @@ internal class ChatSessionDelegate(
         (attached.raw["open_requests"] as? kotlinx.serialization.json.JsonArray)
             ?.let(gatewayClient::redeliverServerRequests)
         Timber.i("[Chat] Recovered $liveId as ${attached.liveId}: ${snapshot.size} messages, running=$running")
+        if (endedMeanwhile) {
+            // Same refetch the turn end triggers when it comes after the
+            // recovery: the stored transcript now holds the reply.
+            Timber.i("[Chat] Turn ended during recovery of $liveId; refetching the settled transcript")
+            return recover(state, attached.liveId, attached.storedId ?: storedId, turnEnded = true)
+        }
         return running
     }
 
@@ -217,15 +252,20 @@ internal class ChatSessionDelegate(
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
             if (messages.isNotEmpty()) {
-                state.update { it.copy(
-                    messages = messages,
-                    sessionLoadedAt = System.currentTimeMillis(),
-                ) }
+                state.update {
+                    // Another chat was opened while this history was in flight.
+                    if (it.activeSessionId != sessionId) return@update it
+                    it.copy(
+                        messages = messages,
+                        sessionLoadedAt = System.currentTimeMillis(),
+                    )
+                }
                 Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
             } else {
                 Timber.w("[Chat] Session history returned empty for $sessionId")
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Timber.w(e, "[Chat] Could not load session history for $sessionId, continuing without it")
         }
     }

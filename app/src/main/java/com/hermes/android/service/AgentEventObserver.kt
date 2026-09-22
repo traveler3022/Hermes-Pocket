@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
+import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,6 +62,23 @@ class AgentEventObserver @Inject constructor(
     /** Live session id → last known title, for turns believed in-flight. */
     private val watched = ConcurrentHashMap<String, String>()
 
+    /**
+     * Sessions whose message.complete arrived but which the server has not yet
+     * reported settled. The gateway sends message.complete before it clears
+     * `running`, so until then active_list still says busy for a turn that is
+     * over. An entry leaves when the server says idle (active_list, or the
+     * end-of-turn session.info) or a new turn starts.
+     */
+    private val completedUnsettled: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Order of turn events (start, tool, complete) and the last one seen per session. */
+    private val turnEventSeq = AtomicLong()
+    private val lastTurnEvent = ConcurrentHashMap<String, Long>()
+
+    private fun markTurnEvent(sessionId: String?) {
+        sessionId?.let { lastTurnEvent[it] = turnEventSeq.incrementAndGet() }
+    }
+
     private var reconcileJob: Job? = null
 
     private val _work = MutableStateFlow<AgentWork?>(null)
@@ -88,7 +107,11 @@ class AgentEventObserver @Inject constructor(
             gatewayClient.events.collect { event ->
                 when (event) {
                     is GatewayEvent.MessageStart -> {
-                        event.sessionId?.let { watched.putIfAbsent(it, "") }
+                        markTurnEvent(event.sessionId)
+                        event.sessionId?.let {
+                            completedUnsettled.remove(it)
+                            watched.putIfAbsent(it, "")
+                        }
                         publishWork()
                         // A lost completion event must not leave "working" up forever.
                         if (gatewayClient.connectionState.value is ConnectionState.Connected) ensureReconcileLoop(scope)
@@ -97,11 +120,15 @@ class AgentEventObserver @Inject constructor(
                         // Tool steps do not change the notification (one quiet
                         // "working" card, not a live play-by-play) — they only
                         // matter for a session nobody told us about yet.
+                        markTurnEvent(event.sessionId)
                         event.sessionId?.let {
+                            completedUnsettled.remove(it)
                             if (watched.putIfAbsent(it, "") == null) publishWork()
                         }
                     }
                     is GatewayEvent.MessageComplete -> {
+                        markTurnEvent(event.sessionId)
+                        event.sessionId?.let { completedUnsettled.add(it) }
                         val title = event.sessionId?.let { watched.remove(it) }
                         publishWork()
                         if (!foregroundState.isForeground) {
@@ -119,6 +146,12 @@ class AgentEventObserver @Inject constructor(
                                 sessionId = event.sessionId,
                                 preview = event.text,
                             )
+                        }
+                    }
+                    is GatewayEvent.SessionInfo -> {
+                        // Sent right after the server clears `running` at the end of a turn.
+                        if ((event.info["running"] as? JsonPrimitive)?.content == "false") {
+                            event.sessionId?.let { completedUnsettled.remove(it) }
                         }
                     }
                     else -> Unit
@@ -157,6 +190,7 @@ class AgentEventObserver @Inject constructor(
     }
 
     private suspend fun reconcile() {
+        val asOf = turnEventSeq.get()
         val result = gatewayClient.request(GatewayMethods.SESSION_ACTIVE_LIST)
         val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
             ?.mapNotNull { it as? JsonObject } ?: return
@@ -167,12 +201,25 @@ class AgentEventObserver @Inject constructor(
         for (row in rows) {
             val id = row.str("id")
             if (id.isEmpty()) continue
-            if (row.str("status") == "streaming") streamingNow[id] = row
+            if (GatewayEventHelpers.isBusySessionStatus(row.str("status"))) streamingNow[id] = row
         }
 
+        // A turn event handled while the list was in flight is newer than the
+        // list: for that session this round's row says nothing.
+        fun changedSince(id: String) = (lastTurnEvent[id] ?: 0L) > asOf
+
+        // The server has settled these: idle now, or gone from the list.
+        completedUnsettled.removeAll(
+            completedUnsettled.filter { it !in streamingNow && !changedSince(it) }.toSet(),
+        )
+
         // Anything streaming server-side deserves watching (covers turns that
-        // started while this process wasn't alive to see message.start).
+        // started while this process wasn't alive to see message.start) —
+        // except a turn whose message.complete already landed and which the
+        // server has not settled yet: watching it again would bring back
+        // "working" and announce the same reply a second time.
         for ((id, row) in streamingNow) {
+            if (id in completedUnsettled || changedSince(id)) continue
             rememberTitle(id, row.str("title"))
         }
 
@@ -181,8 +228,10 @@ class AgentEventObserver @Inject constructor(
         // The result itself is safe in the server's session store; notify
         // from the synced preview.
         for ((id, title) in watched) {
-            if (streamingNow.containsKey(id)) continue
-            watched.remove(id)
+            // A turn that started after the list was read is not in it yet.
+            if (streamingNow.containsKey(id) || changedSince(id)) continue
+            // The live message.complete may have taken it meanwhile, and notified.
+            if (watched.remove(id) == null) continue
             val row = rows.firstOrNull { it.str("id") == id }
             val preview = row?.str("preview").orEmpty().ifBlank { title }
             Timber.i("[AgentObserver] session $id completed while offline — notifying from sync")

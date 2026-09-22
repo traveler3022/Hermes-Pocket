@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
+import com.hermes.android.gateway.GatewayEventHelpers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -58,11 +59,14 @@ class TasksViewModel @Inject constructor(
     private var pollJob: Job? = null
 
     init {
-        // Refresh the board the moment any turn completes so a task flips
-        // from "running" to "done" without waiting for the next poll tick.
+        // Refresh the board the moment any turn settles so a task flips from
+        // "running" to "done" without waiting for the next poll tick. Not on
+        // message.complete: the gateway still reports the session "working"
+        // until it clears `running` after that event, and says so in the
+        // session.info it sends next.
         viewModelScope.launch {
             gatewayClient.events.collect { event ->
-                if (event is GatewayEvent.MessageComplete ||
+                if ((event is GatewayEvent.SessionInfo && GatewayEventHelpers.isSettledSessionInfo(event.info)) ||
                     event is GatewayEvent.BackgroundComplete
                 ) {
                     refresh(showSpinner = false)

@@ -201,6 +201,40 @@ class SessionRepositoryTest {
         assertTrue(tasks.single().isRunning)
     }
 
+    @Test
+    fun `a task the gateway reports as working is running and not finished`() = runTest {
+        registry.register("liveT", "storedT")
+        registry.register("liveDone", "storedDone")
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_ACTIVE_LIST -> buildJsonObject {
+                    put("sessions", buildJsonArray {
+                        add(buildJsonObject {
+                            put("id", "liveT"); put("session_key", "storedT"); put("status", "working")
+                        })
+                        add(buildJsonObject {
+                            put("id", "liveDone"); put("session_key", "storedDone"); put("status", "idle")
+                        })
+                    })
+                }
+                // session.list names tasks by their stored id.
+                GatewayMethods.SESSION_LIST -> buildJsonObject {
+                    put("sessions", buildJsonArray {
+                        for (id in listOf("storedT", "storedDone")) {
+                            add(buildJsonObject {
+                                put("id", id); put("source", SessionRepository.TASK_SOURCE); put("message_count", 2)
+                            })
+                        }
+                    })
+                }
+                else -> JsonObject(emptyMap())
+            }
+        }
+
+        assertTrue(repo.activeTasks().first { it.id == "liveT" }.isRunning)
+        assertEquals(listOf("storedDone"), repo.finishedTasks().map { it.id })
+    }
+
     // ── reasoning scope semantics ──────────────────────────────────────────
 
     @Test
