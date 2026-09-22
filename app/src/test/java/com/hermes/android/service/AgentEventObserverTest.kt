@@ -128,6 +128,76 @@ class AgentEventObserverTest {
     }
 
     @Test
+    fun `a completion between two syncs is not watched again while the server still says working`() = runTest {
+        var status = "working"
+        gateway.activeList = { rows("s1" to status) }
+        val observer = startObserver()
+        gateway.eventFlow.emit(GatewayEvent.MessageStart("s1"))
+
+        // First sync at 2s: the turn really is running.
+        advanceTimeBy(2_500)
+        runCurrent()
+        assertEquals(1, gateway.activeListCalls)
+
+        // message.complete lands while the loop waits for its next round; the
+        // server has not cleared `running` yet when that round asks, at 7s.
+        gateway.eventFlow.emit(complete("s1"))
+        runCurrent()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(2, gateway.activeListCalls)
+
+        assertNull(observer.work.value)
+        verify(exactly = 1) { notifier.showTurnComplete(any(), any(), any()) }
+
+        // Once the server settles, nothing more is announced.
+        status = "idle"
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertNull(observer.work.value)
+        verify(exactly = 1) { notifier.showTurnComplete(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a turn that starts while the list is in flight is not announced as done`() = runTest {
+        gateway.activeList = {
+            if (gateway.activeListCalls == 1) {
+                // message.start arrives while the first list is out; the list
+                // was read before the turn began, so the session is absent.
+                gateway.eventFlow.emit(GatewayEvent.MessageStart("s1"))
+                yield()
+                rows()
+            } else {
+                rows("s1" to "working")
+            }
+        }
+        val observer = startObserver()
+
+        advanceTimeBy(20_000)
+        runCurrent()
+
+        verify(exactly = 0) { notifier.showTurnComplete(any(), any(), any()) }
+        assertNotNull(observer.work.value)
+    }
+
+    @Test
+    fun `a new turn after a completion is watched again`() = runTest {
+        gateway.activeList = { rows("s1" to "working") }
+        val observer = startObserver()
+        gateway.eventFlow.emit(GatewayEvent.MessageStart("s1"))
+        runCurrent()
+        gateway.eventFlow.emit(complete("s1"))
+        runCurrent()
+
+        gateway.eventFlow.emit(GatewayEvent.MessageStart("s1"))
+        advanceTimeBy(20_000)
+        runCurrent()
+
+        assertNotNull(observer.work.value)
+        verify(exactly = 1) { notifier.showTurnComplete(any(), any(), any()) }
+    }
+
+    @Test
     fun `a completion seen during the sync is not watched again or announced twice`() = runTest {
         val observer = startObserver()
         gateway.eventFlow.emit(GatewayEvent.MessageStart("s1"))
