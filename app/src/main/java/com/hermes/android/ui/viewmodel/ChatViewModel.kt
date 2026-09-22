@@ -477,6 +477,7 @@ class ChatViewModel @Inject constructor(
 
         val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
         val lastUserOrdinal = userMessages.size - 1
+        val knownRowId = lastUserMsg.rowId
 
         val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
@@ -484,7 +485,18 @@ class ChatViewModel @Inject constructor(
             _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
         }
 
-        sendPrompt(lastUserText, sessionId, truncateBeforeUserOrdinal = lastUserOrdinal)
+        viewModelScope.launch {
+            // A message sent live in this session (not loaded from session.history) never
+            // got its row id stamped. The server rejects an ordinal-only retry with 4004,
+            // so resolve it against history rather than let the retry fail outright.
+            val rowId = knownRowId ?: sessionDelegate.resolveUserRowId(sessionId, lastUserOrdinal)
+            sendPrompt(
+                lastUserText,
+                sessionId,
+                truncateBeforeUserOrdinal = lastUserOrdinal,
+                truncateBeforeRowId = rowId,
+            )
+        }
     }
 
     fun steerAgent() {
@@ -591,7 +603,12 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun sendPrompt(text: String, sessionId: String, truncateBeforeUserOrdinal: Int? = null) {
+    private fun sendPrompt(
+        text: String,
+        sessionId: String,
+        truncateBeforeUserOrdinal: Int? = null,
+        truncateBeforeRowId: Long? = null,
+    ) {
         viewModelScope.launch {
             try {
                 fun params(liveId: String) = buildJsonObject {
@@ -603,7 +620,11 @@ class ChatViewModel @Inject constructor(
                         // rewind is explicitly confirmed, so a stale ordinal on an
                         // ordinary submit can never silently drop history. Ordinal 0
                         // (regenerating the first turn) empties the transcript and
-                        // needs the second opt-in, or the server answers 4028.
+                        // needs the second opt-in, or the server answers 4028. It also
+                        // refuses an ordinal with no row id at all, as 4004 — ordinals
+                        // shift under compaction, so a durable session requires the
+                        // row id to say which physical row is meant.
+                        if (truncateBeforeRowId != null) put("truncate_before_row_id", truncateBeforeRowId)
                         put("confirm_truncate", true)
                         if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
                     }

@@ -270,6 +270,20 @@ internal class ChatSessionDelegate(
         }
     }
 
+    /** The nth user turn's durable row id, for a retry whose [ChatMessage.User.rowId] was
+     *  never stamped (sent live in this session, not loaded from session.history). */
+    suspend fun resolveUserRowId(sessionId: String, userOrdinal: Int): Long? {
+        return try {
+            val params = buildJsonObject { put("session_id", sessionId) }
+            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
+            parseSessionHistory(result).filterIsInstance<ChatMessage.User>().getOrNull(userOrdinal)?.rowId
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Timber.w(e, "[Chat] Could not resolve row id for session $sessionId ordinal $userOrdinal")
+            null
+        }
+    }
+
     suspend fun branch(state: MutableStateFlow<ChatUiState>, resolveSessionId: suspend () -> String?) {
         try {
             val sid = resolveSessionId()
@@ -344,8 +358,9 @@ internal class ChatSessionDelegate(
                 val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
                     ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
                 val id = msg["id"]?.let { (it as? JsonPrimitive)?.content } ?: UUID.randomUUID().toString()
+                val rowId = msg["row_id"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
                 when (role) {
-                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content)
+                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content, rowId = rowId)
                     "assistant" -> ChatMessage.Assistant(
                         id = id, timestamp = ts, text = content,
                         isStreaming = false,

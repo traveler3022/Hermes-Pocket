@@ -27,6 +27,10 @@ sealed class ChatMessage {
         val attachments: List<PendingAttachment> = emptyList(),
         /** Typed before the gateway was live; goes out by itself once it is. */
         val queued: Boolean = false,
+        /** Durable SQLite row id from session.history, when known. The server rejects
+         *  ordinal-only truncation (retry/regenerate) with RPC 4004 unless this rides
+         *  along with the ordinal, so it has to survive from history into a retry. */
+        val rowId: Long? = null,
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */
