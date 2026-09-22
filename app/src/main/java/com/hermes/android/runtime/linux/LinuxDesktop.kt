@@ -48,7 +48,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class LinuxDesktop @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
     private val environment: ProotEnvironment,
     private val stdioHub: StdioGatewayHub,
 ) {
