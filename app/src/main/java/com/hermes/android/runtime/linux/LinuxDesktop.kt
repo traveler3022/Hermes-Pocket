@@ -197,7 +197,7 @@ class LinuxDesktop @Inject constructor(
                 stopViewerProcess()
                 val log = environment.guestFile(LogPath).also { it.parentFile?.mkdirs() }
                 val started = environment.processBuilder("hermes-desktop view")
-                    .redirectOutput(ProcessBuilder.Redirect.to(log))
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(log))
                     .start()
                     .also { it.outputStream.close() }
                 viewerProcess = started
@@ -515,6 +515,9 @@ class LinuxDesktop @Inject constructor(
             export DISPLAY=:99
 
             running() { curl -sf -m 2 "http://127.0.0.1:${'$'}CDP_PORT/json/version" >/dev/null 2>&1; }
+            # The desktop's own process is alive. Unlike running(), this does not depend on a
+            # busy Chromium answering within two seconds.
+            alive() { [ -f "${'$'}PIDS" ] && kill -0 "${'$'}(cut -d' ' -f1 "${'$'}PIDS")" 2>/dev/null; }
 
             stop_desktop() {
                 if [ -f "${'$'}PIDS" ]; then
@@ -531,7 +534,7 @@ class LinuxDesktop @Inject constructor(
                 # process is what turns the stream off. proot's --kill-on-exit would reap a
                 # backgrounded one the moment this script returned.
                 view)
-                    running || { echo "the desktop is not running" >&2; exit 1; }
+                    alive || running || { echo "the desktop is not running" >&2; exit 1; }
                     for i in ${'$'}(seq 1 50); do [ -S "${'$'}STATE/vnc.sock" ] && break; sleep 0.1; done
                     exec websockify --web=/usr/share/novnc \
                         --unix-target="${'$'}STATE/vnc.sock" 127.0.0.1:"${'$'}NOVNC_PORT" ;;
@@ -542,7 +545,8 @@ class LinuxDesktop @Inject constructor(
                 *) echo "usage: hermes-desktop [start|stop|status|wait|view]" >&2; exit 2 ;;
             esac
 
-            if running; then
+            if running || alive; then
+                # Never restart a live desktop: that would throw away the user's browser.
                 echo "Desktop already running: DISPLAY=:99, CDP http://127.0.0.1:${'$'}CDP_PORT"
                 exit 0
             fi
@@ -580,6 +584,7 @@ class LinuxDesktop @Inject constructor(
 
             cleanup() {
                 trap - EXIT INT TERM
+                echo "=== hermes-desktop stopped ${'$'}(date)"
                 for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{VNC_PID:-}; do
                     kill "${'$'}pid" 2>/dev/null || true
                 done
@@ -623,7 +628,7 @@ class LinuxDesktop @Inject constructor(
             done
             echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
-            wait "${'$'}VNC_PID"
+            wait "${'$'}VNC_PID" || echo "Xvnc exited with ${'$'}?"
         """.trimIndent() + "\n"
 
         private val DesktopSkill = """
