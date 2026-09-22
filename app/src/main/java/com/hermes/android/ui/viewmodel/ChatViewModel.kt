@@ -796,9 +796,13 @@ class ChatViewModel @Inject constructor(
     // ── Drawer (delegated) ───────────────────────────────────────────────
 
     fun toggleSessionDrawer() {
-        val opening = !_uiState.value.showSessionDrawer
-        _uiState.update { it.copy(showSessionDrawer = opening) }
-        if (opening) loadSessionList()
+        _uiState.update { it.copy(showSessionDrawer = !it.showSessionDrawer) }
+    }
+
+    /** However the drawer opened (hamburger or swipe), it shows a current chat list. */
+    fun onSessionDrawerOpened() {
+        _uiState.update { if (it.showSessionDrawer) it else it.copy(showSessionDrawer = true) }
+        loadSessionList()
     }
 
     fun closeSessionDrawer() {

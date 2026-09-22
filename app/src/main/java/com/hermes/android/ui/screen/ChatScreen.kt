@@ -335,6 +335,9 @@ fun ChatScreen(
         if (drawerState.isOpen) {
             keyboardController?.hide()
             focusManager.clearFocus()
+            // A swipe opens the drawer without the hamburger's toggle, which was the only
+            // thing that fetched the chat list; a fresh screen then showed an empty drawer.
+            viewModel.onSessionDrawerOpened()
         } else if (uiState.showSessionDrawer) {
             viewModel.closeSessionDrawer()
         }
