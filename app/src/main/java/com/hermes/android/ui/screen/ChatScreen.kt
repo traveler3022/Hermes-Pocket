@@ -380,6 +380,20 @@ fun ChatScreen(
     // renders. uiState.messages still holds the tool-call cards it hides, so
     // its index pointed further down and pushed the message above the screen.
     val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
+
+    // Diagnostic: a turn running with no reply drawn. Says in the connection journal
+    // whether the reply is missing from the state or only from what the list draws.
+    val streamingInState = uiState.messages.lastOrNull { it is ChatMessage.Assistant && it.isStreaming }?.id
+    val replyDrawn = streamingInState != null && visibleMessages.any { it.id == streamingInState }
+    LaunchedEffect(uiState.isSending, streamingInState, replyDrawn, uiState.activeSessionId) {
+        if (!uiState.isSending || replyDrawn) return@LaunchedEffect
+        kotlinx.coroutines.delay(4_000)
+        timber.log.Timber.w(
+            "[Render] turn running, no reply drawn: session=${uiState.activeSessionId} " +
+                "inState=${streamingInState != null} messages=${uiState.messages.size} " +
+                "windowed=${windowedMessages.size} visible=${visibleMessages.size}",
+        )
+    }
     LaunchedEffect(lastUserMessageId) {
         val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {

@@ -305,6 +305,7 @@ class ChatViewModel @Inject constructor(
         streamingDelegate.reset()
         val storedId = _uiState.value.activeSessionKey ?: storedIdByLiveId[liveId]
         recoverOnTurnEnd = sessionDelegate.recover(_uiState, liveId, storedId, turnEnded) ?: return
+        if (recoverOnTurnEnd) ensureStreamingBubble()
         val newId = _uiState.value.activeSessionId
         if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
     }
@@ -345,6 +346,10 @@ class ChatViewModel @Inject constructor(
             // the reply is fetched once the turn ends. An idle chat drops the
             // flag the previous chat may have left behind.
             if (opened) recoverOnTurnEnd = running == true
+            // The transcript holds no reply yet for a turn still running, and the screen
+            // draws "thinking" only inside a reply bubble: without one, a chat opened
+            // mid-turn showed nothing until the turn was over.
+            if (running == true) ensureStreamingBubble()
             // Keep asking on the next connect only when the gateway was not
             // reachable; a refusal from the server will not change on retry.
             if ((opened || gatewayClient.connectionState.value is ConnectionState.Connected) &&
@@ -1149,11 +1154,15 @@ class ChatViewModel @Inject constructor(
                 viewModelScope.launch { recoverActiveSession(event.sessionId) }
             }
 
+            // Reasoning needs a bubble to land in just like text does; with none open
+            // (a chat joined mid-turn) every chunk was flushed into nothing.
             is GatewayEvent.ThinkingDelta -> {
+                ensureStreamingBubble()
                 streamingDelegate.enqueueDelta(event.text, isReasoning = true)
             }
 
             is GatewayEvent.ReasoningDelta -> {
+                ensureStreamingBubble()
                 streamingDelegate.enqueueDelta(event.text, isReasoning = true)
             }
 

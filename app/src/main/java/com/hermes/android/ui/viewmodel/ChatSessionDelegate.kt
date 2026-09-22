@@ -86,7 +86,7 @@ internal class ChatSessionDelegate(
                 // A drawer row hands over the stored id itself; a live id
                 // (notification tap) resolves to itself and names no key.
                 activeSessionKey = attached.storedId ?: sessionId.takeIf { it != liveSessionId },
-                messages = history,
+                messages = watchDrop("resume", it.messages, history),
                 showSessionDrawer = false,
                 errorEvent = null,
                 sessionLoadedAt = System.currentTimeMillis(),
@@ -183,7 +183,7 @@ internal class ChatSessionDelegate(
             current.copy(
                 activeSessionId = attached.liveId,
                 activeSessionKey = attached.storedId ?: current.activeSessionKey,
-                messages = mergeRecoveredTranscript(snapshot, current.messages),
+                messages = watchDrop("recover", current.messages, mergeRecoveredTranscript(snapshot, current.messages)),
                 isSending = running,
             )
         }
@@ -217,7 +217,7 @@ internal class ChatSessionDelegate(
             current.copy(
                 activeSessionId = attached.liveId,
                 activeSessionKey = attached.storedId ?: current.activeSessionKey,
-                messages = mergeRecoveredTranscript(snapshot, current.messages),
+                messages = watchDrop("rebound", current.messages, mergeRecoveredTranscript(snapshot, current.messages)),
             )
         }
         Timber.i("[Chat] $oldLiveId was reclaimed; continuing as ${attached.liveId}")
@@ -256,7 +256,7 @@ internal class ChatSessionDelegate(
                     // Another chat was opened while this history was in flight.
                     if (it.activeSessionId != sessionId) return@update it
                     it.copy(
-                        messages = messages,
+                        messages = watchDrop("history", it.messages, messages),
                         sessionLoadedAt = System.currentTimeMillis(),
                     )
                 }
@@ -452,3 +452,12 @@ internal fun List<ChatMessage>.withReplyLanded(
  */
 private fun JsonElement?.sessionIdOrNull(): String? =
     (this as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+
+/** Journals a transcript replacement that removes the reply still streaming on screen. */
+internal fun watchDrop(site: String, before: List<ChatMessage>, after: List<ChatMessage>): List<ChatMessage> {
+    val streaming = before.firstOrNull { it is ChatMessage.Assistant && it.isStreaming }
+    if (streaming != null && after.none { it.id == streaming.id }) {
+        Timber.w("[Chat] $site replaced the transcript and dropped the streaming reply (${before.size} -> ${after.size} messages)")
+    }
+    return after
+}
