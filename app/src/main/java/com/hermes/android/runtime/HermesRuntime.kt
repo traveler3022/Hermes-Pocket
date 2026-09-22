@@ -137,6 +137,12 @@ interface HermesRuntime {
     fun getWebSocketUrl(): String
 
     /**
+     * Host-side file for [guestPath] when the runtime's filesystem is readable directly by the
+     * app (the built-in Linux rootfs); null when files can only be fetched over the gateway.
+     */
+    fun hostFileForGuestPath(guestPath: String): java.io.File? = null
+
+    /**
      * Launch the runtime's host application (if any).
      *
      * For the migration adapter, this opens the external terminal app so the

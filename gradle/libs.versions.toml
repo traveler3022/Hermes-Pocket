@@ -1,8 +1,8 @@
 [versions]
+termux-terminal = "v0.118.1"
 agp = "8.7.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
-composeMarkdown = "0.7.2"
 coil = "2.7.0"
 
 # AndroidX
@@ -44,6 +44,8 @@ coroutinesTest = "1.9.0"
 androidxTestCore = "1.6.1"
 
 [libraries]
+# Termux terminal emulator + view (Apache-2.0), the terminal Aether embeds for its Alpine shell.
+termux-terminal-view = { group = "com.github.termux.termux-app", name = "terminal-view", version.ref = "termux-terminal" }
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
@@ -87,7 +89,6 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
 # Markdown
-compose-markdown = { group = "com.github.jeziellago", name = "compose-markdown", version.ref = "composeMarkdown" }
 
 # Coil (image loading for markdown)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

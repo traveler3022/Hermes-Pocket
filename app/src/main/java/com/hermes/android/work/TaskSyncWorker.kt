@@ -48,6 +48,14 @@ class TaskSyncWorker @AssistedInject constructor(
 
         return try {
             val finished = repository.finishedTasks()
+            // First sync of this install: everything the server reports as finished is
+            // history the user already lived through, not news. Record it silently —
+            // otherwise the app's opening act is a burst of notifications for tasks that
+            // completed long before it was installed.
+            if (completionTracker.seedOnFirstSync(finished.map { it.id })) {
+                Timber.i("[TaskSync] first sync — recorded ${finished.size} existing tasks, notified none")
+                return Result.success()
+            }
             var notifiedCount = 0
             for (task in finished) {
                 if (completionTracker.claim(task.id)) {

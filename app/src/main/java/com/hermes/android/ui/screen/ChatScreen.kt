@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -19,33 +20,39 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -57,7 +64,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
@@ -77,14 +83,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import com.hermes.android.ui.viewmodel.SessionItem
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
@@ -94,18 +102,27 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.TextField
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import coil.compose.AsyncImage
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxHeaderCircleButton
+import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.viewmodel.DrawerRenameState
@@ -157,12 +174,19 @@ fun ChatScreen(
     onNavigateToSessions: () -> Unit = {},
     onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
+    onNavigateToCron: () -> Unit = {},
     sharedText: String? = null,
     resumeSessionId: String? = null,
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
+    // The model catalogue and the switch itself already live in ConfigViewModel
+    // — including the part that is easy to get wrong, which is telling the live
+    // session about the change rather than only the next one. Reaching for it
+    // here keeps one implementation of that rather than a second copy.
+    modelPicker: com.hermes.android.ui.viewmodel.ModelPickerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val modelPickerState by modelPicker.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -170,10 +194,15 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
+    var showContext by remember { mutableStateOf(false) }
+    var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
+    var showModelSheet by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -188,7 +217,15 @@ fun ChatScreen(
     }
 
     // Feature #16: Filter messages based on search query
-    val filteredMessages = remember(uiState.messages, uiState.searchQuery) {
+    // Long chats render a window — the latest turns, with older ones added as
+    // the list is scrolled to the top (ChatHistoryWindow). Search spans all.
+    val windowedMessages = rememberChatHistoryWindow(
+        messages = uiState.messages,
+        listState = listState,
+        resetKey = uiState.sessionLoadedAt,
+        enabled = uiState.searchQuery.isBlank(),
+    )
+    val filteredMessages = remember(windowedMessages, uiState.searchQuery) {
         // Last-resort safety net: the LazyColumn below is keyed by message id
         // (required for correct animation/scroll behavior), and Compose treats
         // a repeated key as fatal — it crashes the whole screen rather than
@@ -197,7 +234,7 @@ fun ChatScreen(
         // exists), but distinctBy costs nothing on a chat-length list and
         // means a future event-handling bug degrades to "a message is
         // missing" instead of a hard crash.
-        val deduped = uiState.messages.distinctBy { it.id }
+        val deduped = windowedMessages.distinctBy { it.id }
         if (uiState.searchQuery.isBlank()) {
             deduped
         } else {
@@ -217,28 +254,96 @@ fun ChatScreen(
         }
     }
 
+    // An agent turn is not one message. The gateway opens a new assistant
+    // message for every stretch of narration between tool calls, so a single
+    // question can produce a dozen — and left alone, the chat fills up with the
+    // agent talking to itself on the way to an answer.
+    //
+    // Whatever a turn did on the way is collected in list order and shown in a
+    // trace rather than as loose cards and fragments. List order is also what
+    // gives that trace a true sequence: reasoning and tool events carry no
+    // shared ordering key, but the order they arrived in is one.
+    //
+    // Two independent choices shape what folds:
+    //
+    //  • Narration — off by default, so only the message that ends a turn stays
+    //    on the chat surface. A reader who wants the running commentary turns it
+    //    back on in Settings, and then every fragment keeps its place in the
+    //    flow with its own reasoning and its own tools beneath it.
+    //  • Search — while a query is active nothing folds at all, tool cards
+    //    included, because a hit must never be hidden inside a closed sheet.
+    val searching = uiState.searchQuery.isNotBlank()
+    val foldNarration = !searching && themeModeState?.showInlineNarration != true
+    //
+    // The cache hands back the previous list for every trace whose content is
+    // unchanged: a fresh list per rebuild (every 80ms while streaming) made
+    // every visible bubble recompose, and long chats crawled.
+    val turnWorkCache = remember { TurnWorkCache() }
+    val turnWork: Map<String, List<HxTraceItem>> =
+        remember(filteredMessages, foldNarration, searching) {
+            if (searching) {
+                emptyMap()
+            } else {
+                turnWorkCache.build(filteredMessages, foldNarration)
+            }
+        }
+
+    // What folded into a trace leaves the flow: every tool card, and — when
+    // narration is folded — every assistant message but the one ending its turn.
+    val visibleMessages = remember(filteredMessages, turnWork, searching) {
+        if (searching) {
+            filteredMessages
+        } else {
+            filteredMessages.filter { msg ->
+                when (msg) {
+                    is ChatMessage.ToolCall -> false
+                    is ChatMessage.Assistant -> msg.id in turnWork
+                    else -> true
+                }
+            }
+        }
+    }
+
     // What the agent is doing right now (null = idle). Derived, not stored —
     // the running tool cards / streaming flags already carry the state.
     // Shown in the connection-status slot of the top bar while a turn runs
     // (user decision: working state replaces the connection chip, no extra
     // chrome), and reused to gate the live plan (todo) strip so it only
     // appears while the plan is actually being executed.
-    val isToolRunning = uiState.messages.any { it is ChatMessage.ToolCall && it.isRunning }
-    val streamingAssistant =
-        uiState.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
     // Removed: agent activity text was distracting - ConnectionIndicator handles it
     val agentActivity: String? = null
 
     // Keep drawer state in sync with ViewModel state.
     LaunchedEffect(uiState.showSessionDrawer) {
-        if (uiState.showSessionDrawer) drawerState.open() else drawerState.close()
+        if (uiState.showSessionDrawer) {
+            drawerState.open()
+        } else {
+            drawerState.close()
+        }
+    }
+
+    // ...and the ViewModel in sync with the drawer. The sheet closes by paths the
+    // ViewModel never hears about — the scrim, a swipe, the back gesture, Settings
+    // and Tasks — after which showSessionDrawer was still true, so the next tap on
+    // the hamburger toggled it to false and the drawer simply did not open. Every
+    // second tap did nothing.
+    //
+    // Hiding the keyboard lives here rather than in the effect above so it also
+    // covers the drawer being swiped open: otherwise the keyboard stays up and
+    // covers the buttons at the foot of the sheet.
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        } else if (uiState.showSessionDrawer) {
+            viewModel.closeSessionDrawer()
+        }
     }
 
     // The avatar is customized from Settings (a separate ViewModel writing
     // the same prefs key) — re-read it every time this screen re-enters
     // composition so a change made there shows up on return.
     LaunchedEffect(Unit) {
-        viewModel.loadAssistantAvatar()
     }
 
     // When a new message arrives, scroll the latest USER message to the TOP
@@ -267,9 +372,13 @@ fun ChatScreen(
     //
     // scrollToItem (instant) is used instead of animateScrollToItem so there
     // is no animation in flight to be cancelled/restarted by the next event.
-    val lastUserMessageId = uiState.messages.lastOrNull { it is ChatMessage.User }?.id
+    //
+    // The index must come from visibleMessages — the list the LazyColumn
+    // renders. uiState.messages still holds the tool-call cards it hides, so
+    // its index pointed further down and pushed the message above the screen.
+    val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
     LaunchedEffect(lastUserMessageId) {
-        val lastUserIndex = uiState.messages.indexOfLast { it is ChatMessage.User }
+        val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
         if (lastUserIndex >= 0) {
             listState.scrollToItem(lastUserIndex)
         }
@@ -277,8 +386,8 @@ fun ChatScreen(
 
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
-        if (uiState.sessionLoadedAt > 0L && uiState.messages.isNotEmpty()) {
-            listState.scrollToItem(uiState.messages.size - 1)
+        if (uiState.sessionLoadedAt > 0L && visibleMessages.isNotEmpty()) {
+            listState.scrollToItem(visibleMessages.lastIndex)
         }
     }
 
@@ -322,170 +431,81 @@ fun ChatScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                modifier = Modifier.fillMaxHeight().width(322.dp),
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
             ) {
-                // ── Header ─────────────────────────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.clickable { showRenameAssistantDialog = true },
-                    ) {
-                        Text(
-                            text = uiState.assistantName,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = t("Rename", "تغییر نام"),
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                // Pinned chats first, each group by last update in the chosen order.
+                val drawerSessions = remember(uiState.sessions, uiState.drawerPinnedIds, uiState.drawerSortNewest) {
+                    val byTime = if (uiState.drawerSortNewest) {
+                        uiState.sessions.sortedByDescending { it.updatedAt }
+                    } else {
+                        uiState.sessions.sortedBy { it.updatedAt }
                     }
-                    IconButton(onClick = { scope.launch { drawerState.close() } }) {
-                        Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"))
-                    }
+                    byTime.sortedByDescending { it.id in uiState.drawerPinnedIds }
                 }
-                Button(
-                    onClick = {
-                        viewModel.newConversation()
-                        scope.launch { drawerState.close() }
+                val closeDrawerThen: (() -> Unit) -> Unit = { action ->
+                    scope.launch { drawerState.close() }
+                    action()
+                }
+                WorkspaceDrawerSheet(
+                    sessions = drawerSessions,
+                    activeSessionId = uiState.activeSessionId,
+                    pulseOf = { session ->
+                        when {
+                            uiState.pendingApproval?.sessionId == session.id -> SessionPulse.Waiting
+                            uiState.sessionActivity[session.id]?.isRunning == true -> SessionPulse.Running
+                            uiState.sessionActivity[session.id]?.failed == true -> SessionPulse.Failed
+                            else -> SessionPulse.None
+                        }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                ) {
-                    Text(t("New conversation", "گفتگوی جدید"))
-                }
-                OutlinedButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateToTasks()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                ) {
-                    Text(t("Task Desk", "میز کار"))
-                }
-                // ── Drawer search + sort bar ───────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    OutlinedTextField(
-                        value = uiState.drawerSearchQuery,
-                        onValueChange = { viewModel.updateDrawerSearch(it) },
-                        modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(
-                                t("Search chats…", "جستجو در گفتگوها…"),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                    unreadOf = { session -> uiState.sessionActivity[session.id]?.unreadReplies ?: 0 },
+                    destinations = rememberWorkspaceDestinations(
+                        waitingCount = if (uiState.pendingApproval != null) 1 else 0,
+                        onWorkbench = { closeDrawerThen(onNavigateToTasks) },
+                        onAgent = { closeDrawerThen(onNavigateToSettings) },
+                        onScheduled = { closeDrawerThen(onNavigateToCron) },
+                        onServer = { closeDrawerThen(onNavigateToRuntime) },
+                    ),
+                    onSearch = { closeDrawerThen(onNavigateToSessions) },
+                    onNewChat = { closeDrawerThen { viewModel.newConversation() } },
+                    onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
+                    onSessionLongClick = { session -> drawerMenuTarget = session },
+                    onAccount = { closeDrawerThen(onNavigateToSettings) },
+                )
+
+                // ── Long-press menu: rename / pin / delete ─────────────────
+                drawerMenuTarget?.let { target ->
+                    val pinned = target.id in uiState.drawerPinnedIds
+                    AlertDialog(
+                        onDismissRequest = { drawerMenuTarget = null },
+                        title = {
+                            Text(target.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        trailingIcon = {
-                            if (uiState.drawerSearchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.updateDrawerSearch("") }) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = t("Clear", "پاک کردن"),
-                                        modifier = Modifier.size(16.dp),
-                                    )
+                        text = {
+                            Column {
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerShowRename(target.id, target.title)
+                                }) { Text(t("Rename", "تغییر نام")) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerTogglePin(target.id)
+                                }) { Text(if (pinned) t("Unpin", "برداشتن سنجاق") else t("Pin", "سنجاق")) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
+                                    viewModel.drawerShowDelete(target.id)
+                                }) {
+                                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         },
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
-                        textStyle = MaterialTheme.typography.bodySmall,
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { drawerMenuTarget = null }) { Text(t("Cancel", "لغو")) }
+                        },
                     )
-                    IconButton(onClick = { viewModel.toggleDrawerSort() }) {
-                        Icon(
-                            Icons.Default.Sort,
-                            contentDescription = if (uiState.drawerSortNewest)
-                                t("Newest first", "جدیدترین اول")
-                            else
-                                t("Oldest first", "قدیمی‌ترین اول"),
-                            tint = if (!uiState.drawerSortNewest)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                // ── Session list (fills remaining space) ───────────────────
-                val drawerSessions = remember(
-                    uiState.sessions,
-                    uiState.drawerSearchQuery,
-                    uiState.drawerSortNewest,
-                    uiState.drawerPinnedIds,
-                ) {
-                    var list = uiState.sessions
-                    val q = uiState.drawerSearchQuery.trim().lowercase()
-                    if (q.isNotEmpty()) {
-                        list = list.filter { it.title.lowercase().contains(q) }
-                    }
-                    list = if (uiState.drawerSortNewest) {
-                        list.sortedByDescending { it.updatedAt }
-                    } else {
-                        list.sortedBy { it.updatedAt }
-                    }
-                    // pinned items float to top
-                    val pinned = list.filter { it.id in uiState.drawerPinnedIds }
-                    val unpinned = list.filter { it.id !in uiState.drawerPinnedIds }
-                    pinned + unpinned
-                }
-
-                if (drawerSessions.isEmpty()) {
-                    Text(
-                        text = if (uiState.drawerSearchQuery.isNotEmpty())
-                            t("No results", "نتیجه‌ای یافت نشد")
-                        else
-                            t("No saved sessions yet", "هنوز گفتگویی ذخیره نشده"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(drawerSessions, key = { it.id }) { session ->
-                            SessionDrawerRow(
-                                session = session,
-                                isActive = session.id == uiState.activeSessionId,
-                                isPinned = session.id in uiState.drawerPinnedIds,
-                                onClick = {
-                                    viewModel.resumeSession(session.id)
-                                    scope.launch { drawerState.close() }
-                                },
-                                onLongClick = {
-                                    viewModel.drawerShowRename(session.id, session.title)
-                                },
-                                onPin = { viewModel.drawerTogglePin(session.id) },
-                                onRename = { viewModel.drawerShowRename(session.id, session.title) },
-                                onDelete = { viewModel.drawerShowDelete(session.id) },
-                            )
-                        }
-                    }
                 }
 
                 // ── Rename dialog ──────────────────────────────────────────
@@ -546,63 +566,92 @@ fun ChatScreen(
                         },
                     )
                 }
-
-                // ── Footer: Settings ───────────────────────────────────────
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            scope.launch { drawerState.close() }
-                            onNavigateToSettings()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = t("Settings", "تنظیمات"),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
             }
         },
     ) {
         Scaffold(
             topBar = {
-                Column {
-                    TopAppBar(
-                        title = {
-                            // Keep only the runtime/connection status in the top bar
-                            Box(modifier = Modifier.clickable { onNavigateToRuntime() }) {
+                // The activity is edge-to-edge, and a plain Column does not
+                // consume the status bar inset the way the Material TopAppBar
+                // this replaced did — without this the chrome draws under the
+                // status bar and off the top of the screen.
+                Column(modifier = Modifier.statusBarsPadding()) {
+                    // Floating chrome instead of a flat Material app bar: two
+                    // shadowed circles either side of the status pill, same
+                    // language as the composer's own floating controls, so
+                    // the top and bottom of the screen read as one design
+                    // instead of "system bar" + "custom bar".
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HxHeaderCircleButton(
+                            icon = HxIcons.MenuShort,
+                            contentDescription = t("Sessions", "گفتگوها"),
+                            onClick = { viewModel.toggleSessionDrawer() },
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
+                                .clickable { onNavigateToRuntime() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (agentActivity != null) {
                                     AgentWorkingIndicator(agentActivity)
                                 } else {
-                                    ConnectionIndicator(uiState.connectionState)
+                                    ConnectionIndicator(
+                                        state = uiState.connectionState,
+                                        connectingSince = uiState.connectingSince,
+                                        bootEstimateMs = uiState.bootEstimateMs,
+                                    )
                                 }
                             }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { viewModel.toggleSessionDrawer() }) {
-                                Icon(Icons.Default.Menu, contentDescription = t("Sessions", "گفتگوها"))
-                            }
-                        },
-                        actions = {
-
-                            IconButton(onClick = { viewModel.toggleSearch() }) {
-                                Icon(
-                                    if (uiState.showSearch) Icons.Default.Close else Icons.Default.Search,
-                                    contentDescription = t("Search", "جستجو"),
+                        }
+                        HxHeaderCircleButton(
+                            icon = HxIcons.NewChat,
+                            contentDescription = t("New chat", "گفتگوی جدید"),
+                            onClick = { viewModel.newConversation() },
+                            iconSize = 25.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        // Context and search moved behind ⋮ so the bar keeps
+                        // only new chat; nothing the old buttons did is gone.
+                        Box {
+                            var showOverflow by remember { mutableStateOf(false) }
+                            HxHeaderCircleButton(
+                                icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.MoreVert,
+                                contentDescription = if (uiState.showSearch) t("Close search", "بستن جستجو") else t("More", "بیشتر"),
+                                onClick = {
+                                    if (uiState.showSearch) viewModel.toggleSearch() else showOverflow = true
+                                },
+                            )
+                            DropdownMenu(
+                                expanded = showOverflow,
+                                onDismissRequest = { showOverflow = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(t("Search messages", "جستجو در پیام‌ها")) },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    onClick = {
+                                        showOverflow = false
+                                        viewModel.toggleSearch()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(t("Stats", "آمار")) },
+                                    leadingIcon = { Icon(Icons.Default.DataUsage, contentDescription = null) },
+                                    onClick = {
+                                        showOverflow = false
+                                        showContext = true
+                                    },
                                 )
                             }
-                        },
-                    )
+                        }
+                    }
                     // Feature #16: Search bar (below TopAppBar)
                     AnimatedVisibility(
                         visible = uiState.showSearch,
@@ -643,8 +692,8 @@ fun ChatScreen(
                     SmallFloatingActionButton(
                         onClick = {
                             scope.launch {
-                                if (uiState.messages.isNotEmpty()) {
-                                    listState.animateScrollToItem(uiState.messages.size - 1)
+                                if (visibleMessages.isNotEmpty()) {
+                                    listState.animateScrollToItem(visibleMessages.lastIndex)
                                 }
                             }
                         },
@@ -706,15 +755,27 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
+                            // HxSpace.screen, the same inset every other screen
+                            // uses. The chat had a hand-written 12dp, which is
+                            // why its text ran to the edges while the rest of
+                            // the app breathed — and a long reply with no margin
+                            // reads as a wall rather than as a message.
+                            .padding(horizontal = HxSpace.screen),
                         // Tight gap by default; itemsIndexed adds extra top
                         // padding when a message starts a new group (turn),
                         // so the eye reads turn boundaries instead of a flat
                         // evenly-spaced list.
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                        // More at the top than the bottom: the first message
+                        // sits directly under the top bar and needs clearing
+                        // from it, while the composer already brings its own
+                        // padding to the bottom edge.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            top = HxSpace.xl,
+                            bottom = HxSpace.md,
+                        ),
                     ) {
-                        if (filteredMessages.isEmpty() &&
+                        if (visibleMessages.isEmpty() &&
                             uiState.connectionState == ChatConnectionState.Connected
                         ) {
                             item {
@@ -730,23 +791,20 @@ fun ChatScreen(
                                         )
                                     }
                                 } else {
-                                    EmptyChatHero(
-                                        assistantName = uiState.assistantName,
-                                        avatarUri = uiState.assistantAvatarPath,
-                                        modifier = Modifier.fillParentMaxSize(),
-                                    )
+                                    // A new chat opens empty: no greeting, no suggestions.
+                                    EmptyChatBody(Modifier.fillParentMaxSize())
                                 }
                             }
                         }
-                        itemsIndexed(filteredMessages, key = { _, m -> m.id }) { index, message ->
+                        itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
-                                    filteredMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                                    visibleMessages.lastOrNull { it is ChatMessage.Assistant } == message
                             // Grouped == previous message is from the same side
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
-                            val prev = filteredMessages.getOrNull(index - 1)
-                            val next = filteredMessages.getOrNull(index + 1)
+                            val prev = visibleMessages.getOrNull(index - 1)
+                            val next = visibleMessages.getOrNull(index + 1)
                             val grouped = prev != null &&
                                     (prev is ChatMessage.User) == (message is ChatMessage.User)
                             val isLastInGroup = next == null ||
@@ -784,7 +842,6 @@ fun ChatScreen(
                                 message = message,
                                 grouped = grouped,
                                 isLastInGroup = isLastInGroup,
-                                avatarUri = uiState.assistantAvatarPath,
                                 searchQuery = uiState.searchQuery,
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
@@ -796,8 +853,10 @@ fun ChatScreen(
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
+                                traceItems = turnWork[message.id].orEmpty(),
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
+                                onRespondToClarifyBatch = viewModel::respondToClarifyBatch,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
                                 onImageClick = { url -> fullscreenImageUrl = url },
@@ -830,12 +889,17 @@ fun ChatScreen(
                         // in composition with a stable key so the collapse is
                         // a smooth ease-out instead of a jump cut.
                         item(key = "streaming-tail-spacer") {
-                            val spacerHeight by animateDpAsState(
-                                targetValue = if (isAwaitingReply) 600.dp else 0.dp,
+                            // One viewport tall — just enough to lift the user
+                            // message to the top (a fixed 600dp overshot once the
+                            // composer grew). Sized by fillParentMaxHeight at
+                            // layout time: reading listState.layoutInfo here made
+                            // every scroll frame touch this item and scrolling lag.
+                            val spacerFraction by animateFloatAsState(
+                                targetValue = if (isAwaitingReply) 1f else 0f,
                                 animationSpec = tween(durationMillis = 450),
                                 label = "streamingTailSpacer",
                             )
-                            Spacer(modifier = Modifier.height(spacerHeight))
+                            Spacer(modifier = Modifier.fillParentMaxHeight(spacerFraction))
                         }
                     }
                 }
@@ -862,8 +926,8 @@ fun ChatScreen(
                     onSteer = viewModel::steerAgent,
                     onAttachFile = viewModel::attachFromUri,
                     onRemoveAttachment = viewModel::removeAttachment,
-                    reasoningLevel = uiState.reasoningLevel,
-                    onReasoningLevelChange = viewModel::setReasoningLevel,
+                    activeModel = modelPickerState.activeModel,
+                    onModelClick = { showModelSheet = true },
                 )
             }
         }
@@ -938,6 +1002,25 @@ fun ChatScreen(
         }
     }
 
+    if (showContext) {
+        uiState.activeSessionId?.let { sid ->
+            ContextSheet(
+                sessionId = sid,
+                snackbarHostState = snackbarHostState,
+                onDismiss = { showContext = false },
+            )
+        }
+    }
+
+    ChatModelPicker(
+        viewModel = modelPicker,
+        chat = uiState,
+        showSheet = showModelSheet,
+        snackbarHostState = snackbarHostState,
+        onReasoningLevelChange = viewModel::setReasoningLevel,
+        onDismissSheet = { showModelSheet = false },
+    )
+
     // Rename dialog — client-side display name only (top bar / drawer header).
     if (showRenameAssistantDialog) {
         var nameInput by remember(uiState.assistantName) { mutableStateOf(uiState.assistantName) }
@@ -965,63 +1048,6 @@ fun ChatScreen(
                     Text(t("Cancel", "انصراف"))
                 }
             },
-        )
-    }
-}
-
-
-/**
- * Welcoming zero-state for a fresh conversation: just the assistant's
- * identity. (The tappable starter prompts that used to sit below it were
- * removed on user request — a fresh session should open clean.)
- */
-@Composable
-private fun EmptyChatHero(
-    assistantName: String,
-    avatarUri: String?,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (avatarUri != null) {
-                AsyncImage(
-                    model = avatarUri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Text(
-                    text = assistantName.take(1),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = t("Hi, I'm $assistantName", "سلام، من ${assistantName}م"),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = t(
-                "Your server, one message away",
-                "سرورت، فقط یه پیام فاصله داره",
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

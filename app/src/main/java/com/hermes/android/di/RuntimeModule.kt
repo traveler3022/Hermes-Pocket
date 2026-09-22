@@ -3,9 +3,9 @@ package com.hermes.android.di
 import android.content.Context
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
+import com.hermes.android.runtime.SwitchableHermesRuntime
 import com.hermes.android.runtime.termux.InstallCompletionFlow
 import com.hermes.android.runtime.termux.InstallProgressFlow
-import com.hermes.android.runtime.termux.TermuxBridge
 import com.hermes.android.runtime.termux.TermuxInstallProgressReceiver
 import dagger.Module
 import dagger.Provides
@@ -20,10 +20,8 @@ import javax.inject.Singleton
  *
  * ## Swap point
  *
- * Today this binds [TermuxBridge] (migration phase, ADR-001).
- * When the Embedded Python runtime is ready (ADR-009), this is the ONLY
- * file that needs to change — replace `TermuxBridge::class` with
- * `EmbeddedPythonRuntime::class` and the rest of the app keeps working.
+ * Binds [SwitchableHermesRuntime], which routes to the Termux bridge or the
+ * built-in proot Linux runtime depending on the user's selection.
  *
  * Reference: ADR-001 (Termux migration), ADR-009 (production embedded Python)
  */
@@ -31,14 +29,9 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object RuntimeModule {
 
-    /**
-     * Bind [HermesRuntime] to [TermuxBridge].
-     *
-     * TODO (future): swap to EmbeddedPythonRuntime when ready.
-     */
     @Provides
     @Singleton
-    fun provideHermesRuntime(bridge: TermuxBridge): HermesRuntime = bridge
+    fun provideHermesRuntime(router: SwitchableHermesRuntime): HermesRuntime = router
 
     /**
      * Shared state flow for install progress. Bridged between

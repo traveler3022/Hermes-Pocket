@@ -26,6 +26,9 @@ class HermesApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var appForegroundState: com.hermes.android.service.AppForegroundState
 
+    @Inject
+    lateinit var connectionJournal: com.hermes.android.diagnostics.ConnectionJournal
+
     override fun onCreate() {
         super.onCreate()
 
@@ -33,8 +36,14 @@ class HermesApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
-        Timber.i("HermesApplication initializing")
-
+        // Kept in every build, not just debug: the connection problems worth chasing
+        // happen on someone's own phone, hours from any adb cable, and logcat is gone by
+        // the time they get reported. Planted before anything else runs so the very
+        // first dial of this process is already on the record.
+        Timber.plant(com.hermes.android.diagnostics.JournalTree(connectionJournal))
+        connectionJournal.noteProcessStart()
+        installCrashRecorder()
+        registerActivityLifecycleCallbacks(LifecycleRecorder())
         // Foreground tracking for proactive notifications: the event observer
         // only notifies when no Activity is visible.
         registerActivityLifecycleCallbacks(appForegroundState)
@@ -42,6 +51,84 @@ class HermesApplication : Application(), Configuration.Provider {
         // catches task completions the live socket missed in Doze. Idempotent
         // (KEEP), so this every-launch call never resets the cadence.
         com.hermes.android.work.TaskSyncWorker.schedule(this)
+        // The gateway is the slowest part of a cold start — Hermes boots under proot —
+        // so it starts here instead of in MainActivity. Process init runs before the
+        // Activity exists, and every millisecond of that boot spent behind the first
+        // frame is a millisecond the user never waits for.
+        startGatewayEarly()
+        Timber.i("HermesApplication initializing")
+    }
+
+    /**
+     * Writes a crash to the journal, in full, before the process dies — then lets the
+     * platform handle it as before. The background writer would never get to run.
+     */
+    private fun installCrashRecorder() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                connectionJournal.noteNow(
+                    "E [Crash] uncaught in thread \"${thread.name}\"\n" + java.io.StringWriter().also { error.printStackTrace(java.io.PrintWriter(it)) }.toString(),
+                )
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    /**
+     * Memory pressure is what precedes Android killing a backgrounded app; with this in
+     * the journal a LOW_MEMORY exit on the next start has its lead-up right above it.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val name = when (level) {
+            TRIM_MEMORY_UI_HIDDEN -> "UI_HIDDEN"
+            TRIM_MEMORY_RUNNING_MODERATE -> "RUNNING_MODERATE"
+            TRIM_MEMORY_RUNNING_LOW -> "RUNNING_LOW"
+            TRIM_MEMORY_RUNNING_CRITICAL -> "RUNNING_CRITICAL"
+            TRIM_MEMORY_BACKGROUND -> "BACKGROUND"
+            TRIM_MEMORY_MODERATE -> "MODERATE"
+            TRIM_MEMORY_COMPLETE -> "COMPLETE (next in line to be killed)"
+            else -> "level $level"
+        }
+        if (level == TRIM_MEMORY_UI_HIDDEN) Timber.i("[Memory] trim $name") else Timber.w("[Memory] trim $name")
+    }
+
+    /** When the app was on screen and when it was not — the other half of every drop. */
+    private class LifecycleRecorder : ActivityLifecycleCallbacks {
+        private var started = 0
+        override fun onActivityStarted(activity: android.app.Activity) {
+            if (started++ == 0) Timber.i("[Lifecycle] app came to the foreground")
+        }
+        override fun onActivityStopped(activity: android.app.Activity) {
+            if (--started == 0) Timber.i("[Lifecycle] app went to the background")
+        }
+        override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) = Unit
+        override fun onActivityResumed(activity: android.app.Activity) = Unit
+        override fun onActivityPaused(activity: android.app.Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+        override fun onActivityDestroyed(activity: android.app.Activity) {
+            Timber.i("[Lifecycle] ${activity.javaClass.simpleName} destroyed (finishing=${activity.isFinishing})")
+        }
+    }
+
+    /**
+     * Starts the gateway only when this process came up for the UI.
+     *
+     * onCreate also runs for background process starts — TaskSyncWorker alone wakes it
+     * every 15 minutes — and from Android 12 a startForegroundService() call made from
+     * the background throws ForegroundServiceStartNotAllowedException. An unguarded call
+     * here would buy a faster launch with a crash. Declining costs nothing: MainActivity
+     * starts the service on every foreground regardless, so the slow path is simply the
+     * behaviour we already had.
+     */
+    private fun startGatewayEarly() {
+        val processState = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(processState)
+        val foreground = android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+        if (processState.importance > foreground) return
+        runCatching { com.hermes.android.service.HermesGatewayService.start(this) }
+            .onFailure { Timber.w(it, "[App] early gateway start refused; MainActivity will retry") }
     }
 
     /**

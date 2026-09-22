@@ -51,16 +51,17 @@ data class ConfigUiState(
     val mcpServersText: String = "",
     val isLoadingMcp: Boolean = false,
     // Client-side avatar image (local file path, null = default icon).
-    val avatarUri: String? = null,
     // ── Control Center stats (design E) ──
-    // First balance line from credits.view, or null (not logged in / failed).
-    val creditsSummary: String? = null,
     // 30-day aggregate from insights.get (reuses SessionsViewModel's type).
     val insights: InsightsData? = null,
     // ── Advanced: command console + gateway log (design I) ──
     val consoleEntries: List<ConsoleEntry> = emptyList(),
     val isConsoleRunning: Boolean = false,
     val gatewayLog: List<String> = emptyList(),
+    /** Tail of the on-device connection journal, loaded on demand (it reads from disk). */
+    val connectionJournal: String = "",
+    // A model pick the gateway flagged (cost / data policy / large context) awaiting the user.
+    val modelSwitchConfirm: ModelSwitchConfirm? = null,
 )
 
 /** One command + its result in the Advanced screen's console. */
@@ -75,6 +76,8 @@ data class ModelOption(
     val modelId: String,
     val name: String,
     val requiresApiKey: Boolean,
+    // Provider display name from model.options (row `name`); blank → show [provider].
+    val providerName: String = "",
 )
 
 data class ToolOption(

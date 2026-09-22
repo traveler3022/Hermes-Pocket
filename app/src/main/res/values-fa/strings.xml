@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the launcher name is translated here; everything inside the app goes through
+     ui/i18n/Strings.kt, which follows the in-app language choice. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="app_name">Hermes</string>
+</resources>

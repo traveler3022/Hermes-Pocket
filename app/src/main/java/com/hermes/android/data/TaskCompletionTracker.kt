@@ -39,7 +39,32 @@ class TaskCompletionTracker @Inject constructor(
 
     fun alreadyNotified(taskId: String): Boolean = taskId in notified
 
+    /**
+     * Records everything already finished without announcing any of it, once per install.
+     *
+     * The background sync asks the server for finished tasks and notifies about each one
+     * this set does not know. On the very first sync it knows nothing, so every task the
+     * user ever ran — read, acted on and forgotten months ago — arrived at once as a
+     * "task complete" notification. Nothing there is news; the set simply had no way to
+     * say "I was not watching yet" as distinct from "this just happened".
+     *
+     * Returns true when it did the seeding, which is the caller's signal that this sync
+     * has nothing to announce.
+     */
+    fun seedOnFirstSync(taskIds: Collection<String>): Boolean {
+        synchronized(notified) {
+            if (prefs.getBoolean(KEY_SEEDED, false)) return false
+            notified.addAll(taskIds)
+            prefs.edit()
+                .putStringSet(KEY_NOTIFIED, notified.toSet())
+                .putBoolean(KEY_SEEDED, true)
+                .apply()
+            return true
+        }
+    }
+
     private companion object {
         const val KEY_NOTIFIED = "notified_task_ids"
+        const val KEY_SEEDED = "seeded_existing_tasks"
     }
 }

@@ -40,8 +40,10 @@ interface GatewayClient {
 
     /**
      * Hot stream of events received from the gateway.
-     * Subscribers receive every event while subscribed; late subscribers
-     * do NOT receive past events (use a replay buffer in the UI if needed).
+     * replay=0: late subscribers do not receive past events. On reconnect,
+     * the gateway re-emits current state via gateway.ready and session
+     * events — no replay buffer needed, and it avoids re-delivering stale
+     * MessageDelta/ToolStart events to a freshly (re)subscribed collector.
      */
     val events: SharedFlow<GatewayEvent>
 
@@ -68,11 +70,25 @@ interface GatewayClient {
     suspend fun disconnect()
 
     /**
+     * Answer server→client request [id] (clarify / sudo / secret) with the
+     * response frame the agent is blocking on. False when the socket is down.
+     */
+    fun respondToServerRequest(id: String, result: kotlinx.serialization.json.JsonObject): Boolean = false
+
+    /** Re-emit a resume payload's `open_requests`, so questions still waiting survive a reconnect. */
+    fun redeliverServerRequests(requests: kotlinx.serialization.json.JsonArray) {}
+
+    /**
      * Send an RPC request and await the response.
      *
      * @param method RPC method name (see [GatewayMethods])
      * @param params request parameters
      * @param timeoutMs max time to wait for response
+     * @param trackSession when true (default), a `session_id` in the response
+     *   is adopted as the client's auto-resume target on reconnect. Pass
+     *   false for requests whose sessions are NOT the user's focused chat —
+     *   e.g. Task Desk launches — so a mid-chat reconnect doesn't silently
+     *   jump the chat screen onto a background task's session.
      * @return the response result on success
      * @throws GatewayException on error response or timeout
      */
@@ -80,6 +96,7 @@ interface GatewayClient {
         method: String,
         params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
         timeoutMs: Long = 120_000,
+        trackSession: Boolean = true,
     ): kotlinx.serialization.json.JsonElement
 
     /**
@@ -92,12 +109,20 @@ interface GatewayClient {
     )
 
     /**
-     * Download a file served by the gateway (e.g. an image attachment) and
-     * return its raw bytes.
+     * Fetch [url] (an already-resolved gateway download link, e.g. from
+     * ChatViewModel.resolveMediaUrl) and return the raw bytes.
      *
-     * @param url absolute http(s) URL, or a path relative to the gateway origin
-     * @return the file bytes
-     * @throws GatewayException on a non-2xx response or transport failure
+     * Deliberately routed through the same HTTP client used for every other
+     * gateway call — NOT the system DownloadManager. DownloadManager runs as
+     * a separate OS process with its own network stack, so it doesn't
+     * necessarily honor this app's cleartext-traffic policy (self-hosted
+     * gateways are commonly plain http:// on a LAN/VPN) or any future
+     * auth/cert customization added here; it fails silently with no
+     * exception the app can see. Reusing the client that's already proven to
+     * reach this exact host (the chat connection itself) avoids that whole
+     * class of "download button does nothing" failures.
+     *
+     * @return the response body bytes; throws on non-2xx or network failure.
      */
     suspend fun downloadFile(url: String): ByteArray
 

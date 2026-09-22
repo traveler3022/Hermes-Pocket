@@ -201,7 +201,11 @@ internal fun InstallingContent(progress: InstallProgressUi?) {
 }
 
 @Composable
-internal fun InstalledContent(hermesVersion: String?, onStartGateway: () -> Unit) {
+internal fun InstalledContent(
+    hermesVersion: String?,
+    onStartGateway: () -> Unit,
+    startLabel: String = "Start Agent Gateway (Termux)",
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -233,7 +237,7 @@ internal fun InstalledContent(hermesVersion: String?, onStartGateway: () -> Unit
                 onClick = onStartGateway,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Start Agent Gateway (Termux)")
+                Text(startLabel)
             }
         }
     }

@@ -51,16 +51,6 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     }
 }
 
-/** What to show in the chat top bar to represent the assistant. */
-enum class TopBarDisplay(val key: String, val displayEn: String, val displayFa: String) {
-    NAME("name", "Name", "نام"),
-    AVATAR("avatar", "Avatar", "آواتار");
-
-    companion object {
-        fun fromKey(key: String): TopBarDisplay = entries.firstOrNull { it.key == key } ?: NAME
-    }
-}
-
 class ThemeModeState(context: Context) {
     private val prefs = context.getSharedPreferences("hermes_prefs", Context.MODE_PRIVATE)
 
@@ -96,28 +86,14 @@ class ThemeModeState(context: Context) {
     )
         private set
 
-    // ── Personalization: top bar identity ──
-    // What the chat top bar shows to represent the assistant: the user's
-    // chosen name (a text label, default "Hermes" / "هرمس") or the avatar
-    // image they uploaded. Only one or the other shows — keeping both
-    // would crowd the top bar and fight the connection status for space.
-    var topBarDisplay: TopBarDisplay by mutableStateOf(
-        TopBarDisplay.fromKey(prefs.getString("top_bar_display", "name") ?: "name")
-    )
-        private set
-
-    // The assistant's display name shown in the top bar (when topBarDisplay
-    // is NAME) and as the placeholder/fallback for the avatar (first char
-    // when no avatar image is set). Default "Hermes".
-    var assistantName: String by mutableStateOf(
-        prefs.getString("assistant_name", "Hermes") ?: "Hermes"
-    )
-        private set
-
-    // Avatar size (dp) when shown in the top bar. Range 28..48, default 36.
-    // Big enough to read a face clearly without dominating the top bar.
-    var avatarSizeDp: Int by mutableStateOf(
-        prefs.getInt("avatar_size_dp", 36)
+    // An agent turn arrives as many messages: the gateway opens a new one for
+    // every stretch of narration between tool calls. By default only the
+    // message that ends a turn stays on the chat surface and the rest fold into
+    // its trace, which keeps the chat readable but hides the running commentary
+    // some people want to watch. Turning this on puts every fragment back in
+    // the flow.
+    var showInlineNarration: Boolean by mutableStateOf(
+        prefs.getBoolean("show_inline_narration", false)
     )
         private set
 
@@ -136,6 +112,11 @@ class ThemeModeState(context: Context) {
         prefs.edit().putBoolean("warm_mode", enabled).apply()
     }
 
+    fun updateShowInlineNarration(enabled: Boolean) {
+        showInlineNarration = enabled
+        prefs.edit().putBoolean("show_inline_narration", enabled).apply()
+    }
+
     fun updateAppFont(newFont: AppFont) {
         appFont = newFont
         prefs.edit().putString("app_font", newFont.key).apply()
@@ -147,22 +128,6 @@ class ThemeModeState(context: Context) {
         prefs.edit().putInt("font_scale_pct", clamped).apply()
     }
 
-    fun updateTopBarDisplay(display: TopBarDisplay) {
-        topBarDisplay = display
-        prefs.edit().putString("top_bar_display", display.key).apply()
-    }
-
-    fun updateAssistantName(name: String) {
-        val trimmed = name.take(40)  // sanity cap
-        assistantName = trimmed
-        prefs.edit().putString("assistant_name", trimmed).apply()
-    }
-
-    fun updateAvatarSizeDp(size: Int) {
-        val clamped = size.coerceIn(28, 48)
-        avatarSizeDp = clamped
-        prefs.edit().putInt("avatar_size_dp", clamped).apply()
-    }
 }
 
 // ── Default Hermes palette ──

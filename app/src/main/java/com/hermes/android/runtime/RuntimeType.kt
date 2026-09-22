@@ -21,6 +21,9 @@ enum class RuntimeType {
     /** Migration adapter — runs Hermes inside Termux (ADR-001, ADR-007). */
     TERMUX,
 
+    /** Ubuntu rootfs run by bundled proot inside the app — no host app needed. */
+    PROOT_LINUX,
+
     /** Future production runtime — Python bundled in APK (ADR-009). */
     EMBEDDED_PYTHON,
 

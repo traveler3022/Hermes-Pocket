@@ -1,5 +1,8 @@
 package com.hermes.android.service
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
@@ -38,6 +41,12 @@ import javax.inject.Singleton
  * finishes. That requires an out-of-band push channel (FCM); without it the
  * notification lands on the next reconnect (screen-on / network return).
  */
+/** What Hermes is doing right now: the running sessions (id → title), since when. */
+data class AgentWork(
+    val sessions: Map<String, String>,
+    val startedAt: Long,
+)
+
 @Singleton
 class AgentEventObserver @Inject constructor(
     private val gatewayClient: GatewayClient,
@@ -53,6 +62,24 @@ class AgentEventObserver @Inject constructor(
 
     private var reconcileJob: Job? = null
 
+    private val _work = MutableStateFlow<AgentWork?>(null)
+
+    /** Non-null while any turn is in flight — drives the "Hermes is working" notification. */
+    val work: StateFlow<AgentWork?> = _work.asStateFlow()
+
+    private fun publishWork() {
+        val sessions = watched.toMap()
+        _work.value = if (sessions.isEmpty()) {
+            null
+        } else {
+            AgentWork(sessions, _work.value?.startedAt ?: System.currentTimeMillis())
+        }
+    }
+
+    private fun rememberTitle(id: String, title: String) {
+        watched.compute(id) { _, old -> if (old.isNullOrBlank()) title else old }
+    }
+
     fun start(scope: CoroutineScope) {
         if (!started.compareAndSet(false, true)) return
         Timber.i("[AgentObserver] started")
@@ -62,11 +89,23 @@ class AgentEventObserver @Inject constructor(
                 when (event) {
                     is GatewayEvent.MessageStart -> {
                         event.sessionId?.let { watched.putIfAbsent(it, "") }
+                        publishWork()
+                        // A lost completion event must not leave "working" up forever.
+                        if (gatewayClient.connectionState.value is ConnectionState.Connected) ensureReconcileLoop(scope)
+                    }
+                    is GatewayEvent.ToolStart -> {
+                        // Tool steps do not change the notification (one quiet
+                        // "working" card, not a live play-by-play) — they only
+                        // matter for a session nobody told us about yet.
+                        event.sessionId?.let {
+                            if (watched.putIfAbsent(it, "") == null) publishWork()
+                        }
                     }
                     is GatewayEvent.MessageComplete -> {
-                        event.sessionId?.let { watched.remove(it) }
+                        val title = event.sessionId?.let { watched.remove(it) }
+                        publishWork()
                         if (!foregroundState.isForeground) {
-                            notifier.showTurnComplete(event.sessionId, event.text)
+                            notifier.showTurnComplete(event.sessionId, event.text, title)
                         }
                     }
                     is GatewayEvent.BackgroundComplete -> {
@@ -134,7 +173,7 @@ class AgentEventObserver @Inject constructor(
         // Anything streaming server-side deserves watching (covers turns that
         // started while this process wasn't alive to see message.start).
         for ((id, row) in streamingNow) {
-            watched.putIfAbsent(id, row.str("title"))
+            rememberTitle(id, row.str("title"))
         }
 
         // A watched session that is no longer streaming finished while we
@@ -148,9 +187,10 @@ class AgentEventObserver @Inject constructor(
             val preview = row?.str("preview").orEmpty().ifBlank { title }
             Timber.i("[AgentObserver] session $id completed while offline — notifying from sync")
             if (!foregroundState.isForeground) {
-                notifier.showTurnComplete(id, preview.ifBlank { "Task finished" })
+                notifier.showTurnComplete(id, preview.ifBlank { notifier.taskFinishedText() }, title)
             }
         }
+        publishWork()
     }
 
     private companion object {

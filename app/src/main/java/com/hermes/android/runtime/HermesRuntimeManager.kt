@@ -30,7 +30,17 @@ class HermesRuntimeManager @Inject constructor(
      * [com.hermes.android.di.RuntimeModule] for the binding.
      */
     private val boundRuntime: HermesRuntime,
+    private val router: SwitchableHermesRuntime,
+    selection: RuntimeSelection,
 ) {
+
+    /** Runtime the user picked (Termux or built-in Linux); persisted across launches. */
+    val selectedRuntime: StateFlow<RuntimeType> = selection.selected
+
+    /** False on a fresh install until the user picks Termux or built-in Linux. */
+    val runtimeChosen: StateFlow<Boolean> = selection.hasChosen
+
+    fun selectRuntime(type: RuntimeType) = router.select(type)
 
     /** The active runtime instance. */
     val runtime: HermesRuntime get() = boundRuntime

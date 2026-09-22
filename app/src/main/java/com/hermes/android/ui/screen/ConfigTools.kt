@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
@@ -91,13 +93,56 @@ import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
+/** Tools folder: Toolsets, Plugins and Skills, one row each. */
 @Composable
 internal fun ToolsTab(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    onOpen: (SettingsSection) -> Unit,
+    onNavigateToPlugins: () -> Unit,
+    onNavigateToSkills: () -> Unit,
+) {
+    SettingsFolder {
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = t("Toolsets", "گروه\u200Cهای ابزار"),
+                subtitle = if (state.availableTools.isNotEmpty()) {
+                    val enabled = state.availableTools.count { it.enabled }
+                    t(
+                        "$enabled of ${state.availableTools.size} on",
+                        "$enabled از ${state.availableTools.size} فعال",
+                    )
+                } else {
+                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                },
+                icon = Icons.Default.Build,
+                onClick = { onOpen(SettingsSection.TOOLSETS) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Plugins", "افزونه\u200Cها"),
+                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToPlugins,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("Skills", "مهارت\u200Cها"),
+                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
+                icon = Icons.Default.Star,
+                onClick = onNavigateToSkills,
+            )
+        }
+    }
+}
+
+/** The toolset switches. */
+@Composable
+internal fun ToolsetsSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
 ) {
     if (state.isLoadingTools) {
-        LoadingIndicator("Loading tools…")
+        LoadingIndicator(t("Loading tools…", "در حال بارگذاری ابزارها…"))
         return
     }
 

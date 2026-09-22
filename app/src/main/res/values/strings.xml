@@ -4,7 +4,7 @@
     <string name="app_name">Hermes</string>
 
     <!-- Gateway service notification (Step 6) -->
-    <string name="notification_channel_gateway_id">hermes_gateway</string>
+    <string name="notification_channel_gateway_id">hermes_gateway_service</string>
     <string name="notification_channel_gateway_name">Gateway Service</string>
     <string name="notification_channel_gateway_desc">Keeps the Hermes gateway running in the background</string>
     <string name="gateway_notification_title">Hermes Gateway</string>
@@ -18,14 +18,14 @@
     <string name="approval_approve">Approve</string>
     <string name="approval_deny">Deny</string>
 
-    <!-- Agent activity notification (background replies / tasks) -->
-    <string name="notification_channel_agent_name">Agent Activity</string>
-    <string name="notification_channel_agent_desc">Notifications when the agent replies or finishes a background task</string>
-    <string name="notification_agent_reply_title">Hermes replied</string>
-    <string name="notification_task_done_title">Task complete</string>
-
     <!-- Boot receiver (Step 6) -->
     <string name="boot_notification_text">Starting Hermes gateway…</string>
+
+    <!-- Agent activity notifications (delegation v1) -->
+    <string name="notification_channel_agent_name">Agent Activity</string>
+    <string name="notification_channel_agent_desc">Results of tasks and replies that finish while the app is in the background</string>
+    <string name="notification_agent_reply_title">Hermes finished a reply</string>
+    <string name="notification_task_done_title">Background task finished</string>
 
     <!-- Placeholder strings for Step 4 (Chat UI) -->
     <string name="chat_send">Send</string>

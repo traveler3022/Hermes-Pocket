@@ -34,14 +34,22 @@ android {
         applicationId = "com.hermes.android"
         minSdk = 29    // Android 10 per ADR-012
         targetSdk = 35 // Latest Stable per ADR-012
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 26
+        versionName = "2.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
     signingConfigs {
+        // Fixed, committed debug key. CI runners otherwise mint a fresh ~/.android/debug.keystore
+        // per run, so each debug APK had a different signature and could not update the last one.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             if (releaseStorePath != null) {
                 storeFile = file(releaseStorePath)
@@ -54,7 +62,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -92,6 +101,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // proot runs from nativeLibraryDir, so the .so files must exist on disk.
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     testOptions {
@@ -114,6 +127,7 @@ dependencies {
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.termux.terminal.view)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
@@ -152,9 +166,6 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
-
-    // Markdown rendering (Fix S4F01)
-    implementation(libs.compose.markdown)
 
     // Coil (image loading for HermesMarkdown)
     implementation(libs.coil.compose)

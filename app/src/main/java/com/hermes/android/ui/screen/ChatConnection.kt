@@ -150,11 +150,31 @@ import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
 
+/**
+ * How long a connection gap may last before the screen mentions it. Short drops heal by
+ * themselves; announcing each one makes a working chat look like it keeps falling over.
+ */
+private const val QUIET_WAIT_MS = 2_500L
+
 @Composable
-internal fun ConnectionIndicator(state: ChatConnectionState) {
+internal fun ConnectionIndicator(
+    state: ChatConnectionState,
+    connectingSince: Long = 0L,
+    bootEstimateMs: Long = 0L,
+) {
     // Hide the indicator when connected - only show when there's a problem
     if (state == ChatConnectionState.Connected) return
-    
+
+    val waiting = state == ChatConnectionState.Connecting || state == ChatConnectionState.Reconnecting
+    if (waiting && connectingSince > 0L) {
+        StartupProgressIndicator(
+            connectingSince = connectingSince,
+            bootEstimateMs = bootEstimateMs,
+            reconnecting = state == ChatConnectionState.Reconnecting,
+        )
+        return
+    }
+
     val (color, label) = when (state) {
         ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
         ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting...", "◌ در حال اتصال...")
@@ -172,6 +192,80 @@ internal fun ConnectionIndicator(state: ChatConnectionState) {
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
+    }
+}
+
+/**
+ * The wait while Hermes boots inside Alpine — tens of seconds on a phone, because a
+ * large Python agent is starting under proot. That length is not the problem; an
+ * unexplained spinner is. This shows the seconds actually elapsed and fills a bar
+ * against [bootEstimateMs], this device's own measured average, so the wait reads as
+ * progress rather than a hang. Past the estimate the bar stops at 95% instead of
+ * claiming to be done, and the label drops the estimate rather than lying about it.
+ *
+ * Two things keep it from shouting over a chat that is going fine. It stays out of the
+ * way for the first [QUIET_WAIT_MS]: the socket blips and heals on its own often enough
+ * that surfacing every one of them turns a working app into a flapping one, and a wait
+ * nobody notices needs no progress bar. And when [reconnecting] it says so, rather than
+ * claiming Hermes is starting — mid-chat the agent is already up and holding its
+ * session, so "starting" would be both alarming and untrue. A redial has no meaningful
+ * duration to predict either, so it gets the indeterminate bar.
+ */
+@Composable
+private fun StartupProgressIndicator(
+    connectingSince: Long,
+    bootEstimateMs: Long,
+    reconnecting: Boolean,
+) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(connectingSince) {
+        while (true) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    val elapsedMs = (now - connectingSince).coerceAtLeast(0L)
+    if (elapsedMs < QUIET_WAIT_MS) return
+    val elapsedSeconds = elapsedMs / 1000
+    val fraction = if (!reconnecting && bootEstimateMs > 0L) {
+        (elapsedMs.toFloat() / bootEstimateMs.toFloat()).coerceIn(0f, 0.95f)
+    } else {
+        null
+    }
+    val label = when {
+        reconnecting -> t(
+            "Reconnecting… ${elapsedSeconds}s",
+            "در حال اتصال دوباره… ${elapsedSeconds} ثانیه",
+        )
+        bootEstimateMs > 0L && elapsedMs < bootEstimateMs -> t(
+            "Starting Hermes… ${elapsedSeconds}s of about ${bootEstimateMs / 1000}s",
+            "در حال آماده‌سازی Hermes… ${elapsedSeconds} از حدود ${bootEstimateMs / 1000} ثانیه",
+        )
+        else -> t("Starting Hermes… ${elapsedSeconds}s", "در حال آماده‌سازی Hermes… ${elapsedSeconds} ثانیه")
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.tertiary,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (fraction != null) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp))
+            }
+        }
     }
 }
 

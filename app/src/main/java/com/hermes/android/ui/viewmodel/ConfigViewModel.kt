@@ -44,6 +44,8 @@ import javax.inject.Inject
 class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val sessionRepository: com.hermes.android.data.SessionRepository,
+    private val modelSwitcher: ModelSwitcher,
+    private val connectionJournal: com.hermes.android.diagnostics.ConnectionJournal,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -56,9 +58,25 @@ class ConfigViewModel @Inject constructor(
 
     init {
         loadAll()
-        loadAvatarUri()
         loadHubStats()
         collectGatewayLog()
+    }
+
+    /**
+     * Reads the connection journal off disk. On demand rather than in init: it is a file
+     * read that only matters when somebody has opened Advanced to look at it, and it is
+     * the one log here that outlives the process, so it must be re-read to be current.
+     */
+    fun loadConnectionJournal() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val tail = connectionJournal.tail()
+            _uiState.value = _uiState.value.copy(connectionJournal = tail)
+        }
+    }
+
+    fun clearConnectionJournal() {
+        connectionJournal.clear()
+        _uiState.value = _uiState.value.copy(connectionJournal = "")
     }
 
     fun loadAll() {
@@ -238,45 +256,6 @@ class ConfigViewModel @Inject constructor(
     }
 
     /**
-     * Client-side avatar image shown next to agent replies in chat. The
-     * picked image is copied into app-private storage (not just a
-     * content:// reference, which isn't guaranteed to survive a reboot
-     * without extra permission plumbing) and referenced by a stable file
-     * path saved to prefs — same file/key ChatViewModel reads, no gateway
-     * RPC involved.
-     */
-    fun loadAvatarUri() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
-        _uiState.value = _uiState.value.copy(avatarUri = path)
-    }
-
-    fun setAvatarUri(source: Uri) {
-        viewModelScope.launch {
-            try {
-                val dest = java.io.File(context.filesDir, "assistant_avatar.jpg")
-                context.contentResolver.openInputStream(source)?.use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
-                } ?: throw java.io.IOException("Could not open picked image")
-                prefs.edit().putString(KEY_ASSISTANT_AVATAR, dest.absolutePath).apply()
-                _uiState.value = _uiState.value.copy(avatarUri = dest.absolutePath)
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to save avatar image")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to save avatar image: ${e.message}",
-                )
-            }
-        }
-    }
-
-    fun clearAvatarUri() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        if (!saved.isNullOrBlank()) java.io.File(saved).delete()
-        prefs.edit().remove(KEY_ASSISTANT_AVATAR).apply()
-        _uiState.value = _uiState.value.copy(avatarUri = null)
-    }
-
-    /**
      * SOUL.md — the agent's persistent identity/voice, first slot in the
      * system prompt (~/.hermes/SOUL.md, plain markdown, auto-created by
      * Hermes if missing). Replaces the old free-text "System Prompt" field,
@@ -328,19 +307,14 @@ class ConfigViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingModels = true)
             try {
-                val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
-                val obj = result as? JsonObject
-                val activeProvider = obj?.get("provider")?.let { (it as? JsonPrimitive)?.content }
-                val activeModel = obj?.get("model")?.let { (it as? JsonPrimitive)?.content }
-                // Parse model list from result
-                val models = parseModelOptions(result)
+                val catalog = modelSwitcher.loadCatalog()
                 _uiState.value = _uiState.value.copy(
-                    availableModels = models,
-                    activeProvider = activeProvider ?: _uiState.value.activeProvider,
-                    activeModel = activeModel ?: _uiState.value.activeModel,
+                    availableModels = catalog.models,
+                    activeProvider = catalog.provider ?: _uiState.value.activeProvider,
+                    activeModel = catalog.model ?: _uiState.value.activeModel,
                     isLoadingModels = false,
                 )
-                Timber.i("[Config] Models loaded: ${models.size}")
+                Timber.i("[Config] Models loaded: ${catalog.models.size}")
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load models")
                 _uiState.value = _uiState.value.copy(isLoadingModels = false)
@@ -423,21 +397,30 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun selectModel(model: ModelOption) {
+    /**
+     * Settings pick: no open chat, so [ModelSwitcher.switch] targets the most
+     * recent session and persists config.yaml's default. The chat's own picker
+     * is [ModelPickerViewModel]. [confirmed]: re-send after [confirmModelSwitch].
+     */
+    fun selectModel(model: ModelOption, confirmed: Boolean = false) {
         viewModelScope.launch {
             try {
-                val error = applyHermesModelSwitch(model.provider, model.modelId)
-                if (error != null) {
-                    _uiState.value = _uiState.value.copy(errorMessage = error)
-                    return@launch
+                when (val outcome = modelSwitcher.switch(model.provider, model.modelId, confirmed = confirmed)) {
+                    is ModelSwitchOutcome.Failed -> _uiState.value = _uiState.value.copy(errorMessage = outcome.message)
+                    is ModelSwitchOutcome.NeedsConfirm -> _uiState.value = _uiState.value.copy(
+                        modelSwitchConfirm = ModelSwitchConfirm(model, null, null, outcome.message),
+                    )
+                    is ModelSwitchOutcome.Applied -> {
+                        _uiState.value = _uiState.value.copy(
+                            activeProvider = model.provider,
+                            activeModel = model.modelId,
+                            errorMessage = "Backend set to ${model.provider}/${model.modelId}" +
+                                if (outcome.deferred) " (applies on the next message)" else "",
+                        )
+                        loadConfig()
+                        loadModels()
+                    }
                 }
-                _uiState.value = _uiState.value.copy(
-                    activeProvider = model.provider,
-                    activeModel = model.modelId,
-                    errorMessage = "Backend set to ${model.provider}/${model.modelId}",
-                )
-                loadConfig()
-                loadModels()
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to select model")
                 _uiState.value = _uiState.value.copy(
@@ -447,53 +430,14 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Switch model + provider the Hermes-native way, via `config.set` key="model".
-     *
-     * Earlier the app wrote `~/.hermes/config.yaml` directly (writeModelConfig).
-     * That only affects the NEXT session — the live running agent keeps the old
-     * model, which is why "switch provider" appeared to do nothing.
-     *
-     * The correct path is Hermes' own `config.set` handler with key="model".
-     * Its `value` mirrors the `/model` command grammar parsed by
-     * `parse_model_flags`:
-     *   "<model> --provider <provider> --global"
-     *     • `--provider` pins the provider (else Hermes infers it from the model)
-     *     • `--global` persists the choice to config.yaml so new sessions inherit it
-     *
-     * We target the most-recent live session so the running agent switches too.
-     * Returns null on success, or a user-facing error string on failure.
-     */
-    private suspend fun applyHermesModelSwitch(provider: String, model: String): String? {
-        val sid = try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-        } catch (e: Exception) {
-            null
-        }
-        val value = buildString {
-            append(model)
-            if (provider.isNotBlank()) append(" --provider ").append(provider)
-            append(" --global")
-        }
-        val params = buildJsonObject {
-            put("key", "model")
-            put("value", value)
-            if (!sid.isNullOrBlank()) put("session_id", sid)
-        }
-        return try {
-            gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
-            null
-        } catch (e: GatewayException) {
-            // 4009 = session busy (mid-turn). Hermes rejects model swaps while a
-            // turn is in flight; surface an actionable message.
-            val m = e.message.orEmpty()
-            if (m.contains("busy") || m.contains("4009")) {
-                "Session is busy — interrupt the current turn before switching models."
-            } else {
-                "Failed to switch model: $m"
-            }
-        }
+    fun confirmModelSwitch() {
+        val confirm = _uiState.value.modelSwitchConfirm ?: return
+        _uiState.value = _uiState.value.copy(modelSwitchConfirm = null)
+        selectModel(confirm.model, confirmed = true)
+    }
+
+    fun dismissModelSwitchConfirm() {
+        _uiState.value = _uiState.value.copy(modelSwitchConfirm = null)
     }
 
     // ── Tools ─────────────────────────────────────────────────────────────
@@ -980,7 +924,7 @@ class ConfigViewModel @Inject constructor(
                 // address (matching custom_providers[].name above) — passing
                 // the bare slug would silently fail to activate it.
                 if (chosen.isNotBlank()) {
-                    val err = applyHermesModelSwitch("custom:$s", chosen)
+                    val err = modelSwitcher.switch("custom:$s", chosen).errorText()
                     _uiState.value = _uiState.value.copy(
                         isLoadingModels = false,
                         activeProvider = if (err == null) s else _uiState.value.activeProvider,
@@ -1074,7 +1018,7 @@ class ConfigViewModel @Inject constructor(
                 // provider.slug is one of our custom_providers entries — Hermes
                 // only resolves it via the "custom:<name>" address (see
                 // addProvider's comment for why the bare slug silently fails).
-                val error = applyHermesModelSwitch("custom:${provider.slug}", model)
+                val error = modelSwitcher.switch("custom:${provider.slug}", model).errorText()
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(errorMessage = error)
                     return@launch
@@ -1282,16 +1226,12 @@ class ConfigViewModel @Inject constructor(
      * return its stdout. Throws with stderr when the script fails — callers
      * surface that as the error message instead of silently "succeeding".
      *
-     * The script is fed through a quoted heredoc on stdin, NOT `python3 -c`:
-     * the gateway's safety filter hard-blocks any `-c`/`-e` script execution
-     * ("script execution via -e/-c flag"), which is exactly why every
-     * provider operation used to fail. Heredoc passes the filter and works
-     * even though shell.exec runs the outer shell with stdin=DEVNULL (bash
-     * wires the heredoc to python's stdin itself).
+     * See [pythonStdinCommand] for why the script isn't sent as `-c` or a
+     * heredoc (both are rejected with 4005).
      */
     private suspend fun execPython(script: String): String {
         val result = gatewayClient.request(GatewayMethods.SHELL_EXEC, buildJsonObject {
-            put("command", "python3 - <<'H2PYEOF'\n$script\nH2PYEOF")
+            put("command", pythonStdinCommand(script))
         }.toMap())
         val obj = result as? JsonObject
         val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: -1
@@ -1308,30 +1248,11 @@ class ConfigViewModel @Inject constructor(
     // ── Control Center stats (design E) ───────────────────────────────────
 
     /**
-     * Live numbers for the Settings hub's stat tiles: credit balance
-     * (`credits.view` — a backend capability that was never surfaced in any
-     * UI before) and 30-day usage (`insights.get`). Both are best-effort:
-     * a failure leaves the tile empty instead of raising an error banner.
+     * Live numbers for the Settings hub's stat tiles: 30-day usage
+     * (`insights.get`). Best-effort: a failure leaves the tile empty instead
+     * of raising an error banner.
      */
     fun loadHubStats() {
-        viewModelScope.launch {
-            try {
-                val result = gatewayClient.request(GatewayMethods.CREDITS_VIEW)
-                val obj = result as? JsonObject
-                val loggedIn = (obj?.get("logged_in") as? JsonPrimitive)?.content == "true"
-                val balance = (obj?.get("balance_lines") as? JsonArray)
-                    ?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
-                _uiState.value = _uiState.value.copy(
-                    creditsSummary = when {
-                        balance != null -> balance
-                        loggedIn -> null
-                        else -> null
-                    },
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "[Config] credits.view failed (tile stays empty)")
-            }
-        }
         viewModelScope.launch {
             try {
                 val params = buildJsonObject { put("days", 30) }
@@ -1450,6 +1371,5 @@ class ConfigViewModel @Inject constructor(
     private companion object {
         // Same key ChatViewModel reads from the shared "hermes_chat_prefs"
         // file — keep these in sync if either changes.
-        const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
     }
 }

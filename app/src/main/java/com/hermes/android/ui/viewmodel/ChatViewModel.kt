@@ -2,8 +2,6 @@ package com.hermes.android.ui.viewmodel
 
 import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
-import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.ConnectionState
@@ -14,12 +12,12 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -33,25 +31,13 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * ViewModel for the Chat screen.
+ * ViewModel for the Chat screen — coordinator that delegates to focused
+ * sub-handlers for session management, attachments, streaming, and drawer UI.
  *
  * Depends ONLY on [GatewayClient] interface — never on OkHttp or any
  * concrete implementation. This is the abstraction boundary.
- *
- * Responsibilities:
- * - Connect to the gateway on init
- * - Subscribe to gateway events and convert them to [ChatUiState]
- * - Send user messages via `prompt.submit` RPC
- * - Send interrupt via `session.interrupt` RPC
- * - Manage session list (create, list, resume)
- * - Draft persistence (SharedPreferences)
- * - Search in messages
- * - Retry last message
- *
- * Reference: Phase 1.5 Rule 1 (Strict Layer Dependency),
- *            Phase 1.5 Rule 2 (Agent Is Orchestrator — this ViewModel
- *            coordinates gateway + UI state, does NOT implement service logic)
  */
+
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
@@ -61,41 +47,86 @@ class ChatViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
+    // ── State ───────────────────────────────────────────────────────────
+
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private val _notification = MutableStateFlow<NotificationUi?>(null)
     val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
 
-    /** Slash-command catalog from the gateway (replaces the hardcoded list). */
     private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
     val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
 
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
-    private var activeAssistantMessageId: String? = null
-    private val streamingBuffer = StringBuilder()
-    private val reasoningBuffer = StringBuilder()
-    private var streamingFlushJob: Job? = null
 
-    // Feature #23: SharedPreferences for draft persistence
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // ── Delegates ───────────────────────────────────────────────────────
+
+    private val sessionDelegate = ChatSessionDelegate(
+        gatewayClient, sessionRepository, viewModelScope
+    ) { loadReasoningLevel() }
+
+    private val streamingDelegate = ChatStreamingDelegate(viewModelScope, _uiState)
+    private val backgroundSessions = BackgroundSessionTracker()
+    private var lastActivityPublishedAt = 0L
+    // Events carry a live session id; the drawer rows come from session.list,
+    // which returns stored db ids. session.info reports both, so the badges
+    // can be published under the id the rows are actually keyed by.
+    private val storedIdByLiveId = mutableMapOf<String, String>()
+
+    // Set when a reconnect landed mid-turn: the snapshot had no reply yet and
+    // the stream lost its start, so the reply is fetched once the turn ends.
+    private var recoverOnTurnEnd = false
+
+    private val attachmentDelegate = ChatAttachmentDelegate(
+        gatewayClient, hermesRuntime, context, viewModelScope,
+    )
+
+    private val drawerDelegate = ChatDrawerDelegate(
+        gatewayClient, viewModelScope,
+        loadSessionList = { sessionDelegate.loadList(it) },
+        createNewSession = { sessionDelegate.create(it) },
+        forgetSessionActivity = { sessionId ->
+            liveIdsFor(sessionId).forEach {
+                backgroundSessions.forget(it)
+                storedIdByLiveId.remove(it)
+            }
+            publishSessionActivity()
+        },
+    )
 
     init {
         loadDraft()
         loadAssistantName()
-        loadAssistantAvatar()
+        watchForQueuedPromptFlush()
         connectAndCollect()
         loadCommandCatalog()
-        // reasoning level is loaded from the Connected branch of
-        // connectAndCollect — calling it here would race the WS handshake.
     }
 
     /**
-     * Reasoning effort, quick-switchable from the input bar. Scope semantics
-     * (live-session value preferred over the global default) live in
-     * [SessionRepository.reasoningLevel].
+     * Sends a prompt parked during boot as soon as a session exists. Every path that
+     * lands on a live session goes through activeSessionId, so watching it covers
+     * create, resume, activate and post-reconnect recovery without threading a flush
+     * call through each of them.
+     *
+     * Started once from init, not from connectAndCollect: that function re-runs on
+     * every retry and cancels only connectionWatchJob and eventCollectionJob, so a
+     * watcher launched there would survive as a second, third, nth collector — and
+     * two of them racing the same parked prompt would send it twice.
      */
+    private fun watchForQueuedPromptFlush() {
+        viewModelScope.launch {
+            _uiState.map { it.activeSessionId }.distinctUntilChanged().collect { sessionId ->
+                if (sessionId != null) flushQueuedPrompt(sessionId)
+            }
+        }
+    }
+
+    // ── Reasoning ────────────────────────────────────────────────────────
+
     private fun loadReasoningLevel() {
         viewModelScope.launch {
             try {
@@ -107,14 +138,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Fix: this used to hand-edit config.yaml directly, which only affects
-     * future sessions. Verified against tui_gateway/server.py: config.set's
-     * key="reasoning" case, when given a session_id, sets
-     * session["create_reasoning_override"] and updates the live agent's
-     * reasoning_config in place — an immediate effect on the CURRENT chat.
-     * Passing our own activeSessionId is exactly that live-session path.
-     */
     fun setReasoningLevel(rawLevel: String) {
         viewModelScope.launch {
             try {
@@ -131,18 +154,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Load the real slash-command catalog from Hermes (`commands.catalog`,
-     * no params) instead of a hardcoded list. Response shape:
-     *   { pairs: [[name, description], ...], ... }
-     */
+    // ── Command catalog ──────────────────────────────────────────────────
+
     private fun loadCommandCatalog() {
         viewModelScope.launch {
             try {
                 val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG)
-                val pairs = (result as? JsonObject)?.get("pairs") as? kotlinx.serialization.json.JsonArray
+                val pairs = (result as? JsonObject)?.get("pairs") as? JsonArray
                 val cmds = pairs?.mapNotNull { row ->
-                    val arr = row as? kotlinx.serialization.json.JsonArray ?: return@mapNotNull null
+                    val arr = row as? JsonArray ?: return@mapNotNull null
                     val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
                     val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
                     SlashCommandSuggestion(command = name, description = desc)
@@ -157,15 +177,38 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // ── Connection ────────────────────────────────────────────────────────
+    // ── Connection ───────────────────────────────────────────────────────
+
+    /**
+     * Rolling average of how long this device takes to get a live gateway. Hermes is a
+     * large Python agent starting under proot, so the honest answer is "tens of seconds";
+     * measuring it per device beats a hardcoded guess that is wrong on every phone.
+     */
+    private val bootEstimate: Long
+        get() = prefs.getLong(KEY_BOOT_ESTIMATE_MS, 0L)
+
+    private fun recordBootDuration() {
+        val startedAt = _uiState.value.connectingSince
+        if (startedAt == 0L) return
+        val elapsed = System.currentTimeMillis() - startedAt
+        // Reconnects to an already-live gateway finish instantly and would drag the
+        // estimate down to nothing; only real starts belong in the average.
+        if (elapsed < MIN_BOOT_SAMPLE_MS || elapsed > MAX_BOOT_SAMPLE_MS) return
+        val previous = prefs.getLong(KEY_BOOT_ESTIMATE_MS, 0L)
+        val blended = if (previous == 0L) elapsed else (previous * 2 + elapsed) / 3
+        prefs.edit().putLong(KEY_BOOT_ESTIMATE_MS, blended).apply()
+    }
+
 
     private fun connectAndCollect() {
         connectionWatchJob?.cancel()
         eventCollectionJob?.cancel()
         viewModelScope.launch {
-            // Watch connection state
             connectionWatchJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                var wasConnected = false
                 gatewayClient.connectionState.collect { state ->
+                    val cameUp = state is ConnectionState.Connected && !wasConnected
+                    wasConnected = state is ConnectionState.Connected
                     val chatState = when (state) {
                         is ConnectionState.Disconnected -> ChatConnectionState.Disconnected
                         is ConnectionState.Connecting -> ChatConnectionState.Connecting
@@ -173,79 +216,59 @@ class ChatViewModel @Inject constructor(
                         is ConnectionState.Reconnecting -> ChatConnectionState.Reconnecting
                         is ConnectionState.Failed -> ChatConnectionState.Failed
                     }
-                    _uiState.update { it.copy(connectionState = chatState) }
+                    // Timing for the wait UI: an opaque spinner is what makes a slow start
+                    // feel broken, so the screen gets both the elapsed time and this
+                    // device's own measured estimate to show progress against.
+                    val connecting = chatState == ChatConnectionState.Connecting ||
+                        chatState == ChatConnectionState.Reconnecting
+                    _uiState.update { current ->
+                        val startedAt = when {
+                            connecting && current.connectingSince == 0L -> System.currentTimeMillis()
+                            connecting -> current.connectingSince
+                            else -> 0L
+                        }
+                        current.copy(
+                            connectionState = chatState,
+                            connectingSince = startedAt,
+                            bootEstimateMs = bootEstimate,
+                        )
+                    }
+                    if (chatState == ChatConnectionState.Connected) recordBootDuration()
 
-                    // Fix F-A5: When connection is lost mid-stream, finalize any
-                    // assistant message that was left in isStreaming=true state.
-                    // Without this, the spinner spins forever and the user can't
-                    // tell the message is incomplete. We mark it as not-streaming
-                    // and append a small "(connection lost)" marker so the user
-                    // knows the turn was interrupted.
                     if (state is ConnectionState.Disconnected ||
                         state is ConnectionState.Failed
                     ) {
-                        finalizeOrphanedStreamingMessage(
-                            marker = if (state is ConnectionState.Failed) {
-                                "(connection failed)"
-                            } else {
-                                "(connection lost)"
-                            }
+                        streamingDelegate.finalizeOrphanedMessage(
+                            if (state is ConnectionState.Failed) "(connection failed)" else "(connection lost)",
                         )
                     }
 
-                    // When connected, create or resume a session.
-                    //
-                    // GatewayClient runs its OWN low-level auto-resume on
-                    // reconnect (using its internally-tracked lastSessionId) and,
-                    // once fixed, re-publishes the resulting live session id via
-                    // this same connectionState — so if that already resolved a
-                    // live id, adopt it directly (just fetch its transcript) rather
-                    // than issuing a second, redundant session.resume RPC.
                     if (state is ConnectionState.Connected) {
                         val liveId = state.sessionId
-                        if (liveId != null && liveId != _uiState.value.activeSessionId) {
-                            _uiState.update { it.copy(activeSessionId = liveId) }
-                            launch { loadSessionHistory(liveId) }
-                        } else if (liveId == null && _uiState.value.activeSessionId == null) {
-                            // No id yet from the low-level client (either a brand
-                            // new process with nothing to resume, or its resume is
-                            // still in flight and hasn't re-published yet). Do our
-                            // own most_recent-based resume as the safety net for
-                            // the case nothing else will — e.g. the Activity/
-                            // ChatViewModel was recreated while the WebSocket
-                            // itself never actually dropped, so no low-level
-                            // reconnect-resume ever fires. session.resume's fast
-                            // path reuses the same live id when the worker is
-                            // still alive, so overlapping with an in-flight
-                            // low-level resume here is a redundant round-trip at
-                            // worst, not destructive.
-                            createOrResumeSession()
+                        val activeId = _uiState.value.activeSessionId
+                        when {
+                            // Back from a drop: the stream missed whatever the gateway
+                            // pushed meanwhile, so the open chat is rebuilt from the
+                            // server instead of trusting what is on screen.
+                            activeId != null -> if (cameUp) launch { recoverActiveSession(activeId) }
+                            liveId != null -> {
+                                _uiState.update { it.copy(activeSessionId = liveId) }
+                                launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                            }
+                            else -> launch { sessionDelegate.createOrResume(_uiState) }
                         }
-                        // Now that a live session id is (or is about to be)
-                        // settled, read the effort the chat actually runs at.
-                        // The init-time call races the WebSocket handshake and
-                        // silently fails on a cold start, leaving the control
-                        // stuck on the "medium" default.
+                        if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
                     }
                 }
             }
 
-            // Collect events. Must be attached BEFORE connect() is called, not
-            // after: events.replay is 0 (see GatewayClient), so any
-            // message.start/delta/complete the gateway pushes right after the
-            // handshake — e.g. as part of a session resume — would otherwise
-            // race the collector attaching and be dropped forever, silently
-            // wiping the messages that should have shown up as chat history.
-            // UNDISPATCHED guarantees the collector is live before this
-            // coroutine yields to call connect() below.
             eventCollectionJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 gatewayClient.events.collect { event ->
                     handleEvent(event)
                 }
             }
 
-            // Connect to gateway
             try {
                 gatewayClient.connect(url = hermesRuntime.getWebSocketUrl())
             } catch (e: Exception) {
@@ -262,746 +285,189 @@ class ChatViewModel @Inject constructor(
         connectAndCollect()
     }
 
-    // ── Session management ────────────────────────────────────────────────
-
-    /**
-     * On a fresh ChatViewModel (cold app start, or process death + relaunch —
-     * the common case, not just first-ever launch), unconditionally calling
-     * createSession() meant every reconnect threw away whatever conversation
-     * was in flight and showed a blank chat. The gateway keeps a disconnected
-     * session alive for a grace window (see ws.py's `_close_sessions_for_transport`
-     * orphan reaper) specifically so a reconnecting client can pick the same
-     * conversation back up — but nothing here was actually trying that. Now,
-     * before creating a new session, check `session.most_recent` and resume
-     * it if one exists; only fall back to a genuinely blank session when there
-     * is nothing to resume (first-ever use). An explicit resumeSessionId from
-     * Sessions/share-intent (ChatScreen's LaunchedEffect) still runs after this
-     * and wins, since it always overwrites activeSessionId unconditionally.
-     */
-    private suspend fun createOrResumeSession() {
-        val mostRecentId = try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
-                ?.takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
-            Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
-            null
-        }
-        if (mostRecentId != null) {
-            resumeSession(mostRecentId)
-        } else {
-            createSession()
-        }
+    /** Rebuild the open chat from the server's snapshot of [liveId]. */
+    private suspend fun recoverActiveSession(liveId: String, turnEnded: Boolean = false) {
+        streamingDelegate.reset()
+        val storedId = _uiState.value.activeSessionKey ?: storedIdByLiveId[liveId]
+        recoverOnTurnEnd = sessionDelegate.recover(_uiState, liveId, storedId, turnEnded) ?: return
+        val newId = _uiState.value.activeSessionId
+        if (storedId != null && newId != null && newId != liveId) storedIdByLiveId[newId] = storedId
     }
 
-    private suspend fun createSession() {
-        try {
-            val result = gatewayClient.request(GatewayMethods.SESSION_CREATE)
-            val sessionId = (result as? kotlinx.serialization.json.JsonObject)
-                ?.get("session_id")
-                ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
-                ?.content
-            if (sessionId != null) {
-                _uiState.update { it.copy(activeSessionId = sessionId) }
-                Timber.i("[Chat] Session created: $sessionId")
-            }
-        } catch (e: GatewayException) {
-            Timber.e(e, "[Chat] Failed to create session")
-            _uiState.update { it.copy(
-                errorEvent = ErrorEvent.Error("Failed to create session: ${e.message}")
-            ) }
-        }
+    /** Bring back the busy chats the user is not looking at, and settle the ones that ended meanwhile. */
+    private suspend fun reattachBusyBackground() {
+        val active = _uiState.value.activeSessionId
+        val busy = backgroundSessions.snapshot().filter { (sid, activity) -> activity.isRunning && sid != active }.keys
+        if (busy.isEmpty()) return
+        val ended = sessionDelegate.reattachBackground(busy.associateWith { storedIdByLiveId[it] })
+        ended.forEach { backgroundSessions.onTurnEnd(it, "", isActive = false) }
+        if (ended.isNotEmpty()) publishSessionActivity()
     }
+
+    // ── Session management (coordinated via delegate) ────────────────────
 
     fun loadSessionList() {
-        viewModelScope.launch {
-            try {
-                val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
-                val sessions = parseSessionList(result)
-                _uiState.update { it.copy(sessions = sessions) }
-                Timber.d("[Chat] Session list loaded: ${sessions.size}")
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] Failed to load session list")
-            }
-        }
-    }
-
-    private fun parseSessionList(result: kotlinx.serialization.json.JsonElement): List<SessionItem> {
-        return try {
-            val obj = result as? JsonObject ?: return emptyList()
-            val arr = obj["sessions"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
-            arr.mapNotNull { item ->
-                val session = item as? JsonObject ?: return@mapNotNull null
-                SessionItem(
-                    id = session["id"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null,
-                    title = session["title"]?.let { (it as? JsonPrimitive)?.content }?.ifBlank { null }
-                        ?: "Untitled",
-                    lastMessagePreview = session["preview"]?.let { (it as? JsonPrimitive)?.content },
-                    updatedAt = (session["started_at"] ?: session["updated_at"])
-                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
-                        ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis(),
-                    messageCount = session["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() },
-                )
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Chat] Failed to parse sessions")
-            emptyList()
-        }
+        viewModelScope.launch { sessionDelegate.loadList(_uiState) }
     }
 
     fun resumeSession(sessionId: String) {
         viewModelScope.launch {
-            try {
-                // Hermes `session.resume` (param: session_id) MINTS A NEW live
-                // session id bound to the old transcript and returns it as
-                // `session_id` (the original db id comes back as `resumed`).
-                // The response also inlines the full transcript:
-                //   { session_id, resumed, message_count, messages: [...] }
-                // We MUST adopt the returned `session_id` as the active session —
-                // sending prompt.submit with the old id fails "session not found".
-                // Stored-vs-live id semantics (resume vs activate) live in
-                // SessionRepository.attach — Milestone A, پیمان ۵.
-                val attached = sessionRepository.attach(sessionId)
-                activeAssistantMessageId = null
-                resetStreamingBuffer()
-                val liveSessionId = attached.liveId
-                val history = parseSessionHistory(attached.raw)
-                _uiState.update { it.copy(
-                    activeSessionId = liveSessionId,
-                    messages = history,
-                    showSessionDrawer = false,
-                    errorEvent = null,
-                    sessionLoadedAt = System.currentTimeMillis(),
-                    activeTodos = emptyList(),
-                    pendingApproval = null,
-                ) }
-                // The resumed session may carry its own reasoning override —
-                // re-read against the new live id so the control matches it.
-                loadReasoningLevel()
-                if (history.isNotEmpty()) {
-                    Timber.i("[Chat] Resumed $sessionId as live session $liveSessionId with ${history.size} messages")
-                } else {
-                    // Fallback: lazy/live resume paths may not inline the
-                    // transcript — fetch it explicitly via session.history using
-                    // the live id.
-                    Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
-                    loadSessionHistory(liveSessionId)
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to resume session")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Failed to resume: ${e.message}")) }
-            }
+            streamingDelegate.reset()
+            sessionDelegate.resume(_uiState, sessionId)
+            // resume() resolves the clicked (stored) id to the live one the
+            // events carry; clear the badge under either spelling.
+            _uiState.value.activeSessionId?.let { backgroundSessions.markRead(it) }
+            liveIdsFor(sessionId).forEach { backgroundSessions.markRead(it) }
+            publishSessionActivity()
         }
     }
 
-    private suspend fun loadSessionHistory(sessionId: String) {
-        try {
-            // Hermes `session.history` resolves the session via _sess_nowait,
-            // which reads params["session_id"] — NOT "id".
-            val params = buildJsonObject { put("session_id", sessionId) }
-            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            val messages = parseSessionHistory(result)
-            if (messages.isNotEmpty()) {
-                _uiState.update { it.copy(
-                    messages = messages,
-                    sessionLoadedAt = System.currentTimeMillis(),
-                ) }
-                Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
-            } else {
-                Timber.w("[Chat] Session history returned empty for $sessionId")
-            }
-        } catch (e: Exception) {
-            // History load failure is non-fatal — messages arrive via event stream after resume
-            Timber.w(e, "[Chat] Could not load session history for $sessionId, continuing without it")
+    fun branchSession() {
+        viewModelScope.launch {
+            sessionDelegate.branch(_uiState) { sessionDelegate.resolveLiveSessionId(_uiState) }
         }
     }
 
-    private fun parseSessionHistory(result: kotlinx.serialization.json.JsonElement): List<ChatMessage> {
-        return try {
-            val obj = result as? JsonObject ?: return emptyList()
-            val arr = obj["messages"] as? kotlinx.serialization.json.JsonArray
-                ?: obj["history"] as? kotlinx.serialization.json.JsonArray
-                ?: return emptyList()
-            arr.mapNotNull { item ->
-                val msg = item as? JsonObject ?: return@mapNotNull null
-                val role = msg["role"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null
-                val content = msg["content"]?.let { (it as? JsonPrimitive)?.content }
-                    ?: msg["text"]?.let { (it as? JsonPrimitive)?.content } ?: ""
-                val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                    ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
-                val id = msg["id"]?.let { (it as? JsonPrimitive)?.content } ?: UUID.randomUUID().toString()
-                when (role) {
-                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content)
-                    "assistant" -> ChatMessage.Assistant(
-                        id = id, timestamp = ts, text = content,
-                        isStreaming = false,
-                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.content },
-                    )
-                    "tool" -> ChatMessage.ToolCall(
-                        id = id, timestamp = ts,
-                        toolName = msg["name"]?.let { (it as? JsonPrimitive)?.content } ?: "tool",
-                        argsText = msg["args"]?.let { (it as? JsonPrimitive)?.content },
-                        resultText = msg["result"]?.let { (it as? JsonPrimitive)?.content } ?: content,
-                        error = msg["error"]?.let { (it as? JsonPrimitive)?.content },
-                        isRunning = false, durationS = null,
-                    )
-                    else -> null
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Chat] Failed to parse session history")
-            emptyList()
+    fun newConversation() {
+        viewModelScope.launch {
+            streamingDelegate.reset()
+            _uiState.update { it.copy(
+                messages = emptyList(),
+                showSessionDrawer = false,
+                activeSessionId = null,
+                activeSessionKey = null,
+                activeTodos = emptyList(),
+                pendingApproval = null,
+                // Starting a new chat mid-turn dropped the session id while isSending
+                // stayed true; if session.new then failed nothing ever cleared it and
+                // the composer stayed locked.
+                isSending = false,
+            ) }
+            sessionDelegate.create(_uiState)
         }
     }
 
-    // ── Sending messages ──────────────────────────────────────────────────
+    // ── Sending messages ─────────────────────────────────────────────────
 
     fun updateInputText(text: String) {
         _uiState.update { it.copy(inputText = text) }
+    }
+
+    fun sendSuggestion(text: String) {
+        if (text.isBlank()) return
+        _uiState.update { it.copy(inputText = text) }
+        sendMessage()
     }
 
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
-        val sessionId = _uiState.value.activeSessionId ?: return
+        val sessionId = _uiState.value.activeSessionId
 
-        // Feature #23: Clear draft when message is sent
         clearDraft()
 
-        // Wire format vs UI: the gateway's file.attach protocol requires the
-        // @file: ref inside the submitted prompt text (that's how the agent
-        // learns about the file). That is a transport detail — the chat bubble
-        // shows ONLY what the user typed; attachments render as separate
-        // elements from ChatMessage.User.attachments. Images need no ref at
-        // all: they were queued gateway-side and ride along automatically.
         val refs = attachments.mapNotNull { it.refText }
         val outgoing = when {
             refs.isEmpty() -> text.ifEmpty { attachments.joinToString("\n") { "[User attached image: ${it.name}]" } }
             else -> (text + "\n" + refs.joinToString("\n")).trim()
         }
 
-        // Add user message to UI immediately
+        // No live session yet — Hermes is still booting inside Alpine, which takes
+        // seconds. Park the prompt instead of rejecting it: the bubble goes up now and
+        // [flushQueuedPrompt] sends it the moment a session exists, so the boot wait
+        // costs the user nothing but time they were already spending.
+        val queued = sessionId == null
         val userMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
             text = text,
             attachments = attachments,
+            queued = queued,
         )
         _uiState.update { it.copy(
             messages = _uiState.value.messages + userMsg,
             inputText = "",
-            isSending = true,
+            isSending = !queued,
             pendingAttachments = emptyList(),
-            // New turn — drop the previous turn's task list (matches
-            // upstream turnController, whose turn state resets per turn)
             activeTodos = emptyList(),
-        ) }
-
-        // Check for slash commands
-        if (text.startsWith("/")) {
-            handleSlashCommand(text, sessionId)
-        } else {
-            sendPrompt(outgoing, sessionId)
-        }
-    }
-
-    // ── Attachments — files/images travel over the loopback gateway only ──
-    // (Termux keeps its sandbox: no shared-storage permission is involved.)
-
-    /** Max upload size; matches the gateway's image.attach_bytes cap (25 MB). */
-    private val maxAttachBytes = 25 * 1024 * 1024
-
-    /** Chunk size for streaming Base64 encoding (1 MB raw = ~1.33 MB b64). */
-    private val attachChunkSize = 1024 * 1024
-
-    /**
-     * Upload a user-picked file to the gateway session.
-     *
-     * Images → `image.attach_bytes` (queued for native vision on the next
-     * prompt). Everything else → `file.attach` (staged in the workspace,
-     * referenced from the prompt via the returned `@file:` token).
-     *
-     * Uses chunked Base64 encoding to avoid loading the entire file +
-     * its b64 representation in RAM simultaneously (a 25 MB file would
-     * otherwise spike ~91 MB). Peak memory is now ~2.7 MB.
-     */
-    fun attachFromUri(uri: Uri) {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (_uiState.value.isAttaching) return
-        _uiState.update { it.copy(isAttaching = true) }
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val resolver = context.contentResolver
-                val name = resolver.query(uri, null, null, null, null)?.use { c ->
-                    val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (i >= 0 && c.moveToFirst()) c.getString(i) else null
-                } ?: uri.lastPathSegment ?: "attachment"
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
-
-                // Stream the file in chunks and build Base64 incrementally.
-                // Peak RAM: one chunk (1 MB raw) + its b64 (1.33 MB) + the
-                // accumulated b64 StringBuilder.  For 25 MB files the final
-                // b64 string is ~33 MB but we never hold the raw bytes AND
-                // the b64 string at the same time.
-                val b64 = StringBuilder()
-                var totalSize = 0
-                resolver.openInputStream(uri)?.use { stream ->
-                    val buffer = ByteArray(attachChunkSize)
-                    while (true) {
-                        val read = stream.read(buffer)
-                        if (read <= 0) break
-                        totalSize += read
-                        if (totalSize > maxAttachBytes) {
-                            throw IllegalStateException("File too large (max 25 MB)")
-                        }
-                        val chunk = if (read == buffer.size) buffer else buffer.copyOf(read)
-                        b64.append(Base64.encodeToString(chunk, Base64.NO_WRAP))
-                    }
-                } ?: throw IllegalStateException("Cannot read file")
-
-                if (totalSize == 0) {
-                    throw IllegalStateException("File is empty")
-                }
-
-                val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
-                    // pdf.attach renders each page to PNG server-side (the
-                    // vision pipeline takes images, not PDFs) and queues every
-                    // page the same way image.attach_bytes does — represent
-                    // each queued page as its own chip, same as multi-image.
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        put("content_base64", b64.toString())
-                        put("filename", name)
-                    }
-                    val result = gatewayClient.request(GatewayMethods.PDF_ATTACH, jsonToElementMap(params))
-                        as? JsonObject ?: throw IllegalStateException("Gateway returned no result")
-                    val pages = result["pages"] as? kotlinx.serialization.json.JsonArray
-                        ?: throw IllegalStateException("PDF attach returned no pages")
-                    pages.mapIndexedNotNull { idx, pageEl ->
-                        val page = pageEl as? JsonObject ?: return@mapIndexedNotNull null
-                        val path = (page["path"] as? JsonPrimitive)?.content
-                        PendingAttachment(
-                            name = "$name (p.${idx + 1})",
-                            isImage = true,
-                            gatewayPath = path,
-                            localUri = uri.toString(),
-                        )
-                    }
-                } else if (mime.startsWith("image/")) {
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        put("content_base64", b64.toString())
-                        put("filename", name)
-                    }
-                    val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
-                    val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
-                    listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
-                } else {
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        put("data_url", "data:$mime;base64,${b64}")
-                        put("name", name)
-                    }
-                    val result = gatewayClient.request("file.attach", jsonToElementMap(params))
-                    val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
-                        ?: throw IllegalStateException("Gateway returned no file reference")
-                    listOf(PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString()))
-                }
-                _uiState.update { it.copy(
-                    pendingAttachments = _uiState.value.pendingAttachments + newAttachments,
-                    isAttaching = false,
-                ) }
-                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (size=${totalSize})")
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Attach failed")
-                _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Attach failed: ${e.message}"),
-                    isAttaching = false,
-                ) }
-            }
-        }
-    }
-
-    /**
-     * Download a gateway file/artifact (image, video, file-ref) and save it
-     * into the public Downloads/Hermes folder.
-     *
-     * Deliberately does NOT use the system DownloadManager. DownloadManager
-     * runs as a separate OS process with its own network stack — it doesn't
-     * necessarily honor this app's cleartext-traffic manifest policy (a
-     * self-hosted gateway is commonly plain http:// on a LAN/VPN), and any
-     * failure (cert, cleartext, or otherwise) happens silently with no
-     * exception the app can surface, which is exactly what "I tap download
-     * and nothing happens" looks like. Fetching through GatewayClient reuses
-     * the same HTTP client that's already proven to reach this host (the
-     * chat connection itself), and any failure here becomes a real,
-     * visible error message.
-     */
-    fun downloadFile(url: String, filename: String) {
-        viewModelScope.launch {
-            val derivedName = filename.ifBlank {
-                url.substringAfterLast('/').substringBefore('?')
-            }
-            val safeName = derivedName.ifBlank { "hermes_file" }
-                .let { name -> name.filter { it != '/' && it != '\\' } }
-                .ifBlank { "hermes_file" }
-                .let { if (!it.contains('.')) "$it.jpg" else it }
-            try {
-                val bytes = gatewayClient.downloadFile(url)
-                val resolver = context.contentResolver
-                val values = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safeName)
-                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Hermes")
-                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
-                }
-                val itemUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                    ?: error("Could not create download entry")
-                resolver.openOutputStream(itemUri)?.use { out -> out.write(bytes) }
-                    ?: error("Could not open output stream")
-                values.clear()
-                values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
-                resolver.update(itemUri, values, null, null)
-                Timber.i("[Chat] Downloaded $safeName (${bytes.size} bytes) -> Downloads/Hermes")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to Downloads/Hermes: $safeName")) }
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Download failed: $safeName")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Download failed: ${e.message}")) }
-            }
-        }
-    }
-
-    /** Remove a staged attachment (detaches queued images gateway-side too). */
-    fun removeAttachment(attachment: PendingAttachment) {
-        _uiState.update { it.copy(
-            pendingAttachments = _uiState.value.pendingAttachments - attachment,
-        ) }
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (attachment.isImage && attachment.gatewayPath != null) {
-            viewModelScope.launch {
-                try {
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        put("path", attachment.gatewayPath)
-                    }
-                    gatewayClient.request("image.detach", jsonToElementMap(params))
-                } catch (e: Exception) {
-                    Timber.w(e, "[Chat] image.detach failed (ignored)")
-                }
-            }
-        }
-    }
-
-    /**
-     * Map a gateway-local image/file path (from `![..](..)` markdown) to an
-     * HTTP URL the app can actually load. Agent-written files live inside
-     * Termux's sandbox, which this app cannot read directly — but the
-     * dashboard's `/api/files/download` endpoint streams them over loopback
-     * and accepts the session token as a query param, so the resulting URL
-     * works as-is for both Coil and DownloadManager.
-     */
-    fun resolveMediaUrl(raw: String): String {
-        if (raw.startsWith("http://") || raw.startsWith("https://") ||
-            raw.startsWith("content://") || raw.startsWith("data:")
-        ) return raw
-        val path = if (raw.startsWith("file://")) raw.removePrefix("file://") else raw
-        if (!path.startsWith("/") && !path.startsWith("~")) return raw
-        val ws = hermesRuntime.getWebSocketUrl()
-        val base = ws.replaceFirst("ws://", "http://").replaceFirst("wss://", "https://")
-            .substringBefore("/api/ws")
-        val token = ws.substringAfter("token=", "").substringBefore('&')
-        val encoded = java.net.URLEncoder.encode(path, "UTF-8")
-        // Note: gateway's /api/files/download only accepts token as a query
-        // param (no header support), so we must include it in the URL.
-        // OkHttp logging interceptor strips sensitive query params — see
-        // GatewayModule.provideOkHttpClient() which redacts "token=".
-        return buildString {
-            append(base).append("/api/files/download?path=").append(encoded)
-            if (token.isNotEmpty()) append("&token=").append(token)
-        }
-    }
-
-    private fun sendPrompt(
-        text: String,
-        sessionId: String,
-        truncateBeforeUserOrdinal: Int? = null,
-    ) {
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject {
-                    put("text", text)
-                    put("session_id", sessionId)
-                    // Fix F-A3: when retrying, pass truncate_before_user_ordinal
-                    // so the server truncates history at the target user message
-                    // before appending the new one. Without this, retry would
-                    // duplicate the user message in server history.
-                    // Verified in tui_gateway/server.py:7448,7467-7484.
-                    if (truncateBeforeUserOrdinal != null) {
-                        put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
-                    }
-                }
-                gatewayClient.request(
-                    method = GatewayMethods.PROMPT_SUBMIT,
-                    params = jsonToElementMap(params),
+            queuedPrompt = if (queued) {
+                QueuedPrompt(
+                    bubbleId = userMsg.id,
+                    outgoing = outgoing,
+                    isSlashCommand = text.startsWith("/"),
                 )
-                // Server returns {"status": "streaming"} — actual content comes
-                // via message.start / message.delta / message.complete events.
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to send prompt")
-                _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Failed to send: ${e.message}"),
-                    isSending = false,
-                ) }
-            }
-        }
-    }
-
-    /**
-     * Fix: command.dispatch's response is a discriminated union on `type`
-     * (gatewayTypes.ts `CommandDispatchResponse`) — exec/plugin/alias/skill/
-     * send/prefill — and this only ever handled the exec/plugin shape
-     * (generic key-matching over output/text/message/...). For commands that
-     * come back as `alias` (re-route to another command), `send` (the
-     * expansion must actually be SUBMITTED as a new prompt), or `prefill`
-     * (the expansion belongs in the composer for the user to edit/send, not
-     * displayed as inert text), the old code just printed a static status
-     * line — which does nothing from the agent's point of view. That's almost
-     * certainly why commands "didn't work": the app showed *something* but
-     * never actually dispatched the resulting action.
-     */
-    private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
-        if (depth > 5) {
-            // Guard against a misbehaving/looping alias chain.
-            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
-            return
-        }
-        viewModelScope.launch {
-            try {
-                // Fix S4F04: command.dispatch expects {name, arg, session_id}
-                // Parse "/model claude" → name="model", arg="claude"
-                val withoutSlash = text.removePrefix("/").trim()
-                val parts = withoutSlash.split(" ", limit = 2)
-                val name = parts[0]
-                val arg = if (parts.size > 1) parts[1] else ""
-                val params = buildJsonObject {
-                    put("name", name)
-                    put("arg", arg)
-                    put("session_id", sessionId)
-                }
-                val result = gatewayClient.request(
-                    method = GatewayMethods.COMMAND_DISPATCH,
-                    params = jsonToElementMap(params),
-                )
-                val obj = result as? JsonObject
-                when ((obj?.get("type") as? JsonPrimitive)?.content) {
-                    "alias" -> {
-                        // Re-route to the target command, preserving the arg.
-                        val target = (obj["target"] as? JsonPrimitive)?.content
-                        if (!target.isNullOrBlank()) {
-                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
-                            handleSlashCommand(nextText, sessionId, depth + 1)
-                            return@launch
-                        }
-                    }
-                    "send" -> {
-                        // The command expanded into prompt text that must
-                        // actually be submitted to the agent, not just shown.
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        if (!message.isNullOrBlank()) {
-                            sendPrompt(message, sessionId)
-                            return@launch
-                        }
-                    }
-                    "prefill" -> {
-                        // The expansion goes in the composer for the user to
-                        // review/edit before sending — not auto-sent.
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        _uiState.update { it.copy(
-                            inputText = message ?: _uiState.value.inputText,
-                            isSending = false,
-                        ) }
-                        return@launch
-                    }
-                }
-                // exec/plugin/skill (or an unrecognized/forward-compat shape):
-                // surface whatever textual output the response carries.
-                val output = extractCommandOutput(result)
-                val newMessages = if (!output.isNullOrBlank()) {
-                    _uiState.value.messages + ChatMessage.Status(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = System.currentTimeMillis(),
-                        text = output.trim(),
-                        isError = false,
-                    )
-                } else {
-                    _uiState.value.messages
-                }
-                _uiState.update { it.copy(
-                    messages = newMessages,
-                    isSending = false,
-                ) }
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Slash command failed")
-                _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Command failed: ${e.message}"),
-                    isSending = false,
-                ) }
-            }
-        }
-    }
-
-    /**
-     * Pull human-readable output from a `command.dispatch` response. Hermes
-     * commands return varying shapes — a bare string, or an object with one of
-     * `output`/`text`/`message`/`markdown`/`result`/`detail`, or a `lines`
-     * array. We check the common keys and return null when the response is just
-     * a status ack ({"status":"ok"}) with nothing worth showing.
-     */
-    private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
-        if (result == null) return null
-        (result as? JsonPrimitive)?.let { if (it.isString) return it.content }
-        val obj = result as? JsonObject ?: return null
-        for (key in listOf("output", "text", "message", "markdown", "result", "detail")) {
-            val v = obj[key]
-            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
-        }
-        (obj["lines"] as? JsonArray)?.let { arr ->
-            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.content }.joinToString("\n")
-            if (joined.isNotBlank()) return joined
-        }
-        return null
-    }
-
-    /**
-     * The gateway session that actually holds the live agent + history is not
-     * always [ChatUiState.activeSessionId] (that comes from session.create and
-     * can diverge from the running session). Session-scoped RPCs must target
-     * the session `session.most_recent` reports, falling back to the local id.
-     */
-    private suspend fun resolveLiveSessionId(): String? {
-        return try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            ((mr as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
-        } catch (e: Exception) {
-            null
-        } ?: _uiState.value.activeSessionId
-    }
-
-    /**
-     * Fork the current conversation into a new session and switch to it.
-     * Triggered by long-pressing a message → "Branch conversation".
-     * Backed by Hermes' `session.branch` (copies the current history into a
-     * fresh session; returns the new session_id).
-     */
-    fun branchSession() {
-        viewModelScope.launch {
-            try {
-                val sid = resolveLiveSessionId()
-                if (sid == null) {
-                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active conversation to branch")) }
-                    return@launch
-                }
-                val result = gatewayClient.request(
-                    GatewayMethods.SESSION_BRANCH,
-                    jsonToElementMap(buildJsonObject { put("session_id", sid) }),
-                )
-                val newId = ((result as? JsonObject)?.get("session_id") as? JsonPrimitive)?.content
-                loadSessionList()
-                if (newId != null) {
-                    resumeSession(newId)
-                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Branched into a new conversation")) }
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] session.branch failed")
-                val m = e.message.orEmpty()
-                _uiState.update { it.copy(
-                    errorEvent = if (m.contains("4008") || m.contains("nothing to branch"))
-                        ErrorEvent.Warning("Send at least one message before branching")
-                    else ErrorEvent.Error("Branch failed: $m"),
-                ) }
-            }
-        }
-    }
-
-    fun stopGeneration() {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        // Make the UI stop spinning immediately. The backend interrupt is
-        // cooperative and can take a moment if a tool/model call is in-flight.
-        //
-        // The streaming assistant message must be finalized here too — the
-        // server doesn't reliably send message.complete for an interrupted
-        // turn, so without this the bubble stays isStreaming=true forever:
-        // typing dots never stop, and the streaming spacer at the end of the
-        // list keeps a permanent blank gap. finalizeOrphanedStreamingMessage
-        // needs activeAssistantMessageId, so it runs before the null-out.
-        finalizeOrphanedStreamingMessage(marker = "(stopped)")
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateAll({ msg ->
-                msg is ChatMessage.ToolCall && msg.isRunning
-            }) { msg ->
-                (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+            } else {
+                it.queuedPrompt
             },
-            isSending = false,
         ) }
-        activeAssistantMessageId = null
-        resetStreamingBuffer()
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject {
-                    put("session_id", sessionId)
-                }
-                gatewayClient.request(
-                    method = GatewayMethods.SESSION_INTERRUPT,
-                    params = jsonToElementMap(params),
-                    timeoutMs = 5_000,
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
-            }
-            try {
-                // Best-effort cleanup for background/shell processes that keep
-                // a tool card spinning after the turn was interrupted. This is
-                // still routed through GatewayClient, so UI does not know about
-                // backend process details.
-                gatewayClient.request(
-                    method = GatewayMethods.PROCESS_STOP,
-                    timeoutMs = 5_000,
-                )
-            } catch (e: Exception) {
-                Timber.d(e, "[Chat] process.stop cleanup skipped/failed")
-            }
+        if (queued) return
+
+        if (text.startsWith("/")) {
+            handleSlashCommand(text, sessionId!!)
+        } else {
+            sendPrompt(outgoing, sessionId!!)
         }
     }
 
     /**
-     * Redirect the agent mid-turn WITHOUT interrupting it (`session.steer`).
-     *
-     * This is the desktop/TUI's primary "course-correct" control and the main
-     * thing the phone app was missing: while a turn is streaming, the only
-     * option here used to be Stop (a full interrupt). Steer instead injects a
-     * new instruction that the agent folds in at its next step, so you can nudge
-     * it ("actually use TypeScript", "skip the tests") without losing the turn.
-     *
-     * Response shape (gatewayTypes.ts `SessionSteerResponse`):
-     * `{status: "queued" | "rejected", text?: string}`.
+     * Sends whatever the user typed while Hermes was booting. Called on every
+     * transition into a live session; a no-op when nothing is parked.
      */
+    private fun flushQueuedPrompt(sessionId: String) {
+        val pending = _uiState.value.queuedPrompt ?: return
+        _uiState.update { state ->
+            state.copy(
+                queuedPrompt = null,
+                isSending = true,
+                messages = state.messages.map {
+                    if (it is ChatMessage.User && it.id == pending.bubbleId) it.copy(queued = false) else it
+                },
+            )
+        }
+        if (pending.isSlashCommand) {
+            handleSlashCommand(pending.outgoing, sessionId)
+        } else {
+            sendPrompt(pending.outgoing, sessionId)
+        }
+    }
+
+    fun retryLastMessage() {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isSending) return
+
+        val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
+        val refs = lastUserMsg.attachments.mapNotNull { it.refText }
+        val lastUserText = if (refs.isEmpty()) {
+            lastUserMsg.text
+        } else {
+            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+        }
+
+        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
+        val lastUserOrdinal = userMessages.size - 1
+
+        val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
+        if (lastUserIndex >= 0) {
+            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
+            _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
+        }
+
+        sendPrompt(lastUserText, sessionId, truncateBeforeUserOrdinal = lastUserOrdinal)
+    }
+
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
         if (text.isEmpty()) return
-        // Echo the steer inline (arrow-prefixed) and clear the composer now.
         val steerMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
-            text = "↳ $text",
+            text = "\u21B3 $text",
         )
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages + steerMsg,
-            inputText = "",
-        ) }
+        _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
         clearDraft()
         viewModelScope.launch {
-            // Steer must target the live running session, not the local id.
-            val sessionId = resolveLiveSessionId()
+            val sessionId = sessionDelegate.resolveLiveSessionId(_uiState)
             if (sessionId == null) {
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
                 return@launch
@@ -1030,80 +496,198 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] session.steer failed")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Steer failed: ${e.message}")) }
+            }
+        }
+    }
+
+    fun stopGeneration() {
+        // The state reset comes first and unconditionally. Stop is the only way out of
+        // isSending, and returning early on a missing session id — which happens when a
+        // new chat is started mid-turn and session.new then fails — left the button
+        // pressed with nothing able to release it: Send disabled, Stop inert, forever.
+        val sessionId = _uiState.value.activeSessionId
+        streamingDelegate.finalizeOrphanedMessage("(stopped)")
+        _uiState.update { it.copy(
+            messages = _uiState.value.messages.updateAll({ msg ->
+                msg is ChatMessage.ToolCall && msg.isRunning
+            }) { msg ->
+                (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
+            },
+            isSending = false,
+        ) }
+        if (sessionId == null) return
+        viewModelScope.launch {
+            try {
+                val params = buildJsonObject { put("session_id", sessionId) }
+                gatewayClient.request(
+                    method = GatewayMethods.SESSION_INTERRUPT,
+                    params = jsonToElementMap(params),
+                    timeoutMs = 5_000,
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
+            }
+            // process.stop is process_registry.kill_all() — it reaps every
+            // session's background work, so stopping one chat killed the
+            // others. process.list/process.kill are session-scoped.
+            try {
+                val listed = gatewayClient.request(
+                    method = GatewayMethods.PROCESS_LIST,
+                    params = jsonToElementMap(buildJsonObject { put("session_id", sessionId) }),
+                    timeoutMs = 5_000,
+                )
+                val processes = (listed as? JsonObject)?.get("processes") as? JsonArray ?: JsonArray(emptyList())
+                for (entry in processes) {
+                    val row = entry as? JsonObject ?: continue
+                    // The registry names a process id "session_id" (a "proc_…"
+                    // handle), which is not the chat session id.
+                    val procId = (row["session_id"] as? JsonPrimitive)?.content
+                    if (procId.isNullOrBlank()) continue
+                    if ((row["status"] as? JsonPrimitive)?.content == "exited") continue
+                    gatewayClient.request(
+                        method = GatewayMethods.PROCESS_KILL,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("session_id", sessionId)
+                            put("process_id", procId)
+                        }),
+                        timeoutMs = 5_000,
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.d(e, "[Chat] session-scoped process cleanup skipped/failed")
+            }
+        }
+    }
+
+    private fun sendPrompt(text: String, sessionId: String, truncateBeforeUserOrdinal: Int? = null) {
+        viewModelScope.launch {
+            try {
+                fun params(liveId: String) = buildJsonObject {
+                    put("text", text)
+                    put("session_id", liveId)
+                    if (truncateBeforeUserOrdinal != null) {
+                        put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
+                        // The server refuses truncating submits with 4029 unless the
+                        // rewind is explicitly confirmed, so a stale ordinal on an
+                        // ordinary submit can never silently drop history. Ordinal 0
+                        // (regenerating the first turn) empties the transcript and
+                        // needs the second opt-in, or the server answers 4028.
+                        put("confirm_truncate", true)
+                        if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
+                    }
+                }
+                sessionRepository.onLiveSession(
+                    liveId = sessionId,
+                    storedId = _uiState.value.activeSessionKey,
+                    onRebound = { sessionDelegate.adoptRebound(_uiState, sessionId, it) },
+                ) { liveId ->
+                    gatewayClient.request(
+                        method = GatewayMethods.PROMPT_SUBMIT,
+                        params = jsonToElementMap(params(liveId)),
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to send prompt")
                 _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Steer failed: ${e.message}"),
+                    errorEvent = ErrorEvent.Error("Failed to send: ${e.message}"),
+                    isSending = false,
                 ) }
             }
         }
     }
 
-    // ── Feature #5: Retry / Regenerate ───────────────────────────────────
-
-    fun retryLastMessage() {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (_uiState.value.isSending) return
-
-        // Find the last user message. Rebuild the same wire text sendMessage()
-        // originally submitted: typed text + the @file: refs of any attachments
-        // that rode along. Retrying with .text alone silently dropped the
-        // files from the retried turn.
-        val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
-        val refs = lastUserMsg.attachments.mapNotNull { it.refText }
-        val lastUserText = if (refs.isEmpty()) {
-            lastUserMsg.text
-        } else {
-            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+    private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
+        if (depth > 5) {
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
+            return
         }
-
-        // Fix F-A3: Compute the user-message ordinal (0-based index among
-        // user messages only) of the last user message. The server's
-        // prompt.submit handler accepts `truncate_before_user_ordinal` and
-        // truncates history at history[:user_indices[ordinal]] BEFORE appending
-        // the new text — so the user message is replaced, not duplicated.
-        // Verified in tui_gateway/server.py:7448,7467-7484.
-        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
-        val lastUserOrdinal = userMessages.size - 1  // 0-based index of last user msg
-
-        // Remove the last assistant response (and any tool calls / status after it)
-        val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            // .toList() copies — subList returns a live view backed by the
-            // original list, and stashing that view in immutable state is a
-            // latent aliasing bug.
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
-            _uiState.update { it.copy(
-                messages = trimmedMessages,
-                isSending = true,
-            ) }
+        viewModelScope.launch {
+            try {
+                val withoutSlash = text.removePrefix("/").trim()
+                val parts = withoutSlash.split(" ", limit = 2)
+                val name = parts[0]
+                val arg = if (parts.size > 1) parts[1] else ""
+                val params = buildJsonObject {
+                    put("name", name)
+                    put("arg", arg)
+                    put("session_id", sessionId)
+                }
+                val result = gatewayClient.request(
+                    method = GatewayMethods.COMMAND_DISPATCH,
+                    params = jsonToElementMap(params),
+                )
+                val obj = result as? JsonObject
+                when ((obj?.get("type") as? JsonPrimitive)?.content) {
+                    "alias" -> {
+                        val target = (obj["target"] as? JsonPrimitive)?.content
+                        if (!target.isNullOrBlank()) {
+                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
+                            handleSlashCommand(nextText, sessionId, depth + 1)
+                            return@launch
+                        }
+                    }
+                    "send" -> {
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        if (!message.isNullOrBlank()) {
+                            sendPrompt(message, sessionId)
+                            return@launch
+                        }
+                    }
+                    "prefill" -> {
+                        val message = (obj["message"] as? JsonPrimitive)?.content
+                        _uiState.update { it.copy(inputText = message ?: _uiState.value.inputText, isSending = false) }
+                        return@launch
+                    }
+                }
+                val output = extractCommandOutput(result)
+                val newMessages = if (!output.isNullOrBlank()) {
+                    _uiState.value.messages + ChatMessage.Status(
+                        id = UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        text = output.trim(),
+                        isError = false,
+                    )
+                } else {
+                    _uiState.value.messages
+                }
+                _uiState.update { it.copy(messages = newMessages, isSending = false) }
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Slash command failed")
+                _uiState.update { it.copy(
+                    errorEvent = ErrorEvent.Error("Command failed: ${e.message}"),
+                    isSending = false,
+                ) }
+            }
         }
-
-        // Resend the prompt with truncation — server will drop history from
-        // the target user message onward, then append the new text as a fresh
-        // user message. Net effect on server: [user(msg1), assistant(old),
-        // user(msg1)] becomes [user(msg1), assistant(old_truncated_away),
-        // user(msg1_fresh)]. The retried turn runs against a clean history.
-        sendPrompt(
-            text = lastUserText,
-            sessionId = sessionId,
-            truncateBeforeUserOrdinal = lastUserOrdinal,
-        )
     }
 
-    // ── Feature #16: Search in current chat ──────────────────────────────
-
-    fun toggleSearch() {
-        val current = _uiState.value.showSearch
-        _uiState.update { it.copy(
-            showSearch = !current,
-            searchQuery = if (current) "" else _uiState.value.searchQuery,
-        ) }
+    private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
+        if (result == null) return null
+        (result as? JsonPrimitive)?.let { if (it.isString) return it.content }
+        val obj = result as? JsonObject ?: return null
+        for (key in listOf("output", "text", "message", "markdown", "result", "detail")) {
+            val v = obj[key]
+            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
+        }
+        (obj["lines"] as? JsonArray)?.let { arr ->
+            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.content }.joinToString("\n")
+            if (joined.isNotBlank()) return joined
+        }
+        return null
     }
 
-    fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-    }
+    // ── Attachments (delegated) ──────────────────────────────────────────
 
-    // ── Feature #23: Save / Load draft ───────────────────────────────────
+    fun attachFromUri(uri: Uri) = attachmentDelegate.attachFromUri(_uiState, uri)
+
+    fun downloadFile(url: String, filename: String) = attachmentDelegate.downloadFile(_uiState, url, filename)
+
+    fun removeAttachment(attachment: PendingAttachment) = attachmentDelegate.removeAttachment(_uiState, attachment)
+
+    fun resolveMediaUrl(raw: String): String = attachmentDelegate.resolveMediaUrl(raw)
+
+    // ── Draft persistence ────────────────────────────────────────────────
 
     fun saveDraft() {
         val text = _uiState.value.inputText
@@ -1121,7 +705,7 @@ class ChatViewModel @Inject constructor(
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
-    // ── Client-side display name (top bar / drawer header) ───────────────
+    // ── Display name ─────────────────────────────────────────────────────
 
     private fun loadAssistantName() {
         val saved = prefs.getString(KEY_ASSISTANT_NAME, null)
@@ -1137,97 +721,340 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(assistantName = trimmed) }
     }
 
-    // Avatar is customized from Settings (ConfigViewModel writes the same
-    // prefs key) — re-read on every return to this screen so the change
-    // shows up without needing a shared reactive store between ViewModels.
-    fun loadAssistantAvatar() {
-        val saved = prefs.getString(KEY_ASSISTANT_AVATAR, null)
-        val path = if (!saved.isNullOrBlank() && java.io.File(saved).exists()) saved else null
-        _uiState.update { it.copy(assistantAvatarPath = path) }
+    // ── Search ───────────────────────────────────────────────────────────
+
+    fun toggleSearch() {
+        val current = _uiState.value.showSearch
+        _uiState.update { it.copy(
+            showSearch = !current,
+            searchQuery = if (current) "" else _uiState.value.searchQuery,
+        ) }
     }
 
-    // Model switching lives in the Settings screen (ConfigViewModel), not in
-    // chat — it must go through `config.set` with key="model" against the
-    // active session, which Settings owns.
+    fun updateSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
 
-    // ── Event handling ────────────────────────────────────────────────────
+    // ── Drawer (delegated) ───────────────────────────────────────────────
+
+    fun toggleSessionDrawer() {
+        val opening = !_uiState.value.showSessionDrawer
+        _uiState.update { it.copy(showSessionDrawer = opening) }
+        if (opening) loadSessionList()
+    }
+
+    fun closeSessionDrawer() {
+        _uiState.update { it.copy(showSessionDrawer = false) }
+    }
+
+    fun clearErrorEvent() {
+        _uiState.update { it.copy(errorEvent = null) }
+    }
+
+    fun updateDrawerSearch(query: String) = drawerDelegate.updateSearch(_uiState, query)
+    fun toggleDrawerSort() = drawerDelegate.toggleSort(_uiState)
+    fun drawerTogglePin(sessionId: String) = drawerDelegate.togglePin(_uiState, sessionId)
+    fun drawerShowRename(sessionId: String, currentTitle: String) = drawerDelegate.showRename(_uiState, sessionId, currentTitle)
+    fun drawerUpdateRenameText(text: String) = drawerDelegate.updateRenameText(_uiState, text)
+    fun drawerHideRename() = drawerDelegate.hideRename(_uiState)
+    fun drawerConfirmRename() = drawerDelegate.confirmRename(_uiState)
+    fun drawerShowDelete(sessionId: String) = drawerDelegate.showDelete(_uiState, sessionId)
+    fun drawerHideDelete() = drawerDelegate.hideDelete(_uiState)
+    fun drawerConfirmDelete() = drawerDelegate.confirmDelete(_uiState)
+
+    // ── Interactive responds ─────────────────────────────────────────────
+
+    fun respondToApproval(choice: String) {
+        val pending = _uiState.value.pendingApproval ?: return
+        _uiState.update { it.copy(pendingApproval = null) }
+        approvalNotificationManager.cancelApproval(pending.requestId)
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    method = GatewayMethods.APPROVAL_RESPOND,
+                    params = buildJsonObject {
+                        pending.sessionId?.let { sid -> put("session_id", sid) }
+                        put("request_id", pending.requestId)
+                        put("choice", choice)
+                        put("all", false)
+                    },
+                )
+                Timber.i("[Chat] Approval response sent: $choice")
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Failed to respond to approval")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
+            }
+        }
+    }
+
+    // Clarify / sudo / secret are server→client requests: the agent blocks
+    // until a response frame with the request's id comes back. They have no
+    // RPC of their own (the old clarify.respond / sudo.respond / secret.respond
+    // don't exist on the server, so answers never arrived).
+
+    /** [picked]: the typed text, the chosen option, or — multi-select — every chosen option. */
+    fun respondToClarify(requestId: String, picked: List<String>) {
+        val card = findInteractiveRequest(requestId) ?: return
+        answerServerRequest(
+            requestId,
+            kotlinx.serialization.json.JsonObject(
+                mapOf("answer" to JsonPrimitive(clarifyAnswer(picked, card.multiSelect))),
+            ),
+        )
+    }
+
+    /** Batch clarify: every question's answer, keyed by its qid. */
+    fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) {
+        val card = findInteractiveRequest(requestId) ?: return
+        val encoded = card.questions.associate { q ->
+            q.qid to JsonPrimitive(clarifyAnswer(answers[q.qid].orEmpty(), q.multiSelect))
+        }
+        answerServerRequest(
+            requestId,
+            kotlinx.serialization.json.JsonObject(mapOf("answers" to kotlinx.serialization.json.JsonObject(encoded))),
+        )
+    }
+
+    fun respondToSudo(requestId: String, password: String) =
+        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(password))))
+
+    fun respondToSecret(requestId: String, value: String) =
+        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(value))))
+
+    private fun findInteractiveRequest(requestId: String): ChatMessage.InteractiveRequest? =
+        _uiState.value.messages.lastOrNull {
+            it is ChatMessage.InteractiveRequest && it.requestId == requestId
+        } as? ChatMessage.InteractiveRequest
+
+    /** The clarify tool reads a multi-select answer as a JSON list and anything else as the bare string. */
+    private fun clarifyAnswer(picked: List<String>, multiSelect: Boolean): String {
+        val values = picked.filter { it.isNotBlank() }
+        return if (multiSelect) {
+            kotlinx.serialization.json.JsonArray(values.map { JsonPrimitive(it) }).toString()
+        } else {
+            values.firstOrNull().orEmpty()
+        }
+    }
+
+    private fun answerServerRequest(requestId: String, result: kotlinx.serialization.json.JsonObject) {
+        if (gatewayClient.respondToServerRequest(requestId, result)) {
+            markAnswered(requestId)
+        } else {
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Not connected — answer not sent")) }
+        }
+    }
+
+    /**
+     * Show a question the agent is blocked on — only in its own chat (another
+     * chat's comes back through `open_requests` when that chat is opened), and
+     * only once: a reconnect replay re-delivers the same request id.
+     */
+    private fun addInteractiveRequest(sessionId: String?, request: ChatMessage.InteractiveRequest) {
+        _uiState.update { state ->
+            if (sessionId != null && sessionId != state.activeSessionId) return@update state
+            if (state.messages.any { it.id == request.id }) return@update state
+            state.copy(messages = state.messages + request)
+        }
+    }
+
+    /** The server withdrew a request (timeout, interrupt, answered elsewhere): its card stops taking answers. */
+    private fun onRequestCancel(serverRequestId: String) {
+        val pending = _uiState.value.pendingApproval
+        if (pending != null && pending.serverRequestId == serverRequestId) {
+            approvalNotificationManager.cancelApproval(pending.requestId)
+        }
+        _uiState.update { state ->
+            state.copy(
+                pendingApproval = state.pendingApproval?.takeUnless { it.serverRequestId == serverRequestId },
+                messages = state.messages.updateFirst({ msg ->
+                    msg is ChatMessage.InteractiveRequest && msg.requestId == serverRequestId && !msg.answered
+                }) { msg ->
+                    (msg as ChatMessage.InteractiveRequest).copy(expired = true)
+                },
+            )
+        }
+    }
+
+    private fun markAnswered(requestId: String) {
+        _uiState.update { it.copy(
+            messages = _uiState.value.messages.updateFirst({ msg ->
+                msg is ChatMessage.InteractiveRequest && msg.requestId == requestId
+            }) { msg ->
+                (msg as ChatMessage.InteractiveRequest).copy(answered = true)
+            }
+        ) }
+    }
+
+    // ── Event handling ───────────────────────────────────────────────────
+
+    /**
+     * Keep every live session's turn state, including the ones the filter
+     * below drops. The gateway runs them concurrently — one session key per
+     * chat, exactly like a Telegram forum topic — so a chat the user is not
+     * looking at still needs to show as busy and to flag its reply.
+     */
+    private fun trackSessionActivity(event: GatewayEvent, eventSid: String?, activeSid: String?) {
+        val sid = eventSid ?: return
+        // A delta arrives per token burst; publishing the map on each one would
+        // recompose the whole chat screen at token rate, so only the turn
+        // boundaries push immediately and the live preview is rate-limited.
+        val publishNow = when (event) {
+            is GatewayEvent.SessionInfo -> {
+                val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
+                if (!stored.isNullOrBlank() && sid == activeSid) {
+                    _uiState.update {
+                        if (it.activeSessionId == sid && it.activeSessionKey == null) it.copy(activeSessionKey = stored) else it
+                    }
+                }
+                if (stored.isNullOrBlank() || storedIdByLiveId[sid] == stored) return
+                storedIdByLiveId[sid] = stored
+                true
+            }
+            is GatewayEvent.MessageStart -> {
+                backgroundSessions.onTurnStart(sid); true
+            }
+            is GatewayEvent.MessageComplete -> {
+                backgroundSessions.onTurnEnd(sid, event.text, isActive = sid == activeSid); true
+            }
+            is GatewayEvent.Error -> {
+                // The chat on screen shows its own error; only a chat the user
+                // is not looking at needs the drawer's red dot.
+                if (sid == activeSid) return
+                backgroundSessions.onError(sid); true
+            }
+            is GatewayEvent.MessageDelta -> {
+                backgroundSessions.onDelta(sid, event.text)
+                val now = System.currentTimeMillis()
+                if (now - lastActivityPublishedAt >= ACTIVITY_PUBLISH_INTERVAL_MS) {
+                    lastActivityPublishedAt = now
+                    true
+                } else {
+                    false
+                }
+            }
+            else -> return
+        }
+        if (publishNow) publishSessionActivity()
+    }
+
+    /** Republish the badges under the ids the drawer rows use. */
+    private fun publishSessionActivity() {
+        val byDrawerId = backgroundSessions.snapshot()
+            .mapKeys { (liveId, _) -> storedIdByLiveId[liveId] ?: liveId }
+        _uiState.update { it.copy(sessionActivity = byDrawerId) }
+    }
+
+    /** Every live id this drawer row could be streaming under. */
+    private fun liveIdsFor(drawerId: String): List<String> =
+        listOf(drawerId) + storedIdByLiveId.filterValues { it == drawerId }.keys
+
+    /** Put an empty streaming bubble on screen for [msgId] to stream into. */
+    private fun openAssistantBubble(msgId: String) {
+        val assistantMsg = ChatMessage.Assistant(
+            id = msgId,
+            timestamp = System.currentTimeMillis(),
+            text = "",
+            isStreaming = true,
+            reasoning = null,
+        )
+        _uiState.update { it.copy(messages = it.messages + assistantMsg) }
+    }
+
+    /**
+     * Deltas stream into the bubble MessageStart opened. When that frame never
+     * reached the screen (a recovery reset the turn, or the socket dropped it),
+     * the bubble is missing and every token would be discarded — open one.
+     */
+    private fun ensureStreamingBubble() {
+        if (streamingDelegate.currentAssistantMessageId != null) return
+        openAssistantBubble(streamingDelegate.onMessageStart())
+    }
 
     private fun handleEvent(event: GatewayEvent) {
-        // Multi-session isolation: every live session shares this ONE
-        // WebSocket, so a background task streaming its turn used to pour
-        // its message.start/delta/complete into whatever chat was open —
-        // tokens from another conversation appearing mid-screen, and the
-        // task's message.complete finalizing the CHAT's in-flight bubble
-        // (which read as "the chat got cut off"). Render only the active
-        // session's traffic here. Interactive prompts (approval/clarify/
-        // sudo/secret) must pass from ANY session — dropping them would
-        // hang a background task waiting for an answer — and
-        // BackgroundComplete is a cross-session completion signal.
         val eventSid = event.sessionId
         val activeSid = _uiState.value.activeSessionId
+        // Turn boundaries in the journal, so a drop can be placed inside or between turns.
+        when (event) {
+            is GatewayEvent.MessageStart -> Timber.i("[Turn] start session=$eventSid active=${eventSid == activeSid}")
+            is GatewayEvent.MessageComplete -> Timber.i("[Turn] complete session=$eventSid chars=${event.text.length}")
+            is GatewayEvent.Error -> Timber.w("[Turn] error session=$eventSid: ${event.message?.take(300)}")
+            else -> Unit
+        }
+        trackSessionActivity(event, eventSid, activeSid)
         if (eventSid != null && activeSid != null && eventSid != activeSid &&
             event !is GatewayEvent.ApprovalRequest &&
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
             event !is GatewayEvent.SecretRequest &&
-            event !is GatewayEvent.BackgroundComplete
+            event !is GatewayEvent.RequestCancel &&
+            event !is GatewayEvent.BackgroundComplete &&
+            // A background chat renaming itself still repaints the drawer.
+            event !is GatewayEvent.SessionTitle
         ) {
             return
         }
 
         when (event) {
             is GatewayEvent.MessageStart -> {
-                // Start a new assistant message (streaming). Use a unique
-                // message id; sessionId is stable for the whole conversation
-                // and would collide across multiple assistant turns.
-                //
-                // Fix F-A5 (regression): if a previous assistant message was
-                // left in isStreaming=true (e.g. because reconnect succeeded
-                // after a mid-stream drop and the server started a new turn),
-                // finalize it now before assigning a new activeAssistantMessageId.
-                // Otherwise the old message would orphan with spinner forever.
-                finalizeOrphanedStreamingMessage(marker = "(interrupted)")
-                resetStreamingBuffer()
-                val msgId = UUID.randomUUID().toString()
-                activeAssistantMessageId = msgId
-                val assistantMsg = ChatMessage.Assistant(
-                    id = msgId,
-                    timestamp = System.currentTimeMillis(),
-                    text = "",
-                    isStreaming = true,
-                    reasoning = null,
-                )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + assistantMsg,
-                ) }
+                streamingDelegate.finalizeOrphanedMessage("(interrupted)")
+                streamingDelegate.reset()
+                openAssistantBubble(streamingDelegate.onMessageStart())
             }
 
             is GatewayEvent.MessageDelta -> {
-                enqueueStreamingDelta(event.text)
+                ensureStreamingBubble()
+                streamingDelegate.enqueueDelta(event.text)
+            }
+
+            is GatewayEvent.MessageInterim -> {
+                streamingDelegate.sealInterim(event.text)?.let { openAssistantBubble(it) }
+            }
+
+            is GatewayEvent.SessionTitle -> {
+                if (event.title.isNotBlank() && event.storedSessionId.isNotBlank()) {
+                    _uiState.update { state ->
+                        state.copy(
+                            sessions = state.sessions.updateFirst({ it.id == event.storedSessionId }) {
+                                it.copy(title = event.title)
+                            },
+                        )
+                    }
+                }
+            }
+
+            is GatewayEvent.SessionsChanged -> {
+                // Fires on every message append of every session, floored to
+                // one per 2s server-side. Only worth a refetch while the list
+                // is on screen; opening the drawer reloads it anyway.
+                if (_uiState.value.showSessionDrawer) loadSessionList()
             }
 
             is GatewayEvent.MessageComplete -> {
-                flushStreamingBuffer()
-                // Finalize the assistant message
+                streamingDelegate.flushBuffer()
+                // A previewed answer repeats text already sealed on screen; any
+                // other final text is new and follows the sealed commentary.
+                val finalText = if (event.responsePreviewed) {
+                    streamingDelegate.withoutSealedInterims(event.text)
+                } else {
+                    event.text
+                }
+                val streamingId = streamingDelegate.currentAssistantMessageId
+                // Nothing on screen to settle AND nothing in the frame: the reply
+                // exists only in the stored history (a turn this screen never saw
+                // stream — muted, queued or auto-continued — or lost frames).
+                val replyOnlyInHistory = finalText.isBlank() && _uiState.value.messages.none { msg ->
+                    msg is ChatMessage.Assistant && msg.isStreaming &&
+                        (streamingId == null || msg.id == streamingId)
+                }
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.Assistant && msg.isStreaming &&
-                            (activeAssistantMessageId == null || msg.id == activeAssistantMessageId)
-                    }) { msg ->
-                        (msg as ChatMessage.Assistant).copy(
-                            text = event.text.ifEmpty { msg.text },
-                            isStreaming = false,
-                            // Keep the reasoning accumulated from deltas when
-                            // the complete event doesn't carry its own copy —
-                            // overwriting with a null here erased the Thoughts
-                            // block the moment the reply finished.
-                            reasoning = event.reasoning?.takeIf { it.isNotBlank() } ?: msg.reasoning,
-                        )
+                    messages = _uiState.value.messages.withReplyLanded(
+                        streamingId, finalText, event.reasoning,
+                    ).filterNot { msg ->
+                        // The bubble sealInterim opened, on a turn that ended
+                        // with nothing left to put in it.
+                        msg is ChatMessage.Assistant && msg.id == streamingId &&
+                            msg.text.isBlank() && msg.reasoning.isNullOrBlank()
                     }.let { msgs ->
-                        // Also finalize any running tool calls — ALL of them,
-                        // not just the first match: the agent can run several
-                        // tools in parallel, and finalizing only one left the
-                        // rest spinning forever after the turn ended.
                         msgs.updateAll({ msg ->
                             msg is ChatMessage.ToolCall && msg.isRunning
                         }) { msg ->
@@ -1235,46 +1062,54 @@ class ChatViewModel @Inject constructor(
                         }
                     },
                     isSending = false,
-                    // Turn is over — drop the live plan so a stale list can't
-                    // reappear at the start of the next turn (the strip is
-                    // only visible while a turn is active anyway).
                     activeTodos = emptyList(),
                 ) }
-                activeAssistantMessageId = null
-                resetStreamingBuffer()
-            }
-
-            is GatewayEvent.ThinkingDelta -> {
-                // Reasoning tokens arrive just as fast as text tokens, so they
-                // go through the same 80ms flush buffer — updating state per
-                // token here re-rendered the whole message list on every
-                // reasoning token, the exact per-token recomposition storm the
-                // text path was already protected against.
-                if (activeAssistantMessageId != null) {
-                    enqueueStreamingDelta(event.text, isReasoning = true)
+                streamingDelegate.reset()
+                if (recoverOnTurnEnd || replyOnlyInHistory) {
+                    recoverOnTurnEnd = false
+                    val sid = _uiState.value.activeSessionId
+                    if (sid != null) viewModelScope.launch { recoverActiveSession(sid, turnEnded = true) }
                 }
             }
 
+            is GatewayEvent.EventGap -> {
+                // Frames for the open chat were lost on a live socket: the same
+                // hole a reconnect leaves, so the same recovery.
+                viewModelScope.launch { recoverActiveSession(event.sessionId) }
+            }
+
+            is GatewayEvent.ThinkingDelta -> {
+                streamingDelegate.enqueueDelta(event.text, isReasoning = true)
+            }
+
+            is GatewayEvent.ReasoningDelta -> {
+                streamingDelegate.enqueueDelta(event.text, isReasoning = true)
+            }
+
             is GatewayEvent.ToolStart -> {
-                // Defense in depth: id is server-assigned (event.toolId), not a
-                // locally generated UUID, so a duplicate delivery of the same
-                // event (e.g. a stray replay after a reconnect) would append a
-                // second message with an id already in the list. Compose's
-                // LazyColumn (keyed by message id) treats a repeated key as
-                // fatal and crashes the whole screen. Update in place instead
-                // of appending when the id already exists.
-                val toolMsg = ChatMessage.ToolCall(
-                    id = event.toolId,
-                    timestamp = System.currentTimeMillis(),
-                    toolName = event.name ?: "unknown",
-                    argsText = event.argsText,
-                    resultText = null,
-                    error = null,
-                    isRunning = true,
-                    durationS = null,
-                )
+                // Drain buffered reasoning first so the mark below counts
+                // everything that arrived before this tool.
+                streamingDelegate.flushBuffer()
                 _uiState.update { state ->
+                    val existing = state.messages.firstOrNull { it.id == event.toolId } as? ChatMessage.ToolCall
                     val exists = state.messages.any { it.id == event.toolId }
+                    val ownerId = existing?.reasoningOwnerId ?: streamingDelegate.currentAssistantMessageId
+                    val mark = existing?.reasoningMark
+                        ?: (state.messages.firstOrNull { it.id == ownerId } as? ChatMessage.Assistant)
+                            ?.reasoning?.length
+                        ?: 0
+                    val toolMsg = ChatMessage.ToolCall(
+                        id = event.toolId,
+                        timestamp = System.currentTimeMillis(),
+                        toolName = event.name ?: "unknown",
+                        argsText = event.argsText,
+                        resultText = null,
+                        error = null,
+                        isRunning = true,
+                        durationS = null,
+                        reasoningOwnerId = ownerId,
+                        reasoningMark = mark,
+                    )
                     state.copy(
                         messages = if (exists) {
                             state.messages.updateFirst({ it.id == event.toolId }) { toolMsg }
@@ -1284,6 +1119,10 @@ class ChatViewModel @Inject constructor(
                         activeTodos = event.todos?.toUiTodos() ?: state.activeTodos,
                     )
                 }
+            }
+
+            is GatewayEvent.TodoUpdated -> {
+                _uiState.update { it.copy(activeTodos = event.todos.toUiTodos()) }
             }
 
             is GatewayEvent.ToolComplete -> {
@@ -1302,6 +1141,20 @@ class ChatViewModel @Inject constructor(
                 ) }
             }
 
+            is GatewayEvent.ToolProgress -> {
+                _uiState.update { it.copy(
+                    messages = _uiState.value.messages.updateFirst({ msg ->
+                        msg is ChatMessage.ToolCall && msg.isRunning
+                    }) { msg ->
+                        (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
+                    }
+                ) }
+            }
+
+            is GatewayEvent.ToolGenerating -> {
+                Timber.d("[Chat] Tool generating: ${event.name}")
+            }
+
             is GatewayEvent.Error -> {
                 val isRateLimit = event.message?.contains("rate_limit", ignoreCase = true) == true ||
                         event.message?.contains("429") == true
@@ -1315,39 +1168,22 @@ class ChatViewModel @Inject constructor(
                     errorEvent = ErrorEvent.Warning(displayMsg ?: "Unknown error"),
                     isSending = false,
                 ) }
-                if (isRateLimit) {
-                    val statusMsg = ChatMessage.Status(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = System.currentTimeMillis(),
-                        text = "⏸ Rate limited — please wait a moment",
-                        isError = false,
-                    )
-                    _uiState.update { it.copy(
-                        messages = _uiState.value.messages + statusMsg,
-                    ) }
-                }
-                activeAssistantMessageId = null
             }
 
             is GatewayEvent.StatusUpdate -> {
-                // Show as a status message
                 val statusMsg = ChatMessage.Status(
                     id = UUID.randomUUID().toString(),
                     timestamp = System.currentTimeMillis(),
                     text = event.text ?: "",
                     isError = event.kind == "error",
                 )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + statusMsg,
-                ) }
+                _uiState.update { it.copy(messages = _uiState.value.messages + statusMsg) }
             }
 
             is GatewayEvent.ApprovalRequest -> {
-                // Step 7: notification (for when the app is backgrounded) +
-                // modal approval sheet in the chat (pendingApproval). The
-                // transcript keeps a status line as the permanent record of
-                // the request.
-                val requestId = UUID.randomUUID().toString()
+                // The server's queue id: approval.respond resolves exactly this
+                // entry (a random id here left the server guessing which one).
+                val requestId = event.requestId.ifBlank { event.serverRequestId }
                 approvalNotificationManager.showApprovalRequest(
                     requestId = requestId,
                     sessionId = event.sessionId,
@@ -1359,7 +1195,7 @@ class ChatViewModel @Inject constructor(
                 val statusMsg = ChatMessage.Status(
                     id = requestId,
                     timestamp = System.currentTimeMillis(),
-                    text = "🔐 Approval needed: ${event.description}\nCommand: ${event.command}",
+                    text = "Approval needed: ${event.description}\nCommand: ${event.command}",
                     isError = false,
                 )
                 _uiState.update { it.copy(
@@ -1371,51 +1207,50 @@ class ChatViewModel @Inject constructor(
                         description = event.description,
                         patternKeys = event.patternKeys,
                         allowPermanent = event.allowPermanent,
+                        serverRequestId = event.serverRequestId,
                     ),
                 ) }
             }
 
-            is GatewayEvent.ClarifyRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.ClarifyRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
                     question = event.question,
                     choices = event.choices,
                     kind = InteractiveKind.CLARIFY,
-                )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + msg,
-                ) }
-            }
+                    multiSelect = event.multiSelect,
+                    questions = event.questions.map { ClarifyQuestionUi(it.qid, it.question, it.choices, it.multiSelect) },
+                ),
+            )
 
-            is GatewayEvent.SudoRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.SudoRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
-                    question = "Sudo password required",
+                    question = "",
                     choices = null,
                     kind = InteractiveKind.SUDO,
-                )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + msg,
-                ) }
-            }
+                ),
+            )
 
-            is GatewayEvent.SecretRequest -> {
-                val msg = ChatMessage.InteractiveRequest(
+            is GatewayEvent.SecretRequest -> addInteractiveRequest(
+                event.sessionId,
+                ChatMessage.InteractiveRequest(
                     id = event.requestId,
                     timestamp = System.currentTimeMillis(),
                     requestId = event.requestId,
                     question = event.prompt,
                     choices = null,
                     kind = InteractiveKind.SECRET,
-                )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + msg,
-                ) }
-            }
+                ),
+            )
+
+            is GatewayEvent.RequestCancel -> onRequestCancel(event.requestId)
 
             is GatewayEvent.SubagentEvent -> {
                 when (event.subagentType) {
@@ -1428,9 +1263,7 @@ class ChatViewModel @Inject constructor(
                             subagentType = event.subagentType,
                             text = event.payload["description"]?.jsonPrimitive?.content ?: "Sub-agent",
                         )
-                        _uiState.update { it.copy(
-                            messages = _uiState.value.messages + msg,
-                        ) }
+                        _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
                     }
                     "complete" -> {
                         val subagentId = event.payload["id"]?.jsonPrimitive?.content
@@ -1459,31 +1292,6 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            is GatewayEvent.ToolProgress -> {
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.ToolCall && msg.isRunning
-                    }) { msg ->
-                        (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
-                    }
-                ) }
-            }
-
-            is GatewayEvent.ToolGenerating -> {
-                Timber.d("[Chat] Tool generating: ${event.name}")
-            }
-
-            is GatewayEvent.ReasoningDelta -> {
-                // Same buffering as ThinkingDelta — see the comment there.
-                if (activeAssistantMessageId != null) {
-                    enqueueStreamingDelta(event.text, isReasoning = true)
-                }
-            }
-
-            is GatewayEvent.ReasoningAvailable -> {
-                Timber.d("[Chat] Reasoning available")
-            }
-
             is GatewayEvent.NotificationShow -> {
                 val notifUi = NotificationUi(
                     key = event.key,
@@ -1497,7 +1305,7 @@ class ChatViewModel @Inject constructor(
                 val key = event.key
                 if (event.kind != "sticky" && ttl != null) {
                     viewModelScope.launch {
-                        delay(ttl)
+                        kotlinx.coroutines.delay(ttl)
                         if (_notification.value?.key == key) _notification.value = null
                     }
                 }
@@ -1511,34 +1319,33 @@ class ChatViewModel @Inject constructor(
                 val msg = ChatMessage.Status(
                     id = "bg-${event.taskId}",
                     timestamp = System.currentTimeMillis(),
-                    text = "✅ Background task complete: ${event.text.take(200)}",
+                    text = "Background task complete: ${event.text.take(200)}",
                     isError = false,
                 )
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages + msg,
-                ) }
+                _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
             }
 
             is GatewayEvent.SessionInfo -> {
-                // Pushed after things like a session-scoped reasoning change
-                // (config.set key="reasoning") — reflects the LIVE agent's
-                // actual current effort (session override included), so this
-                // is the authoritative source for what the chat's control
-                // should show, not our own optimistic local copy.
-                // Server distinguishes "" (unset/provider default) from the
-                // explicit "none" (reasoning disabled) — collapsing them
-                // would make the control lie about state right after a
-                // fresh session, before any override has been set. Only
-                // update on a concrete value; leave the existing display
-                // (config.yaml default) alone otherwise.
                 (event.info["reasoning_effort"] as? JsonPrimitive)?.content
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
+                (event.info["model"] as? JsonPrimitive)?.content
+                    ?.takeIf { it.isNotBlank() && event.sessionId == _uiState.value.activeSessionId }
+                    ?.let { model ->
+                        val provider = (event.info["provider"] as? JsonPrimitive)?.content
+                        _uiState.update {
+                            it.copy(sessionModel = model, sessionProvider = provider, sessionInfoSeq = it.sessionInfoSeq + 1)
+                        }
+                    }
                 Timber.d("[Chat] Session info: ${event.info}")
             }
 
             is GatewayEvent.GatewayStderr -> {
                 Timber.w("[Chat] Gateway stderr: ${event.line}")
+            }
+
+            is GatewayEvent.ReasoningAvailable -> {
+                Timber.d("[Chat] Reasoning available")
             }
 
             else -> {
@@ -1547,304 +1354,9 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // ── Streaming buffer ─────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────────
 
-    private fun enqueueStreamingDelta(text: String, isReasoning: Boolean = false) {
-        if (text.isEmpty()) return
-        (if (isReasoning) reasoningBuffer else streamingBuffer).append(text)
-        if (streamingFlushJob?.isActive == true) return
-        streamingFlushJob = viewModelScope.launch {
-            delay(STREAM_FLUSH_INTERVAL_MS)
-            flushStreamingBuffer()
-            streamingFlushJob = null
-        }
-    }
-
-    private fun flushStreamingBuffer() {
-        if (streamingBuffer.isEmpty() && reasoningBuffer.isEmpty()) return
-        val chunk = streamingBuffer.toString()
-        streamingBuffer.setLength(0)
-        val reasoningChunk = reasoningBuffer.toString()
-        reasoningBuffer.setLength(0)
-        val targetId = activeAssistantMessageId
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateFirst({ msg ->
-                msg is ChatMessage.Assistant && msg.isStreaming &&
-                    (targetId == null || msg.id == targetId)
-            }) { msg ->
-                (msg as ChatMessage.Assistant).copy(
-                    text = msg.text + chunk,
-                    reasoning = if (reasoningChunk.isEmpty()) msg.reasoning
-                        else (msg.reasoning ?: "") + reasoningChunk,
-                )
-            }
-        ) }
-    }
-
-    private fun resetStreamingBuffer() {
-        streamingFlushJob?.cancel()
-        streamingFlushJob = null
-        streamingBuffer.setLength(0)
-        reasoningBuffer.setLength(0)
-    }
-
-    /**
-     * Finalize any assistant message left in `isStreaming=true` state.
-     *
-     * Called when the WebSocket disconnects mid-stream. Without this, the
-     * spinner would spin forever and the user couldn't tell the message was
-     * incomplete. We:
-     *   1. Flush any buffered deltas to the message text (don't lose partial output)
-     *   2. Mark the message as `isStreaming = false`
-     *   3. Append a small marker so the user sees the turn was interrupted
-     *   4. Clear `activeAssistantMessageId` so a fresh MessageStart doesn't
-     *      accidentally target this orphaned message
-     *   5. Reset `isSending` so the input bar is interactive again
-     *
-     * Fix for F-A5: orphaned streaming message on disconnect.
-     */
-    private fun finalizeOrphanedStreamingMessage(marker: String) {
-        // Flush any buffered text first so the user sees what was streamed
-        // before the disconnect.
-        flushStreamingBuffer()
-
-        val orphanedId = activeAssistantMessageId ?: return
-        var found = false
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateFirst({ msg ->
-                msg is ChatMessage.Assistant && msg.isStreaming && msg.id == orphanedId
-            }) { msg ->
-                found = true
-                (msg as ChatMessage.Assistant).copy(
-                    isStreaming = false,
-                    text = if (msg.text.isBlank()) marker else "${msg.text}\n\n$marker",
-                )
-            },
-            isSending = false,
-        ) }
-        if (found) {
-            Timber.w("[Chat] Finalized orphaned streaming message $orphanedId with marker: $marker")
-        }
-        activeAssistantMessageId = null
-        resetStreamingBuffer()
-    }
-
-    // ── Drawer: search / sort / pin / rename / delete ─────────────────────
-
-    fun updateDrawerSearch(query: String) {
-        _uiState.update { it.copy(drawerSearchQuery = query) }
-    }
-
-    fun toggleDrawerSort() {
-        _uiState.update { it.copy(drawerSortNewest = !_uiState.value.drawerSortNewest) }
-    }
-
-    fun drawerTogglePin(sessionId: String) {
-        val pins = _uiState.value.drawerPinnedIds
-        _uiState.update { it.copy(
-            drawerPinnedIds = if (sessionId in pins) pins - sessionId else pins + sessionId,
-        ) }
-    }
-
-    fun drawerShowRename(sessionId: String, currentTitle: String) {
-        _uiState.update { it.copy(
-            drawerRenameTarget = DrawerRenameState(sessionId, currentTitle),
-        ) }
-    }
-
-    fun drawerUpdateRenameText(text: String) {
-        _uiState.update { it.copy(
-            drawerRenameTarget = _uiState.value.drawerRenameTarget?.copy(inputText = text),
-        ) }
-    }
-
-    fun drawerHideRename() {
-        _uiState.update { it.copy(drawerRenameTarget = null) }
-    }
-
-    fun drawerConfirmRename() {
-        val target = _uiState.value.drawerRenameTarget ?: return
-        val newTitle = target.inputText.trim().ifEmpty { return }
-        _uiState.update { it.copy(drawerRenameTarget = null) }
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject {
-                    put("session_id", target.sessionId)
-                    put("title", newTitle)
-                }
-                gatewayClient.request(GatewayMethods.SESSION_TITLE, jsonToElementMap(params))
-                Timber.i("[Chat] Renamed ${target.sessionId} → $newTitle")
-                loadSessionList()
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Rename failed")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Rename failed: ${e.message}")) }
-            }
-        }
-    }
-
-    fun drawerShowDelete(sessionId: String) {
-        _uiState.update { it.copy(drawerDeleteTarget = sessionId) }
-    }
-
-    fun drawerHideDelete() {
-        _uiState.update { it.copy(drawerDeleteTarget = null) }
-    }
-
-    fun drawerConfirmDelete() {
-        val sessionId = _uiState.value.drawerDeleteTarget ?: return
-        _uiState.update { it.copy(drawerDeleteTarget = null) }
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(GatewayMethods.SESSION_DELETE, jsonToElementMap(params))
-                Timber.i("[Chat] Deleted $sessionId")
-                if (_uiState.value.activeSessionId == sessionId) {
-                    _uiState.update { it.copy(
-                        activeSessionId = null,
-                        messages = emptyList(),
-                    ) }
-                    createSession()
-                }
-                loadSessionList()
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Delete failed")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Delete failed: ${e.message}")) }
-            }
-        }
-    }
-
-    // ── UI actions ────────────────────────────────────────────────────────
-
-    fun toggleSessionDrawer() {
-        val opening = !_uiState.value.showSessionDrawer
-        _uiState.update { it.copy(showSessionDrawer = opening) }
-        if (opening) loadSessionList()
-    }
-
-    fun closeSessionDrawer() {
-        _uiState.update { it.copy(showSessionDrawer = false) }
-    }
-
-    fun newConversation() {
-        viewModelScope.launch {
-            activeAssistantMessageId = null
-            resetStreamingBuffer()
-            _uiState.update { it.copy(
-                messages = emptyList(),
-                showSessionDrawer = false,
-                activeSessionId = null,
-                activeTodos = emptyList(),
-                pendingApproval = null,
-            ) }
-            createSession()
-        }
-    }
-
-    fun clearErrorEvent() {
-        _uiState.update { it.copy(errorEvent = null) }
-    }
-
-    // ── Interactive responds ──────────────────────────────────────────────
-
-    /**
-     * Answer the pending tool-approval request (the modal sheet). [choice]
-     * uses the canonical upstream values: "once" | "always" | "deny"
-     * (see `tools/approval.py` — same contract as the notification buttons
-     * in ApprovalActionReceiver). approval.respond is per-session: the
-     * gateway holds a single pending approval, so no request_id is sent.
-     */
-    fun respondToApproval(choice: String) {
-        val pending = _uiState.value.pendingApproval ?: return
-        _uiState.update { it.copy(pendingApproval = null) }
-        // The notification mirrors the same request — dismiss it so the user
-        // can't answer twice.
-        approvalNotificationManager.cancelApproval(pending.requestId)
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.APPROVAL_RESPOND,
-                    params = buildJsonObject {
-                        pending.sessionId?.let { sid -> put("session_id", sid) }
-                        put("choice", choice)
-                        put("all", false)
-                    },
-                )
-                Timber.i("[Chat] Approval response sent: $choice")
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to approval")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
-        }
-    }
-
-    fun respondToClarify(requestId: String, answer: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.CLARIFY_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("answer", answer)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to clarify")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
-        }
-    }
-
-    fun respondToSudo(requestId: String, password: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.SUDO_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("password", password)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to sudo")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
-        }
-    }
-
-    fun respondToSecret(requestId: String, value: String) {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.SECRET_RESPOND,
-                    params = buildJsonObject {
-                        put("request_id", requestId)
-                        put("value", value)
-                    },
-                )
-                markAnswered(requestId)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Failed to respond to secret")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
-            }
-        }
-    }
-
-    private fun markAnswered(requestId: String) {
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateFirst({ msg ->
-                msg is ChatMessage.InteractiveRequest && msg.requestId == requestId
-            }) { msg ->
-                (msg as ChatMessage.InteractiveRequest).copy(answered = true)
-            }
-        ) }
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    private fun jsonToElementMap(obj: kotlinx.serialization.json.JsonObject):
-        Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
+    private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 
     private fun List<GatewayEvent.TodoItem>.toUiTodos(): List<TodoItemUi> =
         map { todo ->
@@ -1860,60 +1372,23 @@ class ChatViewModel @Inject constructor(
             )
         }
 
-    private companion object {
-        private const val STREAM_FLUSH_INTERVAL_MS = 80L
+    companion object {
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
+        private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
+        /** Below this, the gateway was already up and we only re-dialled. */
+        private const val MIN_BOOT_SAMPLE_MS = 1_500L
+        /** Above this, something stalled; averaging it in would poison the estimate. */
+        private const val MAX_BOOT_SAMPLE_MS = 180_000L
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
-        private const val KEY_ASSISTANT_AVATAR = "assistant_avatar_path"
-    }
-
-    /**
-     * Replace a single item in a list by index — O(1) replacement,
-     * O(n) copy (unavoidable with immutable lists), but avoids the
-     * O(n) predicate scan of [List.map] when the target index is known.
-     */
-    private inline fun <T> List<T>.updateAt(index: Int, transform: (T) -> T): List<T> {
-        val mutable = toMutableList()
-        mutable[index] = transform(mutable[index])
-        return mutable.toList()
-    }
-
-    /**
-     * Find the first item matching [predicate] and replace it — O(n) scan
-     * once + O(1) copy at the found index. Returns the same list if no
-     * match is found (avoids a new allocation).
-     */
-    private inline fun <T> List<T>.updateFirst(predicate: (T) -> Boolean, transform: (T) -> T): List<T> {
-        val idx = indexOfFirst(predicate)
-        if (idx == -1) return this
-        return updateAt(idx, transform)
-    }
-
-    /**
-     * Replace EVERY item matching [predicate] — for cleanup passes where any
-     * number of items can be in the target state (e.g. several tool calls
-     * running in parallel when the turn ends). Returns the same list when
-     * nothing matches.
-     */
-    private inline fun <T> List<T>.updateAll(predicate: (T) -> Boolean, transform: (T) -> T): List<T> {
-        if (none(predicate)) return this
-        return map { if (predicate(it)) transform(it) else it }
+        private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
     }
 
     override fun onCleared() {
         super.onCleared()
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()
-        resetStreamingBuffer()
-        // Feature #23: Save draft when ViewModel is cleared
+        streamingDelegate.reset()
         saveDraft()
-        // Note: we intentionally do NOT call gatewayClient.disconnect() here.
-        // GatewayClient is a process-scoped @Singleton (GatewayModule.kt:31)
-        // shared with HermesGatewayService (foreground service) and other
-        // ViewModels. The ViewModel should not tear down a connection it
-        // doesn't own. The previous `viewModelScope.launch { disconnect() }`
-        // call here was also dead code: viewModelScope is already cancelled
-        // by the time onCleared() runs, so the coroutine never executed.
     }
 }
