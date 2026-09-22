@@ -233,8 +233,8 @@ fun RuntimeSetupScreen(
                 Text(
                     text = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
                         t(
-                            "Alpine Linux runs inside this app — no Termux needed",
-                            "لینوکس Alpine داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس",
+                            "Linux runs inside this app — no Termux needed",
+                            "لینوکس داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس",
                         )
                     } else {
                         "Termux & Hermes Agent Gateway Connection"

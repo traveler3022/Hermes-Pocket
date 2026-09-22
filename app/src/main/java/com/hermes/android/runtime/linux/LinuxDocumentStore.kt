@@ -21,7 +21,7 @@ internal class LinuxDocumentStore(private val rootfs: File) {
             Files.isRegularFile(File(rootfs, ProotEnvironment.READY_MARKER).toPath(), NOFOLLOW_LINKS)
 
     fun document(documentId: String): LinuxDocument {
-        if (!isAvailable) throw FileNotFoundException("Alpine is not installed.")
+        if (!isAvailable) throw FileNotFoundException("Linux is not installed.")
         val guestPath = guestPath(documentId)
         val entry = resolve(guestPath, followLastLink = false)
         val symbolicLink = Files.isSymbolicLink(entry.file.toPath())
@@ -46,18 +46,18 @@ internal class LinuxDocumentStore(private val rootfs: File) {
     }
 
     fun directory(documentId: String): LinuxDocument = document(documentId).also {
-        if (!it.isDirectory) throw FileNotFoundException("Not an Alpine directory.")
+        if (!it.isDirectory) throw FileNotFoundException("Not an Linux directory.")
     }
 
     fun contentFile(documentId: String): File = document(documentId).let {
-        if (!it.isRegularFile) throw FileNotFoundException("Not a regular Alpine file.")
+        if (!it.isRegularFile) throw FileNotFoundException("Not a regular Linux file.")
         it.target!!
     }
 
     fun children(documentId: String): List<LinuxDocument> {
         val parent = directory(documentId)
         val names = parent.target!!.list()?.toMutableSet()
-            ?: throw FileNotFoundException("Unable to list the Alpine directory.")
+            ?: throw FileNotFoundException("Unable to list the Linux directory.")
         if (parent.targetPath == "/") names.removeAll(HostMounts)
         return names.mapNotNull { name ->
             try {
@@ -144,7 +144,7 @@ internal class LinuxDocumentStore(private val rootfs: File) {
     }
 
     private fun mutableDocument(documentId: String): LinuxDocument = document(documentId).also {
-        if (it.isProtected) throw FileNotFoundException("Cannot rename or delete an Alpine mount root.")
+        if (it.isProtected) throw FileNotFoundException("Cannot rename or delete an Linux mount root.")
     }
 
     /** Resolve links in the guest namespace, not relative to the Android filesystem root. */
@@ -175,10 +175,10 @@ internal class LinuxDocumentStore(private val rootfs: File) {
                 target.split('/').filter(String::isNotEmpty).asReversed().forEach(pending::addFirst)
             } else {
                 if (!Files.exists(file.toPath(), NOFOLLOW_LINKS) && !(allowMissingLeaf && pending.isEmpty())) {
-                    throw FileNotFoundException("Alpine document does not exist.")
+                    throw FileNotFoundException("Linux document does not exist.")
                 }
                 if (pending.isNotEmpty() && !Files.isDirectory(file.toPath(), NOFOLLOW_LINKS)) {
-                    throw FileNotFoundException("Not an Alpine directory.")
+                    throw FileNotFoundException("Not an Linux directory.")
                 }
             }
         }
@@ -202,11 +202,11 @@ internal class LinuxDocumentStore(private val rootfs: File) {
 
         fun guestPath(documentId: String): String {
             if (!documentId.startsWith(RootDocumentId) || '\u0000' in documentId) {
-                throw FileNotFoundException("Invalid Alpine document ID.")
+                throw FileNotFoundException("Invalid Linux document ID.")
             }
             val path = documentId.removePrefix("linux:")
             if (path != "/" && path.removePrefix("/").split('/').any { it.isEmpty() || it == "." || it == ".." }) {
-                throw FileNotFoundException("Invalid Alpine document path.")
+                throw FileNotFoundException("Invalid Linux document path.")
             }
             return path
         }
@@ -244,7 +244,7 @@ internal data class LinuxDocument(
     val targetPath: String?,
     val isSymbolicLink: Boolean,
 ) {
-    val displayName: String get() = if (guestPath == "/") "Alpine" else guestPath.substringAfterLast('/')
+    val displayName: String get() = if (guestPath == "/") "Linux" else guestPath.substringAfterLast('/')
     val isDirectory: Boolean get() = target?.isDirectory == true
     val isRegularFile: Boolean get() = target?.isFile == true
     val isProtected: Boolean get() = entryPath == "/"

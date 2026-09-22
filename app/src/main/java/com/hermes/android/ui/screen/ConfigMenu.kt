@@ -157,7 +157,7 @@ internal fun SettingsMenu(
                 onClick = { onOpen(SettingsSection.TOOLS) },
             ),
             DomainSpec(
-                title = t("Linux (Alpine)", "لینوکس (Alpine)"),
+                title = t("Linux", "لینوکس"),
                 subtitle = t("Terminal, files, packages", "ترمینال، فایل‌ها، بسته‌ها"),
                 icon = Icons.Default.Terminal,
                 onClick = onNavigateToLinux,

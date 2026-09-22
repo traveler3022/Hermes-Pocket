@@ -74,7 +74,7 @@ fun LinuxToolsScreen(
     }
 
     HermesScaffold(
-        title = t("Linux (Alpine)", "لینوکس (Alpine)"),
+        title = t("Linux", "لینوکس"),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
         actions = {
@@ -106,14 +106,14 @@ fun LinuxToolsScreen(
             SettingsGroup {
                 SettingRow(
                     title = t("Terminal", "ترمینال"),
-                    subtitle = t("Shell inside Alpine", "شل داخل Alpine"),
+                    subtitle = t("Shell inside the built-in Linux", "شل داخل لینوکس داخلی"),
                     icon = Icons.Default.Terminal,
                     onClick = onOpenTerminal,
                 )
                 GroupDivider()
                 SettingRow(
                     title = t("Files", "فایل‌ها"),
-                    subtitle = t("Browse Alpine in Android's Files app", "مرور فایل‌های Alpine در برنامهٔ Files اندروید"),
+                    subtitle = t("Browse Linux files in Android's Files app", "مرور فایل‌های لینوکس در برنامهٔ Files اندروید"),
                     icon = Icons.Default.Folder,
                     onClick = { if (!openFiles(context)) viewModel.showMessage(filesUnavailable) },
                 )

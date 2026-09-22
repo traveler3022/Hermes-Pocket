@@ -23,7 +23,7 @@ class RootfsInstaller @Inject constructor(
 
     suspend fun install(onProgress: (String) -> Unit) = withContext(Dispatchers.IO) {
         environment.baseDir.mkdirs()
-        onProgress("Extracting Alpine Linux…")
+        onProgress("Preparing the built-in Linux…")
         val staging = File(environment.baseDir, "rootfs.staging")
         deleteTree(staging)
         staging.mkdirs()
@@ -39,13 +39,13 @@ class RootfsInstaller @Inject constructor(
             assetExists(plain) -> context.assets.open(plain).use { asset ->
                 extractTar(asset.buffered(64 * 1024), staging)
             }
-            else -> throw IOException("Alpine rootfs is missing from this build ($compressed or $plain)")
+            else -> throw IOException("Linux system image is missing from this build ($compressed or $plain)")
         }
         configure(staging)
         deleteTree(environment.rootfsDir)
         if (!staging.renameTo(environment.rootfsDir)) throw IOException("Could not move rootfs into place")
         environment.markRootfsReady()
-        onProgress("Alpine Linux is ready")
+        onProgress("Built-in Linux is ready")
     }
 
     private fun assetExists(path: String): Boolean =

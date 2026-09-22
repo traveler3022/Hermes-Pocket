@@ -73,7 +73,7 @@ fun LinuxTerminalScreen(
     var errorMessage by remember { mutableStateOf("") }
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
     var terminalSession by remember { mutableStateOf<TerminalSession?>(null) }
-    var title by remember { mutableStateOf("Alpine") }
+    var title by remember { mutableStateOf("Linux") }
     var controlDown by remember { mutableStateOf(false) }
     var altDown by remember { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -94,7 +94,7 @@ fun LinuxTerminalScreen(
     LaunchedEffect(Unit) {
         createLaunchSpec().fold(
             onSuccess = { launchSpec = it },
-            onFailure = { errorMessage = it.message ?: "Unable to start the Alpine terminal." },
+            onFailure = { errorMessage = it.message ?: "Unable to start the terminal." },
         )
     }
 
@@ -143,7 +143,7 @@ fun LinuxTerminalScreen(
                             SessionClient(
                                 context = viewContext,
                                 invalidate = { view.onScreenUpdated() },
-                                updateTitle = { title = it.ifBlank { "Alpine" } },
+                                updateTitle = { title = it.ifBlank { "Linux" } },
                             ),
                         )
                         view.setTerminalViewClient(ViewClient(view))

@@ -215,8 +215,8 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     Text(
         if (choice == RuntimeChoiceUi.BuiltInLinux) {
             t(
-                "Recommended. A small Alpine Linux runs inside this app — nothing else to install.",
-                "پیشنهادی. یک لینوکس Alpine کوچک داخل همین اپ اجرا می‌شود — نیازی به نصب چیز دیگری نیست.",
+                "Recommended. A small Linux runs inside this app — nothing else to install.",
+                "پیشنهادی. یک لینوکس کوچک داخل همین اپ اجرا می‌شود — نیازی به نصب چیز دیگری نیست.",
             )
         } else {
             t(

@@ -60,9 +60,9 @@ internal fun BuiltInLinuxDetectedContent(
             )
             Text(
                 t(
-                    "Alpine Linux is built into the app; Hermes Agent and its Python packages " +
+                    "Linux is built into the app; Hermes Agent and its Python packages " +
                         "are downloaded into it. Needs about 1 GB free and a stable connection.",
-                    "لینوکس Alpine داخل خود اپ است؛ Hermes Agent و پکیج‌های پایتونش داخل آن دانلود می‌شوند. " +
+                    "لینوکس داخل خود اپ است؛ Hermes Agent و پکیج‌های پایتونش داخل آن دانلود می‌شوند. " +
                         "حدود ۱ گیگابایت فضای خالی و اینترنت پایدار لازم است.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,

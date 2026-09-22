@@ -72,7 +72,7 @@ class ProotEnvironment @Inject constructor(
         val shellEnv = mapOf(
             "HERMES_HOME" to "/root/.hermes",
             "COLORTERM" to "truecolor",
-            "PS1" to "alpine:\\w# ",
+            "PS1" to "hermes:\\w# ",
         )
         val args = prootArgs(listOf("/bin/sh", "-i"), shellEnv)
         // The emulator replaces the whole environment, so the host side needs PATH too.

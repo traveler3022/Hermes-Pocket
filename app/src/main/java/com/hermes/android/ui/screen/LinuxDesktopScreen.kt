@@ -311,7 +311,7 @@ private fun StatusCard(
             subtitle = when {
                 state is LinuxDesktop.State.Error -> state.message.lines().first()
                 restartPending -> t("Restart to apply the new settings", "برای اعمال تنظیمات جدید، دوباره روشن کنید")
-                else -> t("Chromium on a VNC display inside Alpine", "Chromium روی یک نمایشگر VNC داخل Alpine")
+                else -> t("Chromium on a VNC display inside the built-in Linux", "Chromium روی یک نمایشگر VNC داخل لینوکس داخلی")
             },
             icon = Icons.Default.DesktopWindows,
             trailing = {

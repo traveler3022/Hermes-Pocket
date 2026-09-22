@@ -45,7 +45,7 @@ class LinuxDocumentsProvider : DocumentsProvider() {
                     Root.COLUMN_ROOT_ID to LinuxDocumentStore.RootId,
                     Root.COLUMN_DOCUMENT_ID to root.documentId,
                     Root.COLUMN_TITLE to application.loadLabel(context!!.packageManager).toString(),
-                    Root.COLUMN_SUMMARY to "Alpine",
+                    Root.COLUMN_SUMMARY to "Linux",
                     Root.COLUMN_ICON to application.icon,
                     Root.COLUMN_FLAGS to (Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_IS_CHILD),
                     Root.COLUMN_MIME_TYPES to "*/*",
@@ -237,7 +237,7 @@ class LinuxDocumentsProvider : DocumentsProvider() {
     } catch (error: FileNotFoundException) {
         throw error
     } catch (error: IOException) {
-        throw FileNotFoundException("Unable to access the Alpine document.").apply { initCause(error) }
+        throw FileNotFoundException("Unable to access the Linux document.").apply { initCause(error) }
     }
 
     companion object {

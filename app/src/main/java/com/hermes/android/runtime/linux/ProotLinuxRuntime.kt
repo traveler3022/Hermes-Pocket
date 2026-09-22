@@ -119,7 +119,7 @@ class ProotLinuxRuntime @Inject constructor(
         if (free < MIN_FREE_BYTES) {
             return PrerequisiteResult.Blocked(
                 title = "Not enough storage",
-                instructions = "Installing Alpine + Hermes needs about ${MIN_FREE_BYTES / 1_000_000_000} GB free; " +
+                instructions = "Installing Hermes needs about ${MIN_FREE_BYTES / 1_000_000_000} GB free; " +
                     "only ${free / 1_000_000} MB is available.",
             )
         }
@@ -346,7 +346,7 @@ class ProotLinuxRuntime @Inject constructor(
 
     private fun currentInfo() = RuntimeInfo(
         type = RuntimeType.PROOT_LINUX,
-        version = "Alpine 3.23 (proot)",
+        version = "Built-in Linux",
         path = environment.rootfsDir.absolutePath,
         diskFreeBytes = freeBytes(),
         hermesVersion = prefs.getString(KEY_VERSION, null),
