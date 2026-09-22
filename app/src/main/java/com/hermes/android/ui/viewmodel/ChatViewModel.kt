@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
+import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.service.ApprovalNotificationManager
@@ -331,7 +332,12 @@ class ChatViewModel @Inject constructor(
         resumeJob?.cancel()
         resumeJob = viewModelScope.launch {
             streamingDelegate.reset()
-            val opened = sessionDelegate.resume(_uiState, sessionId)
+            val running = sessionDelegate.resume(_uiState, sessionId)
+            val opened = running != null
+            // Joined mid-turn: its start went by before this chat was open, so
+            // the reply is fetched once the turn ends. An idle chat drops the
+            // flag the previous chat may have left behind.
+            if (opened) recoverOnTurnEnd = running == true
             // Keep asking on the next connect only when the gateway was not
             // reachable; a refusal from the server will not change on retry.
             if ((opened || gatewayClient.connectionState.value is ConnectionState.Connected) &&
@@ -925,15 +931,20 @@ class ChatViewModel @Inject constructor(
         // boundaries push immediately and the live preview is rate-limited.
         val publishNow = when (event) {
             is GatewayEvent.SessionInfo -> {
+                val settled = GatewayEventHelpers.isSettledSessionInfo(event.info) &&
+                    backgroundSessions.onSettled(sid, isActive = sid == activeSid)
                 val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
                 if (!stored.isNullOrBlank() && sid == activeSid) {
                     _uiState.update {
                         if (it.activeSessionId == sid && it.activeSessionKey == null) it.copy(activeSessionKey = stored) else it
                     }
                 }
-                if (stored.isNullOrBlank() || storedIdByLiveId[sid] == stored) return
-                storedIdByLiveId[sid] = stored
-                true
+                if (!stored.isNullOrBlank() && storedIdByLiveId[sid] != stored) {
+                    storedIdByLiveId[sid] = stored
+                    true
+                } else {
+                    settled
+                }
             }
             is GatewayEvent.MessageStart -> {
                 backgroundSessions.onTurnStart(sid); true
@@ -1349,6 +1360,20 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.SessionInfo -> {
+                // Busy only on a snapshot's word, and the turn's message.complete
+                // never reached this chat (it went out before the snapshot was
+                // answered, or while the socket was down): this frame, sent after
+                // the server cleared `running`, is the turn end. Settle it the
+                // way message.complete would, from the stored transcript.
+                if (recoverOnTurnEnd && eventSid != null && eventSid == activeSid &&
+                    GatewayEventHelpers.isSettledSessionInfo(event.info)
+                ) {
+                    Timber.i("[Turn] settled session=$eventSid without a message.complete; refetching")
+                    recoverOnTurnEnd = false
+                    sessionDelegate.onTurnEnded()
+                    _uiState.update { it.copy(isSending = false) }
+                    viewModelScope.launch { recoverActiveSession(eventSid, turnEnded = true) }
+                }
                 (event.info["reasoning_effort"] as? JsonPrimitive)?.content
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }

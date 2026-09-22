@@ -3,6 +3,7 @@ package com.hermes.android.gateway
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -22,6 +23,15 @@ internal object GatewayEventHelpers {
     fun isBusySessionStatus(status: String): Boolean = status in BUSY_SESSION_STATUSES
 
     private val BUSY_SESSION_STATUSES = setOf("working", "waiting", "streaming", "running")
+
+    /**
+     * Whether a `session.info` payload says the session is not running. The
+     * gateway sends one right after it clears `running` at the end of a turn,
+     * which is later than message.complete, so it is the first frame that
+     * proves a turn is over to a client that missed or outran the completion.
+     */
+    fun isSettledSessionInfo(info: Map<String, JsonElement>): Boolean =
+        (info["running"] as? JsonPrimitive)?.content == "false"
 
     fun parseSkinMap(element: JsonElement): Map<String, String> {
         return try {

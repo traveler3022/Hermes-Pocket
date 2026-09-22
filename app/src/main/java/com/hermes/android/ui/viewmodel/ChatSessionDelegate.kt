@@ -71,12 +71,16 @@ internal class ChatSessionDelegate(
         }
     }
 
-    /** Returns whether [sessionId] is now the open chat. */
-    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean {
+    /**
+     * Returns null when [sessionId] could not be opened, otherwise whether a
+     * turn is still running in it.
+     */
+    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean? {
         try {
             val attached = sessionRepository.attach(sessionId)
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
+            val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
             state.update { it.copy(
                 activeSessionId = liveSessionId,
                 // A drawer row hands over the stored id itself; a live id
@@ -88,10 +92,10 @@ internal class ChatSessionDelegate(
                 sessionLoadedAt = System.currentTimeMillis(),
                 activeTodos = emptyList(),
                 pendingApproval = null,
-                // isSending tracks the turn of the session we just left. Leaving
-                // it set makes the input bar of the session we switched TO show
-                // a stop button instead of send, so the chat looks unusable.
-                isSending = false,
+                // isSending is this chat's own turn, not the one of the chat we
+                // just left: a busy chat (opened from its "working"
+                // notification, say) shows the stop button, an idle one send.
+                isSending = running,
             ) }
             loadReasoningLevel()
             // Questions the agent is still blocked on come back with the resume.
@@ -103,13 +107,13 @@ internal class ChatSessionDelegate(
                 Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
                 loadHistory(state, liveSessionId)
             }
-            return true
+            return running
         } catch (e: Exception) {
             // Superseded by another resume: not a failure to show.
             if (e is CancellationException) throw e
             Timber.e(e, "[Chat] Failed to resume session")
             state.update { it.copy(errorEvent = ErrorEvent.Error("Failed to resume: ${e.message}")) }
-            return false
+            return null
         }
     }
 

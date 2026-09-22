@@ -120,6 +120,8 @@ android {
         jvmArgs("-Xmx2g", "-XX:MaxMetaspaceSize=512m")
         // Robolectric needs this to find its resources
         systemProperty("robolectric.logging.enabled", "false")
+        // One line per test in the CI log, so a green run shows what ran.
+        testLogging { events("passed", "skipped", "failed") }
     }
 }
 

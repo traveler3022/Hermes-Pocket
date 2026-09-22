@@ -95,4 +95,47 @@ class ChatSessionSwitchTest {
         assertEquals("notified", state.value.activeSessionId)
         assertNull(state.value.errorEvent)
     }
+
+    private fun resumed(running: Boolean) = buildJsonObject {
+        put("session_id", "live-2")
+        put("running", running)
+        put("messages", buildJsonArray {
+            add(buildJsonObject { put("id", "u1"); put("role", "user"); put("content", "hi") })
+        })
+    }
+
+    @Test
+    fun `opening a chat mid-turn shows it busy and reports the turn`() = runTest {
+        val sessions = ChatSessionDelegate(gateway, SessionRepository(gateway, NoTasks), this) {}
+        gateway.handler = { resumed(running = true) }
+        val state = MutableStateFlow(ChatUiState(activeSessionId = "live-1", isSending = false))
+
+        val running = sessions.resume(state, "stored-2")
+
+        assertEquals(true, running)
+        assertEquals("live-2", state.value.activeSessionId)
+        assertEquals(true, state.value.isSending)
+    }
+
+    @Test
+    fun `opening an idle chat from a busy one leaves the busy state behind`() = runTest {
+        val sessions = ChatSessionDelegate(gateway, SessionRepository(gateway, NoTasks), this) {}
+        gateway.handler = { resumed(running = false) }
+        val state = MutableStateFlow(ChatUiState(activeSessionId = "live-1", isSending = true))
+
+        val running = sessions.resume(state, "stored-2")
+
+        assertEquals(false, running)
+        assertEquals(false, state.value.isSending)
+    }
+
+    @Test
+    fun `a chat that cannot be opened reports no turn state`() = runTest {
+        val sessions = ChatSessionDelegate(gateway, SessionRepository(gateway, NoTasks), this) {}
+        gateway.handler = { error("gateway unreachable") }
+        val state = MutableStateFlow(ChatUiState(activeSessionId = "live-1", isSending = true))
+
+        assertNull(sessions.resume(state, "stored-2"))
+        assertEquals("live-1", state.value.activeSessionId)
+    }
 }
