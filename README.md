@@ -22,6 +22,12 @@ manages files, browses the web and runs scheduled tasks. All of it on your phone
 
 </div>
 
+<p align="center">
+  <img src="screenshots/chat.jpg" width="270" alt="Chat">
+  &nbsp;&nbsp;
+  <img src="screenshots/control-center.jpg" width="270" alt="Control Center">
+</p>
+
 ---
 
 ## 🤔 What is it?

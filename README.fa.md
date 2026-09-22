@@ -14,6 +14,12 @@
 
 </div>
 
+<p align="center">
+  <img src="screenshots/chat.jpg" width="270" alt="چت">
+  &nbsp;&nbsp;
+  <img src="screenshots/control-center.jpg" width="270" alt="میز فرمان">
+</p>
+
 <div dir="rtl">
 
 ---
