@@ -1192,14 +1192,9 @@ class ChatViewModel @Inject constructor(
                     description = event.description,
                     allowPermanent = event.allowPermanent,
                 )
-                val statusMsg = ChatMessage.Status(
-                    id = requestId,
-                    timestamp = System.currentTimeMillis(),
-                    text = "Approval needed: ${event.description}\nCommand: ${event.command}",
-                    isError = false,
-                )
+                // The approval sheet and the notification show the request. It is not added
+                // to the chat: as plain text it stayed there for good, raw command and all.
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages + statusMsg,
                     pendingApproval = PendingApprovalUi(
                         requestId = requestId,
                         sessionId = event.sessionId,

@@ -102,7 +102,7 @@ internal fun WorkspaceDrawerSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Hermes",
+                    text = t("Hermes", "هرمس"),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
