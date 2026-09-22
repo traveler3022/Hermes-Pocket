@@ -62,6 +62,26 @@ class SkillsViewModel @Inject constructor(
         }
     }
 
+    /** skills.manage search answers {"results": [{name, description}]}, not the list's category map. */
+    private fun parseSearchResults(result: kotlinx.serialization.json.JsonElement): List<SkillItem> {
+        val rows = (result as? JsonObject)?.get("results") as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+        return rows.mapNotNull { row ->
+            val name = ((row as? JsonObject)?.get("name") as? JsonPrimitive)?.content ?: return@mapNotNull null
+            SkillItem(name = name, category = "Search results")
+        }
+    }
+
+    /** skills.manage inspect nests everything under "info": description, source, SKILL.md preview. */
+    private fun inspectDetail(result: kotlinx.serialization.json.JsonElement): String? {
+        val info = (result as? JsonObject)?.get("info") as? JsonObject ?: return null
+        fun field(key: String) = (info[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+        return listOfNotNull(
+            field("description"),
+            field("source")?.let { "Source: $it" },
+            field("skill_md_preview"),
+        ).joinToString("\n\n").ifBlank { null }
+    }
+
     private fun parseSkills(result: kotlinx.serialization.json.JsonElement): List<SkillItem> {
         return try {
             // Fix S10F02: Hermes get_available_skills() returns Dict[str, List[str]]
@@ -140,7 +160,7 @@ class SkillsViewModel @Inject constructor(
                     put("query", query)
                 }
                 val result = gatewayClient.request(GatewayMethods.SKILLS_MANAGE, params.toMap())
-                val skills = parseSkills(result)
+                val skills = parseSearchResults(result)
                 _uiState.value = _uiState.value.copy(
                     skills = skills,
                     isLoading = false,
@@ -167,12 +187,9 @@ class SkillsViewModel @Inject constructor(
                     put("query", skillName)
                 }
                 val result = gatewayClient.request(GatewayMethods.SKILLS_MANAGE, params.toMap())
-                val obj = result as? JsonObject
-                val detail = (obj?.get("detail") ?: obj?.get("description") ?: obj?.get("content"))
-                    as? JsonPrimitive
                 _uiState.value = _uiState.value.copy(
                     inspectedSkillName = skillName,
-                    inspectedSkillDetail = detail?.content ?: "(no details returned)",
+                    inspectedSkillDetail = inspectDetail(result) ?: "(no details returned)",
                 )
             } catch (e: Exception) {
                 Timber.e(e, "[Skills] Inspect failed")

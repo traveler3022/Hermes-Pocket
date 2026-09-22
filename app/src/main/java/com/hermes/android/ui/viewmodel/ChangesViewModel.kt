@@ -30,6 +30,8 @@ class ChangesViewModel @Inject constructor(
         val isRestoring: Boolean = false,
         val error: String? = null,
         val lastActionMessage: String? = null,
+        /** Bumped when an undo removed turns, so the open chat reloads its transcript. */
+        val transcriptChanges: Int = 0,
     )
 
     private val _uiState = MutableStateFlow(ChangesUiState())
@@ -104,6 +106,7 @@ class ChangesViewModel @Inject constructor(
                 val removed = repository.undoLastTurn(sid)
                 _uiState.value = _uiState.value.copy(
                     lastActionMessage = if (removed > 0) "Undid last turn" else "Nothing to undo",
+                    transcriptChanges = _uiState.value.transcriptChanges + if (removed > 0) 1 else 0,
                 )
             } catch (e: Exception) {
                 Timber.e(e, "[Changes] undo failed")

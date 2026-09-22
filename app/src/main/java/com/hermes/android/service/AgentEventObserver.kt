@@ -71,6 +71,9 @@ class AgentEventObserver @Inject constructor(
      */
     private val completedUnsettled: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    /** Live id → stored transcript id, from session.info; the task worker keys tasks by the stored id. */
+    private val storedByLive = ConcurrentHashMap<String, String>()
+
     /** Order of turn events (start, tool, complete) and the last one seen per session. */
     private val turnEventSeq = AtomicLong()
     private val lastTurnEvent = ConcurrentHashMap<String, Long>()
@@ -131,6 +134,13 @@ class AgentEventObserver @Inject constructor(
                         event.sessionId?.let { completedUnsettled.add(it) }
                         val title = event.sessionId?.let { watched.remove(it) }
                         publishWork()
+                        // Claimed whether or not a notification goes out here: the background
+                        // task worker finds the same finished task under its stored id and would
+                        // announce it a second time (or later, for a turn watched in the app).
+                        event.sessionId?.let { liveId ->
+                            completionTracker.claim(liveId)
+                            storedByLive[liveId]?.let { completionTracker.claim(it) }
+                        }
                         if (!foregroundState.isForeground) {
                             notifier.showTurnComplete(event.sessionId, event.text, title)
                         }
@@ -149,6 +159,8 @@ class AgentEventObserver @Inject constructor(
                         }
                     }
                     is GatewayEvent.SessionInfo -> {
+                        val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
+                        if (!stored.isNullOrBlank()) event.sessionId?.let { storedByLive[it] = stored }
                         // Sent right after the server clears `running` at the end of a turn.
                         if ((event.info["running"] as? JsonPrimitive)?.content == "false") {
                             event.sessionId?.let { completedUnsettled.remove(it) }

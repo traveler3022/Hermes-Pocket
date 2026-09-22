@@ -998,6 +998,7 @@ fun ChatScreen(
                 sessionId = sid,
                 snackbarHostState = snackbarHostState,
                 onDismiss = { showChanges = false },
+                onTranscriptChanged = viewModel::reloadTranscript,
             )
         }
     }

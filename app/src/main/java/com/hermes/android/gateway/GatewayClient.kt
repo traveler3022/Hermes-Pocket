@@ -78,6 +78,9 @@ interface GatewayClient {
     /** Re-emit a resume payload's `open_requests`, so questions still waiting survive a reconnect. */
     fun redeliverServerRequests(requests: kotlinx.serialization.json.JsonArray) {}
 
+    /** Drop the remembered URL so nothing redials it (dial-on-demand, network callback, retry loop). */
+    fun forgetEndpoint() = Unit
+
     /**
      * Send an RPC request and await the response.
      *

@@ -48,6 +48,9 @@ class ApprovalActionReceiver : BroadcastReceiver() {
 
         approvalNotificationManager.cancelApproval(requestId)
 
+        // Keeps the process alive until the answer is sent: a tap from the shade can
+        // arrive with the app otherwise idle, and onReceive returning frees it to die.
+        val pending = goAsync()
         scope.launch {
             try {
                 val params = buildJsonObject {
@@ -57,10 +60,12 @@ class ApprovalActionReceiver : BroadcastReceiver() {
                     put("choice", choice)
                     put("all", false)
                 }
-                gatewayClient.request(GatewayMethods.APPROVAL_RESPOND, params.toMap())
+                gatewayClient.request(GatewayMethods.APPROVAL_RESPOND, params.toMap(), timeoutMs = 9_000)
                 Timber.i("[Approval] Response sent: choice=$choice")
             } catch (e: Exception) {
                 Timber.e(e, "[Approval] Failed to send response")
+            } finally {
+                pending.finish()
             }
         }
     }

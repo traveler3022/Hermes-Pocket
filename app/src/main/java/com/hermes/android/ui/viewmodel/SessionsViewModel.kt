@@ -1,5 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
+import com.hermes.android.data.deleteStoredSession
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -266,12 +267,12 @@ class SessionsViewModel @Inject constructor(
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(GatewayMethods.SESSION_DELETE, params.toMap())
+                gatewayClient.deleteStoredSession(sessionId)
                 Timber.i("[Sessions] Deleted: $sessionId")
                 loadSessions()
             } catch (e: Exception) {
                 Timber.e(e, "[Sessions] Delete failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Delete failed: ${e.message}")
             }
         }
     }

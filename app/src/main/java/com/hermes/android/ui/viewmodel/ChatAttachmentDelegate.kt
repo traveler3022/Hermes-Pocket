@@ -42,21 +42,25 @@ internal class ChatAttachmentDelegate(
                 } ?: uri.lastPathSegment ?: "attachment"
                 val mime = resolver.getType(uri) ?: "application/octet-stream"
 
-                val b64 = StringBuilder()
+                // One continuous encoder: encoding each read separately put "=" padding
+                // mid-string whenever a read was not a multiple of 3 bytes, corrupting the file.
+                val encoded = java.io.ByteArrayOutputStream()
                 var totalSize = 0
                 resolver.openInputStream(uri)?.use { stream ->
-                    val buffer = ByteArray(attachChunkSize)
-                    while (true) {
-                        val read = stream.read(buffer)
-                        if (read <= 0) break
-                        totalSize += read
-                        if (totalSize > maxAttachBytes) {
-                            throw IllegalStateException("File too large (max 25 MB)")
+                    android.util.Base64OutputStream(encoded, Base64.NO_WRAP).use { encoder ->
+                        val buffer = ByteArray(attachChunkSize)
+                        while (true) {
+                            val read = stream.read(buffer)
+                            if (read <= 0) break
+                            totalSize += read
+                            if (totalSize > maxAttachBytes) {
+                                throw IllegalStateException("File too large (max 25 MB)")
+                            }
+                            encoder.write(buffer, 0, read)
                         }
-                        val chunk = if (read == buffer.size) buffer else buffer.copyOf(read)
-                        b64.append(Base64.encodeToString(chunk, Base64.NO_WRAP))
                     }
                 } ?: throw IllegalStateException("Cannot read file")
+                val b64 = encoded.toString(Charsets.US_ASCII.name())
 
                 if (totalSize == 0) {
                     throw IllegalStateException("File is empty")

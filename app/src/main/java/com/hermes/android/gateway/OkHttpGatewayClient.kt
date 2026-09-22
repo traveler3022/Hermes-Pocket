@@ -285,6 +285,10 @@ class OkHttpGatewayClient @Inject constructor(
         }
     }
 
+    override fun forgetEndpoint() {
+        synchronized(this) { currentUrl = null }
+    }
+
     override suspend fun disconnect() {
         val ws = synchronized(this) {
             reconnectJob?.cancel()
@@ -904,7 +908,8 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["tool_id"]?.jsonPrimitive?.content ?: "",
                 p["name"]?.jsonPrimitive?.content,
-                p["args_text"].asText(),
+                // args_text only comes on verbose sessions; every other session sends the raw args.
+                (p["args_text"] ?: p["args"]).asText(),
                 p["context"].asText(),
                 todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )

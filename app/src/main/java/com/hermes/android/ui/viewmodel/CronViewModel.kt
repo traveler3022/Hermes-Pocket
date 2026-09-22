@@ -45,7 +45,8 @@ class CronViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val params = buildJsonObject { put("action", "list") }
+                // Paused jobs are left out unless asked for; a toggle would read as deletion.
+                val params = buildJsonObject { put("action", "list"); put("include_disabled", true) }
                 val result = gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap())
                 val jobs = parseJobs(result)
                 _uiState.value = _uiState.value.copy(
@@ -97,7 +98,7 @@ class CronViewModel @Inject constructor(
                     put("schedule", schedule)
                     put("prompt", prompt)
                 }
-                gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap())
+                addJob(name, schedule, prompt)
                 Timber.i("[Cron] Job created: $name")
                 _uiState.value = _uiState.value.copy(showCreateDialog = false)
                 loadJobs()
@@ -111,28 +112,19 @@ class CronViewModel @Inject constructor(
     }
 
     /**
-     * cron.manage only exposes list/add/remove/pause/resume — there's no
-     * update/edit verb server-side (add maps to cronjob(action="create", ...),
-     * which doesn't overwrite an existing job by name). Editing is therefore
-     * remove-then-add: delete the old job, create a new one with the edited
-     * fields. Reload happens once, after both RPCs, so the list doesn't
-     * flash empty between them.
+     * cron.manage has no update verb, so an edit is a new job plus removing the old
+     * one. The new job is created first: removing first lost the job for good whenever
+     * the edited schedule was rejected. A paused job stays paused.
      */
     fun updateJob(oldJobId: String, name: String, schedule: String, prompt: String) {
         viewModelScope.launch {
             try {
-                val removeParams = buildJsonObject {
-                    put("action", "remove")
-                    put("name", oldJobId)
+                val wasEnabled = _uiState.value.jobs.firstOrNull { it.id == oldJobId }?.enabled ?: true
+                val newJobId = addJob(name, schedule, prompt)
+                if (!wasEnabled && newJobId != null) {
+                    manage(buildJsonObject { put("action", "pause"); put("name", newJobId) })
                 }
-                gatewayClient.request(GatewayMethods.CRON_MANAGE, removeParams.toMap())
-                val addParams = buildJsonObject {
-                    put("action", "add")
-                    put("name", name)
-                    put("schedule", schedule)
-                    put("prompt", prompt)
-                }
-                gatewayClient.request(GatewayMethods.CRON_MANAGE, addParams.toMap())
+                manage(buildJsonObject { put("action", "remove"); put("name", oldJobId) })
                 Timber.i("[Cron] Job updated: $oldJobId -> $name")
                 _uiState.value = _uiState.value.copy(editingJob = null)
                 loadJobs()
@@ -141,8 +133,27 @@ class CronViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Failed to update job: ${e.message}",
                 )
+                loadJobs()
             }
         }
+    }
+
+    /** Returns the new job id. A rejected job comes back as {"error": …} inside a success reply. */
+    private suspend fun addJob(name: String, schedule: String, prompt: String): String? {
+        val result = manage(buildJsonObject {
+            put("action", "add")
+            put("name", name)
+            put("schedule", schedule)
+            put("prompt", prompt)
+        })
+        return (result["job_id"] as? JsonPrimitive)?.content
+    }
+
+    private suspend fun manage(params: JsonObject): JsonObject {
+        val result = gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap()) as? JsonObject
+            ?: throw IllegalStateException("Empty reply from cron.manage")
+        (result["error"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }?.let { throw IllegalStateException(it) }
+        return result
     }
 
     fun startEditJob(job: CronJob) {

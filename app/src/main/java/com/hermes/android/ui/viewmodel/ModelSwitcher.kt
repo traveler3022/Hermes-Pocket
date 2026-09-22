@@ -113,7 +113,14 @@ class ModelSwitcher @Inject constructor(
                     gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid))
                 }
             } else {
-                gatewayClient.request(GatewayMethods.CONFIG_SET, params(mostRecentLiveId()))
+                val recent = mostRecentLiveId()
+                if (recent != null) {
+                    gatewayClient.request(GatewayMethods.CONFIG_SET, params(recent))
+                } else {
+                    // No chat yet (fresh install): the server refuses a sessionless model
+                    // set with 4001, so lend it a scratch session for the --global write.
+                    withScratchSession { sid -> gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid)) }
+                }
             }
             val obj = result as? JsonObject
             fun flag(key: String) = (obj?.get(key) as? JsonPrimitive)?.content == "true"
@@ -137,6 +144,19 @@ class ModelSwitcher @Inject constructor(
                     "Failed to switch model: $m"
                 },
             )
+        }
+    }
+
+    private suspend fun <T> withScratchSession(block: suspend (String) -> T): T {
+        val created = gatewayClient.request(GatewayMethods.SESSION_CREATE) as? JsonObject
+        val sid = (created?.get("session_id") as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+            ?: throw GatewayException("session.create returned no session_id")
+        return try {
+            block(sid)
+        } finally {
+            runCatching {
+                gatewayClient.request(GatewayMethods.SESSION_CLOSE, mapOf("session_id" to JsonPrimitive(sid)), timeoutMs = 5_000)
+            }
         }
     }
 

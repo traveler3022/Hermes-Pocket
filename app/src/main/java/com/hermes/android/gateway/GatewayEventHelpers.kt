@@ -30,6 +30,22 @@ internal object GatewayEventHelpers {
      * which is later than message.complete, so it is the first frame that
      * proves a turn is over to a client that missed or outran the completion.
      */
+    /**
+     * Side-job failures (title generation, compression summary) that do not touch the
+     * reply. The server keeps these out of its own chat surfaces (`_TELEGRAM_NOISY_STATUS_RE`
+     * in gateway/run.py); this is the auxiliary part of that list.
+     */
+    private val AUXILIARY_NOISE = Regex(
+        "auxiliary\\s+.+\\s+failed" +
+            "|compression\\s+summary\\s+failed" +
+            "|fallback\\s+context\\s+marker" +
+            "|configured\\s+compression\\s+model\\s+.+\\s+failed" +
+            "|no\\s+auxiliary\\s+llm\\s+provider\\s+configured",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+    )
+
+    fun isAuxiliaryNoise(text: String): Boolean = AUXILIARY_NOISE.containsMatchIn(text)
+
     fun isSettledSessionInfo(info: Map<String, JsonElement>): Boolean =
         (info["running"] as? JsonPrimitive)?.content == "false"
 

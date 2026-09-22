@@ -94,9 +94,11 @@ class SwitchableHermesRuntime @Inject constructor(
         scope.launch {
             // The gateway client treats "already connected" as success regardless of URL.
             gatewayClient.disconnect()
-            if (previous === linux) {
-                runCatching { linux.stopGateway() }.onFailure { Timber.w(it, "[Runtime] Stopping Linux gateway failed") }
-            }
+            // Otherwise the next request's dial-on-demand reconnects to the runtime just left.
+            gatewayClient.forgetEndpoint()
+            // Termux too: its dashboard would keep running and holding port 9119.
+            runCatching { previous.stopGateway() }
+                .onFailure { Timber.w(it, "[Runtime] Stopping the ${previous.type} gateway failed") }
         }
     }
 

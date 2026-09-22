@@ -49,11 +49,15 @@ fun ChangesSheet(
     sessionId: String,
     snackbarHostState: SnackbarHostState,
     onDismiss: () -> Unit,
+    onTranscriptChanged: () -> Unit,
     viewModel: ChangesViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(sessionId) { viewModel.load(sessionId) }
+    LaunchedEffect(uiState.transcriptChanges) {
+        if (uiState.transcriptChanges > 0) onTranscriptChanged()
+    }
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)

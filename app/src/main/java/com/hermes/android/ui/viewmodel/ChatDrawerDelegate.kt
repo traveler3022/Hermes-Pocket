@@ -1,5 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
+import com.hermes.android.data.deleteStoredSession
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.coroutines.CoroutineScope
@@ -81,8 +82,7 @@ internal class ChatDrawerDelegate(
         state.update { it.copy(drawerDeleteTarget = null) }
         scope.launch {
             try {
-                val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(GatewayMethods.SESSION_DELETE, jsonToElementMap(params))
+                gatewayClient.deleteStoredSession(sessionId)
                 Timber.i("[Chat] Deleted $sessionId")
                 forgetSessionActivity(sessionId)
                 if (state.value.activeSessionId == sessionId) {

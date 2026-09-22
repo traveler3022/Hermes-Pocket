@@ -120,7 +120,7 @@ class ConfigViewModel @Inject constructor(
                     put("value", value)
                 }
                 gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
-                Timber.i("[Config] Saved: $key=$value")
+                Timber.i("[Config] Saved: $key")  // never the value: keys and tokens go through here
                 loadConfig()
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to save config")

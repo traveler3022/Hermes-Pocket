@@ -324,6 +324,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { sessionDelegate.loadList(_uiState) }
     }
 
+    /** The server's transcript changed under the open chat (an undo); show what it holds now. */
+    fun reloadTranscript() {
+        val sid = _uiState.value.activeSessionId ?: return
+        viewModelScope.launch { sessionDelegate.loadHistory(_uiState, sid, allowEmpty = true) }
+    }
+
     fun resumeSession(sessionId: String) {
         requestedSessionId = sessionId
         autoPickJob?.cancel()
@@ -1231,6 +1237,10 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.StatusUpdate -> {
+                if (GatewayEventHelpers.isAuxiliaryNoise(event.text.orEmpty())) {
+                    Timber.w("[Chat] auxiliary status (not shown): ${event.text}")
+                    return
+                }
                 val statusMsg = ChatMessage.Status(
                     id = UUID.randomUUID().toString(),
                     timestamp = System.currentTimeMillis(),

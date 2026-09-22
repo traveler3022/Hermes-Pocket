@@ -55,6 +55,18 @@ class SwitchableHermesRuntimeTest {
     }
 
     @Test
+    fun `switching away from Termux stops its dashboard and forgets its address`() {
+        coEvery { termux.stopGateway() } returns StopResult.Success
+        selected.value = RuntimeType.TERMUX
+        val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
+
+        router.select(RuntimeType.PROOT_LINUX)
+
+        coVerify(timeout = 2_000) { gatewayClient.forgetEndpoint() }
+        coVerify(timeout = 2_000) { termux.stopGateway() }
+    }
+
+    @Test
     fun `selecting the current runtime keeps the connection but records the choice`() {
         val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
 

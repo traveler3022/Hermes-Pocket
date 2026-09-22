@@ -246,12 +246,12 @@ internal class ChatSessionDelegate(
             }
         }.keys
 
-    suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String) {
+    suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String, allowEmpty: Boolean = false) {
         try {
             val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
-            if (messages.isNotEmpty()) {
+            if (messages.isNotEmpty() || allowEmpty) {
                 state.update {
                     // Another chat was opened while this history was in flight.
                     if (it.activeSessionId != sessionId) return@update it
