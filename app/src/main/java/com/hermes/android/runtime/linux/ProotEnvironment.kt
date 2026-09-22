@@ -44,7 +44,7 @@ class ProotEnvironment @Inject constructor(
 
     fun markRootfsReady() {
         File(rootfsDir, READY_MARKER).writeText(System.currentTimeMillis().toString())
-        LinuxDocumentsProvider.notifyRootsChanged(context)
+        LinuxFilesProvider.notifyRootsChanged(context)
     }
 
     /** Host path of a file inside the guest, e.g. `/root/.hermes/logs/x.log`. */

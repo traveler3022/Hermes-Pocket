@@ -35,8 +35,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.runtime.linux.LinuxDocumentStore
-import com.hermes.android.runtime.linux.LinuxDocumentsProvider
+import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.SectionHeader
@@ -180,9 +179,9 @@ fun LinuxToolsScreen(
 
 /** Opens DocumentsUI on our provider's root; false when no app handles it. */
 private fun openFiles(context: Context): Boolean {
-    val authority = LinuxDocumentsProvider.authority(context)
+    val authority = LinuxFilesProvider.authority(context)
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(DocumentsContract.buildRootUri(authority, LinuxDocumentStore.RootId), DocumentsContract.Root.MIME_TYPE_ITEM)
+        setDataAndType(DocumentsContract.buildRootUri(authority, LinuxFilesProvider.ROOT_ID), DocumentsContract.Root.MIME_TYPE_ITEM)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     return runCatching { context.startActivity(intent) }.isSuccess

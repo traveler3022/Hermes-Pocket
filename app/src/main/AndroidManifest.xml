@@ -103,10 +103,10 @@
             android:name=".service.AgentStopReceiver"
             android:exported="false" />
 
-        <!-- Built-in Alpine files in Android's Files app / document picker (Aether's provider).
-             Guarded by MANAGE_DOCUMENTS, so only the system DocumentsUI can bind to it. -->
+        <!-- Built-in Linux files in the Files app and file pickers. MANAGE_DOCUMENTS
+             means only the system DocumentsUI can bind to it. -->
         <provider
-            android:name=".runtime.linux.LinuxDocumentsProvider"
+            android:name=".runtime.linux.LinuxFilesProvider"
             android:authorities="${applicationId}.linux.documents"
             android:exported="true"
             android:grantUriPermissions="true"
