@@ -129,7 +129,7 @@ class SessionRepository @Inject constructor(
         val messageCount: Int,
         val lastActive: Double,
     ) {
-        val isRunning: Boolean get() = status == "streaming" || status == "running"
+        val isRunning: Boolean get() = com.hermes.android.gateway.GatewayEventHelpers.isBusySessionStatus(status)
     }
 
     /** A finished/idle task from the server's session store (history tab). */
@@ -288,7 +288,12 @@ class SessionRepository @Inject constructor(
      * against the live running set so a task mid-turn is never reported done.
      */
     suspend fun finishedTasks(): List<TaskHistoryRow> {
-        val running = activeTasks().filter { it.isRunning }.map { it.id }.toSet()
+        // active_list rows are keyed by live id, session.list rows by stored
+        // id; a running task has to be recognized under either.
+        val running = activeTasks().filter { it.isRunning }
+            .flatMap { listOf(it.id, it.sessionKey) }
+            .filter { it.isNotEmpty() }
+            .toSet()
         return taskHistory().filter { it.id !in running && it.messageCount > 0 }
     }
 

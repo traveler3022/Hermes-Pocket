@@ -81,6 +81,15 @@ class ChatViewModel @Inject constructor(
     // the stream lost its start, so the reply is fetched once the turn ends.
     private var recoverOnTurnEnd = false
 
+    // A chat the user asked for (notification, drawer, task list) that has not
+    // opened yet. While it is pending the screen does not pick a chat on its
+    // own: on a cold start the connect path used to open the most recent one
+    // in parallel, and whichever answer landed last won.
+    private var requestedSessionId: String? = null
+    private var resumeJob: Job? = null
+    // The connect path opening a chat by itself; a requested one cancels it.
+    private var autoPickJob: Job? = null
+
     private val attachmentDelegate = ChatAttachmentDelegate(
         gatewayClient, hermesRuntime, context, viewModelScope,
     )
@@ -246,16 +255,20 @@ class ChatViewModel @Inject constructor(
                     if (state is ConnectionState.Connected) {
                         val liveId = state.sessionId
                         val activeId = _uiState.value.activeSessionId
+                        val requested = requestedSessionId
                         when {
+                            // The asked-for chat opens instead; retried here when it
+                            // could not reach the gateway before the socket was up.
+                            requested != null -> if (resumeJob?.isActive != true) resumeSession(requested)
                             // Back from a drop: the stream missed whatever the gateway
                             // pushed meanwhile, so the open chat is rebuilt from the
                             // server instead of trusting what is on screen.
                             activeId != null -> if (cameUp) launch { recoverActiveSession(activeId) }
                             liveId != null -> {
                                 _uiState.update { it.copy(activeSessionId = liveId) }
-                                launch { sessionDelegate.loadHistory(_uiState, liveId) }
+                                autoPickJob = launch { sessionDelegate.loadHistory(_uiState, liveId) }
                             }
-                            else -> launch { sessionDelegate.createOrResume(_uiState) }
+                            else -> autoPickJob = launch { sessionDelegate.createOrResume(_uiState) }
                         }
                         if (cameUp) launch { reattachBusyBackground() }
                         loadReasoningLevel()
@@ -311,9 +324,21 @@ class ChatViewModel @Inject constructor(
     }
 
     fun resumeSession(sessionId: String) {
-        viewModelScope.launch {
+        requestedSessionId = sessionId
+        autoPickJob?.cancel()
+        // Only the latest pick may land; an older one finishing late would
+        // replace the chat the user just chose.
+        resumeJob?.cancel()
+        resumeJob = viewModelScope.launch {
             streamingDelegate.reset()
-            sessionDelegate.resume(_uiState, sessionId)
+            val opened = sessionDelegate.resume(_uiState, sessionId)
+            // Keep asking on the next connect only when the gateway was not
+            // reachable; a refusal from the server will not change on retry.
+            if ((opened || gatewayClient.connectionState.value is ConnectionState.Connected) &&
+                requestedSessionId == sessionId
+            ) {
+                requestedSessionId = null
+            }
             // resume() resolves the clicked (stored) id to the live one the
             // events carry; clear the badge under either spelling.
             _uiState.value.activeSessionId?.let { backgroundSessions.markRead(it) }

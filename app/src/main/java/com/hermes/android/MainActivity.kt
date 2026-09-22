@@ -17,6 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -36,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
     @javax.inject.Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
+
+    /** Latest notification tap that reached the running activity (onNewIntent). */
+    private val notificationOpen = mutableStateOf<NotificationOpen?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +86,7 @@ class MainActivity : ComponentActivity() {
                             startInSetup = !setupState.isComplete,
                             sharedText = sharedText,
                             notificationSessionId = notificationSessionId,
+                            notificationOpen = notificationOpen.value,
                             themeModeState = themeModeState,
                             appLanguageState = appLanguageState,
                         )
@@ -88,6 +94,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * A notification tapped while the activity is alive lands here, not in
+     * onCreate (the intent is CLEAR_TOP | SINGLE_TOP). Without this the tap only
+     * brought back whatever chat was open, never the one the notification is about.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(com.hermes.android.service.AgentActivityNotifier.EXTRA_SESSION_ID)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { notificationOpen.value = NotificationOpen(it) }
     }
 
     override fun onStart() {
@@ -185,6 +204,7 @@ private fun HermesNavHost(
     startInSetup: Boolean = false,
     sharedText: String? = null,
     notificationSessionId: String? = null,
+    notificationOpen: NotificationOpen? = null,
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -341,4 +361,17 @@ private fun HermesNavHost(
             )
         }
     }
+
+    // A notification tapped while the app was already running: open the chat
+    // it is about, rebuilt from the server like any other chat switch.
+    LaunchedEffect(notificationOpen) {
+        val open = notificationOpen ?: return@LaunchedEffect
+        if (navController.currentDestination?.route == "setup") return@LaunchedEffect
+        navController.navigate("chat?resumeSessionId=${Uri.encode(open.sessionId)}") {
+            popUpTo("chat") { inclusive = true }
+        }
+    }
 }
+
+/** One notification tap; a class, not data, so tapping the same chat again still counts. */
+private class NotificationOpen(val sessionId: String)

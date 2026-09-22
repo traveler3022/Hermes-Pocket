@@ -4,6 +4,7 @@ import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -37,6 +38,9 @@ internal class ChatSessionDelegate(
             val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
             (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
         } catch (e: Exception) {
+            // Cancelled because the user asked for a specific chat meanwhile:
+            // opening a new one here would bury it.
+            if (e is CancellationException) throw e
             Timber.w(e, "[Chat] session.most_recent failed, falling back to a new session")
             null
         }
@@ -67,7 +71,8 @@ internal class ChatSessionDelegate(
         }
     }
 
-    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String) {
+    /** Returns whether [sessionId] is now the open chat. */
+    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean {
         try {
             val attached = sessionRepository.attach(sessionId)
             val liveSessionId = attached.liveId
@@ -98,9 +103,13 @@ internal class ChatSessionDelegate(
                 Timber.w("[Chat] Resume returned no inline messages, falling back to session.history for $liveSessionId")
                 loadHistory(state, liveSessionId)
             }
+            return true
         } catch (e: Exception) {
+            // Superseded by another resume: not a failure to show.
+            if (e is CancellationException) throw e
             Timber.e(e, "[Chat] Failed to resume session")
             state.update { it.copy(errorEvent = ErrorEvent.Error("Failed to resume: ${e.message}")) }
+            return false
         }
     }
 
@@ -239,15 +248,20 @@ internal class ChatSessionDelegate(
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
             val messages = parseSessionHistory(result)
             if (messages.isNotEmpty()) {
-                state.update { it.copy(
-                    messages = messages,
-                    sessionLoadedAt = System.currentTimeMillis(),
-                ) }
+                state.update {
+                    // Another chat was opened while this history was in flight.
+                    if (it.activeSessionId != sessionId) return@update it
+                    it.copy(
+                        messages = messages,
+                        sessionLoadedAt = System.currentTimeMillis(),
+                    )
+                }
                 Timber.i("[Chat] Loaded ${messages.size} history messages for session $sessionId")
             } else {
                 Timber.w("[Chat] Session history returned empty for $sessionId")
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Timber.w(e, "[Chat] Could not load session history for $sessionId, continuing without it")
         }
     }
