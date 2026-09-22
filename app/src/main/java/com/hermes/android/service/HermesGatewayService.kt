@@ -53,6 +53,9 @@ class HermesGatewayService : Service() {
     lateinit var agentEventObserver: AgentEventObserver
 
     @Inject
+    lateinit var foregroundState: AppForegroundState
+
+    @Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -79,7 +82,7 @@ class HermesGatewayService : Service() {
         // restarts the service on every foreground; when the gateway is already connected
         // nothing re-emits (connect() no-ops, status stays null), so the render loop never
         // ran again and this placeholder stayed pinned as "Connecting…" forever.
-        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value)
+        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value, foregroundState.visible.value)
 
         // Proactive notifications: watch gateway events for the whole life of
         // the background connection (ChatViewModel's collector dies with the
@@ -88,10 +91,11 @@ class HermesGatewayService : Service() {
 
         if (renderJob?.isActive != true) {
             renderJob = scope.launch {
-                combine(gatewayClient.connectionState, agentEventObserver.work, status) { state, work, text ->
-                    Triple(state, work, text)
-                }.collectLatest { (state, work, text) ->
-                    render(state, work, text)
+                combine(
+                    gatewayClient.connectionState, agentEventObserver.work, status, foregroundState.visible,
+                ) { state, work, text, visible -> RenderInput(state, work, text, visible) }
+                    .collectLatest { (state, work, text, visible) ->
+                    render(state, work, text, visible)
                     delay(RENDER_INTERVAL_MS) // Android drops bursts of updates; tool steps can be rapid.
                 }
             }
@@ -129,7 +133,19 @@ class HermesGatewayService : Service() {
     /** What the card currently says, so an unchanged render is not re-posted. */
     private var shownKey: String? = null
 
-    private fun render(state: ConnectionState, work: AgentWork?, text: String?) {
+    private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean)
+
+    private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean) {
+        // The app on screen already shows all of this, and a visible app needs no
+        // foreground service to stay alive; the card comes up once the user leaves.
+        if (visible) {
+            holdWakeLock(work != null)
+            if (shownKey != null) {
+                shownKey = null
+                dismiss()
+            }
+            return
+        }
         when {
             work != null -> {
                 val reconnecting = state !is ConnectionState.Connected

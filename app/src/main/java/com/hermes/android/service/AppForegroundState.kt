@@ -4,6 +4,9 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,14 +27,17 @@ class AppForegroundState @Inject constructor() : Application.ActivityLifecycleCa
     val isForeground: Boolean
         get() = startedCount.get() > 0
 
+    private val _visible = MutableStateFlow(false)
+    val visible: StateFlow<Boolean> = _visible.asStateFlow()
+
     override fun onActivityStarted(activity: Activity) {
-        startedCount.incrementAndGet()
+        _visible.value = startedCount.incrementAndGet() > 0
     }
 
     override fun onActivityStopped(activity: Activity) {
         // Guard against going negative if callbacks were registered after an
         // activity already started (process-restart edge).
-        startedCount.updateAndGet { if (it > 0) it - 1 else 0 }
+        _visible.value = startedCount.updateAndGet { if (it > 0) it - 1 else 0 } > 0
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

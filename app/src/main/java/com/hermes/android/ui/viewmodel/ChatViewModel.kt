@@ -45,6 +45,7 @@ class ChatViewModel @Inject constructor(
     private val sessionRepository: com.hermes.android.data.SessionRepository,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
+    private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -1258,14 +1259,17 @@ class ChatViewModel @Inject constructor(
                 // The server's queue id: approval.respond resolves exactly this
                 // entry (a random id here left the server guessing which one).
                 val requestId = event.requestId.ifBlank { event.serverRequestId }
-                approvalNotificationManager.showApprovalRequest(
-                    requestId = requestId,
-                    sessionId = event.sessionId,
-                    toolName = "terminal",
-                    command = event.command,
-                    description = event.description,
-                    allowPermanent = event.allowPermanent,
-                )
+                // In the app the approval sheet asks; the notification is for when the user is away.
+                if (!foregroundState.isForeground) {
+                    approvalNotificationManager.showApprovalRequest(
+                        requestId = requestId,
+                        sessionId = event.sessionId,
+                        toolName = "terminal",
+                        command = event.command,
+                        description = event.description,
+                        allowPermanent = event.allowPermanent,
+                    )
+                }
                 // The approval sheet and the notification show the request. It is not added
                 // to the chat: as plain text it stayed there for good, raw command and all.
                 _uiState.update { it.copy(
