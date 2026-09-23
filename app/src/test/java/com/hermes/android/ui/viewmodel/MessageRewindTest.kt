@@ -98,4 +98,25 @@ class MessageRewindTest {
         assertEquals(1, turnsFrom(server, 5))
         assertEquals(0, turnsFrom(server, 42))
     }
+
+    @Test
+    fun `a refused row falls back to the hidden rows since the previous shown turn, newest first`() {
+        // Seen on a phone: 1843 "[System: The active model … changed]" (hidden by
+        // session.history), 1844 the prompt, merged by the server into turn 1843.
+        val server = listOf(stored("hi", 1839), stored("hi", 1841), stored("hi", 1844))
+
+        assertEquals(listOf(1843L, 1842L), hiddenRowsBefore(server, 1844))
+    }
+
+    @Test
+    fun `no gap before the target means nothing to fall back to`() {
+        val server = listOf(stored("one", 5), stored("two", 6))
+
+        assertEquals(emptyList<Long>(), hiddenRowsBefore(server, 6))
+    }
+
+    @Test
+    fun `the fallback is capped`() {
+        assertEquals((99L downTo 92L).toList(), hiddenRowsBefore(listOf(stored("x", 100)), 100))
+    }
 }

@@ -533,12 +533,12 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(messages = before.subList(0, lastUserIndex + 1).toList(), isSending = true) }
 
         viewModelScope.launch {
-            val rowId = locateOnServer(sessionId, before, lastUserMsg)
-            if (rowId == null) {
+            val rows = locateOnServer(sessionId, before, lastUserMsg)
+            if (rows == null) {
                 _uiState.update { it.copy(messages = before, isSending = false) }
                 return@launch
             }
-            sendPrompt(lastUserText, sessionId, truncateBeforeRowId = rowId) {
+            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows) {
                 _uiState.update { it.copy(messages = before) }
             }
         }
@@ -578,13 +578,13 @@ class ChatViewModel @Inject constructor(
             isSending = true,
         ) }
         viewModelScope.launch {
-            val rowId = locateOnServer(sessionId, before, target)
-            if (rowId == null) {
+            val rows = locateOnServer(sessionId, before, target)
+            if (rows == null) {
                 _uiState.update { it.copy(messages = before, isSending = false, editingMessageId = messageId, inputText = text) }
                 return@launch
             }
             // Refused (busy, stale): the server kept everything, so the screen must too.
-            sendPrompt(outgoing, sessionId, truncateBeforeRowId = rowId) {
+            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows) {
                 _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
             }
         }
@@ -624,10 +624,15 @@ class ChatViewModel @Inject constructor(
         sessionId: String,
         local: List<ChatMessage>,
         target: ChatMessage.User,
-    ): Long? {
-        val rowId = sessionDelegate.serverUserTurns(sessionId)?.let { findUserRow(local, target, it) }
-        if (rowId == null) _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
-        return rowId
+    ): List<Long>? {
+        val server = sessionDelegate.serverUserTurns(sessionId)
+        val rowId = server?.let { findUserRow(local, target, it) }
+        if (rowId == null) {
+            _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
+            return null
+        }
+        // The target first; the hidden rows are only tried if the server refuses it.
+        return listOf(rowId) + hiddenRowsBefore(server, rowId)
     }
 
     private fun rewindFailure(e: Exception): String =
@@ -744,15 +749,35 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * prompt.submit aimed at the first of [rows] the server accepts (none: a plain send).
+     * A refused target (4018) is rejected before anything is written, so the next is safe.
+     */
+    private suspend fun submitToFirstAddressable(
+        rows: List<Long>,
+        params: (Long?) -> JsonObject,
+    ): kotlinx.serialization.json.JsonElement {
+        val targets: List<Long?> = rows.ifEmpty { listOf(null) }
+        for ((i, target) in targets.withIndex()) {
+            try {
+                return gatewayClient.request(GatewayMethods.PROMPT_SUBMIT, jsonToElementMap(params(target)))
+            } catch (e: Exception) {
+                if (target == null || i == targets.lastIndex || !e.message.orEmpty().startsWith("RPC error 4018:")) throw e
+                Timber.w("[Chat] Row $target is not addressable; trying row ${targets[i + 1]}")
+            }
+        }
+        error("no prompt.submit target")
+    }
+
     private fun sendPrompt(
         text: String,
         sessionId: String,
-        truncateBeforeRowId: Long? = null,
+        truncateBeforeRowIds: List<Long> = emptyList(),
         onRefused: (() -> Unit)? = null,
     ) {
         viewModelScope.launch {
             try {
-                fun params(liveId: String) = buildJsonObject {
+                fun params(liveId: String, truncateBeforeRowId: Long?) = buildJsonObject {
                     put("text", text)
                     put("session_id", liveId)
                     if (truncateBeforeRowId != null) {
@@ -771,18 +796,13 @@ class ChatViewModel @Inject constructor(
                     liveId = sessionId,
                     storedId = _uiState.value.activeSessionKey,
                     onRebound = { sessionDelegate.adoptRebound(_uiState, sessionId, it) },
-                ) { liveId ->
-                    gatewayClient.request(
-                        method = GatewayMethods.PROMPT_SUBMIT,
-                        params = jsonToElementMap(params(liveId)),
-                    )
-                }
+                ) { liveId -> submitToFirstAddressable(truncateBeforeRowIds) { params(liveId, it) } }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
                 onRefused?.invoke()
                 _uiState.update { it.copy(
                     errorEvent = ErrorEvent.Error(
-                        if (truncateBeforeRowId != null) rewindFailure(e) else "Failed to send: ${e.message}",
+                        if (truncateBeforeRowIds.isNotEmpty()) rewindFailure(e) else "Failed to send: ${e.message}",
                     ),
                     isSending = false,
                 ) }
