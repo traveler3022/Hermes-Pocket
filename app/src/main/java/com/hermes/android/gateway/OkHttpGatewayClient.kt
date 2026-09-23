@@ -756,7 +756,11 @@ class OkHttpGatewayClient @Inject constructor(
 
         if (response.error != null) {
             deferred.completeExceptionally(
-                GatewayException("RPC error ${response.error.code}: ${response.error.message}")
+                GatewayException(
+                    "RPC error ${response.error.code}: ${response.error.message}",
+                    code = response.error.code,
+                    rpcMessage = response.error.message,
+                )
             )
         } else if (response.result != null) {
             if (!skipSessionTracking) {
@@ -974,6 +978,12 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["task_id"]?.jsonPrimitive?.content ?: "",
                 p["text"]?.jsonPrimitive?.content ?: "",
+            )
+            "btw.complete" -> GatewayEvent.BtwComplete(
+                sid,
+                p["task_id"]?.jsonPrimitive?.content ?: "",
+                p["text"]?.jsonPrimitive?.content ?: "",
+                p["question"]?.jsonPrimitive?.contentOrNull,
             )
             "review.summary" -> GatewayEvent.ReviewSummary(sid, p["text"]?.jsonPrimitive?.content)
             "browser.progress" -> GatewayEvent.BrowserProgress(

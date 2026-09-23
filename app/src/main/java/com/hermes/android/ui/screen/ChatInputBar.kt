@@ -174,17 +174,22 @@ internal fun InputBar(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(onAttachFile) }
-    // Feature 5.2: slash command suggestions — from the gateway catalog
-    // (commands.catalog); falls back to a minimal built-in list if empty.
+    // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
+    // a button for; a short built-in list until the catalog arrives.
     val fallbackCommands = remember {
-        listOf("/help", "/clear", "/config", "/model", "/session")
-            .map { SlashCommandSuggestion(it, "") }
+        listOf(
+            "/help" to "Show available commands",
+            "/btw" to "Ask a side question without interrupting",
+            "/bg" to "Run a prompt in a separate background session",
+            "/goal" to "Set a standing goal Hermes works on across turns",
+            "/status" to "Show session, model, token, and context info",
+        ).map { (command, description) -> SlashCommandSuggestion(command, description) }
     }
     val commandList = slashCommands.ifEmpty { fallbackCommands }
-    val showSuggestions = text.startsWith("/") && !isSending
+    // Only while the command name is being typed: past the first space it is the argument.
+    val showSuggestions = text.startsWith("/") && text.none { it == ' ' || it == '\n' } && !isSending
     val suggestions = remember(text, commandList) {
-        if (text == "/") commandList
-        else commandList.filter { it.command.startsWith(text) }
+        commandList.distinctBy { it.command }.filter { it.command.startsWith(text, ignoreCase = true) }
     }
 
     // Scaffold's own content padding (in ChatScreen.kt) already reserves
@@ -198,17 +203,36 @@ internal fun InputBar(
             .imePadding(),
     ) {
         if (showSuggestions && suggestions.isNotEmpty()) {
-            LazyRow(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .heightIn(max = 260.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                items(suggestions) { cmd ->
-                    SuggestionChip(
-                        onClick = { onTextChange(cmd.command) },
-                        label = { Text(cmd.command) },
-                    )
+                items(suggestions, key = { it.command }) { cmd ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onTextChange(cmd.command + " ") }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            cmd.command,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (cmd.description.isNotBlank()) {
+                            Text(
+                                cmd.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }

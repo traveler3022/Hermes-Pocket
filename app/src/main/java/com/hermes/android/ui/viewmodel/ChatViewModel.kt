@@ -60,6 +60,10 @@ class ChatViewModel @Inject constructor(
     private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
     val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
 
+    /** Every command and alias Hermes knows, lowercase with the slash; empty until the catalog lands. */
+    @Volatile
+    private var knownCommands: Set<String> = emptySet()
+
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
 
@@ -114,7 +118,14 @@ class ChatViewModel @Inject constructor(
         loadAssistantName()
         watchForQueuedPromptFlush()
         connectAndCollect()
-        loadCommandCatalog()
+        // Asked once at init the catalog raced Hermes' boot and usually failed, leaving
+        // only the built-in fallback list: ask on every connect instead.
+        viewModelScope.launch {
+            gatewayClient.connectionState
+                .map { it is ConnectionState.Connected }
+                .distinctUntilChanged()
+                .collect { connected -> if (connected) loadCommandCatalog() }
+        }
     }
 
     /**
@@ -170,23 +181,31 @@ class ChatViewModel @Inject constructor(
     private fun loadCommandCatalog() {
         viewModelScope.launch {
             try {
-                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG)
-                val pairs = (result as? JsonObject)?.get("pairs") as? JsonArray
-                val cmds = pairs?.mapNotNull { row ->
+                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG) as? JsonObject
+                val pairs = (result?.get("pairs") as? JsonArray)?.mapNotNull { row ->
                     val arr = row as? JsonArray ?: return@mapNotNull null
                     val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
                     val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
                     SlashCommandSuggestion(command = name, description = desc)
                 } ?: emptyList()
-                if (cmds.isNotEmpty()) {
-                    _slashCommands.value = cmds
-                    Timber.i("[Chat] Loaded ${cmds.size} slash commands from catalog")
-                }
+                if (pairs.isEmpty()) return@launch
+                // `canon` holds every name and alias; skills are only in `pairs`.
+                val canon = (result?.get("canon") as? JsonObject)?.keys.orEmpty()
+                knownCommands = (canon + pairs.map { it.command }).map { it.lowercase() }.toSet()
+                _slashCommands.value = pairs.filterNot { it.command.lowercase() in HIDDEN_SLASH_COMMANDS }
+                Timber.i("[Chat] Loaded ${pairs.size} slash commands from catalog")
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] commands.catalog failed — slash command autocomplete will be empty until next retry")
             }
         }
     }
+
+    /**
+     * Only a name Hermes knows makes a slash command: `/sdcard/x.txt رو بخون` is a message.
+     * Before the catalog arrives every `/…` is still a command, as it always was.
+     */
+    private fun isSlashCommand(text: String): Boolean =
+        isSlashCommandText(text, knownCommands)
 
     // ── Connection ───────────────────────────────────────────────────────
 
@@ -439,7 +458,7 @@ class ChatViewModel @Inject constructor(
                 QueuedPrompt(
                     bubbleId = userMsg.id,
                     outgoing = outgoing,
-                    isSlashCommand = text.startsWith("/"),
+                    isSlashCommand = isSlashCommand(text),
                 )
             } else {
                 it.queuedPrompt
@@ -447,7 +466,7 @@ class ChatViewModel @Inject constructor(
         ) }
         if (queued) return
 
-        if (text.startsWith("/")) {
+        if (isSlashCommand(text)) {
             handleSlashCommand(text, sessionId!!)
         } else {
             sendPrompt(outgoing, sessionId!!)
@@ -750,6 +769,13 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Runs a slash command the way Hermes' own TUI does (`ui-tui/src/app/createSlashHandler.ts`):
+     * `slash.exec` first, because `command.dispatch` alone only knows quick/plugin/skill commands
+     * and a handful of built-ins, so `/help`, `/model`, `/status`… came back as error 4018.
+     * `command.dispatch` is only the fallback for the refusals where `slash.exec` says the
+     * command is not its to run.
+     */
     private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
         if (depth > 5) {
             _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
@@ -761,50 +787,32 @@ class ChatViewModel @Inject constructor(
                 val parts = withoutSlash.split(" ", limit = 2)
                 val name = parts[0]
                 val arg = if (parts.size > 1) parts[1] else ""
-                val params = buildJsonObject {
-                    put("name", name)
-                    put("arg", arg)
-                    put("session_id", sessionId)
+                // Hermes' own clients run these two themselves (ui-tui slash/commands/session.ts):
+                // the slash worker has no side agent to hand them to.
+                SIDE_AGENT_COMMANDS[name.lowercase()]?.let { method ->
+                    startSideAgent(method, name, arg, sessionId)
+                    return@launch
                 }
-                val result = gatewayClient.request(
-                    method = GatewayMethods.COMMAND_DISPATCH,
-                    params = jsonToElementMap(params),
-                )
-                val obj = result as? JsonObject
-                when ((obj?.get("type") as? JsonPrimitive)?.content) {
-                    "alias" -> {
-                        val target = (obj["target"] as? JsonPrimitive)?.content
-                        if (!target.isNullOrBlank()) {
-                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
-                            handleSlashCommand(nextText, sessionId, depth + 1)
-                            return@launch
-                        }
-                    }
-                    "send" -> {
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        if (!message.isNullOrBlank()) {
-                            sendPrompt(message, sessionId)
-                            return@launch
-                        }
-                    }
-                    "prefill" -> {
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        _uiState.update { it.copy(inputText = message ?: _uiState.value.inputText, isSending = false) }
-                        return@launch
-                    }
-                }
-                val output = extractCommandOutput(result)
-                val newMessages = if (!output.isNullOrBlank()) {
-                    _uiState.value.messages + ChatMessage.Status(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = System.currentTimeMillis(),
-                        text = output.trim(),
-                        isError = false,
+                val result = try {
+                    gatewayClient.request(
+                        method = GatewayMethods.SLASH_EXEC,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("command", withoutSlash)
+                            put("session_id", sessionId)
+                        }),
                     )
-                } else {
-                    _uiState.value.messages
+                } catch (e: GatewayException) {
+                    if (!slashExecDisowns(e)) throw e
+                    gatewayClient.request(
+                        method = GatewayMethods.COMMAND_DISPATCH,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("name", name)
+                            put("arg", arg)
+                            put("session_id", sessionId)
+                        }),
+                    )
                 }
-                _uiState.update { it.copy(messages = newMessages, isSending = false) }
+                applySlashResult(result, name, arg, sessionId, depth)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Slash command failed")
                 _uiState.update { it.copy(
@@ -813,6 +821,83 @@ class ChatViewModel @Inject constructor(
                 ) }
             }
         }
+    }
+
+    private suspend fun startSideAgent(method: String, name: String, arg: String, sessionId: String) {
+        if (arg.isBlank()) {
+            postSlashStatus(if (method == GatewayMethods.PROMPT_BTW) "/btw <question>" else "/$name <prompt>")
+            return
+        }
+        val result = gatewayClient.request(
+            method = method,
+            params = jsonToElementMap(buildJsonObject {
+                put("session_id", sessionId)
+                put("text", arg)
+            }),
+        ) as? JsonObject
+        val taskId = (result?.get("task_id") as? JsonPrimitive)?.content
+        postSlashStatus(
+            when {
+                taskId == null -> "/$name: no task started"
+                method == GatewayMethods.PROMPT_BTW -> "btw $taskId — answering from a snapshot of this chat"
+                else -> "bg $taskId started"
+            },
+        )
+    }
+
+    private fun applySlashResult(
+        result: kotlinx.serialization.json.JsonElement?,
+        name: String,
+        arg: String,
+        sessionId: String,
+        depth: Int,
+    ) {
+        val obj = result as? JsonObject
+        fun str(key: String) = (obj?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val notice = str("notice")?.takeIf { it.isNotBlank() }
+        val message = str("message")
+        when (str("type")) {
+            "alias" -> {
+                val target = str("target")
+                if (!target.isNullOrBlank()) {
+                    handleSlashCommand(if (arg.isNotBlank()) "/$target $arg" else "/$target", sessionId, depth + 1)
+                    return
+                }
+            }
+            "exec", "plugin" -> {
+                postSlashStatus(str("output")?.takeIf { it.isNotBlank() } ?: "(no output)")
+                return
+            }
+            "skill", "send" -> {
+                notice?.let { postSlashStatus(it) }
+                if (!message.isNullOrBlank()) {
+                    sendPrompt(message, sessionId)
+                } else {
+                    postSlashStatus("/$name: empty message", isError = true)
+                }
+                return
+            }
+            "prefill" -> {
+                notice?.let { postSlashStatus(it) }
+                _uiState.update { it.copy(inputText = message ?: it.inputText, isSending = false) }
+                return
+            }
+        }
+        val output = extractCommandOutput(result)?.trim().orEmpty().ifBlank { "/$name: no output" }
+        val warning = str("warning")?.takeIf { it.isNotBlank() }
+        postSlashStatus(if (warning != null) "warning: $warning\n$output" else output)
+    }
+
+    private fun postSlashStatus(text: String, isError: Boolean = false) {
+        _uiState.update { it.copy(
+            messages = it.messages + ChatMessage.Status(
+                id = UUID.randomUUID().toString(),
+                timestamp = System.currentTimeMillis(),
+                text = text.trim(),
+                isError = isError,
+            ),
+            isSending = false,
+        ) }
     }
 
     private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
@@ -1488,10 +1573,21 @@ class ChatViewModel @Inject constructor(
                 val msg = ChatMessage.Status(
                     id = "bg-${event.taskId}",
                     timestamp = System.currentTimeMillis(),
-                    text = "Background task complete: ${event.text.take(200)}",
+                    text = "[bg ${event.taskId}] ${event.text}",
                     isError = false,
                 )
                 _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
+            }
+
+            is GatewayEvent.BtwComplete -> {
+                val question = event.question?.takeIf { it.isNotBlank() }?.let { " \"$it\"" }.orEmpty()
+                val msg = ChatMessage.Status(
+                    id = "btw-${event.taskId}",
+                    timestamp = System.currentTimeMillis(),
+                    text = "[btw$question] ${event.text}",
+                    isError = false,
+                )
+                _uiState.update { it.copy(messages = it.messages + msg) }
             }
 
             is GatewayEvent.SessionInfo -> {
@@ -1556,6 +1652,42 @@ class ChatViewModel @Inject constructor(
         }
 
     companion object {
+        /**
+         * `slash.exec` answers 4018 with exactly these texts when the command is not its own.
+         * Every other 4018 comes from a `command.dispatch` handler it already forwarded to
+         * (/retry, /undo, /compress…): dispatching again would run a mutating command twice.
+         */
+        private val SLASH_EXEC_NOT_MINE = Regex(
+            "^skill command: use command\\.dispatch for /|use command\\.dispatch for /snapshot restore",
+        )
+
+        internal fun slashExecDisowns(e: GatewayException): Boolean =
+            e.code == 4018 && SLASH_EXEC_NOT_MINE.containsMatchIn(e.rpcMessage.orEmpty())
+
+        private val SIDE_AGENT_COMMANDS = mapOf(
+            "btw" to GatewayMethods.PROMPT_BTW,
+            "bg" to GatewayMethods.PROMPT_BACKGROUND,
+            "background" to GatewayMethods.PROMPT_BACKGROUND,
+        )
+
+        internal fun isSlashCommandText(text: String, known: Set<String>): Boolean {
+            if (!text.startsWith("/")) return false
+            if (known.isEmpty()) return true
+            val name = "/" + text.removePrefix("/").trimStart().substringBefore(' ').substringBefore('\n').lowercase()
+            return name in known
+        }
+
+        /**
+         * Left out of the `/` list (typing them in full still runs them): the app has a
+         * button or screen for them, or they only mean something in a terminal.
+         */
+        internal val HIDDEN_SLASH_COMMANDS = setOf(
+            "/new", "/clear", "/retry", "/undo", "/branch", "/model", "/approve", "/deny",
+            "/sessions", "/resume", "/stop", "/image",
+            "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
+            "/copy", "/paste", "/quit", "/wake", "/voice",
+        )
+
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
