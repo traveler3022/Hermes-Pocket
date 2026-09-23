@@ -354,6 +354,21 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { sessionDelegate.loadHistory(_uiState, sid, allowEmpty = true) }
     }
 
+    /** The chat id this screen was opened with (notification, Tasks, Sessions), already acted on. */
+    private var openedRouteSessionId: String? = null
+
+    /**
+     * Open the chat the screen was navigated to, once. The id stays in the route,
+     * so coming back to this screen (from Settings, or after the activity is
+     * recreated) asked for it again: the chat the user had switched to since was
+     * replaced by an old one, or 4001 when that one was gone.
+     */
+    fun openRouteSession(sessionId: String) {
+        if (sessionId == openedRouteSessionId) return
+        openedRouteSessionId = sessionId
+        resumeSession(sessionId)
+    }
+
     fun resumeSession(sessionId: String) {
         requestedSessionId = sessionId
         // An edit belongs to the chat it started in.

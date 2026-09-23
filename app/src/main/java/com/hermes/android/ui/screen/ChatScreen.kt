@@ -422,7 +422,7 @@ fun ChatScreen(
     // Pre-fill input from share intent
     LaunchedEffect(resumeSessionId) {
         if (!resumeSessionId.isNullOrBlank()) {
-            viewModel.resumeSession(resumeSessionId)
+            viewModel.openRouteSession(resumeSessionId)
         }
     }
 
