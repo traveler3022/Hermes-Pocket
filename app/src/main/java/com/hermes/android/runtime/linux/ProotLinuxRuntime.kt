@@ -22,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +61,7 @@ class ProotLinuxRuntime @Inject constructor(
         // more, until the service happened to start Hermes. A deliberate stop still wins,
         // and a start already under way is left to finish rather than queued behind.
         stdioHub.restartHandler = handler@{
-            if (stoppedDeliberately) return@handler
+            if (stoppedDeliberately || updating) return@handler
             val state = _state.value
             if (state is RuntimeState.Installing || state is RuntimeState.Detecting) return@handler
             if (gatewayMutex.isLocked) {
@@ -170,6 +171,55 @@ class ProotLinuxRuntime @Inject constructor(
         }
     }
 
+    @Volatile
+    private var updating = false
+
+    override val canUpdateHermes: Boolean get() = true
+
+    /**
+     * Update Hermes Agent the way it was installed: the same script, whose
+     * `git pull` + locked `uv sync` bring an existing checkout up to date. Hermes'
+     * own `hermes update` assumes install.sh, which has no Alpine support, and
+     * timed out here. The gateway is stopped for the swap and started again after,
+     * also when the update fails, so a failed update still leaves Hermes running.
+     */
+    override suspend fun updateHermes(progressEmitter: ProgressEmitter): InstallResult =
+        // The runtime's own scope: a caller that goes away (the About screen closed)
+        // must not cancel the update halfway and leave Hermes stopped.
+        scope.async { updateHermesNow(progressEmitter) }.await()
+
+    private suspend fun updateHermesNow(progressEmitter: ProgressEmitter): InstallResult {
+        if (!isHermesInstalled()) return InstallResult.Failure("Hermes is not installed yet.")
+        val result = installMutex.withLock {
+            updating = true
+            val log = StringBuilder()
+            fun report(stage: String, message: String, percent: Int?) {
+                progressEmitter.emit(InstallProgress(stage, message, percent, System.currentTimeMillis()))
+            }
+            try {
+                report("stop", "Stopping Hermes…", 2)
+                stopGateway()
+                report("hermes", "Downloading the newest Hermes Agent…", 5)
+                runStage("hermes", HERMES_INSTALL_SCRIPT, 5, 90, log, ::report)
+                report("verify", "Checking hermes --version…", 92)
+                val version = readHermesVersion()
+                    ?: throw InstallFailure("Hermes command not found after the update.")
+                prefs.edit().putString(KEY_VERSION, version).apply()
+                InstallResult.Success(currentInfo().copy(hermesVersion = version))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Linux] Hermes update failed")
+                InstallResult.Failure((e as? InstallFailure)?.message ?: "Update failed: ${e.message}", log.toString().takeLast(8_000))
+            } finally {
+                updating = false
+            }
+        }
+        progressEmitter.emit(InstallProgress("start", "Starting Hermes…", 95, System.currentTimeMillis()))
+        runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway did not come back after the update") }
+        return result
+    }
+
     private suspend fun runStage(
         stage: String,
         script: String,
@@ -212,7 +262,14 @@ class ProotLinuxRuntime @Inject constructor(
         return VerifyResult.Success(version, doctor.ok)
     }
 
-    override suspend fun startGateway(): GatewayHandle = gatewayMutex.withLock {
+    override suspend fun startGateway(): GatewayHandle {
+        // Hermes' files are being replaced: a gateway started now would load half of
+        // the old version and half of the new. Wait for the update to finish.
+        if (updating) installMutex.withLock { }
+        return startGatewayLocked()
+    }
+
+    private suspend fun startGatewayLocked(): GatewayHandle = gatewayMutex.withLock {
         stoppedDeliberately = false
         val current = _state.value
         if (current is RuntimeState.Running && gatewayProcess?.isAlive == true) return current.gateway
