@@ -1205,7 +1205,18 @@ class ChatViewModel @Inject constructor(
             isStreaming = true,
             reasoning = null,
         )
-        _uiState.update { it.copy(messages = it.messages + assistantMsg) }
+        // One reply streams per chat: a bubble the delegate lost track of (its id
+        // reset by a recovery or a switch) was never settled and kept its dots.
+        _uiState.update { it.copy(messages = it.messages.closeStrayReplies() + assistantMsg) }
+    }
+
+    /** Stop every reply still marked streaming; one with nothing in it is dropped. */
+    private fun List<ChatMessage>.closeStrayReplies(): List<ChatMessage> = mapNotNull { msg ->
+        when {
+            msg !is ChatMessage.Assistant || !msg.isStreaming -> msg
+            msg.text.isBlank() && msg.reasoning.isNullOrBlank() -> null
+            else -> msg.copy(isStreaming = false)
+        }
     }
 
     /**
@@ -1314,7 +1325,7 @@ class ChatViewModel @Inject constructor(
                             msg is ChatMessage.ToolCall && msg.isRunning
                         }) { msg ->
                             (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Completed")
-                        }
+                        }.closeStrayReplies()
                     },
                     isSending = false,
                     activeTodos = emptyList(),
