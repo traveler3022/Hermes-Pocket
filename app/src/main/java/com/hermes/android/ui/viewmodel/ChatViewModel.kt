@@ -1244,7 +1244,10 @@ class ChatViewModel @Inject constructor(
             else -> Unit
         }
         trackSessionActivity(event, eventSid, activeSid)
-        if (eventSid != null && activeSid != null && eventSid != activeSid &&
+        // No open chat (a new one waiting for its id) is not a licence to draw
+        // anyone's frames: the chat left behind still streaming poured its text
+        // and typing dots into the new, empty chat.
+        if (eventSid != null && eventSid != activeSid &&
             event !is GatewayEvent.ApprovalRequest &&
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
