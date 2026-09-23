@@ -199,7 +199,14 @@ class ProotLinuxRuntime @Inject constructor(
                 report("stop", "Stopping Hermes…", 2)
                 stopGateway()
                 report("update", "Downloading the newest Hermes Agent…", 5)
+                // Proot refuses to delete link2symlink entries ("Operation not permitted"), so what
+                // the guest can't remove is removed from here: a uv cache that past hardlinking
+                // poisoned (it breaks pip in the venv), and the .git dirs the repair set aside.
+                deleteTree(environment.guestFile("/root/.cache/uv"))
                 runStage("update", HERMES_UPDATE_SCRIPT, 5, 60, log, ::report)
+                environment.guestFile("/root/.hermes/hermes-agent")
+                    .listFiles { f -> f.name.startsWith(".git-old-") }
+                    ?.forEach(::deleteTree)
                 runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT", 60, 90, log, ::report)
                 report("verify", "Checking hermes --version…", 92)
                 val version = readHermesVersion()
@@ -218,6 +225,21 @@ class ProotLinuxRuntime @Inject constructor(
         progressEmitter.emit(InstallProgress("start", "Starting Hermes…", 95, System.currentTimeMillis()))
         runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway did not come back after the update") }
         return result
+    }
+
+    /** Deletes [root] without following symlinks: link2symlink's links hold absolute host paths. */
+    private fun deleteTree(root: File) {
+        if (!root.exists() && !java.nio.file.Files.isSymbolicLink(root.toPath())) return
+        runCatching {
+            java.nio.file.Files.walkFileTree(root.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(file) }
+                override fun visitFileFailed(file: java.nio.file.Path, exc: java.io.IOException) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(file) }
+                override fun postVisitDirectory(dir: java.nio.file.Path, exc: java.io.IOException?) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(dir) }
+            })
+        }.onFailure { Timber.w(it, "[Linux] Could not delete ${root.path}") }
     }
 
     private suspend fun runStage(
@@ -456,14 +478,35 @@ class ProotLinuxRuntime @Inject constructor(
                 exit 1
             fi
             echo "Newest Hermes Agent: ${'$'}TARGET"
-            at_target() { [ "${'$'}(git -C "${'$'}REPO" rev-parse HEAD 2>/dev/null)" = "${'$'}TARGET" ]; }
+            # main moves every few minutes, so a HEAD past TARGET (or at a fresher tip) counts too.
+            at_target() {
+                head=${'$'}(git -C "${'$'}REPO" rev-parse HEAD 2>/dev/null) || return 1
+                [ "${'$'}head" = "${'$'}TARGET" ] && return 0
+                git -C "${'$'}REPO" merge-base --is-ancestor "${'$'}TARGET" "${'$'}head" 2>/dev/null && return 0
+                [ "${'$'}head" = "${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)" ]
+            }
+            # hermes update provisions nodejs.org's Node (glibc) when Alpine's npm is out of its range; it
+            # cannot run on musl, and while it is there Hermes ignores the system Node altogether.
+            drop_broken_node() {
+                if [ -e "${'$'}HERMES_HOME/node/bin/node" ] && ! "${'$'}HERMES_HOME/node/bin/node" --version >/dev/null 2>&1; then
+                    echo "removing Hermes-managed Node that cannot run on Alpine; the system Node stays in use"
+                    rm -rf "${'$'}HERMES_HOME/node"
+                fi
+            }
             healthy() { git -C "${'$'}REPO" fsck --connectivity-only >/dev/null 2>&1; }
-            done_with() { echo "== Updated by: ${'$'}1"; exit 0; }
+            # uv hardlinks by default, and under link2symlink that has left pip in the venv half-installed.
+            fix_pip() {
+                "${'$'}REPO/venv/bin/python" -m pip --version >/dev/null 2>&1 && return 0
+                echo "pip in the venv is broken — reinstalling it"
+                UV_LINK_MODE=copy "${'$'}HERMES_HOME/bin/uv" pip install -q --python "${'$'}REPO/venv/bin/python" --reinstall pip || echo "pip reinstall failed"
+            }
+            done_with() { drop_broken_node; fix_pip; echo "== Updated by: ${'$'}1"; exit 0; }
             at_target && healthy && done_with "nothing to do, already the newest"
 
             echo "== [1/3] hermes update"
             if [ -x "${'$'}REPO/venv/bin/hermes" ]; then
-                (cd "${'$'}REPO" && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
+                (cd "${'$'}REPO" && export UV_LINK_MODE=copy && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
+                drop_broken_node
                 at_target && healthy && done_with "hermes update"
             else
                 echo "hermes command missing — skipping"
@@ -492,15 +535,16 @@ class ProotLinuxRuntime @Inject constructor(
             fi
             # Fetch into a second git dir next to the old one, in real files (rename mode), and only swap
             # once it holds the new version. Code files are then brought to it in place; venv and every
-            # untracked file stay where they are.
+            # untracked file stay where they are. The old .git is renamed, not deleted: proot refuses to
+            # rm its link2symlink entries ("Operation not permitted"); the app deletes .git-old-* from outside.
             NEW="${'$'}REPO/.git-new"
-            rm -rf "${'$'}NEW"
+            rm -rf "${'$'}NEW" 2>/dev/null || mv "${'$'}NEW" "${'$'}REPO/.git-old-new-${'$'}(date +%s)"
             if git --git-dir="${'$'}NEW" init -q -b "${'$'}BRANCH" &&
                 git --git-dir="${'$'}NEW" config core.createObject rename &&
                 t 600 git --git-dir="${'$'}NEW" fetch -q --depth 1 "${'$'}REMOTE" "${'$'}BRANCH" </dev/null &&
                 [ "${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)" != "" ]; then
                 TARGET=${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)
-                rm -rf "${'$'}REPO/.git" && mv "${'$'}NEW" "${'$'}REPO/.git" &&
+                { [ ! -e "${'$'}REPO/.git" ] || mv "${'$'}REPO/.git" "${'$'}REPO/.git-old-${'$'}(date +%s)"; } && mv "${'$'}NEW" "${'$'}REPO/.git" &&
                     git -C "${'$'}REPO" config core.bare false &&
                     git -C "${'$'}REPO" remote add origin "${'$'}REMOTE" 2>/dev/null
                 git -C "${'$'}REPO" update-ref "refs/remotes/origin/${'$'}BRANCH" "${'$'}TARGET"
@@ -511,6 +555,7 @@ class ProotLinuxRuntime @Inject constructor(
                 echo "could not download fresh git data from GitHub"
                 rm -rf "${'$'}NEW"
             fi
+            drop_broken_node
             echo "Hermes Agent was not updated — the steps and diagnosis above say why (also in /root/.hermes/logs/app-install.log)"
             exit 1
         """.trimIndent()
