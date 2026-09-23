@@ -396,12 +396,6 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(inputText = text) }
     }
 
-    fun sendSuggestion(text: String) {
-        if (text.isBlank()) return
-        _uiState.update { it.copy(inputText = text) }
-        sendMessage()
-    }
-
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
@@ -819,8 +813,6 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(errorEvent = null) }
     }
 
-    fun updateDrawerSearch(query: String) = drawerDelegate.updateSearch(_uiState, query)
-    fun toggleDrawerSort() = drawerDelegate.toggleSort(_uiState)
     fun drawerTogglePin(sessionId: String) = drawerDelegate.togglePin(_uiState, sessionId)
     fun drawerShowRename(sessionId: String, currentTitle: String) = drawerDelegate.showRename(_uiState, sessionId, currentTitle)
     fun drawerUpdateRenameText(text: String) = drawerDelegate.updateRenameText(_uiState, text)

@@ -854,18 +854,4 @@ class TermuxBridge @Inject constructor(
         }
     }
 
-    @Suppress("unused")
-    private fun getCachedInstallInfo(): RuntimeInfo? {
-        return try {
-            if (prefs.getBoolean(KEY_INSTALLED, false)) {
-                RuntimeInfo(
-                    type = RuntimeType.TERMUX,
-                    version = null,
-                    hermesVersion = prefs.getString(KEY_VERSION, null),
-                )
-            } else null
-        } catch (e: Exception) {
-            null
-        }
-    }
 }

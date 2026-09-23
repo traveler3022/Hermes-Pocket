@@ -149,44 +149,6 @@ import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun formatRelativeTime(timestampMs: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMs = now - timestampMs
-    val diffSeconds = diffMs / 1000
-    val diffMinutes = diffSeconds / 60
-    val diffHours = diffMinutes / 60
-    val diffDays = diffHours / 24
-
-    return when {
-        diffMs < 0 || diffMinutes < 1 -> t("Just now", "همین الان")
-        diffMinutes < 60 -> {
-            val m = diffMinutes.toInt()
-            t("$m min ago", "$m دقیقه پیش")
-        }
-        diffHours < 24 -> {
-            val h = diffHours.toInt()
-            if (h == 1) t("1 hour ago", "۱ ساعت پیش")
-            else t("$h hours ago", "$h ساعت پیش")
-        }
-        diffDays < 2 -> t("Yesterday", "دیروز")
-        diffDays < 7 -> {
-            val d = diffDays.toInt()
-            t("$d days ago", "$d روز پیش")
-        }
-        diffDays < 30 -> {
-            val w = (diffDays / 7).toInt()
-            if (w == 1) t("1 week ago", "۱ هفته پیش")
-            else t("$w weeks ago", "$w هفته پیش")
-        }
-        else -> {
-            val months = (diffDays / 30).toInt()
-            if (months == 1) t("1 month ago", "۱ ماه پیش")
-            else t("$months months ago", "$months ماه پیش")
-        }
-    }
-}
-
-@Composable
 internal fun highlightText(text: String, query: String): AnnotatedString {
     if (query.isBlank()) return AnnotatedString(text)
     val highlightColor = MaterialTheme.colorScheme.tertiary
@@ -211,23 +173,6 @@ internal fun highlightText(text: String, query: String): AnnotatedString {
             append(text.substring(start))
         }
     }
-}
-
-@Composable
-internal fun thinkingDotStr(): String {
-    val transition = rememberInfiniteTransition(label = "thinking_dots")
-    // InfiniteTransition exposes animateFloat (not animateInt); animate 0f..4f
-    // and floor to an int step.
-    val rawStep by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "dots",
-    )
-    return when (rawStep.toInt() % 4) { 0 -> ""; 1 -> "."; 2 -> ".."; else -> "..." }
 }
 
 
