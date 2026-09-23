@@ -1703,7 +1703,7 @@ class ChatViewModel @Inject constructor(
 
         /** Shown first in the `/` list: what the app has no button for and people reach for. */
         internal val FIRST_SLASH_COMMANDS = listOf(
-            "/goal", "/btw", "/bg", "/plan", "/loop", "/review", "/learn", "/status", "/help",
+            "/plan", "/goal", "/subgoal", "/btw", "/bg", "/loop", "/review", "/learn", "/status", "/help",
         )
 
         /**
