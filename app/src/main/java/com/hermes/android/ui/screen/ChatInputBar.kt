@@ -179,9 +179,9 @@ internal fun InputBar(
         ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(onAttachFile) }
     // Voice input: Android's own recognizer (the system's speech dialog), so no
-    // microphone permission here. What was said lands in the box to check before sending.
+    // microphone permission here. No language is asked for: the recognizer uses the
+    // one the user set on the phone. What was said lands in the box to check before sending.
     val context = LocalContext.current
-    val speechLanguage = t("en-US", "fa-IR")
     val speechPrompt = t("Speak", "صحبت کن")
     val noSpeech = t("Speech recognition isn't available on this phone", "تشخیص گفتار روی این گوشی در دسترس نیست")
     val voiceInput = rememberLauncherForActivityResult(
@@ -198,7 +198,6 @@ internal fun InputBar(
     val startVoiceInput = {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage)
             .putExtra(RecognizerIntent.EXTRA_PROMPT, speechPrompt)
         try {
             voiceInput.launch(intent)
