@@ -52,6 +52,11 @@ class TermuxBridgeTest {
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
+        // A stored session token, so the bridge never mints one: android.util.Base64
+        // is a stub returning null on the JVM, which Kotlin 2.2 turns into an NPE.
+        every {
+            context.getSharedPreferences(any(), any()).getString(any(), any())
+        } returns "test-token"
         detector = mockk(relaxed = true)
         installer = mockk(relaxed = true)
         executor = mockk(relaxed = true)
