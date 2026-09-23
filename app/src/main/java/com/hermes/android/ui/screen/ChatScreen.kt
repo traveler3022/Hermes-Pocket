@@ -288,20 +288,11 @@ fun ChatScreen(
             }
         }
 
-    // What folded into a trace leaves the flow: every tool card, and — when
-    // narration is folded — every assistant message but the one ending its turn.
+    // What folded into a trace leaves the flow: every tool card a trace
+    // carries, and — when narration is folded — every assistant message but
+    // the one ending its turn.
     val visibleMessages = remember(filteredMessages, turnWork, searching) {
-        if (searching) {
-            filteredMessages
-        } else {
-            filteredMessages.filter { msg ->
-                when (msg) {
-                    is ChatMessage.ToolCall -> false
-                    is ChatMessage.Assistant -> msg.id in turnWork
-                    else -> true
-                }
-            }
-        }
+        visibleChatMessages(filteredMessages, turnWork, searching)
     }
 
     // What the agent is doing right now (null = idle). Derived, not stored —

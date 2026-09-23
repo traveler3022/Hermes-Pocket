@@ -296,6 +296,31 @@ internal class TurnWorkCache {
 }
 
 /**
+ * What stays on the chat surface once [turnWork] has folded a turn's work away:
+ * an assistant message only when it owns a trace, a tool card only when no
+ * trace carries it. A turn with no assistant message at all — cut off mid-tool,
+ * or ended on one — has nowhere to fold into, and hiding every tool card
+ * regardless left the question standing alone with no sign anything ran.
+ */
+internal fun visibleChatMessages(
+    messages: List<ChatMessage>,
+    turnWork: Map<String, List<HxTraceItem>>,
+    searching: Boolean,
+): List<ChatMessage> {
+    if (searching) return messages
+    val foldedTools = turnWork.values.flatMapTo(HashSet()) { items ->
+        items.mapNotNull { (it as? HxTraceItem.Tool)?.call?.id }
+    }
+    return messages.filter { msg ->
+        when (msg) {
+            is ChatMessage.ToolCall -> msg.id !in foldedTools
+            is ChatMessage.Assistant -> msg.id in turnWork
+            else -> true
+        }
+    }
+}
+
+/**
  * The agent's reasoning, as a single quiet line in the message flow.
  *
  * Collapsed it is only text — no card, no border, no chevron: while the model

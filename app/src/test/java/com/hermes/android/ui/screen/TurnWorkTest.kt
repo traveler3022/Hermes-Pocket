@@ -156,7 +156,7 @@ class TurnWorkTest {
     }
 
     @Test
-    fun `a tool with no assistant before it is dropped rather than misattributed`() {
+    fun `a tool with no assistant before it is not misattributed`() {
         val messages = listOf(user(), tool("t1"), assistant("a1", text = "hi"))
 
         val folded = buildTurnWork(messages, foldNarration = true)
@@ -164,8 +164,68 @@ class TurnWorkTest {
 
         // Folded, the turn owns it — the ending message is that turn.
         assertEquals(listOf("Tool:t1"), folded.getValue("a1").map(::describe))
-        // Unfolded, nothing preceded it to carry it.
+        // Unfolded, nothing preceded it to carry it; it stays a card instead.
         assertEquals(emptyList<String>(), unfolded.getValue("a1").map(::describe))
+    }
+
+    // ── What stays on the surface ────────────────────────────────────────────
+
+    private fun visible(messages: List<ChatMessage>, folded: Boolean) =
+        visibleChatMessages(messages, buildTurnWork(messages, folded), searching = false).map { it.id }
+
+    @Test
+    fun `a turn with no assistant message still shows its tools`() {
+        // Cut off mid-tool, or a turn that ended on a tool: nothing to fold into.
+        val messages = listOf(user(), tool("t1"), tool("t2"))
+
+        listOf(true, false).forEach { folded ->
+            assertEquals("foldNarration=$folded", listOf("u0", "t1", "t2"), visible(messages, folded))
+        }
+    }
+
+    @Test
+    fun `unfolded, a tool before the turn's first message stays on the surface`() {
+        val messages = listOf(user(), tool("t1"), assistant("a1", text = "hi"))
+
+        assertEquals(listOf("u0", "t1", "a1"), visible(messages, folded = false))
+    }
+
+    @Test
+    fun `a tool a trace carries leaves the flow`() {
+        val messages = listOf(user(), assistant("a1", text = "look"), tool("t1"), assistant("a2", text = "done"))
+
+        assertEquals(listOf("u0", "a2"), visible(messages, folded = true))
+        assertEquals(listOf("u0", "a1", "a2"), visible(messages, folded = false))
+    }
+
+    @Test
+    fun `a search folds nothing`() {
+        val messages = listOf(user(), assistant("a1", text = "look"), tool("t1"), assistant("a2", text = "done"))
+
+        assertEquals(messages, visibleChatMessages(messages, emptyMap(), searching = true))
+    }
+
+    @Test
+    fun `the cache hands back the same list for an unchanged trace and a new one for a changed trace`() {
+        val cache = TurnWorkCache()
+        val first = listOf(user(), assistant("a1", reasoning = "r"), user(), assistant("a2", reasoning = "x"))
+        val before = cache.build(first, foldNarration = true)
+
+        val grown = first.dropLast(1) + assistant("a2", reasoning = "xy")
+        val after = cache.build(grown, foldNarration = true)
+
+        assertTrue(before.getValue("a1") === after.getValue("a1"))
+        assertEquals(listOf("Reasoning:xy"), after.getValue("a2").map(::describe))
+    }
+
+    @Test
+    fun `the window starts at the n-th question from the end`() {
+        val messages = listOf(user(), assistant("a1"), user(), assistant("a2"), user(), assistant("a3"))
+
+        assertEquals(4, chatWindowStart(messages, 1))
+        assertEquals(2, chatWindowStart(messages, 2))
+        assertEquals(0, chatWindowStart(messages, 10))
+        assertEquals(0, chatWindowStart(emptyList(), 10))
     }
 
     private fun describe(item: HxTraceItem): String = when (item) {
