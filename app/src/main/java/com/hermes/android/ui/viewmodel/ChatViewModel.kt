@@ -1714,6 +1714,11 @@ class ChatViewModel @Inject constructor(
             "/new", "/clear", "/retry", "/undo", "/branch", "/model", "/approve", "/deny",
             "/sessions", "/resume", "/stop", "/image",
             "/context", "/queue", "/compress", "/title", "/save", "/history",
+            // Settings, Tools, Task Desk, Changes and the composer already do these.
+            "/steer", "/reasoning", "/personality", "/approvals", "/yolo", "/config",
+            "/reload", "/reload-mcp", "/tools", "/toolsets", "/skills", "/reload-skills",
+            "/plugins", "/cron", "/platforms", "/agents", "/insights", "/usage",
+            "/rollback", "/skin",
             "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
             "/copy", "/paste", "/quit", "/wake", "/voice",
         )
