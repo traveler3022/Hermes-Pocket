@@ -1,8 +1,6 @@
 package com.hermes.android.ui.screen
 
-import android.content.Context
-import android.content.Intent
-import android.provider.DocumentsContract
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,20 +26,23 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.LinuxToolsUiState
 import com.hermes.android.ui.viewmodel.LinuxToolsViewModel
 
 /** The built-in Alpine's own tools, as in Aether's Alpine settings: terminal, files, packages. */
@@ -53,11 +54,14 @@ fun LinuxToolsScreen(
     viewModel: LinuxToolsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    // The package list is a page of its own inside this screen; back returns here.
+    var showPackages by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showPackages) { showPackages = false }
     val desktopNotInstalled = t(
-        "Install “Browser & desktop (VNC)” below first.",
-        "اول بستهٔ «مرورگر و دسکتاپ (VNC)» را از پایین همین صفحه نصب کنید.",
+        "Install “Browser & desktop (VNC)” from Packages first.",
+        "اول بستهٔ «مرورگر و دسکتاپ (VNC)» را از «بسته‌ها» نصب کنید.",
     )
     val filesUnavailable = t(
         "No Files app found. Open your file manager and pick “Hermes”.",
@@ -73,8 +77,8 @@ fun LinuxToolsScreen(
     }
 
     HermesScaffold(
-        title = t("Linux", "لینوکس"),
-        onBack = onNavigateBack,
+        title = if (showPackages) t("Packages", "بسته‌ها") else t("Linux", "لینوکس"),
+        onBack = { if (showPackages) showPackages = false else onNavigateBack() },
         snackbarHostState = snackbarHostState,
         actions = {
             IconButton(onClick = viewModel::refresh, enabled = !state.checking) {
@@ -100,6 +104,10 @@ fun LinuxToolsScreen(
                 )
                 return@Column
             }
+            if (showPackages) {
+                PackagesPage(state, viewModel)
+                return@Column
+            }
 
             Spacer(Modifier.height(12.dp))
             SettingsGroup {
@@ -114,7 +122,7 @@ fun LinuxToolsScreen(
                     title = t("Files", "فایل‌ها"),
                     subtitle = t("Browse Linux files in Android's Files app", "مرور فایل‌های لینوکس در برنامهٔ Files اندروید"),
                     icon = Icons.Default.Folder,
-                    onClick = { if (!openFiles(context)) viewModel.showMessage(filesUnavailable) },
+                    onClick = { if (!openLinuxFiles(context)) viewModel.showMessage(filesUnavailable) },
                 )
                 GroupDivider()
                 SettingRow(
@@ -132,57 +140,60 @@ fun LinuxToolsScreen(
                         }
                     },
                 )
-            }
-
-            SectionHeader(t("Packages", "بسته‌ها"))
-            SettingsGroup {
-                viewModel.profiles.forEachIndexed { index, profile ->
-                    if (index > 0) GroupDivider()
-                    val installed = state.installed[profile.id]
-                    SettingRow(
-                        title = t(profile.titleEn, profile.titleFa),
-                        subtitle = profile.packages.joinToString(" "),
-                        icon = Icons.Default.Inventory2,
-                        trailing = {
-                            when {
-                                state.installing == profile.id || (installed == null && state.checking) ->
-                                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                installed == true -> Text(
-                                    t("Installed", "نصب شده"),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                else -> TextButton(
-                                    onClick = { viewModel.install(profile) },
-                                    enabled = state.installing == null,
-                                ) { Text(t("Install", "نصب")) }
-                            }
-                        },
-                    )
-                }
-            }
-
-            if (state.log.isNotEmpty()) {
-                SectionHeader(t("Install output", "خروجی نصب"))
-                SettingsGroup {
-                    Text(
-                        text = state.log.joinToString("\n"),
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    )
-                }
+                GroupDivider()
+                SettingRow(
+                    title = t("Packages", "بسته‌ها"),
+                    subtitle = t(
+                        "${state.installed.count { it.value == true }} of ${viewModel.profiles.size} installed",
+                        "${state.installed.count { it.value == true }} از ${viewModel.profiles.size} نصب شده",
+                    ),
+                    icon = Icons.Default.Inventory2,
+                    onClick = { showPackages = true },
+                )
             }
         }
     }
 }
 
-/** Opens DocumentsUI on our provider's root; false when no app handles it. */
-private fun openFiles(context: Context): Boolean {
-    val authority = LinuxFilesProvider.authority(context)
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(DocumentsContract.buildRootUri(authority, LinuxFilesProvider.ROOT_ID), DocumentsContract.Root.MIME_TYPE_ITEM)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+@Composable
+private fun PackagesPage(state: LinuxToolsUiState, viewModel: LinuxToolsViewModel) {
+    Spacer(Modifier.height(12.dp))
+    SettingsGroup {
+        viewModel.profiles.forEachIndexed { index, profile ->
+            if (index > 0) GroupDivider()
+            val installed = state.installed[profile.id]
+            SettingRow(
+                title = t(profile.titleEn, profile.titleFa),
+                subtitle = profile.packages.joinToString(" "),
+                icon = Icons.Default.Inventory2,
+                trailing = {
+                    when {
+                        state.installing == profile.id || (installed == null && state.checking) ->
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        installed == true -> Text(
+                            t("Installed", "نصب شده"),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        else -> TextButton(
+                            onClick = { viewModel.install(profile) },
+                            enabled = state.installing == null,
+                        ) { Text(t("Install", "نصب")) }
+                    }
+                },
+            )
+        }
     }
-    return runCatching { context.startActivity(intent) }.isSuccess
+
+    if (state.log.isNotEmpty()) {
+        SectionHeader(t("Install output", "خروجی نصب"))
+        SettingsGroup {
+            Text(
+                text = state.log.joinToString("\n"),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+            )
+        }
+    }
 }

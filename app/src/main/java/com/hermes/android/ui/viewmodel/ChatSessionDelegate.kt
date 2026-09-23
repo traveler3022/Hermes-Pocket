@@ -75,9 +75,14 @@ internal class ChatSessionDelegate(
      * Returns null when [sessionId] could not be opened, otherwise whether a
      * turn is still running in it.
      */
-    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean? {
+    suspend fun resume(
+        state: MutableStateFlow<ChatUiState>,
+        sessionId: String,
+        isLiveId: Boolean = false,
+    ): Boolean? {
         try {
-            val attached = sessionRepository.attach(sessionId)
+            // A live id always 4007s on session.resume first; go straight to activate.
+            val attached = sessionRepository.attach(sessionId, preferLive = isLiveId)
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
             val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
@@ -270,16 +275,19 @@ internal class ChatSessionDelegate(
         }
     }
 
-    /** The nth user turn's durable row id, for a retry whose [ChatMessage.User.rowId] was
-     *  never stamped (sent live in this session, not loaded from session.history). */
-    suspend fun resolveUserRowId(sessionId: String, userOrdinal: Int): Long? {
+    /**
+     * The chat's user turns as the server stores them, row ids included, or null when
+     * the history could not be read. A rewind is aimed with these, never with the
+     * bubbles on screen alone (see [findUserRow]).
+     */
+    suspend fun serverUserTurns(sessionId: String): List<ChatMessage.User>? {
         return try {
             val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            parseSessionHistory(result).filterIsInstance<ChatMessage.User>().getOrNull(userOrdinal)?.rowId
+            parseSessionHistory(result).filterIsInstance<ChatMessage.User>()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Timber.w(e, "[Chat] Could not resolve row id for session $sessionId ordinal $userOrdinal")
+            Timber.w(e, "[Chat] Could not read the user turns of session $sessionId")
             null
         }
     }
@@ -310,15 +318,6 @@ internal class ChatSessionDelegate(
                 else ErrorEvent.Error("Branch failed: $m"),
             ) }
         }
-    }
-
-    suspend fun resolveLiveSessionId(state: MutableStateFlow<ChatUiState>): String? {
-        return try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
-        } catch (e: Exception) {
-            null
-        } ?: state.value.activeSessionId
     }
 
     private fun parseList(result: kotlinx.serialization.json.JsonElement): List<SessionItem> {

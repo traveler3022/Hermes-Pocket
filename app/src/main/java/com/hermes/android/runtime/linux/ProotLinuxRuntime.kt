@@ -22,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +61,7 @@ class ProotLinuxRuntime @Inject constructor(
         // more, until the service happened to start Hermes. A deliberate stop still wins,
         // and a start already under way is left to finish rather than queued behind.
         stdioHub.restartHandler = handler@{
-            if (stoppedDeliberately) return@handler
+            if (stoppedDeliberately || updating) return@handler
             val state = _state.value
             if (state is RuntimeState.Installing || state is RuntimeState.Detecting) return@handler
             if (gatewayMutex.isLocked) {
@@ -170,6 +171,77 @@ class ProotLinuxRuntime @Inject constructor(
         }
     }
 
+    @Volatile
+    private var updating = false
+
+    override val canUpdateHermes: Boolean get() = true
+
+    /**
+     * Update Hermes Agent: [HERMES_UPDATE_SCRIPT] brings the checkout to GitHub's main
+     * through a chain of fallbacks, then the install script's locked `uv sync` brings the
+     * dependencies along. The gateway is stopped for the swap and started again after,
+     * also when the update fails, so a failed update still leaves Hermes running.
+     */
+    override suspend fun updateHermes(progressEmitter: ProgressEmitter): InstallResult =
+        // The runtime's own scope: a caller that goes away (the About screen closed)
+        // must not cancel the update halfway and leave Hermes stopped.
+        scope.async { updateHermesNow(progressEmitter) }.await()
+
+    private suspend fun updateHermesNow(progressEmitter: ProgressEmitter): InstallResult {
+        if (!isHermesInstalled()) return InstallResult.Failure("Hermes is not installed yet.")
+        val result = installMutex.withLock {
+            updating = true
+            val log = StringBuilder()
+            fun report(stage: String, message: String, percent: Int?) {
+                progressEmitter.emit(InstallProgress(stage, message, percent, System.currentTimeMillis()))
+            }
+            try {
+                report("stop", "Stopping Hermes…", 2)
+                stopGateway()
+                report("update", "Downloading the newest Hermes Agent…", 5)
+                // Proot refuses to delete link2symlink entries ("Operation not permitted"), so what
+                // the guest can't remove is removed from here: a uv cache that past hardlinking
+                // poisoned (it breaks pip in the venv), and the .git dirs the repair set aside.
+                deleteTree(environment.guestFile("/root/.cache/uv"))
+                runStage("update", HERMES_UPDATE_SCRIPT, 5, 60, log, ::report)
+                environment.guestFile("/root/.hermes/hermes-agent")
+                    .listFiles { f -> f.name.startsWith(".git-old-") }
+                    ?.forEach(::deleteTree)
+                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT", 60, 90, log, ::report)
+                report("verify", "Checking hermes --version…", 92)
+                val version = readHermesVersion()
+                    ?: throw InstallFailure("Hermes command not found after the update.")
+                prefs.edit().putString(KEY_VERSION, version).apply()
+                InstallResult.Success(currentInfo().copy(hermesVersion = version))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Linux] Hermes update failed")
+                InstallResult.Failure((e as? InstallFailure)?.message ?: "Update failed: ${e.message}", log.toString().takeLast(8_000))
+            } finally {
+                updating = false
+            }
+        }
+        progressEmitter.emit(InstallProgress("start", "Starting Hermes…", 95, System.currentTimeMillis()))
+        runCatching { startGateway() }.onFailure { Timber.w(it, "[Linux] Gateway did not come back after the update") }
+        return result
+    }
+
+    /** Deletes [root] without following symlinks: link2symlink's links hold absolute host paths. */
+    private fun deleteTree(root: File) {
+        if (!root.exists() && !java.nio.file.Files.isSymbolicLink(root.toPath())) return
+        runCatching {
+            java.nio.file.Files.walkFileTree(root.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(file) }
+                override fun visitFileFailed(file: java.nio.file.Path, exc: java.io.IOException) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(file) }
+                override fun postVisitDirectory(dir: java.nio.file.Path, exc: java.io.IOException?) =
+                    java.nio.file.FileVisitResult.CONTINUE.also { java.nio.file.Files.deleteIfExists(dir) }
+            })
+        }.onFailure { Timber.w(it, "[Linux] Could not delete ${root.path}") }
+    }
+
     private suspend fun runStage(
         stage: String,
         script: String,
@@ -212,7 +284,14 @@ class ProotLinuxRuntime @Inject constructor(
         return VerifyResult.Success(version, doctor.ok)
     }
 
-    override suspend fun startGateway(): GatewayHandle = gatewayMutex.withLock {
+    override suspend fun startGateway(): GatewayHandle {
+        // Hermes' files are being replaced: a gateway started now would load half of
+        // the old version and half of the new. Wait for the update to finish.
+        if (updating) installMutex.withLock { }
+        return startGatewayLocked()
+    }
+
+    private suspend fun startGatewayLocked(): GatewayHandle = gatewayMutex.withLock {
         stoppedDeliberately = false
         val current = _state.value
         if (current is RuntimeState.Running && gatewayProcess?.isAlive == true) return current.gateway
@@ -377,6 +456,110 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
+        // Brings the checkout to GitHub's main, stopping at the first way that gets there: Hermes'
+        // own `hermes update`, a plain pull, then (after saying what is broken) fresh git data
+        // fetched beside the old one. Nothing is moved or reinstalled; the venv and untracked
+        // files stay. The install script then syncs the dependencies.
+        private val HERMES_UPDATE_SCRIPT = """
+            export HERMES_HOME=/root/.hermes
+            REPO="${'$'}HERMES_HOME/hermes-agent"
+            REMOTE=https://github.com/NousResearch/hermes-agent.git
+            BRANCH=main
+            # busybox has timeout; if a rootfs ever lacks it, run without a limit rather than fail every step.
+            t() { if command -v timeout >/dev/null 2>&1; then timeout "${'$'}@"; else shift; "${'$'}@"; fi; }
+            # proot's --link2symlink turns git's link()+unlink() object writes into symlinks holding
+            # absolute paths, so a moved or copied .git loses every object. Rename mode writes real files.
+            git config --global core.createObject rename
+            [ ! -d "${'$'}REPO/.git" ] || git -C "${'$'}REPO" config core.createObject rename 2>/dev/null
+            # Success is judged against GitHub itself, never an exit code: HEAD must equal the remote tip.
+            TARGET=${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)
+            if [ -z "${'$'}TARGET" ]; then
+                echo "Could not reach GitHub — check the internet connection; nothing was changed."
+                exit 1
+            fi
+            echo "Newest Hermes Agent: ${'$'}TARGET"
+            # main moves every few minutes, so a HEAD past TARGET (or at a fresher tip) counts too.
+            at_target() {
+                head=${'$'}(git -C "${'$'}REPO" rev-parse HEAD 2>/dev/null) || return 1
+                [ "${'$'}head" = "${'$'}TARGET" ] && return 0
+                git -C "${'$'}REPO" merge-base --is-ancestor "${'$'}TARGET" "${'$'}head" 2>/dev/null && return 0
+                [ "${'$'}head" = "${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)" ]
+            }
+            # hermes update provisions nodejs.org's Node (glibc) when Alpine's npm is out of its range; it
+            # cannot run on musl, and while it is there Hermes ignores the system Node altogether.
+            drop_broken_node() {
+                if [ -e "${'$'}HERMES_HOME/node/bin/node" ] && ! "${'$'}HERMES_HOME/node/bin/node" --version >/dev/null 2>&1; then
+                    echo "removing Hermes-managed Node that cannot run on Alpine; the system Node stays in use"
+                    rm -rf "${'$'}HERMES_HOME/node"
+                fi
+            }
+            healthy() { git -C "${'$'}REPO" fsck --connectivity-only >/dev/null 2>&1; }
+            # uv hardlinks by default, and under link2symlink that has left pip in the venv half-installed.
+            fix_pip() {
+                "${'$'}REPO/venv/bin/python" -m pip --version >/dev/null 2>&1 && return 0
+                echo "pip in the venv is broken — reinstalling it"
+                UV_LINK_MODE=copy "${'$'}HERMES_HOME/bin/uv" pip install -q --python "${'$'}REPO/venv/bin/python" --reinstall pip || echo "pip reinstall failed"
+            }
+            done_with() { drop_broken_node; fix_pip; echo "== Updated by: ${'$'}1"; exit 0; }
+            at_target && healthy && done_with "nothing to do, already the newest"
+
+            echo "== [1/3] hermes update"
+            if [ -x "${'$'}REPO/venv/bin/hermes" ]; then
+                (cd "${'$'}REPO" && export UV_LINK_MODE=copy && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
+                drop_broken_node
+                at_target && healthy && done_with "hermes update"
+            else
+                echo "hermes command missing — skipping"
+            fi
+
+            echo "== [2/3] git pull from GitHub"
+            # A step killed by its timeout can leave git children and index.lock behind; clear both.
+            pkill -x git 2>/dev/null && sleep 1
+            find "${'$'}REPO/.git" -maxdepth 2 -name '*.lock' -delete 2>/dev/null
+            t 600 git -C "${'$'}REPO" pull --ff-only "${'$'}REMOTE" "${'$'}BRANCH" </dev/null || echo "git pull failed (exit ${'$'}?)"
+            at_target && healthy && done_with "git pull"
+
+            echo "== [3/3] diagnose and repair the git data"
+            if [ ! -d "${'$'}REPO/.git" ]; then
+                echo "diagnosis: ${'$'}REPO/.git is missing"
+            else
+                dangling=${'$'}(find "${'$'}REPO/.git" -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)
+                [ "${'$'}dangling" -eq 0 ] || echo "diagnosis: ${'$'}dangling git file(s) are links to data that is gone (proot link2symlink; the .git was moved or its .l2s files deleted)"
+                if healthy; then
+                    echo "diagnosis: git data is intact; the pull itself failed:"
+                    git -C "${'$'}REPO" status 2>&1 | head -5
+                else
+                    echo "diagnosis: git data is broken (${'$'}(git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | grep -c missing) missing object(s)):"
+                    git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | head -3
+                fi
+            fi
+            # Fetch into a second git dir next to the old one, in real files (rename mode), and only swap
+            # once it holds the new version. Code files are then brought to it in place; venv and every
+            # untracked file stay where they are. The old .git is renamed, not deleted: proot refuses to
+            # rm its link2symlink entries ("Operation not permitted"); the app deletes .git-old-* from outside.
+            NEW="${'$'}REPO/.git-new"
+            rm -rf "${'$'}NEW" 2>/dev/null || mv "${'$'}NEW" "${'$'}REPO/.git-old-new-${'$'}(date +%s)"
+            if git --git-dir="${'$'}NEW" init -q -b "${'$'}BRANCH" &&
+                git --git-dir="${'$'}NEW" config core.createObject rename &&
+                t 600 git --git-dir="${'$'}NEW" fetch -q --depth 1 "${'$'}REMOTE" "${'$'}BRANCH" </dev/null &&
+                [ "${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)" != "" ]; then
+                TARGET=${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)
+                { [ ! -e "${'$'}REPO/.git" ] || mv "${'$'}REPO/.git" "${'$'}REPO/.git-old-${'$'}(date +%s)"; } && mv "${'$'}NEW" "${'$'}REPO/.git" &&
+                    git -C "${'$'}REPO" config core.bare false &&
+                    git -C "${'$'}REPO" remote add origin "${'$'}REMOTE" 2>/dev/null
+                git -C "${'$'}REPO" update-ref "refs/remotes/origin/${'$'}BRANCH" "${'$'}TARGET"
+                git -C "${'$'}REPO" reset -q --hard "${'$'}TARGET" && git -C "${'$'}REPO" branch -q -u "origin/${'$'}BRANCH" 2>/dev/null
+                at_target && healthy && done_with "git repair"
+                echo "repair fetched ${'$'}TARGET but could not check it out"
+            else
+                echo "could not download fresh git data from GitHub"
+                rm -rf "${'$'}NEW"
+            fi
+            drop_broken_node
+            echo "Hermes Agent was not updated — the steps and diagnosis above say why (also in /root/.hermes/logs/app-install.log)"
+            exit 1
+        """.trimIndent()
+
         // install.sh has no Alpine support, so this mirrors its steps: clone, locked uv sync
         // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
         private val HERMES_INSTALL_SCRIPT = """
@@ -388,8 +571,13 @@ class ProotLinuxRuntime @Inject constructor(
                 curl -LsSf --retry 3 https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${'$'}HERMES_HOME/bin" UV_NO_MODIFY_PATH=1 sh
             fi
             UV="${'$'}HERMES_HOME/bin/uv"
+            # Real files for git objects, not link2symlink's absolute-path symlinks (see HERMES_UPDATE_SCRIPT).
+            git config --global core.createObject rename
             if [ -d "${'$'}REPO/.git" ]; then
-                git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
+                # An update has already brought the checkout to GitHub's main (HERMES_UPDATE_SCRIPT).
+                if [ "${'$'}{HERMES_SKIP_PULL:-}" != 1 ]; then
+                    git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
+                fi
             else
                 rm -rf "${'$'}REPO"
                 git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"

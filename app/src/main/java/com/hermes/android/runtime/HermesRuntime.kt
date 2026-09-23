@@ -162,4 +162,14 @@ interface HermesRuntime {
      * null (no user-side setup needed).
      */
     fun getInstallInstructions(): InstallInstructions?
+
+    /** Whether [updateHermes] can update Hermes Agent in place (only the built-in Linux can). */
+    val canUpdateHermes: Boolean get() = false
+
+    /**
+     * Update Hermes Agent itself (not this app) and bring the gateway back up.
+     * [InstallResult.Success] carries the version now installed.
+     */
+    suspend fun updateHermes(progressEmitter: ProgressEmitter): InstallResult =
+        InstallResult.Failure("Updating Hermes from the app needs the built-in Linux.")
 }

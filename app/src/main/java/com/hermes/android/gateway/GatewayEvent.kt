@@ -316,6 +316,13 @@ sealed class GatewayEvent {
         val text: String,
     ) : GatewayEvent()
 
+    data class BtwComplete(
+        override val sessionId: String?,
+        val taskId: String,
+        val text: String,
+        val question: String?,
+    ) : GatewayEvent()
+
     data class ReviewSummary(
         override val sessionId: String?,
         val text: String?,

@@ -125,4 +125,7 @@ class SwitchableHermesRuntime @Inject constructor(
     override fun hostFileForGuestPath(guestPath: String): java.io.File? = active.hostFileForGuestPath(guestPath)
     override fun launchHostApp(): Boolean = active.launchHostApp()
     override fun getInstallInstructions(): InstallInstructions? = active.getInstallInstructions()
+    override val canUpdateHermes: Boolean get() = active.canUpdateHermes
+    override suspend fun updateHermes(progressEmitter: ProgressEmitter): InstallResult =
+        active.updateHermes(progressEmitter)
 }

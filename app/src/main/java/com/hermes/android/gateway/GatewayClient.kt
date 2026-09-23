@@ -148,5 +148,11 @@ interface GatewayClient {
 
 /**
  * Thrown when an RPC request fails (error response, timeout, or not connected).
+ * [code] and [rpcMessage] are set only for an error response from the server.
  */
-class GatewayException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class GatewayException(
+    message: String,
+    cause: Throwable? = null,
+    val code: Int? = null,
+    val rpcMessage: String? = null,
+) : Exception(message, cause)

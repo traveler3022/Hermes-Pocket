@@ -353,10 +353,6 @@ class SessionsViewModel @Inject constructor(
 
     // ── Export / Share session (#20, #21) ──────────────────────────────────
 
-    fun exportSession(sessionId: String) {
-        shareOrExportSession(sessionId)
-    }
-
     fun shareSession(sessionId: String) {
         shareOrExportSession(sessionId)
     }

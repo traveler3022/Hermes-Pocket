@@ -74,22 +74,6 @@ class TermuxDetector @Inject constructor(
         }
     }
 
-    /**
-     * Open F-Droid install page for a Termux package.
-     */
-    fun openFDroid(pkg: Package): Boolean {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(pkg.fDroidUrl)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        return try {
-            context.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to open F-Droid for ${pkg.packageName}")
-            false
-        }
-    }
-
     private fun getPackageInfo(packageName: String): android.content.pm.PackageInfo? {
         return try {
             // Use getPackageInfo with 0 flags (avoid deprecated PackageManager.GET_META_DATA)

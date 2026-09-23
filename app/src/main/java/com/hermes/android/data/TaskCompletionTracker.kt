@@ -37,8 +37,6 @@ class TaskCompletionTracker @Inject constructor(
         }
     }
 
-    fun alreadyNotified(taskId: String): Boolean = taskId in notified
-
     /**
      * Records everything already finished without announcing any of it, once per install.
      *

@@ -221,6 +221,7 @@ class OkHttpGatewayClient @Inject constructor(
                         if (!deferred.isCompleted) {
                             _connectionState.value = ConnectionState.Connected(state.sessionId)
                             deferred.complete(_connectionState.value)
+                            scope.launch { advertiseCapabilities() }
                             // Session resume on reconnect. Capture into a local so
                             // a concurrent write to lastSessionId can't null it out
                             // between the check and the resume call.
@@ -432,6 +433,25 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     // ── Reconnection ───────────────────────────────────────────────────────
+
+    /**
+     * Tells the server this connection answers server→client requests. A WebSocket client
+     * that never says so gets clarify/approval/sudo/secret requests failed at once instead
+     * of shown (`tui_gateway/session_transports.py::_session_client_answers_requests`).
+     * The stdio transport is not checked by the server, so there this is only a no-op.
+     */
+    private suspend fun advertiseCapabilities() {
+        try {
+            request(
+                GatewayMethods.CLIENT_CAPABILITIES,
+                mapOf("server_requests" to JsonPrimitive(true)),
+                timeoutMs = 15_000,
+                trackSession = false,
+            )
+        } catch (e: Exception) {
+            Timber.w("[Gateway] client.capabilities failed: ${e.message}")
+        }
+    }
 
     private fun handleDisconnect(reason: String) {
         Timber.w("[Gateway] disconnected: $reason")
@@ -756,7 +776,11 @@ class OkHttpGatewayClient @Inject constructor(
 
         if (response.error != null) {
             deferred.completeExceptionally(
-                GatewayException("RPC error ${response.error.code}: ${response.error.message}")
+                GatewayException(
+                    "RPC error ${response.error.code}: ${response.error.message}",
+                    code = response.error.code,
+                    rpcMessage = response.error.message,
+                )
             )
         } else if (response.result != null) {
             if (!skipSessionTracking) {
@@ -974,6 +998,12 @@ class OkHttpGatewayClient @Inject constructor(
                 sid,
                 p["task_id"]?.jsonPrimitive?.content ?: "",
                 p["text"]?.jsonPrimitive?.content ?: "",
+            )
+            "btw.complete" -> GatewayEvent.BtwComplete(
+                sid,
+                p["task_id"]?.jsonPrimitive?.content ?: "",
+                p["text"]?.jsonPrimitive?.content ?: "",
+                p["question"]?.jsonPrimitive?.contentOrNull,
             )
             "review.summary" -> GatewayEvent.ReviewSummary(sid, p["text"]?.jsonPrimitive?.content)
             "browser.progress" -> GatewayEvent.BrowserProgress(

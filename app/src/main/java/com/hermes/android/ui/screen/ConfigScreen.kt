@@ -231,5 +231,5 @@ internal enum class SettingsSection(
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     TOOLS("Tools", "ابزارها"),
     TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
-    ABOUT("About", "درباره"),
+    ABOUT("Updates", "به\u200Cروزرسانی"),
 }

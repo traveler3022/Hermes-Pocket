@@ -18,14 +18,6 @@ internal class ChatDrawerDelegate(
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val forgetSessionActivity: (String) -> Unit,
 ) {
-    fun updateSearch(state: MutableStateFlow<ChatUiState>, query: String) {
-        state.update { it.copy(drawerSearchQuery = query) }
-    }
-
-    fun toggleSort(state: MutableStateFlow<ChatUiState>) {
-        state.update { it.copy(drawerSortNewest = !state.value.drawerSortNewest) }
-    }
-
     fun togglePin(state: MutableStateFlow<ChatUiState>, sessionId: String) {
         val pins = state.value.drawerPinnedIds
         state.update { it.copy(

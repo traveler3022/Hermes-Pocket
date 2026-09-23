@@ -1,0 +1,6 @@
+# Baseline profile for Hermes' own code, in the same wildcard form Compose's own
+# libraries ship. Compose already brings its rules; these cover the app itself so
+# the chat screen, its ViewModel and the gateway client are compiled at install
+# time rather than warming up over the first days of use. Only release builds
+# carry it — debug builds are never ahead-of-time compiled.
+HSPLcom/hermes/android/**->**(**)**

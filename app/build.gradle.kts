@@ -185,3 +185,57 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+// ── Compose compiler report (render diagnostics) ─────────────────────────────
+// Which composables can skip a recomposition, and which parameters are compared
+// by instance rather than by value. Printed into the CI log after assembleDebug,
+// limited to the chat screen's render path. Changes nothing in the APK.
+composeCompiler {
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+}
+
+val composeReportDir = layout.buildDirectory.dir("compose_compiler")
+val printComposeReport by tasks.registering {
+    val dir = composeReportDir
+    doLast {
+        val chatPath = setOf(
+            "ChatScreen", "MessageBubble", "AssistantMessageBubble", "UserMessageBubble",
+            "ToolCallCard", "InteractiveRequestCard", "HxThinkingTrace", "HxStatusLine",
+            "HxShimmerText", "HermesMarkdown", "MdText", "CodeBlock", "CodeBlockCard",
+            "MermaidBlockCard", "InlineImageBlock", "ArtifactCard", "HtmlBlockCard",
+            "TypingDots", "InputBar", "WorkspaceDrawerSheet", "EmptyChatBody",
+            "AgentTodoCard", "MessageActionIcon",
+        )
+        val files = dir.get().asFile.listFiles().orEmpty()
+        val composables = files.filter { it.name.endsWith("-composables.txt") }
+        if (composables.isEmpty()) {
+            println("COMPOSE-REPORT: no report files (compile task came from cache?)")
+            return@doLast
+        }
+        println("COMPOSE-REPORT ================================================")
+        files.filter { it.name.endsWith("-module.json") }.forEach { println(it.readText()) }
+        val entry = Regex("""(?ms)^(\w[^\n]*?)\bfun (\w+)\((.*?)^\)""")
+        val notSkippable = mutableListOf<String>()
+        composables.forEach { f ->
+            entry.findAll(f.readText()).forEach { m ->
+                val flags = m.groupValues[1]
+                val name = m.groupValues[2]
+                if ("restartable" in flags && "skippable" !in flags) notSkippable += name
+                if (name in chatPath) {
+                    println("COMPOSE-REPORT $flags fun $name(")
+                    m.groupValues[3].lines().filter { it.isNotBlank() }
+                        .forEach { println("COMPOSE-REPORT   ${it.trim()}") }
+                    println("COMPOSE-REPORT )")
+                }
+            }
+        }
+        println("COMPOSE-REPORT restartable but not skippable: ${notSkippable.sorted()}")
+        files.filter { it.name.endsWith("-classes.txt") }.forEach { f ->
+            f.readText().split(Regex("(?m)^(?=\\S)")).filter { it.startsWith("unstable class") }
+                .forEach { println("COMPOSE-REPORT " + it.lines().first()) }
+        }
+        println("COMPOSE-REPORT ================================================")
+    }
+}
+tasks.matching { it.name == "assembleDebug" }.configureEach { finalizedBy(printComposeReport) }

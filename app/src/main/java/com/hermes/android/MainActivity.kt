@@ -1,6 +1,7 @@
 package com.hermes.android
 
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.compose.dropUnlessResumed
 import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
@@ -210,6 +211,10 @@ private fun HermesNavHost(
 ) {
     val navController = rememberNavController()
 
+    // Every back arrow is wrapped in dropUnlessResumed: after a pop, the leaving
+    // screen stays on top for the 700 ms fade and still takes taps. A tap on the
+    // chat's hamburger in that window hit Settings' back arrow (same corner) and
+    // popped `chat` too, leaving an empty NavHost — a black screen.
     NavHost(
         navController = navController,
         startDestination = if (startInSetup) "setup" else "chat",
@@ -250,7 +255,7 @@ private fun HermesNavHost(
 
         composable("tasks") {
             com.hermes.android.ui.screen.TasksScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenInChat = { sessionId ->
                     navController.navigate("chat?resumeSessionId=$sessionId") {
                         popUpTo("chat") { inclusive = true }
@@ -261,7 +266,7 @@ private fun HermesNavHost(
 
         composable("config") {
             com.hermes.android.ui.screen.ConfigScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onNavigateToPlatforms = { navController.navigate("platforms") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
@@ -277,7 +282,7 @@ private fun HermesNavHost(
 
         composable("projects") {
             com.hermes.android.ui.screen.ProjectsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenSession = { sessionId ->
                     navController.navigate("chat?resumeSessionId=$sessionId") {
                         popUpTo("chat") { inclusive = true }
@@ -293,19 +298,19 @@ private fun HermesNavHost(
 
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
         composable("plugins") {
             com.hermes.android.ui.screen.PluginsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
         composable("sessions") {
             com.hermes.android.ui.screen.SessionsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onResumeSession = { sessionId ->
                     navController.navigate("chat?resumeSessionId=$sessionId") {
                         popUpTo("chat") { inclusive = true }
@@ -316,19 +321,19 @@ private fun HermesNavHost(
 
         composable("skills") {
             com.hermes.android.ui.screen.SkillsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
         composable("cron") {
             com.hermes.android.ui.screen.CronScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
         composable("linux") {
             com.hermes.android.ui.screen.LinuxToolsScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenTerminal = { navController.navigate("linux/terminal") },
                 onOpenDesktop = { navController.navigate("linux/desktop") },
             )
@@ -336,14 +341,14 @@ private fun HermesNavHost(
 
         composable("linux/desktop") {
             com.hermes.android.ui.screen.LinuxDesktopScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenViewer = { navController.navigate("linux/desktop/viewer") },
             )
         }
 
         composable("linux/desktop/viewer") {
             com.hermes.android.ui.screen.LinuxDesktopViewerScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
@@ -351,13 +356,13 @@ private fun HermesNavHost(
             val tools: com.hermes.android.ui.viewmodel.LinuxToolsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             com.hermes.android.ui.screen.LinuxTerminalScreen(
                 createLaunchSpec = tools::terminalLaunchSpec,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 
         composable("runtime") {
             com.hermes.android.ui.screen.RuntimeSetupScreen(
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
     }

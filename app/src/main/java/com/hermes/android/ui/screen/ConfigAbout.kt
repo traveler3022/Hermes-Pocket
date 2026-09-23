@@ -11,13 +11,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +43,9 @@ import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.AboutUiState
 import com.hermes.android.ui.viewmodel.AboutViewModel
+import com.hermes.android.ui.viewmodel.HermesUpdate
 
 /**
  * What this build is, and whether a newer one has been published.
@@ -59,10 +67,14 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
             .padding(vertical = HxSpace.md),
         verticalArrangement = Arrangement.spacedBy(HxSpace.md),
     ) {
-        SectionHeader(t("This build", "این نسخه"))
+        // Two things update here, and they are easy to mistake for one: the app
+        // (screens, installed from a GitHub release) and Hermes Agent (the agent
+        // itself, inside the built-in Linux). Each gets its own name, version and
+        // one line saying what it is, so neither button looks like the other.
+        SectionHeader(t("App — Hermes for Android", "برنامه — Hermes برای اندروید"))
         SettingsGroup {
             SettingRow(
-                title = t("Version", "نسخه"),
+                title = t("App version", "نسخهٔ برنامه"),
                 subtitle = state.installedVersion,
                 icon = HxIcons.Sparkles,
             )
@@ -74,7 +86,6 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
             )
         }
 
-        SectionHeader(t("Updates", "به‌روزرسانی"))
         SettingsGroup {
             Column(
                 modifier = Modifier.padding(HxSpace.inner),
@@ -100,7 +111,7 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
-                        Text(t("Check for updates", "بررسی به‌روزرسانی"))
+                        Text(t("Check for app updates", "بررسی به‌روزرسانی برنامه"))
                     }
                 }
 
@@ -132,6 +143,11 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                 }
             }
         }
+
+        HermesAgentSection(
+            state = state,
+            onUpdate = viewModel::updateHermes,
+        )
     }
 }
 
@@ -209,5 +225,97 @@ private fun AvailableRelease(
                 modifier = Modifier.padding(start = HxSpace.sm),
             )
         }
+    }
+}
+
+/** Hermes Agent itself: its version, and an in-place update for the built-in Linux. */
+@Composable
+private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    SectionHeader(t("Hermes Agent — the core", "هستهٔ Hermes Agent"))
+    SettingsGroup {
+        SettingRow(
+            title = t("Core version", "نسخهٔ هسته"),
+            subtitle = state.hermesVersion ?: "—",
+            icon = HxIcons.Terminal,
+        )
+        Column(
+            modifier = Modifier.padding(HxSpace.inner),
+            verticalArrangement = Arrangement.spacedBy(HxSpace.md),
+        ) {
+            Text(
+                text = t(
+                    "The agent that writes the replies and runs the tools. It lives in the built-in Linux and updates separately from the app.",
+                    "خود عامل که جواب‌ها را می‌نویسد و ابزارها را اجرا می‌کند. داخل Linux داخلی است و جدا از برنامه به‌روز می‌شود.",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!state.canUpdateHermes) {
+                UpdateNote(
+                    text = t(
+                        "Hermes runs outside the app here (Termux or a server); update it there.",
+                        "اینجا هرمس بیرون از برنامه اجرا می‌شود (Termux یا سرور)؛ همان‌جا به‌روزش کن.",
+                    ),
+                )
+                return@Column
+            }
+            val update = state.hermesUpdate
+            Button(
+                onClick = { confirming = true },
+                enabled = update !is HermesUpdate.Running,
+            ) {
+                Text(t("Update the Hermes core", "به‌روزرسانی هستهٔ هرمس"))
+            }
+            when (update) {
+                HermesUpdate.Idle -> Unit
+                is HermesUpdate.Running -> {
+                    if (update.percent != null) {
+                        LinearProgressIndicator(
+                            progress = { update.percent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    if (update.message.isNotBlank()) UpdateNote(text = update.message)
+                }
+                is HermesUpdate.Done -> UpdateNote(
+                    text = if (update.changed) {
+                        t("Hermes core updated: ${update.version}", "هستهٔ هرمس به‌روز شد: ${update.version}")
+                    } else {
+                        t("The core was already the newest version.", "هسته از قبل جدیدترین نسخه بود.")
+                    },
+                )
+                is HermesUpdate.Failed -> UpdateNote(
+                    text = t(
+                        "Update failed — ${update.reason}. Hermes is being started again.",
+                        "به‌روزرسانی نشد — ${update.reason}. هرمس دوباره روشن می‌شود.",
+                    ),
+                    isProblem = true,
+                )
+            }
+        }
+    }
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(t("Update the Hermes core?", "هستهٔ هرمس به‌روز شود؟")) },
+            text = {
+                Text(
+                    t(
+                        "Hermes stops for a few minutes while it downloads, and any reply in progress is cut off. Your chats and settings stay.",
+                        "هرمس چند دقیقه برای دانلود خاموش می‌شود و جوابی که در حال نوشتن است قطع می‌شود. گفتگوها و تنظیمات سر جایشان می‌مانند.",
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirming = false; onUpdate() }) { Text(t("Update", "به‌روزرسانی")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
     }
 }

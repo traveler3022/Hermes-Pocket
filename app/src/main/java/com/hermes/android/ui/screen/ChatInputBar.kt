@@ -1,10 +1,13 @@
 package com.hermes.android.ui.screen
 
+import android.app.Activity
 import android.app.DownloadManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.speech.RecognizerIntent
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,6 +60,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -151,6 +155,7 @@ import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
+import com.hermes.android.ui.i18n.SlashCommandDescriptions
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
@@ -174,17 +179,51 @@ internal fun InputBar(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(onAttachFile) }
-    // Feature 5.2: slash command suggestions — from the gateway catalog
-    // (commands.catalog); falls back to a minimal built-in list if empty.
+    // Voice input: Android's own recognizer (the system's speech dialog), so no
+    // microphone permission here. No language is asked for: the recognizer uses the
+    // one the user set on the phone. What was said lands in the box to check before sending.
+    val context = LocalContext.current
+    val speechPrompt = t("Speak", "صحبت کن")
+    val noSpeech = t("Speech recognition isn't available on this phone", "تشخیص گفتار روی این گوشی در دسترس نیست")
+    val voiceInput = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (result.resultCode == Activity.RESULT_OK && !spoken.isNullOrEmpty()) {
+            onTextChange(if (text.isBlank()) spoken else text.trimEnd() + " " + spoken)
+        }
+    }
+    val startVoiceInput = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, speechPrompt)
+        try {
+            voiceInput.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, noSpeech, Toast.LENGTH_LONG).show()
+        }
+    }
+    // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
+    // a button for; a short built-in list until the catalog arrives.
     val fallbackCommands = remember {
-        listOf("/help", "/clear", "/config", "/model", "/session")
-            .map { SlashCommandSuggestion(it, "") }
+        listOf(
+            "/help" to "Show available commands",
+            "/btw" to "Ask a side question without interrupting",
+            "/bg" to "Run a prompt in a separate background session",
+            "/goal" to "Set a standing goal Hermes works on across turns",
+            "/status" to "Show session, model, token, and context info",
+        ).map { (command, description) -> SlashCommandSuggestion(command, description) }
     }
     val commandList = slashCommands.ifEmpty { fallbackCommands }
-    val showSuggestions = text.startsWith("/") && !isSending
+    // Hermes describes its commands in English only; Persian comes from the app.
+    val persianDescriptions = t("en", "fa") == "fa"
+    // Only while the command name is being typed: past the first space it is the argument.
+    val showSuggestions = text.startsWith("/") && text.none { it == ' ' || it == '\n' } && !isSending
     val suggestions = remember(text, commandList) {
-        if (text == "/") commandList
-        else commandList.filter { it.command.startsWith(text) }
+        commandList.distinctBy { it.command }.filter { it.command.startsWith(text, ignoreCase = true) }
     }
 
     // Scaffold's own content padding (in ChatScreen.kt) already reserves
@@ -198,17 +237,36 @@ internal fun InputBar(
             .imePadding(),
     ) {
         if (showSuggestions && suggestions.isNotEmpty()) {
-            LazyRow(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .heightIn(max = 260.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                items(suggestions) { cmd ->
-                    SuggestionChip(
-                        onClick = { onTextChange(cmd.command) },
-                        label = { Text(cmd.command) },
-                    )
+                items(suggestions, key = { it.command }) { cmd ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onTextChange(cmd.command + " ") }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            cmd.command,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (cmd.description.isNotBlank()) {
+                            Text(
+                                SlashCommandDescriptions.describe(cmd.command, cmd.description, persianDescriptions),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -339,6 +397,16 @@ internal fun InputBar(
                         )
                     }
                 } else {
+                    IconButton(
+                        onClick = startVoiceInput,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = t("Voice input", "ورودی صوتی"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(
                         onClick = onSend,
                         // An attachment-only message (no typed text) is valid —

@@ -60,6 +60,10 @@ class ChatViewModel @Inject constructor(
     private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
     val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
 
+    /** Every command and alias Hermes knows, lowercase with the slash; empty until the catalog lands. */
+    @Volatile
+    private var knownCommands: Set<String> = emptySet()
+
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
 
@@ -114,7 +118,14 @@ class ChatViewModel @Inject constructor(
         loadAssistantName()
         watchForQueuedPromptFlush()
         connectAndCollect()
-        loadCommandCatalog()
+        // Asked once at init the catalog raced Hermes' boot and usually failed, leaving
+        // only the built-in fallback list: ask on every connect instead.
+        viewModelScope.launch {
+            gatewayClient.connectionState
+                .map { it is ConnectionState.Connected }
+                .distinctUntilChanged()
+                .collect { connected -> if (connected) loadCommandCatalog() }
+        }
     }
 
     /**
@@ -170,23 +181,34 @@ class ChatViewModel @Inject constructor(
     private fun loadCommandCatalog() {
         viewModelScope.launch {
             try {
-                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG)
-                val pairs = (result as? JsonObject)?.get("pairs") as? JsonArray
-                val cmds = pairs?.mapNotNull { row ->
+                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG) as? JsonObject
+                val pairs = (result?.get("pairs") as? JsonArray)?.mapNotNull { row ->
                     val arr = row as? JsonArray ?: return@mapNotNull null
                     val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
                     val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
                     SlashCommandSuggestion(command = name, description = desc)
                 } ?: emptyList()
-                if (cmds.isNotEmpty()) {
-                    _slashCommands.value = cmds
-                    Timber.i("[Chat] Loaded ${cmds.size} slash commands from catalog")
-                }
+                if (pairs.isEmpty()) return@launch
+                // `canon` holds every name and alias; skills are only in `pairs`.
+                val canon = (result?.get("canon") as? JsonObject)?.keys.orEmpty()
+                knownCommands = (canon + pairs.map { it.command }).map { it.lowercase() }.toSet()
+                _slashCommands.value = pairs
+                    .filterNot { it.command.lowercase() in HIDDEN_SLASH_COMMANDS }
+                    // Stable: everything after the useful ones keeps the catalog's order.
+                    .sortedBy { FIRST_SLASH_COMMANDS.indexOf(it.command.lowercase()).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
+                Timber.i("[Chat] Loaded ${pairs.size} slash commands from catalog")
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] commands.catalog failed — slash command autocomplete will be empty until next retry")
             }
         }
     }
+
+    /**
+     * Only a name Hermes knows makes a slash command: `/sdcard/x.txt رو بخون` is a message.
+     * Before the catalog arrives every `/…` is still a command, as it always was.
+     */
+    private fun isSlashCommand(text: String): Boolean =
+        isSlashCommandText(text, knownCommands)
 
     // ── Connection ───────────────────────────────────────────────────────
 
@@ -332,15 +354,35 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { sessionDelegate.loadHistory(_uiState, sid, allowEmpty = true) }
     }
 
+    /** The chat id this screen was opened with (notification, Tasks, Sessions), already acted on. */
+    private var openedRouteSessionId: String? = null
+
+    /**
+     * Open the chat the screen was navigated to, once. The id stays in the route,
+     * so coming back to this screen (from Settings, or after the activity is
+     * recreated) asked for it again: the chat the user had switched to since was
+     * replaced by an old one, or 4001 when that one was gone.
+     */
+    fun openRouteSession(sessionId: String) {
+        if (sessionId == openedRouteSessionId) return
+        openedRouteSessionId = sessionId
+        resumeSession(sessionId)
+    }
+
     fun resumeSession(sessionId: String) {
         requestedSessionId = sessionId
+        // An edit belongs to the chat it started in.
+        if (_uiState.value.editingMessageId != null) cancelEditing()
         autoPickJob?.cancel()
         // Only the latest pick may land; an older one finishing late would
         // replace the chat the user just chose.
         resumeJob?.cancel()
         resumeJob = viewModelScope.launch {
             streamingDelegate.reset()
-            val running = sessionDelegate.resume(_uiState, sessionId)
+            // Reopening the chat on screen (back from the background, a reconnect)
+            // or one known by its live id: not a stored id from the drawer.
+            val isLiveId = sessionId == _uiState.value.activeSessionId || sessionId in storedIdByLiveId
+            val running = sessionDelegate.resume(_uiState, sessionId, isLiveId)
             val opened = running != null
             // Joined mid-turn: its start went by before this chat was open, so
             // the reply is fetched once the turn ends. An idle chat drops the
@@ -367,11 +409,12 @@ class ChatViewModel @Inject constructor(
 
     fun branchSession() {
         viewModelScope.launch {
-            sessionDelegate.branch(_uiState) { sessionDelegate.resolveLiveSessionId(_uiState) }
+            sessionDelegate.branch(_uiState) { _uiState.value.activeSessionId }
         }
     }
 
     fun newConversation() {
+        if (_uiState.value.editingMessageId != null) cancelEditing()
         viewModelScope.launch {
             streamingDelegate.reset()
             _uiState.update { it.copy(
@@ -396,17 +439,15 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(inputText = text) }
     }
 
-    fun sendSuggestion(text: String) {
-        if (text.isBlank()) return
-        _uiState.update { it.copy(inputText = text) }
-        sendMessage()
-    }
-
     fun sendMessage() {
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
         val sessionId = _uiState.value.activeSessionId
+        _uiState.value.editingMessageId?.let { editing ->
+            if (text.isNotEmpty()) submitEdit(editing, text)
+            return
+        }
 
         clearDraft()
 
@@ -438,7 +479,7 @@ class ChatViewModel @Inject constructor(
                 QueuedPrompt(
                     bubbleId = userMsg.id,
                     outgoing = outgoing,
-                    isSlashCommand = text.startsWith("/"),
+                    isSlashCommand = isSlashCommand(text),
                 )
             } else {
                 it.queuedPrompt
@@ -446,7 +487,7 @@ class ChatViewModel @Inject constructor(
         ) }
         if (queued) return
 
-        if (text.startsWith("/")) {
+        if (isSlashCommand(text)) {
             handleSlashCommand(text, sessionId!!)
         } else {
             sendPrompt(outgoing, sessionId!!)
@@ -482,34 +523,119 @@ class ChatViewModel @Inject constructor(
         val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
         val refs = lastUserMsg.attachments.mapNotNull { it.refText }
         val lastUserText = if (refs.isEmpty()) {
-            lastUserMsg.text
+            sentText(lastUserMsg)
         } else {
-            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+            (sentText(lastUserMsg) + "\n" + refs.joinToString("\n")).trim()
         }
 
-        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
-        val lastUserOrdinal = userMessages.size - 1
-        val knownRowId = lastUserMsg.rowId
-
-        val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
-            _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
-        }
+        val before = _uiState.value.messages
+        val lastUserIndex = before.indexOfLast { it is ChatMessage.User }
+        _uiState.update { it.copy(messages = before.subList(0, lastUserIndex + 1).toList(), isSending = true) }
 
         viewModelScope.launch {
-            // A message sent live in this session (not loaded from session.history) never
-            // got its row id stamped. The server rejects an ordinal-only retry with 4004,
-            // so resolve it against history rather than let the retry fail outright.
-            val rowId = knownRowId ?: sessionDelegate.resolveUserRowId(sessionId, lastUserOrdinal)
-            sendPrompt(
-                lastUserText,
-                sessionId,
-                truncateBeforeUserOrdinal = lastUserOrdinal,
-                truncateBeforeRowId = rowId,
-            )
+            val rowId = locateOnServer(sessionId, before, lastUserMsg)
+            if (rowId == null) {
+                _uiState.update { it.copy(messages = before, isSending = false) }
+                return@launch
+            }
+            sendPrompt(lastUserText, sessionId, truncateBeforeRowId = rowId) {
+                _uiState.update { it.copy(messages = before) }
+            }
         }
     }
+
+    /** Puts a sent message back in the composer; sending replaces it and what followed. */
+    fun startEditing(messageId: String) {
+        if (_uiState.value.isSending) return
+        val message = _uiState.value.messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
+        _uiState.update { it.copy(editingMessageId = messageId, inputText = sentText(message)) }
+    }
+
+    fun cancelEditing() {
+        _uiState.update { it.copy(editingMessageId = null, inputText = "") }
+    }
+
+    private fun submitEdit(messageId: String, text: String) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isSending) return
+        val before = _uiState.value.messages
+        val index = before.indexOfFirst { it.id == messageId }
+        val target = before.getOrNull(index) as? ChatMessage.User ?: run { cancelEditing(); return }
+        // File references ride along as they did the first time; the edit is to the words.
+        val refs = target.attachments.mapNotNull { it.refText }
+        val outgoing = if (refs.isEmpty()) text else (text + "\n" + refs.joinToString("\n")).trim()
+        val edited = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = text,
+            attachments = target.attachments,
+        )
+        clearDraft()
+        _uiState.update { it.copy(
+            messages = before.subList(0, index) + edited,
+            editingMessageId = null,
+            inputText = "",
+            isSending = true,
+        ) }
+        viewModelScope.launch {
+            val rowId = locateOnServer(sessionId, before, target)
+            if (rowId == null) {
+                _uiState.update { it.copy(messages = before, isSending = false, editingMessageId = messageId, inputText = text) }
+                return@launch
+            }
+            // Refused (busy, stale): the server kept everything, so the screen must too.
+            sendPrompt(outgoing, sessionId, truncateBeforeRowId = rowId) {
+                _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
+            }
+        }
+    }
+
+    /**
+     * Removes a sent message and everything after it. The server has no cut without a
+     * new prompt, only session.undo (the last turn), so the turns from the message to
+     * the end are undone one by one, and the chat then reloads what the server kept.
+     */
+    fun deleteFromMessage(messageId: String) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isSending) return
+        val messages = _uiState.value.messages
+        val target = messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
+        viewModelScope.launch {
+            try {
+                val server = sessionDelegate.serverUserTurns(sessionId)
+                val rowId = server?.let { findUserRow(messages, target, it) }
+                if (server == null || rowId == null) {
+                    _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
+                    return@launch
+                }
+                for (turn in 1..turnsFrom(server, rowId)) {
+                    if (sessionRepository.undoLastTurn(sessionId) == 0) break
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] delete from message failed")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(rewindFailure(e))) }
+            }
+            sessionDelegate.loadHistory(_uiState, sessionId, allowEmpty = true)
+        }
+    }
+
+    /** [target]'s row on the server, or null after telling the user it could not be found. */
+    private suspend fun locateOnServer(
+        sessionId: String,
+        local: List<ChatMessage>,
+        target: ChatMessage.User,
+    ): Long? {
+        val rowId = sessionDelegate.serverUserTurns(sessionId)?.let { findUserRow(local, target, it) }
+        if (rowId == null) _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
+        return rowId
+    }
+
+    private fun rewindFailure(e: Exception): String =
+        if (e.message.orEmpty().startsWith("RPC error 4009:")) {
+            "Hermes is still finishing the last reply. Try again in a moment."
+        } else {
+            "Could not change the chat: ${e.message}"
+        }
 
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
@@ -517,12 +643,15 @@ class ChatViewModel @Inject constructor(
         val steerMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
-            text = "\u21B3 $text",
+            text = "$STEER_PREFIX$text",
         )
         _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
         clearDraft()
         viewModelScope.launch {
-            val sessionId = sessionDelegate.resolveLiveSessionId(_uiState)
+            // The open chat's live id. session.most_recent answered with the newest
+            // *stored* id, which session.steer (a live-only method) rejects with
+            // 4001 "session not found" — every mid-turn message failed that way.
+            val sessionId = _uiState.value.activeSessionId
             if (sessionId == null) {
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
                 return@launch
@@ -618,27 +747,24 @@ class ChatViewModel @Inject constructor(
     private fun sendPrompt(
         text: String,
         sessionId: String,
-        truncateBeforeUserOrdinal: Int? = null,
         truncateBeforeRowId: Long? = null,
+        onRefused: (() -> Unit)? = null,
     ) {
         viewModelScope.launch {
             try {
                 fun params(liveId: String) = buildJsonObject {
                     put("text", text)
                     put("session_id", liveId)
-                    if (truncateBeforeUserOrdinal != null) {
-                        put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
-                        // The server refuses truncating submits with 4029 unless the
-                        // rewind is explicitly confirmed, so a stale ordinal on an
-                        // ordinary submit can never silently drop history. Ordinal 0
-                        // (regenerating the first turn) empties the transcript and
-                        // needs the second opt-in, or the server answers 4028. It also
-                        // refuses an ordinal with no row id at all, as 4004 — ordinals
-                        // shift under compaction, so a durable session requires the
-                        // row id to say which physical row is meant.
-                        if (truncateBeforeRowId != null) put("truncate_before_row_id", truncateBeforeRowId)
+                    if (truncateBeforeRowId != null) {
+                        // A rewind (edit, retry) is aimed at the target's durable row id
+                        // alone: ordinals drift — a steered message is stored wherever the
+                        // agent picked it up — and a mismatched ordinal is refused (4030).
+                        // The cut is explicit (4029 without confirm_truncate), and cutting
+                        // at the first turn empties the transcript, which needs its own
+                        // opt-in (4028); both are the user's own action here.
+                        put("truncate_before_row_id", truncateBeforeRowId)
                         put("confirm_truncate", true)
-                        if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
+                        put("confirm_empty_truncate", true)
                     }
                 }
                 sessionRepository.onLiveSession(
@@ -653,14 +779,24 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
+                onRefused?.invoke()
                 _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Failed to send: ${e.message}"),
+                    errorEvent = ErrorEvent.Error(
+                        if (truncateBeforeRowId != null) rewindFailure(e) else "Failed to send: ${e.message}",
+                    ),
                     isSending = false,
                 ) }
             }
         }
     }
 
+    /**
+     * Runs a slash command the way Hermes' own TUI does (`ui-tui/src/app/createSlashHandler.ts`):
+     * `slash.exec` first, because `command.dispatch` alone only knows quick/plugin/skill commands
+     * and a handful of built-ins, so `/help`, `/model`, `/status`… came back as error 4018.
+     * `command.dispatch` is only the fallback for the refusals where `slash.exec` says the
+     * command is not its to run.
+     */
     private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
         if (depth > 5) {
             _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
@@ -672,50 +808,32 @@ class ChatViewModel @Inject constructor(
                 val parts = withoutSlash.split(" ", limit = 2)
                 val name = parts[0]
                 val arg = if (parts.size > 1) parts[1] else ""
-                val params = buildJsonObject {
-                    put("name", name)
-                    put("arg", arg)
-                    put("session_id", sessionId)
+                // Hermes' own clients run these two themselves (ui-tui slash/commands/session.ts):
+                // the slash worker has no side agent to hand them to.
+                SIDE_AGENT_COMMANDS[name.lowercase()]?.let { method ->
+                    startSideAgent(method, name, arg, sessionId)
+                    return@launch
                 }
-                val result = gatewayClient.request(
-                    method = GatewayMethods.COMMAND_DISPATCH,
-                    params = jsonToElementMap(params),
-                )
-                val obj = result as? JsonObject
-                when ((obj?.get("type") as? JsonPrimitive)?.content) {
-                    "alias" -> {
-                        val target = (obj["target"] as? JsonPrimitive)?.content
-                        if (!target.isNullOrBlank()) {
-                            val nextText = if (arg.isNotBlank()) "/$target $arg" else "/$target"
-                            handleSlashCommand(nextText, sessionId, depth + 1)
-                            return@launch
-                        }
-                    }
-                    "send" -> {
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        if (!message.isNullOrBlank()) {
-                            sendPrompt(message, sessionId)
-                            return@launch
-                        }
-                    }
-                    "prefill" -> {
-                        val message = (obj["message"] as? JsonPrimitive)?.content
-                        _uiState.update { it.copy(inputText = message ?: _uiState.value.inputText, isSending = false) }
-                        return@launch
-                    }
-                }
-                val output = extractCommandOutput(result)
-                val newMessages = if (!output.isNullOrBlank()) {
-                    _uiState.value.messages + ChatMessage.Status(
-                        id = UUID.randomUUID().toString(),
-                        timestamp = System.currentTimeMillis(),
-                        text = output.trim(),
-                        isError = false,
+                val result = try {
+                    gatewayClient.request(
+                        method = GatewayMethods.SLASH_EXEC,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("command", withoutSlash)
+                            put("session_id", sessionId)
+                        }),
                     )
-                } else {
-                    _uiState.value.messages
+                } catch (e: GatewayException) {
+                    if (!slashExecDisowns(e)) throw e
+                    gatewayClient.request(
+                        method = GatewayMethods.COMMAND_DISPATCH,
+                        params = jsonToElementMap(buildJsonObject {
+                            put("name", name)
+                            put("arg", arg)
+                            put("session_id", sessionId)
+                        }),
+                    )
                 }
-                _uiState.update { it.copy(messages = newMessages, isSending = false) }
+                applySlashResult(result, name, arg, sessionId, depth)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Slash command failed")
                 _uiState.update { it.copy(
@@ -724,6 +842,83 @@ class ChatViewModel @Inject constructor(
                 ) }
             }
         }
+    }
+
+    private suspend fun startSideAgent(method: String, name: String, arg: String, sessionId: String) {
+        if (arg.isBlank()) {
+            postSlashStatus(if (method == GatewayMethods.PROMPT_BTW) "/btw <question>" else "/$name <prompt>")
+            return
+        }
+        val result = gatewayClient.request(
+            method = method,
+            params = jsonToElementMap(buildJsonObject {
+                put("session_id", sessionId)
+                put("text", arg)
+            }),
+        ) as? JsonObject
+        val taskId = (result?.get("task_id") as? JsonPrimitive)?.content
+        postSlashStatus(
+            when {
+                taskId == null -> "/$name: no task started"
+                method == GatewayMethods.PROMPT_BTW -> "btw $taskId — answering from a snapshot of this chat"
+                else -> "bg $taskId started"
+            },
+        )
+    }
+
+    private fun applySlashResult(
+        result: kotlinx.serialization.json.JsonElement?,
+        name: String,
+        arg: String,
+        sessionId: String,
+        depth: Int,
+    ) {
+        val obj = result as? JsonObject
+        fun str(key: String) = (obj?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val notice = str("notice")?.takeIf { it.isNotBlank() }
+        val message = str("message")
+        when (str("type")) {
+            "alias" -> {
+                val target = str("target")
+                if (!target.isNullOrBlank()) {
+                    handleSlashCommand(if (arg.isNotBlank()) "/$target $arg" else "/$target", sessionId, depth + 1)
+                    return
+                }
+            }
+            "exec", "plugin" -> {
+                postSlashStatus(str("output")?.takeIf { it.isNotBlank() } ?: "(no output)")
+                return
+            }
+            "skill", "send" -> {
+                notice?.let { postSlashStatus(it) }
+                if (!message.isNullOrBlank()) {
+                    sendPrompt(message, sessionId)
+                } else {
+                    postSlashStatus("/$name: empty message", isError = true)
+                }
+                return
+            }
+            "prefill" -> {
+                notice?.let { postSlashStatus(it) }
+                _uiState.update { it.copy(inputText = message ?: it.inputText, isSending = false) }
+                return
+            }
+        }
+        val output = extractCommandOutput(result)?.trim().orEmpty().ifBlank { "/$name: no output" }
+        val warning = str("warning")?.takeIf { it.isNotBlank() }
+        postSlashStatus(if (warning != null) "warning: $warning\n$output" else output)
+    }
+
+    private fun postSlashStatus(text: String, isError: Boolean = false) {
+        _uiState.update { it.copy(
+            messages = it.messages + ChatMessage.Status(
+                id = UUID.randomUUID().toString(),
+                timestamp = System.currentTimeMillis(),
+                text = text.trim(),
+                isError = isError,
+            ),
+            isSending = false,
+        ) }
     }
 
     private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
@@ -819,8 +1014,6 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(errorEvent = null) }
     }
 
-    fun updateDrawerSearch(query: String) = drawerDelegate.updateSearch(_uiState, query)
-    fun toggleDrawerSort() = drawerDelegate.toggleSort(_uiState)
     fun drawerTogglePin(sessionId: String) = drawerDelegate.togglePin(_uiState, sessionId)
     fun drawerShowRename(sessionId: String, currentTitle: String) = drawerDelegate.showRename(_uiState, sessionId, currentTitle)
     fun drawerUpdateRenameText(text: String) = drawerDelegate.updateRenameText(_uiState, text)
@@ -1030,7 +1223,18 @@ class ChatViewModel @Inject constructor(
             isStreaming = true,
             reasoning = null,
         )
-        _uiState.update { it.copy(messages = it.messages + assistantMsg) }
+        // One reply streams per chat: a bubble the delegate lost track of (its id
+        // reset by a recovery or a switch) was never settled and kept its dots.
+        _uiState.update { it.copy(messages = it.messages.closeStrayReplies() + assistantMsg) }
+    }
+
+    /** Stop every reply still marked streaming; one with nothing in it is dropped. */
+    private fun List<ChatMessage>.closeStrayReplies(): List<ChatMessage> = mapNotNull { msg ->
+        when {
+            msg !is ChatMessage.Assistant || !msg.isStreaming -> msg
+            msg.text.isBlank() && msg.reasoning.isNullOrBlank() -> null
+            else -> msg.copy(isStreaming = false)
+        }
     }
 
     /**
@@ -1039,7 +1243,11 @@ class ChatViewModel @Inject constructor(
      * the bubble is missing and every token would be discarded — open one.
      */
     private fun ensureStreamingBubble() {
-        if (streamingDelegate.currentAssistantMessageId != null) return
+        // An id alone is not a bubble: switching chats while the one being left
+        // still streams opens a bubble for it that the new transcript then drops,
+        // and the id outlives it — the opened chat's reasoning went nowhere.
+        val id = streamingDelegate.currentAssistantMessageId
+        if (id != null && _uiState.value.messages.any { it.id == id }) return
         openAssistantBubble(streamingDelegate.onMessageStart())
     }
 
@@ -1054,7 +1262,10 @@ class ChatViewModel @Inject constructor(
             else -> Unit
         }
         trackSessionActivity(event, eventSid, activeSid)
-        if (eventSid != null && activeSid != null && eventSid != activeSid &&
+        // No open chat (a new one waiting for its id) is not a licence to draw
+        // anyone's frames: the chat left behind still streaming poured its text
+        // and typing dots into the new, empty chat.
+        if (eventSid != null && eventSid != activeSid &&
             event !is GatewayEvent.ApprovalRequest &&
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
@@ -1135,7 +1346,7 @@ class ChatViewModel @Inject constructor(
                             msg is ChatMessage.ToolCall && msg.isRunning
                         }) { msg ->
                             (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Completed")
-                        }
+                        }.closeStrayReplies()
                     },
                     isSending = false,
                     activeTodos = emptyList(),
@@ -1401,10 +1612,21 @@ class ChatViewModel @Inject constructor(
                 val msg = ChatMessage.Status(
                     id = "bg-${event.taskId}",
                     timestamp = System.currentTimeMillis(),
-                    text = "Background task complete: ${event.text.take(200)}",
+                    text = "[bg ${event.taskId}] ${event.text}",
                     isError = false,
                 )
                 _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
+            }
+
+            is GatewayEvent.BtwComplete -> {
+                val question = event.question?.takeIf { it.isNotBlank() }?.let { " \"$it\"" }.orEmpty()
+                val msg = ChatMessage.Status(
+                    id = "btw-${event.taskId}",
+                    timestamp = System.currentTimeMillis(),
+                    text = "[btw$question] ${event.text}",
+                    isError = false,
+                )
+                _uiState.update { it.copy(messages = it.messages + msg) }
             }
 
             is GatewayEvent.SessionInfo -> {
@@ -1469,6 +1691,53 @@ class ChatViewModel @Inject constructor(
         }
 
     companion object {
+        /**
+         * `slash.exec` answers 4018 with exactly these texts when the command is not its own.
+         * Every other 4018 comes from a `command.dispatch` handler it already forwarded to
+         * (/retry, /undo, /compress…): dispatching again would run a mutating command twice.
+         */
+        private val SLASH_EXEC_NOT_MINE = Regex(
+            "^skill command: use command\\.dispatch for /|use command\\.dispatch for /snapshot restore",
+        )
+
+        internal fun slashExecDisowns(e: GatewayException): Boolean =
+            e.code == 4018 && SLASH_EXEC_NOT_MINE.containsMatchIn(e.rpcMessage.orEmpty())
+
+        private val SIDE_AGENT_COMMANDS = mapOf(
+            "btw" to GatewayMethods.PROMPT_BTW,
+            "bg" to GatewayMethods.PROMPT_BACKGROUND,
+            "background" to GatewayMethods.PROMPT_BACKGROUND,
+        )
+
+        internal fun isSlashCommandText(text: String, known: Set<String>): Boolean {
+            if (!text.startsWith("/")) return false
+            if (known.isEmpty()) return true
+            val name = "/" + text.removePrefix("/").trimStart().substringBefore(' ').substringBefore('\n').lowercase()
+            return name in known
+        }
+
+        /** Shown first in the `/` list: what the app has no button for and people reach for. */
+        internal val FIRST_SLASH_COMMANDS = listOf(
+            "/plan", "/goal", "/subgoal", "/btw", "/bg", "/loop", "/review", "/learn", "/status", "/help",
+        )
+
+        /**
+         * Left out of the `/` list (typing them in full still runs them): the app has a
+         * button or screen for them, or they only mean something in a terminal.
+         */
+        internal val HIDDEN_SLASH_COMMANDS = setOf(
+            "/new", "/clear", "/retry", "/undo", "/branch", "/model", "/approve", "/deny",
+            "/sessions", "/resume", "/stop", "/image",
+            "/context", "/queue", "/compress", "/title", "/save", "/history",
+            // Settings, Tools, Task Desk, Changes and the composer already do these.
+            "/steer", "/reasoning", "/personality", "/approvals", "/yolo", "/config",
+            "/reload", "/reload-mcp", "/tools", "/toolsets", "/skills", "/reload-skills",
+            "/plugins", "/cron", "/platforms", "/agents", "/insights", "/usage",
+            "/rollback", "/skin",
+            "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
+            "/copy", "/paste", "/quit", "/wake", "/voice",
+        )
+
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
@@ -1478,6 +1747,8 @@ class ChatViewModel @Inject constructor(
         private const val MAX_BOOT_SAMPLE_MS = 180_000L
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
+        private const val MESSAGE_NOT_LOCATED =
+            "Could not find this message in the stored chat, so nothing was changed. Reopen the chat and try again."
     }
 
     override fun onCleared() {

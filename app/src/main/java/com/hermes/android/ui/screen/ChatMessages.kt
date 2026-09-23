@@ -155,131 +155,6 @@ import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
 
-@Composable
-internal fun ThinkingBlock(
-    reasoning: String,
-    isStreaming: Boolean,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    val barColor = MaterialTheme.colorScheme.primary
-    val reduceMotion = rememberReduceMotion()
-
-    // A full-amplitude, fast pulse sustained for the whole length of a long
-    // agent turn is fatiguing to stare at — ease to a slower, shallower
-    // pulse once thinking has been running a while instead of holding full
-    // intensity indefinitely.
-    var streamingSeconds by remember(isStreaming) { mutableStateOf(0) }
-    LaunchedEffect(isStreaming) {
-        if (isStreaming) {
-            while (true) {
-                kotlinx.coroutines.delay(1000)
-                streamingSeconds++
-            }
-        }
-    }
-    val isLongTurn = streamingSeconds > 20
-
-    val transition = rememberInfiniteTransition(label = "thinking")
-    val pulse by transition.animateFloat(
-        initialValue = if (isLongTurn) 0.55f else 0.35f,
-        targetValue = if (isLongTurn) 0.85f else 1f,
-        animationSpec = infiniteRepeatable(
-            tween(if (isLongTurn) 1600 else 900),
-            RepeatMode.Reverse,
-        ),
-        label = "pulse",
-    )
-    val barAlpha = when {
-        !isStreaming -> 0.4f
-        reduceMotion -> 0.7f
-        else -> pulse
-    }
-
-    // Emotive markers the model emits inside its reasoning (😌 🤔 😅 …) become
-    // a big "sticker" beside the thinking state — the agent's mood, live.
-    // Scan only a bounded tail: reasoning grows by hundreds of tokens per
-    // turn and this re-runs on every buffered flush, so a full-string
-    // findAll was O(n²) across the turn — enough to visibly stutter long
-    // thinking phases on a phone.
-    val emojiRe = remember { Regex("[\\uD83C-\\uDBFF][\\uDC00-\\uDFFF]|[\\u2600-\\u27BF\\u2B00-\\u2BFF]") }
-    val sticker = remember(reasoning) {
-        emojiRe.findAll(reasoning.takeLast(400)).map { it.value }.lastOrNull()
-    }
-
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onToggle() }
-                .padding(bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(16.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(barColor.copy(alpha = barAlpha)),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (isStreaming) t("‌", "‌") else t("Thoughts", "افکار"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            )
-        }
-
-        // Mood sticker: the latest emotive emoji from the reasoning, shown big,
-        // popping in when it changes.
-        AnimatedVisibility(visible = sticker != null) {
-            Text(
-                text = sticker ?: "",
-                style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 4.dp),
-            )
-        }
-
-        // Live preview: latest reasoning line, fading with the pulse, while collapsed.
-        if (isStreaming && !expanded) {
-            val preview = remember(reasoning) {
-                // Bounded tail for the same O(n²) reason as the sticker scan.
-                reasoning.takeLast(400).trim().lines().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
-            }
-            if (preview.isNotEmpty()) {
-                Text(
-                    text = preview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse * 0.8f),
-                    maxLines = 1,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 11.dp, bottom = 2.dp),
-                )
-            }
-        }
-
-        // Full reasoning: fades/expands in when opened (the "fade from bottom").
-        AnimatedVisibility(visible = expanded) {
-            HermesMarkdown(
-                markdown = reasoning,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 11.dp, bottom = 8.dp),
-            )
-        }
-    }
-}
 
 /** One quiet icon in the post-reply action row: 32dp touch target, 16dp
  *  glyph, muted tint — present but never competing with the reply text. */
@@ -354,14 +229,27 @@ internal fun MessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    onEditMessage: ((messageId: String) -> Unit)? = null,
+    onDeleteMessage: ((messageId: String) -> Unit)? = null,
 ) {
     when (message) {
         is ChatMessage.User -> {
+            // Both rewrite the stored transcript, which the server refuses mid-turn, and
+            // a message still waiting for Hermes to boot has nothing stored to rewrite.
+            val canRewind = !isSending && !message.queued
             UserMessageBubble(
                 message = message,
                 searchQuery = searchQuery,
                 isLastInGroup = isLastInGroup,
                 onCopyMessage = onCopyMessage,
+                // An attached image cannot be sent again from here, so an edit would
+                // quietly drop it; the text-only edit is offered where nothing is lost.
+                onEdit = onEditMessage
+                    ?.takeIf { canRewind && message.attachments.none { it.isImage } }
+                    ?.let { edit -> { edit(message.id) } },
+                onDelete = onDeleteMessage
+                    ?.takeIf { canRewind }
+                    ?.let { delete -> { delete(message.id) } },
             )
         }
 

@@ -112,25 +112,6 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    fun saveConfig(key: String, value: String) {
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject {
-                    put("key", key)
-                    put("value", value)
-                }
-                gatewayClient.request(GatewayMethods.CONFIG_SET, params.toMap())
-                Timber.i("[Config] Saved: $key")  // never the value: keys and tokens go through here
-                loadConfig()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Failed to save config")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to save: ${e.message}",
-                )
-            }
-        }
-    }
-
     // ── Model Behavior Config ──────────────────────────────────────────────
     //
     // Fix: every one of these used to send a bare top-level config.set key
@@ -366,32 +347,6 @@ class ConfigViewModel @Inject constructor(
                 Timber.w(e, "[Config] API key validation failed for $provider")
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "API key may be invalid (could not verify)",
-                )
-            }
-        }
-    }
-
-    /**
-     * Reset the current model connection (`model.disconnect`). This RPC has
-     * been defined in GatewayMethods since the original protocol wiring but
-     * had zero call sites anywhere in the app — real users had no way to
-     * force-clear a stuck/authenticated model session (e.g. after rotating an
-     * API key or when a provider connection wedges) other than restarting the
-     * whole gateway. Re-loads models/providers afterward so the UI reflects
-     * the cleared state.
-     */
-    fun disconnectModel() {
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(GatewayMethods.MODEL_DISCONNECT)
-                Timber.i("[Config] Model disconnected")
-                _uiState.value = _uiState.value.copy(errorMessage = "Model disconnected")
-                loadModels()
-                loadProviders()
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] model.disconnect failed")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to disconnect model: ${e.message}",
                 )
             }
         }
@@ -726,24 +681,6 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isLoadingProviders = false)
             }
         }
-    }
-
-    private fun parseConfigSectionsMap(result: JsonElement): Map<String, List<String>> {
-        val sections = mutableMapOf<String, List<String>>()
-        try {
-            val obj = result as? JsonObject ?: return sections
-            // config.show returns {sections: {name: {rows: [...]}}}
-            val sectionsObj = obj["sections"] as? JsonObject
-            sectionsObj?.forEach { (name, section) ->
-                val sectionObj = section as? JsonObject
-                val rows = (sectionObj?.get("rows") as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.content }
-                if (rows != null) sections[name] = rows
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "[Config] Failed to parse config sections")
-        }
-        return sections
     }
 
     /**
@@ -1186,32 +1123,6 @@ class ConfigViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(errorMessage = "Key removed from $slug")
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to remove key: ${e.message}")
-            }
-        }
-    }
-
-    fun removeCredential(rawSlug: String) {
-        val slug = safeSlug(rawSlug)
-        val poolKey = customPoolKey(rawSlug)
-        viewModelScope.launch {
-            try {
-                val script = """
-                    import json, pathlib
-                    p = pathlib.Path.home() / '.hermes' / 'auth.json'
-                    d = json.loads(p.read_text()) if p.exists() else {}
-                    d.get('credential_pool', {}).pop('$poolKey', None)
-                    p.write_text(json.dumps(d, indent=2))
-                    print('OK')
-                """.trimIndent()
-                execPython(script)
-                loadCredentialPool(slug)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Key removed from $slug"
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to remove key: ${e.message}"
-                )
             }
         }
     }

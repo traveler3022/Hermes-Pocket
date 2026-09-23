@@ -403,5 +403,4 @@ class TermuxInstaller @Inject constructor(
      */
     fun generateInstallCommand(): String = generateInstallScript()
 
-    fun getScriptFilePath(): java.io.File? = null
 }

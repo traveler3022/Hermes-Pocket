@@ -3,11 +3,8 @@ package com.hermes.android.ui.screen
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.VisibilityThreshold
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -79,7 +76,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -202,6 +198,7 @@ fun ChatScreen(
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
+    var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
@@ -288,20 +285,11 @@ fun ChatScreen(
             }
         }
 
-    // What folded into a trace leaves the flow: every tool card, and — when
-    // narration is folded — every assistant message but the one ending its turn.
+    // What folded into a trace leaves the flow: every tool card a trace
+    // carries, and — when narration is folded — every assistant message but
+    // the one ending its turn.
     val visibleMessages = remember(filteredMessages, turnWork, searching) {
-        if (searching) {
-            filteredMessages
-        } else {
-            filteredMessages.filter { msg ->
-                when (msg) {
-                    is ChatMessage.ToolCall -> false
-                    is ChatMessage.Assistant -> msg.id in turnWork
-                    else -> true
-                }
-            }
-        }
+        visibleChatMessages(filteredMessages, turnWork, searching)
     }
 
     // What the agent is doing right now (null = idle). Derived, not stored —
@@ -434,7 +422,7 @@ fun ChatScreen(
     // Pre-fill input from share intent
     LaunchedEffect(resumeSessionId) {
         if (!resumeSessionId.isNullOrBlank()) {
-            viewModel.resumeSession(resumeSessionId)
+            viewModel.openRouteSession(resumeSessionId)
         }
     }
 
@@ -813,10 +801,17 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
+                        val lastAssistantId = visibleMessages.lastOrNull { it is ChatMessage.Assistant }?.id
+                        // contentType lets the list reuse a scrolled-off row only for a row of the
+                        // same kind (user bubble, reply, tool card…) instead of rebuilding it.
+                        itemsIndexed(
+                            visibleMessages,
+                            key = { _, m -> m.id },
+                            contentType = { _, m -> m::class },
+                        ) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
-                                    visibleMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                                    message.id == lastAssistantId
                             // Grouped == previous message is from the same side
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.
@@ -846,12 +841,16 @@ fun ChatScreen(
 
                             Box(
                                 modifier = Modifier
+                                    // New messages fade in; nothing glides. A
+                                    // placement spring made every message drift
+                                    // to its new spot whenever something above
+                                    // it changed height (a thinking line
+                                    // settling, a trace folding, older turns
+                                    // loading), so the text never felt fixed
+                                    // to the page.
                                     .animateItem(
                                         fadeInSpec = tween(220),
-                                        placementSpec = spring(
-                                            stiffness = Spring.StiffnessMediumLow,
-                                            visibilityThreshold = IntOffset.VisibilityThreshold,
-                                        ),
+                                        placementSpec = null,
                                     )
                                     .padding(top = topPad),
                             ) {
@@ -880,6 +879,8 @@ fun ChatScreen(
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                onEditMessage = viewModel::startEditing,
+                                onDeleteMessage = { id -> deleteFromMessageId = id },
                             )
                             }
                         }
@@ -930,6 +931,40 @@ fun ChatScreen(
                     AgentTodoCard(todos = uiState.activeTodos)
                 }
 
+                // Editing a sent message: say so above the composer, with the way out.
+                if (uiState.editingMessageId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = HxSpace.screen, end = 4.dp, top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = t(
+                                "Editing message — sending replaces it and everything after it",
+                                "ویرایش پیام — با ارسال، این پیام و هرچه بعدش آمده جایگزین می‌شود",
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = viewModel::cancelEditing) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = t("Cancel edit", "لغو ویرایش"),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+
                 // Input bar
                 InputBar(
                     text = uiState.inputText,
@@ -948,6 +983,30 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    deleteFromMessageId?.let { messageId ->
+        AlertDialog(
+            onDismissRequest = { deleteFromMessageId = null },
+            title = { Text(t("Delete message?", "حذف پیام؟")) },
+            text = {
+                Text(
+                    t(
+                        "This message and everything after it will be removed from the chat, for Hermes too. This cannot be undone.",
+                        "این پیام و همهٔ پیام‌های بعد از آن از گفتگو حذف می‌شوند، برای Hermes هم. قابل برگشت نیست.",
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteFromMessageId = null
+                    viewModel.deleteFromMessage(messageId)
+                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteFromMessageId = null }) { Text(t("Cancel", "لغو")) }
+            },
+        )
     }
 
     // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
