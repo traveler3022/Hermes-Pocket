@@ -367,7 +367,7 @@ class ChatViewModel @Inject constructor(
 
     fun branchSession() {
         viewModelScope.launch {
-            sessionDelegate.branch(_uiState) { sessionDelegate.resolveLiveSessionId(_uiState) }
+            sessionDelegate.branch(_uiState) { _uiState.value.activeSessionId }
         }
     }
 
@@ -516,7 +516,10 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
         clearDraft()
         viewModelScope.launch {
-            val sessionId = sessionDelegate.resolveLiveSessionId(_uiState)
+            // The open chat's live id. session.most_recent answered with the newest
+            // *stored* id, which session.steer (a live-only method) rejects with
+            // 4001 "session not found" — every mid-turn message failed that way.
+            val sessionId = _uiState.value.activeSessionId
             if (sessionId == null) {
                 _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("No active turn to steer")) }
                 return@launch

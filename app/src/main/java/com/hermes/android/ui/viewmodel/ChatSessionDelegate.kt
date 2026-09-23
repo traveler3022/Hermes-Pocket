@@ -312,15 +312,6 @@ internal class ChatSessionDelegate(
         }
     }
 
-    suspend fun resolveLiveSessionId(state: MutableStateFlow<ChatUiState>): String? {
-        return try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
-        } catch (e: Exception) {
-            null
-        } ?: state.value.activeSessionId
-    }
-
     private fun parseList(result: kotlinx.serialization.json.JsonElement): List<SessionItem> {
         return try {
             val obj = result as? JsonObject ?: return emptyList()
