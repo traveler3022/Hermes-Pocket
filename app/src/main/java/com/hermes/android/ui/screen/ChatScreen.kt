@@ -804,10 +804,11 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        val lastAssistantId = visibleMessages.lastOrNull { it is ChatMessage.Assistant }?.id
                         itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
-                                    visibleMessages.lastOrNull { it is ChatMessage.Assistant } == message
+                                    message.id == lastAssistantId
                             // Grouped == previous message is from the same side
                             // (user vs agent). Used to show the agent avatar only
                             // once per run and tighten consecutive bubbles.

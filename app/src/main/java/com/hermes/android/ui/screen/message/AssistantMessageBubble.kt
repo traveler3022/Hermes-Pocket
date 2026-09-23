@@ -72,7 +72,6 @@ internal fun AssistantMessageBubble(
     val hasTrace = traceItems.isNotEmpty()
 
     val assistantContext = LocalContext.current
-    val codeBlocks = remember(message.text) { extractCodeBlocks(message.text) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.widthIn(max = hxAssistantMaxWidth())) {
@@ -83,7 +82,12 @@ internal fun AssistantMessageBubble(
                             onClick = {},
                             onLongClick = { showContextMenu = true },
                         )
-                        .animateContentSize()
+                        // Only a finished reply animates its size (Show more /
+                        // Collapse). While streaming the text grows every 80ms
+                        // flush, and each growth restarted a size animation:
+                        // the bubble never stopped animating and relaid out
+                        // the list under it on every frame.
+                        .then(if (message.isStreaming) Modifier else Modifier.animateContentSize())
                         .padding(vertical = 2.dp),
                 ) {
                     if (hasTrace) {
@@ -184,7 +188,8 @@ internal fun AssistantMessageBubble(
                             }
                         }
                     }
-                    if (message.isStreaming) {
+                    // An empty streaming reply already shows its dots above.
+                    if (message.isStreaming && message.text.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         TypingDots(dotSize = 4.dp)
                     }
@@ -198,7 +203,8 @@ internal fun AssistantMessageBubble(
                         onClick = { onCopyMessage(message.text); showContextMenu = false },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                     )
-                    val firstCode = codeBlocks.firstOrNull()
+                    // Scanned when the menu opens, not on every streamed flush.
+                    val firstCode = remember(message.text) { extractCodeBlocks(message.text).firstOrNull() }
                     if (firstCode != null) {
                         DropdownMenuItem(
                             text = { Text(t("Copy code", "کپی کد")) },
