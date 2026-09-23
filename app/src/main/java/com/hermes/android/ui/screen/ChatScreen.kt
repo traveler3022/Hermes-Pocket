@@ -802,7 +802,13 @@ fun ChatScreen(
                             }
                         }
                         val lastAssistantId = visibleMessages.lastOrNull { it is ChatMessage.Assistant }?.id
-                        itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, message ->
+                        // contentType lets the list reuse a scrolled-off row only for a row of the
+                        // same kind (user bubble, reply, tool card…) instead of rebuilding it.
+                        itemsIndexed(
+                            visibleMessages,
+                            key = { _, m -> m.id },
+                            contentType = { _, m -> m::class },
+                        ) { index, message ->
                             val isLastAssistant = message is ChatMessage.Assistant &&
                                     !message.isStreaming &&
                                     message.id == lastAssistantId
