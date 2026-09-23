@@ -192,7 +192,10 @@ class ChatViewModel @Inject constructor(
                 // `canon` holds every name and alias; skills are only in `pairs`.
                 val canon = (result?.get("canon") as? JsonObject)?.keys.orEmpty()
                 knownCommands = (canon + pairs.map { it.command }).map { it.lowercase() }.toSet()
-                _slashCommands.value = pairs.filterNot { it.command.lowercase() in HIDDEN_SLASH_COMMANDS }
+                _slashCommands.value = pairs
+                    .filterNot { it.command.lowercase() in HIDDEN_SLASH_COMMANDS }
+                    // Stable: everything after the useful ones keeps the catalog's order.
+                    .sortedBy { FIRST_SLASH_COMMANDS.indexOf(it.command.lowercase()).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
                 Timber.i("[Chat] Loaded ${pairs.size} slash commands from catalog")
             } catch (e: Exception) {
                 Timber.w(e, "[Chat] commands.catalog failed — slash command autocomplete will be empty until next retry")
@@ -1698,6 +1701,11 @@ class ChatViewModel @Inject constructor(
             return name in known
         }
 
+        /** Shown first in the `/` list: what the app has no button for and people reach for. */
+        internal val FIRST_SLASH_COMMANDS = listOf(
+            "/goal", "/btw", "/bg", "/plan", "/loop", "/review", "/learn", "/status", "/help",
+        )
+
         /**
          * Left out of the `/` list (typing them in full still runs them): the app has a
          * button or screen for them, or they only mean something in a terminal.
@@ -1705,6 +1713,7 @@ class ChatViewModel @Inject constructor(
         internal val HIDDEN_SLASH_COMMANDS = setOf(
             "/new", "/clear", "/retry", "/undo", "/branch", "/model", "/approve", "/deny",
             "/sessions", "/resume", "/stop", "/image",
+            "/context", "/queue", "/compress", "/title", "/save", "/history",
             "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
             "/copy", "/paste", "/quit", "/wake", "/voice",
         )
