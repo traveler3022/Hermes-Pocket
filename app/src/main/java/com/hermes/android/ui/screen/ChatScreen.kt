@@ -3,11 +3,8 @@ package com.hermes.android.ui.screen
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.VisibilityThreshold
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -79,7 +76,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -838,12 +834,16 @@ fun ChatScreen(
 
                             Box(
                                 modifier = Modifier
+                                    // New messages fade in; nothing glides. A
+                                    // placement spring made every message drift
+                                    // to its new spot whenever something above
+                                    // it changed height (a thinking line
+                                    // settling, a trace folding, older turns
+                                    // loading), so the text never felt fixed
+                                    // to the page.
                                     .animateItem(
                                         fadeInSpec = tween(220),
-                                        placementSpec = spring(
-                                            stiffness = Spring.StiffnessMediumLow,
-                                            visibilityThreshold = IntOffset.VisibilityThreshold,
-                                        ),
+                                        placementSpec = null,
                                     )
                                     .padding(top = topPad),
                             ) {
