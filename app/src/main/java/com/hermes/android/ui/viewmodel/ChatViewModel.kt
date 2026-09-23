@@ -1211,7 +1211,11 @@ class ChatViewModel @Inject constructor(
      * the bubble is missing and every token would be discarded — open one.
      */
     private fun ensureStreamingBubble() {
-        if (streamingDelegate.currentAssistantMessageId != null) return
+        // An id alone is not a bubble: switching chats while the one being left
+        // still streams opens a bubble for it that the new transcript then drops,
+        // and the id outlives it — the opened chat's reasoning went nowhere.
+        val id = streamingDelegate.currentAssistantMessageId
+        if (id != null && _uiState.value.messages.any { it.id == id }) return
         openAssistantBubble(streamingDelegate.onMessageStart())
     }
 
