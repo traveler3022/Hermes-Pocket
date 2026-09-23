@@ -39,7 +39,7 @@ junit = "4.13.2"
 junitExt = "1.2.1"
 espresso = "3.6.1"
 robolectric = "4.14.1"
-mockk = "1.13.13"
+mockk = "1.14.11"
 coroutinesTest = "1.10.2"
 androidxTestCore = "1.6.1"
 
@@ -101,7 +101,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+mockk = "1.14.11"
 mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
