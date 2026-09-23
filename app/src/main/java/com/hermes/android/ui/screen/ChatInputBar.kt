@@ -155,6 +155,7 @@ import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
+import com.hermes.android.ui.i18n.SlashCommandDescriptions
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
@@ -217,6 +218,8 @@ internal fun InputBar(
         ).map { (command, description) -> SlashCommandSuggestion(command, description) }
     }
     val commandList = slashCommands.ifEmpty { fallbackCommands }
+    // Hermes describes its commands in English only; Persian comes from the app.
+    val persianDescriptions = t("en", "fa") == "fa"
     // Only while the command name is being typed: past the first space it is the argument.
     val showSuggestions = text.startsWith("/") && text.none { it == ' ' || it == '\n' } && !isSending
     val suggestions = remember(text, commandList) {
@@ -256,7 +259,7 @@ internal fun InputBar(
                         )
                         if (cmd.description.isNotBlank()) {
                             Text(
-                                cmd.description,
+                                SlashCommandDescriptions.describe(cmd.command, cmd.description, persianDescriptions),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
