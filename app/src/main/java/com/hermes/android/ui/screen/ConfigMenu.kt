@@ -175,8 +175,8 @@ internal fun SettingsMenu(
                 onClick = onNavigateToProjects,
             ),
             DomainSpec(
-                title = t("About", "درباره"),
-                subtitle = t("Version and updates", "نسخه و به\u200Cروزرسانی"),
+                title = t("Updates", "به\u200Cروزرسانی"),
+                subtitle = t("App and Hermes core versions", "نسخهٔ برنامه و هستهٔ هرمس"),
                 icon = Icons.Default.Info,
                 onClick = { onOpen(SettingsSection.ABOUT) },
             ),
