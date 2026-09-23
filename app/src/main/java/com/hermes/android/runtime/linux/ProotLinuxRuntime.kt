@@ -177,10 +177,9 @@ class ProotLinuxRuntime @Inject constructor(
     override val canUpdateHermes: Boolean get() = true
 
     /**
-     * Update Hermes Agent the way it was installed: the same script, whose
-     * `git pull` + locked `uv sync` bring an existing checkout up to date. Hermes'
-     * own `hermes update` assumes install.sh, which has no Alpine support, and
-     * timed out here. The gateway is stopped for the swap and started again after,
+     * Update Hermes Agent: [HERMES_UPDATE_SCRIPT] brings the checkout to GitHub's main
+     * through a chain of fallbacks, then the install script's locked `uv sync` brings the
+     * dependencies along. The gateway is stopped for the swap and started again after,
      * also when the update fails, so a failed update still leaves Hermes running.
      */
     override suspend fun updateHermes(progressEmitter: ProgressEmitter): InstallResult =
@@ -199,8 +198,9 @@ class ProotLinuxRuntime @Inject constructor(
             try {
                 report("stop", "Stopping Hermes…", 2)
                 stopGateway()
-                report("hermes", "Downloading the newest Hermes Agent…", 5)
-                runStage("hermes", HERMES_INSTALL_SCRIPT, 5, 90, log, ::report)
+                report("update", "Downloading the newest Hermes Agent…", 5)
+                runStage("update", HERMES_UPDATE_SCRIPT, 5, 60, log, ::report)
+                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT", 60, 90, log, ::report)
                 report("verify", "Checking hermes --version…", 92)
                 val version = readHermesVersion()
                     ?: throw InstallFailure("Hermes command not found after the update.")
@@ -434,6 +434,94 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
+        // Updates the checkout, trying each way in turn until HEAD is GitHub's main: Hermes' own
+        // `hermes update`, a plain pull, fresh git data over the same files (after saying what
+        // was broken), and last a fresh clone that keeps the venv. The install script then syncs deps.
+        private val HERMES_UPDATE_SCRIPT = """
+            export HERMES_HOME=/root/.hermes
+            REPO="${'$'}HERMES_HOME/hermes-agent"
+            REMOTE=https://github.com/NousResearch/hermes-agent.git
+            BRANCH=main
+            # busybox has timeout; if a rootfs ever lacks it, run without a limit rather than fail every step.
+            t() { if command -v timeout >/dev/null 2>&1; then timeout "${'$'}@"; else shift; "${'$'}@"; fi; }
+            # Success is judged against GitHub itself, never an exit code: HEAD must equal the remote tip.
+            TARGET=${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)
+            if [ -z "${'$'}TARGET" ]; then
+                echo "Could not reach GitHub — check the internet connection; nothing was changed."
+                exit 1
+            fi
+            echo "Newest Hermes Agent: ${'$'}TARGET"
+            at_target() { [ "${'$'}(git -C "${'$'}REPO" rev-parse HEAD 2>/dev/null)" = "${'$'}TARGET" ]; }
+            healthy() { git -C "${'$'}REPO" fsck --connectivity-only >/dev/null 2>&1; }
+            done_with() { echo "== Updated by: ${'$'}1"; rm -rf "${'$'}REPO.git-broken" "${'$'}REPO.old"; exit 0; }
+            at_target && healthy && done_with "nothing to do, already the newest"
+
+            echo "== [1/4] hermes update"
+            if [ -x "${'$'}REPO/venv/bin/hermes" ]; then
+                (cd "${'$'}REPO" && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
+                at_target && healthy && done_with "hermes update"
+            else
+                echo "hermes command missing — skipping"
+            fi
+
+            echo "== [2/4] git pull from GitHub"
+            # A step killed by its timeout can leave git children and index.lock behind; clear both.
+            pkill -x git 2>/dev/null && sleep 1
+            find "${'$'}REPO/.git" -maxdepth 2 -name '*.lock' -delete 2>/dev/null
+            t 600 git -C "${'$'}REPO" pull --ff-only "${'$'}REMOTE" "${'$'}BRANCH" </dev/null || echo "git pull failed (exit ${'$'}?)"
+            at_target && healthy && done_with "git pull"
+
+            echo "== [3/4] diagnose the checkout"
+            if [ ! -d "${'$'}REPO/.git" ]; then
+                echo "diagnosis: ${'$'}REPO/.git is missing"
+            elif healthy; then
+                echo "diagnosis: git data is intact — the failure was not a broken repository"
+                git -C "${'$'}REPO" status --short | head -5
+            else
+                echo "diagnosis: git data is broken:"
+                git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | head -5
+            fi
+            echo "repairing: fresh git data, code files and venv stay"
+            rm -rf "${'$'}REPO.gitfix" "${'$'}REPO.git-broken"
+            if t 600 git clone --quiet --depth 1 --no-checkout --branch "${'$'}BRANCH" "${'$'}REMOTE" "${'$'}REPO.gitfix" </dev/null; then
+                # main may have moved since ls-remote; a fresh clone is the newest by definition.
+                TARGET=${'$'}(git -C "${'$'}REPO.gitfix" rev-parse HEAD)
+                { [ ! -d "${'$'}REPO/.git" ] || mv "${'$'}REPO/.git" "${'$'}REPO.git-broken"; } &&
+                    mv "${'$'}REPO.gitfix/.git" "${'$'}REPO/.git" &&
+                    git -C "${'$'}REPO" reset --quiet --hard "${'$'}TARGET"
+                rm -rf "${'$'}REPO.gitfix"
+                at_target && healthy && done_with "git repair"
+                # Put the old git data back if the swap went halfway.
+                if [ ! -d "${'$'}REPO/.git" ] && [ -d "${'$'}REPO.git-broken" ]; then mv "${'$'}REPO.git-broken" "${'$'}REPO/.git"; fi
+            else
+                echo "fresh clone failed (exit ${'$'}?)"
+                rm -rf "${'$'}REPO.gitfix"
+            fi
+
+            echo "== [4/4] reinstall the Hermes Agent code (settings, chats and venv are kept)"
+            rm -rf "${'$'}REPO.new" "${'$'}REPO.old"
+            if t 900 git clone --quiet --depth 1 --branch "${'$'}BRANCH" "${'$'}REMOTE" "${'$'}REPO.new" </dev/null; then
+                TARGET=${'$'}(git -C "${'$'}REPO.new" rev-parse HEAD)
+                if mv "${'$'}REPO" "${'$'}REPO.old" && mv "${'$'}REPO.new" "${'$'}REPO"; then
+                    # Same path after the swap, so the venv's absolute paths still hold; the dependency stage repairs it.
+                    [ ! -d "${'$'}REPO.old/venv" ] || mv "${'$'}REPO.old/venv" "${'$'}REPO/venv"
+                    at_target && healthy && done_with "reinstall"
+                    [ ! -d "${'$'}REPO/venv" ] || mv "${'$'}REPO/venv" "${'$'}REPO.old/venv"
+                    rm -rf "${'$'}REPO" && mv "${'$'}REPO.old" "${'$'}REPO"
+                    echo "reinstall did not land on ${'$'}TARGET — old code restored"
+                else
+                    [ -d "${'$'}REPO" ] || mv "${'$'}REPO.old" "${'$'}REPO"
+                    rm -rf "${'$'}REPO.new"
+                    echo "could not swap the code folders — old code kept"
+                fi
+            else
+                echo "clone for the reinstall failed (exit ${'$'}?)"
+                rm -rf "${'$'}REPO.new"
+            fi
+            echo "Hermes Agent could not be updated by any of the 4 methods — details are in /root/.hermes/logs/app-install.log"
+            exit 1
+        """.trimIndent()
+
         // install.sh has no Alpine support, so this mirrors its steps: clone, locked uv sync
         // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
         private val HERMES_INSTALL_SCRIPT = """
@@ -446,7 +534,10 @@ class ProotLinuxRuntime @Inject constructor(
             fi
             UV="${'$'}HERMES_HOME/bin/uv"
             if [ -d "${'$'}REPO/.git" ]; then
-                git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
+                # An update has already brought the checkout to GitHub's main (HERMES_UPDATE_SCRIPT).
+                if [ "${'$'}{HERMES_SKIP_PULL:-}" != 1 ]; then
+                    git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
+                fi
             else
                 rm -rf "${'$'}REPO"
                 git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
