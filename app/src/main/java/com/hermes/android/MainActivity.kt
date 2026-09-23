@@ -21,6 +21,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -212,12 +215,18 @@ private fun HermesNavHost(
     val navController = rememberNavController()
 
     // Every back arrow is wrapped in dropUnlessResumed: after a pop, the leaving
-    // screen stays on top for the 700 ms fade and still takes taps. A tap on the
+    // screen stays on top for the whole fade and still takes taps. A tap on the
     // chat's hamburger in that window hit Settings' back arrow (same corner) and
     // popped `chat` too, leaving an empty NavHost — a black screen.
     NavHost(
         navController = navController,
         startDestination = if (startInSetup) "setup" else "chat",
+        // The library default is a 700 ms cross-fade, which made every screen
+        // change feel sluggish.
+        enterTransition = { fadeIn(tween(220)) },
+        exitTransition = { fadeOut(tween(220)) },
+        popEnterTransition = { fadeIn(tween(220)) },
+        popExitTransition = { fadeOut(tween(220)) },
     ) {
         composable("setup") {
             com.hermes.android.ui.screen.SetupScreen(
