@@ -848,9 +848,13 @@ fun ChatScreen(
                                     // settling, a trace folding, older turns
                                     // loading), so the text never felt fixed
                                     // to the page.
+                                    // No fade-out: switching chats removes every row
+                                    // at once, and the old chat's rows lingered on top
+                                    // of the new chat's while they faded.
                                     .animateItem(
                                         fadeInSpec = tween(220),
                                         placementSpec = null,
+                                        fadeOutSpec = null,
                                     )
                                     .padding(top = topPad),
                             ) {
