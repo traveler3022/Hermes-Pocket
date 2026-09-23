@@ -57,6 +57,7 @@ object GatewayMethods {
     const val PROMPT_BTW = "prompt.btw"
     const val PROMPT_BACKGROUND = "prompt.background"
 
+    const val CLIENT_CAPABILITIES = "client.capabilities"
 
     const val SKILLS_MANAGE = "skills.manage"
     const val SKILLS_RELOAD = "skills.reload"
