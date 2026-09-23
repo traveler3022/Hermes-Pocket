@@ -75,9 +75,14 @@ internal class ChatSessionDelegate(
      * Returns null when [sessionId] could not be opened, otherwise whether a
      * turn is still running in it.
      */
-    suspend fun resume(state: MutableStateFlow<ChatUiState>, sessionId: String): Boolean? {
+    suspend fun resume(
+        state: MutableStateFlow<ChatUiState>,
+        sessionId: String,
+        isLiveId: Boolean = false,
+    ): Boolean? {
         try {
-            val attached = sessionRepository.attach(sessionId)
+            // A live id always 4007s on session.resume first; go straight to activate.
+            val attached = sessionRepository.attach(sessionId, preferLive = isLiveId)
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
             val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"

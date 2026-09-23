@@ -361,7 +361,10 @@ class ChatViewModel @Inject constructor(
         resumeJob?.cancel()
         resumeJob = viewModelScope.launch {
             streamingDelegate.reset()
-            val running = sessionDelegate.resume(_uiState, sessionId)
+            // Reopening the chat on screen (back from the background, a reconnect)
+            // or one known by its live id: not a stored id from the drawer.
+            val isLiveId = sessionId == _uiState.value.activeSessionId || sessionId in storedIdByLiveId
+            val running = sessionDelegate.resume(_uiState, sessionId, isLiveId)
             val opened = running != null
             // Joined mid-turn: its start went by before this chat was open, so
             // the reply is fetched once the turn ends. An idle chat drops the
