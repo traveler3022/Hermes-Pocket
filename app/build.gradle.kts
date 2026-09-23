@@ -28,7 +28,7 @@ val releaseStorePath: String? = signingCred("KEYSTORE_FILE", "storeFile")
 
 android {
     namespace = "com.hermes.android"
-    compileSdk = 35  // Latest Stable per ADR-012
+    compileSdk = 36  // Latest Stable per ADR-012
 
     defaultConfig {
         applicationId = "com.hermes.android"
@@ -86,10 +86,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -239,3 +235,9 @@ val printComposeReport by tasks.registering {
     }
 }
 tasks.matching { it.name == "assembleDebug" }.configureEach { finalizedBy(printComposeReport) }
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
