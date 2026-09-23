@@ -1,10 +1,13 @@
 package com.hermes.android.ui.screen
 
+import android.app.Activity
 import android.app.DownloadManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.speech.RecognizerIntent
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,6 +60,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -174,6 +178,34 @@ internal fun InputBar(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(onAttachFile) }
+    // Voice input: Android's own recognizer (the system's speech dialog), so no
+    // microphone permission here. What was said lands in the box to check before sending.
+    val context = LocalContext.current
+    val speechLanguage = t("en-US", "fa-IR")
+    val speechPrompt = t("Speak", "صحبت کن")
+    val noSpeech = t("Speech recognition isn't available on this phone", "تشخیص گفتار روی این گوشی در دسترس نیست")
+    val voiceInput = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (result.resultCode == Activity.RESULT_OK && !spoken.isNullOrEmpty()) {
+            onTextChange(if (text.isBlank()) spoken else text.trimEnd() + " " + spoken)
+        }
+    }
+    val startVoiceInput = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, speechPrompt)
+        try {
+            voiceInput.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, noSpeech, Toast.LENGTH_LONG).show()
+        }
+    }
     // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
     // a button for; a short built-in list until the catalog arrives.
     val fallbackCommands = remember {
@@ -363,6 +395,16 @@ internal fun InputBar(
                         )
                     }
                 } else {
+                    IconButton(
+                        onClick = startVoiceInput,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = t("Voice input", "ورودی صوتی"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(
                         onClick = onSend,
                         // An attachment-only message (no typed text) is valid —
