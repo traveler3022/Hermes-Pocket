@@ -434,9 +434,10 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
-        // Updates the checkout, trying each way in turn until HEAD is GitHub's main: Hermes' own
-        // `hermes update`, a plain pull, fresh git data over the same files (after saying what
-        // was broken), and last a fresh clone that keeps the venv. The install script then syncs deps.
+        // Brings the checkout to GitHub's main, stopping at the first way that gets there: Hermes'
+        // own `hermes update`, a plain pull, then (after saying what is broken) fresh git data
+        // fetched beside the old one. Nothing is moved or reinstalled; the venv and untracked
+        // files stay. The install script then syncs the dependencies.
         private val HERMES_UPDATE_SCRIPT = """
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
@@ -444,6 +445,10 @@ class ProotLinuxRuntime @Inject constructor(
             BRANCH=main
             # busybox has timeout; if a rootfs ever lacks it, run without a limit rather than fail every step.
             t() { if command -v timeout >/dev/null 2>&1; then timeout "${'$'}@"; else shift; "${'$'}@"; fi; }
+            # proot's --link2symlink turns git's link()+unlink() object writes into symlinks holding
+            # absolute paths, so a moved or copied .git loses every object. Rename mode writes real files.
+            git config --global core.createObject rename
+            [ ! -d "${'$'}REPO/.git" ] || git -C "${'$'}REPO" config core.createObject rename 2>/dev/null
             # Success is judged against GitHub itself, never an exit code: HEAD must equal the remote tip.
             TARGET=${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)
             if [ -z "${'$'}TARGET" ]; then
@@ -453,10 +458,10 @@ class ProotLinuxRuntime @Inject constructor(
             echo "Newest Hermes Agent: ${'$'}TARGET"
             at_target() { [ "${'$'}(git -C "${'$'}REPO" rev-parse HEAD 2>/dev/null)" = "${'$'}TARGET" ]; }
             healthy() { git -C "${'$'}REPO" fsck --connectivity-only >/dev/null 2>&1; }
-            done_with() { echo "== Updated by: ${'$'}1"; rm -rf "${'$'}REPO.git-broken" "${'$'}REPO.old"; exit 0; }
+            done_with() { echo "== Updated by: ${'$'}1"; exit 0; }
             at_target && healthy && done_with "nothing to do, already the newest"
 
-            echo "== [1/4] hermes update"
+            echo "== [1/3] hermes update"
             if [ -x "${'$'}REPO/venv/bin/hermes" ]; then
                 (cd "${'$'}REPO" && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
                 at_target && healthy && done_with "hermes update"
@@ -464,61 +469,49 @@ class ProotLinuxRuntime @Inject constructor(
                 echo "hermes command missing — skipping"
             fi
 
-            echo "== [2/4] git pull from GitHub"
+            echo "== [2/3] git pull from GitHub"
             # A step killed by its timeout can leave git children and index.lock behind; clear both.
             pkill -x git 2>/dev/null && sleep 1
             find "${'$'}REPO/.git" -maxdepth 2 -name '*.lock' -delete 2>/dev/null
             t 600 git -C "${'$'}REPO" pull --ff-only "${'$'}REMOTE" "${'$'}BRANCH" </dev/null || echo "git pull failed (exit ${'$'}?)"
             at_target && healthy && done_with "git pull"
 
-            echo "== [3/4] diagnose the checkout"
+            echo "== [3/3] diagnose and repair the git data"
             if [ ! -d "${'$'}REPO/.git" ]; then
                 echo "diagnosis: ${'$'}REPO/.git is missing"
-            elif healthy; then
-                echo "diagnosis: git data is intact — the failure was not a broken repository"
-                git -C "${'$'}REPO" status --short | head -5
             else
-                echo "diagnosis: git data is broken:"
-                git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | head -5
-            fi
-            echo "repairing: fresh git data, code files and venv stay"
-            rm -rf "${'$'}REPO.gitfix" "${'$'}REPO.git-broken"
-            if t 600 git clone --quiet --depth 1 --no-checkout --branch "${'$'}BRANCH" "${'$'}REMOTE" "${'$'}REPO.gitfix" </dev/null; then
-                # main may have moved since ls-remote; a fresh clone is the newest by definition.
-                TARGET=${'$'}(git -C "${'$'}REPO.gitfix" rev-parse HEAD)
-                { [ ! -d "${'$'}REPO/.git" ] || mv "${'$'}REPO/.git" "${'$'}REPO.git-broken"; } &&
-                    mv "${'$'}REPO.gitfix/.git" "${'$'}REPO/.git" &&
-                    git -C "${'$'}REPO" reset --quiet --hard "${'$'}TARGET"
-                rm -rf "${'$'}REPO.gitfix"
-                at_target && healthy && done_with "git repair"
-                # Put the old git data back if the swap went halfway.
-                if [ ! -d "${'$'}REPO/.git" ] && [ -d "${'$'}REPO.git-broken" ]; then mv "${'$'}REPO.git-broken" "${'$'}REPO/.git"; fi
-            else
-                echo "fresh clone failed (exit ${'$'}?)"
-                rm -rf "${'$'}REPO.gitfix"
-            fi
-
-            echo "== [4/4] reinstall the Hermes Agent code (settings, chats and venv are kept)"
-            rm -rf "${'$'}REPO.new" "${'$'}REPO.old"
-            if t 900 git clone --quiet --depth 1 --branch "${'$'}BRANCH" "${'$'}REMOTE" "${'$'}REPO.new" </dev/null; then
-                TARGET=${'$'}(git -C "${'$'}REPO.new" rev-parse HEAD)
-                if mv "${'$'}REPO" "${'$'}REPO.old" && mv "${'$'}REPO.new" "${'$'}REPO"; then
-                    # Same path after the swap, so the venv's absolute paths still hold; the dependency stage repairs it.
-                    [ ! -d "${'$'}REPO.old/venv" ] || mv "${'$'}REPO.old/venv" "${'$'}REPO/venv"
-                    at_target && healthy && done_with "reinstall"
-                    [ ! -d "${'$'}REPO/venv" ] || mv "${'$'}REPO/venv" "${'$'}REPO.old/venv"
-                    rm -rf "${'$'}REPO" && mv "${'$'}REPO.old" "${'$'}REPO"
-                    echo "reinstall did not land on ${'$'}TARGET — old code restored"
+                dangling=${'$'}(find "${'$'}REPO/.git" -type l ! -exec test -e {} \; -print 2>/dev/null | wc -l)
+                [ "${'$'}dangling" -eq 0 ] || echo "diagnosis: ${'$'}dangling git file(s) are links to data that is gone (proot link2symlink; the .git was moved or its .l2s files deleted)"
+                if healthy; then
+                    echo "diagnosis: git data is intact; the pull itself failed:"
+                    git -C "${'$'}REPO" status 2>&1 | head -5
                 else
-                    [ -d "${'$'}REPO" ] || mv "${'$'}REPO.old" "${'$'}REPO"
-                    rm -rf "${'$'}REPO.new"
-                    echo "could not swap the code folders — old code kept"
+                    echo "diagnosis: git data is broken (${'$'}(git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | grep -c missing) missing object(s)):"
+                    git -C "${'$'}REPO" fsck --connectivity-only 2>&1 | head -3
                 fi
-            else
-                echo "clone for the reinstall failed (exit ${'$'}?)"
-                rm -rf "${'$'}REPO.new"
             fi
-            echo "Hermes Agent could not be updated by any of the 4 methods — details are in /root/.hermes/logs/app-install.log"
+            # Fetch into a second git dir next to the old one, in real files (rename mode), and only swap
+            # once it holds the new version. Code files are then brought to it in place; venv and every
+            # untracked file stay where they are.
+            NEW="${'$'}REPO/.git-new"
+            rm -rf "${'$'}NEW"
+            if git --git-dir="${'$'}NEW" init -q -b "${'$'}BRANCH" &&
+                git --git-dir="${'$'}NEW" config core.createObject rename &&
+                t 600 git --git-dir="${'$'}NEW" fetch -q --depth 1 "${'$'}REMOTE" "${'$'}BRANCH" </dev/null &&
+                [ "${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)" != "" ]; then
+                TARGET=${'$'}(git --git-dir="${'$'}NEW" rev-parse FETCH_HEAD)
+                rm -rf "${'$'}REPO/.git" && mv "${'$'}NEW" "${'$'}REPO/.git" &&
+                    git -C "${'$'}REPO" config core.bare false &&
+                    git -C "${'$'}REPO" remote add origin "${'$'}REMOTE" 2>/dev/null
+                git -C "${'$'}REPO" update-ref "refs/remotes/origin/${'$'}BRANCH" "${'$'}TARGET"
+                git -C "${'$'}REPO" reset -q --hard "${'$'}TARGET" && git -C "${'$'}REPO" branch -q -u "origin/${'$'}BRANCH" 2>/dev/null
+                at_target && healthy && done_with "git repair"
+                echo "repair fetched ${'$'}TARGET but could not check it out"
+            else
+                echo "could not download fresh git data from GitHub"
+                rm -rf "${'$'}NEW"
+            fi
+            echo "Hermes Agent was not updated — the steps and diagnosis above say why (also in /root/.hermes/logs/app-install.log)"
             exit 1
         """.trimIndent()
 
@@ -533,6 +526,8 @@ class ProotLinuxRuntime @Inject constructor(
                 curl -LsSf --retry 3 https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${'$'}HERMES_HOME/bin" UV_NO_MODIFY_PATH=1 sh
             fi
             UV="${'$'}HERMES_HOME/bin/uv"
+            # Real files for git objects, not link2symlink's absolute-path symlinks (see HERMES_UPDATE_SCRIPT).
+            git config --global core.createObject rename
             if [ -d "${'$'}REPO/.git" ]; then
                 # An update has already brought the checkout to GitHub's main (HERMES_UPDATE_SCRIPT).
                 if [ "${'$'}{HERMES_SKIP_PULL:-}" != 1 ]; then
