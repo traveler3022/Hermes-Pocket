@@ -229,14 +229,27 @@ internal fun MessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    onEditMessage: ((messageId: String) -> Unit)? = null,
+    onDeleteMessage: ((messageId: String) -> Unit)? = null,
 ) {
     when (message) {
         is ChatMessage.User -> {
+            // Both rewrite the stored transcript, which the server refuses mid-turn, and
+            // a message still waiting for Hermes to boot has nothing stored to rewrite.
+            val canRewind = !isSending && !message.queued
             UserMessageBubble(
                 message = message,
                 searchQuery = searchQuery,
                 isLastInGroup = isLastInGroup,
                 onCopyMessage = onCopyMessage,
+                // An attached image cannot be sent again from here, so an edit would
+                // quietly drop it; the text-only edit is offered where nothing is lost.
+                onEdit = onEditMessage
+                    ?.takeIf { canRewind && message.attachments.none { it.isImage } }
+                    ?.let { edit -> { edit(message.id) } },
+                onDelete = onDeleteMessage
+                    ?.takeIf { canRewind }
+                    ?.let { delete -> { delete(message.id) } },
             )
         }
 

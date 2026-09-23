@@ -270,16 +270,19 @@ internal class ChatSessionDelegate(
         }
     }
 
-    /** The nth user turn's durable row id, for a retry whose [ChatMessage.User.rowId] was
-     *  never stamped (sent live in this session, not loaded from session.history). */
-    suspend fun resolveUserRowId(sessionId: String, userOrdinal: Int): Long? {
+    /**
+     * The chat's user turns as the server stores them, row ids included, or null when
+     * the history could not be read. A rewind is aimed with these, never with the
+     * bubbles on screen alone (see [findUserRow]).
+     */
+    suspend fun serverUserTurns(sessionId: String): List<ChatMessage.User>? {
         return try {
             val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            parseSessionHistory(result).filterIsInstance<ChatMessage.User>().getOrNull(userOrdinal)?.rowId
+            parseSessionHistory(result).filterIsInstance<ChatMessage.User>()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Timber.w(e, "[Chat] Could not resolve row id for session $sessionId ordinal $userOrdinal")
+            Timber.w(e, "[Chat] Could not read the user turns of session $sessionId")
             null
         }
     }

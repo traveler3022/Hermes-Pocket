@@ -18,9 +18,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -50,9 +55,13 @@ internal fun UserMessageBubble(
     searchQuery: String = "",
     isLastInGroup: Boolean = true,
     onCopyMessage: (String) -> Unit = {},
+    /** Null hides the action: a turn is running, or the message never reached Hermes. */
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val isLongMessage = message.text.length > 500
     var isExpanded by remember { mutableStateOf(!isLongMessage) }
+    var showMenu by remember { mutableStateOf(false) }
 
     val bubbleShape = if (isLastInGroup) {
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
@@ -77,7 +86,7 @@ internal fun UserMessageBubble(
                 .background(bubbleColor)
                 .combinedClickable(
                     onClick = { if (isLongMessage) isExpanded = !isExpanded },
-                    onLongClick = { onCopyMessage(message.text) },
+                    onLongClick = { showMenu = true },
                 ),
         ) {
             CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
@@ -183,6 +192,29 @@ internal fun UserMessageBubble(
                             )
                         }
                     }
+                }
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(t("Copy", "کپی")) },
+                    onClick = { showMenu = false; onCopyMessage(message.text) },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                )
+                onEdit?.let { edit ->
+                    DropdownMenuItem(
+                        text = { Text(t("Edit", "ویرایش")) },
+                        onClick = { showMenu = false; edit() },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                    )
+                }
+                onDelete?.let { delete ->
+                    DropdownMenuItem(
+                        text = { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false; delete() },
+                        leadingIcon = {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        },
+                    )
                 }
             }
         }

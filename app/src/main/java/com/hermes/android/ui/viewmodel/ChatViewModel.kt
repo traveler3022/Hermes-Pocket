@@ -334,6 +334,8 @@ class ChatViewModel @Inject constructor(
 
     fun resumeSession(sessionId: String) {
         requestedSessionId = sessionId
+        // An edit belongs to the chat it started in.
+        if (_uiState.value.editingMessageId != null) cancelEditing()
         autoPickJob?.cancel()
         // Only the latest pick may land; an older one finishing late would
         // replace the chat the user just chose.
@@ -372,6 +374,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun newConversation() {
+        if (_uiState.value.editingMessageId != null) cancelEditing()
         viewModelScope.launch {
             streamingDelegate.reset()
             _uiState.update { it.copy(
@@ -401,6 +404,10 @@ class ChatViewModel @Inject constructor(
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
         val sessionId = _uiState.value.activeSessionId
+        _uiState.value.editingMessageId?.let { editing ->
+            if (text.isNotEmpty()) submitEdit(editing, text)
+            return
+        }
 
         clearDraft()
 
@@ -476,34 +483,119 @@ class ChatViewModel @Inject constructor(
         val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
         val refs = lastUserMsg.attachments.mapNotNull { it.refText }
         val lastUserText = if (refs.isEmpty()) {
-            lastUserMsg.text
+            sentText(lastUserMsg)
         } else {
-            (lastUserMsg.text + "\n" + refs.joinToString("\n")).trim()
+            (sentText(lastUserMsg) + "\n" + refs.joinToString("\n")).trim()
         }
 
-        val userMessages = _uiState.value.messages.filterIsInstance<ChatMessage.User>()
-        val lastUserOrdinal = userMessages.size - 1
-        val knownRowId = lastUserMsg.rowId
-
-        val lastUserIndex = _uiState.value.messages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            val trimmedMessages = _uiState.value.messages.subList(0, lastUserIndex + 1).toList()
-            _uiState.update { it.copy(messages = trimmedMessages, isSending = true) }
-        }
+        val before = _uiState.value.messages
+        val lastUserIndex = before.indexOfLast { it is ChatMessage.User }
+        _uiState.update { it.copy(messages = before.subList(0, lastUserIndex + 1).toList(), isSending = true) }
 
         viewModelScope.launch {
-            // A message sent live in this session (not loaded from session.history) never
-            // got its row id stamped. The server rejects an ordinal-only retry with 4004,
-            // so resolve it against history rather than let the retry fail outright.
-            val rowId = knownRowId ?: sessionDelegate.resolveUserRowId(sessionId, lastUserOrdinal)
-            sendPrompt(
-                lastUserText,
-                sessionId,
-                truncateBeforeUserOrdinal = lastUserOrdinal,
-                truncateBeforeRowId = rowId,
-            )
+            val rowId = locateOnServer(sessionId, before, lastUserMsg)
+            if (rowId == null) {
+                _uiState.update { it.copy(messages = before, isSending = false) }
+                return@launch
+            }
+            sendPrompt(lastUserText, sessionId, truncateBeforeRowId = rowId) {
+                _uiState.update { it.copy(messages = before) }
+            }
         }
     }
+
+    /** Puts a sent message back in the composer; sending replaces it and what followed. */
+    fun startEditing(messageId: String) {
+        if (_uiState.value.isSending) return
+        val message = _uiState.value.messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
+        _uiState.update { it.copy(editingMessageId = messageId, inputText = sentText(message)) }
+    }
+
+    fun cancelEditing() {
+        _uiState.update { it.copy(editingMessageId = null, inputText = "") }
+    }
+
+    private fun submitEdit(messageId: String, text: String) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isSending) return
+        val before = _uiState.value.messages
+        val index = before.indexOfFirst { it.id == messageId }
+        val target = before.getOrNull(index) as? ChatMessage.User ?: run { cancelEditing(); return }
+        // File references ride along as they did the first time; the edit is to the words.
+        val refs = target.attachments.mapNotNull { it.refText }
+        val outgoing = if (refs.isEmpty()) text else (text + "\n" + refs.joinToString("\n")).trim()
+        val edited = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = text,
+            attachments = target.attachments,
+        )
+        clearDraft()
+        _uiState.update { it.copy(
+            messages = before.subList(0, index) + edited,
+            editingMessageId = null,
+            inputText = "",
+            isSending = true,
+        ) }
+        viewModelScope.launch {
+            val rowId = locateOnServer(sessionId, before, target)
+            if (rowId == null) {
+                _uiState.update { it.copy(messages = before, isSending = false, editingMessageId = messageId, inputText = text) }
+                return@launch
+            }
+            // Refused (busy, stale): the server kept everything, so the screen must too.
+            sendPrompt(outgoing, sessionId, truncateBeforeRowId = rowId) {
+                _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
+            }
+        }
+    }
+
+    /**
+     * Removes a sent message and everything after it. The server has no cut without a
+     * new prompt, only session.undo (the last turn), so the turns from the message to
+     * the end are undone one by one, and the chat then reloads what the server kept.
+     */
+    fun deleteFromMessage(messageId: String) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        if (_uiState.value.isSending) return
+        val messages = _uiState.value.messages
+        val target = messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
+        viewModelScope.launch {
+            try {
+                val server = sessionDelegate.serverUserTurns(sessionId)
+                val rowId = server?.let { findUserRow(messages, target, it) }
+                if (server == null || rowId == null) {
+                    _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
+                    return@launch
+                }
+                for (turn in 1..turnsFrom(server, rowId)) {
+                    if (sessionRepository.undoLastTurn(sessionId) == 0) break
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "[Chat] delete from message failed")
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(rewindFailure(e))) }
+            }
+            sessionDelegate.loadHistory(_uiState, sessionId, allowEmpty = true)
+        }
+    }
+
+    /** [target]'s row on the server, or null after telling the user it could not be found. */
+    private suspend fun locateOnServer(
+        sessionId: String,
+        local: List<ChatMessage>,
+        target: ChatMessage.User,
+    ): Long? {
+        val rowId = sessionDelegate.serverUserTurns(sessionId)?.let { findUserRow(local, target, it) }
+        if (rowId == null) _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
+        return rowId
+    }
+
+    private fun rewindFailure(e: Exception): String =
+        if (e.message.orEmpty().startsWith("RPC error 4009:")) {
+            "Hermes is still finishing the last reply. Try again in a moment."
+        } else {
+            "Could not change the chat: ${e.message}"
+        }
 
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
@@ -511,7 +603,7 @@ class ChatViewModel @Inject constructor(
         val steerMsg = ChatMessage.User(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
-            text = "\u21B3 $text",
+            text = "$STEER_PREFIX$text",
         )
         _uiState.update { it.copy(messages = _uiState.value.messages + steerMsg, inputText = "") }
         clearDraft()
@@ -615,27 +707,24 @@ class ChatViewModel @Inject constructor(
     private fun sendPrompt(
         text: String,
         sessionId: String,
-        truncateBeforeUserOrdinal: Int? = null,
         truncateBeforeRowId: Long? = null,
+        onRefused: (() -> Unit)? = null,
     ) {
         viewModelScope.launch {
             try {
                 fun params(liveId: String) = buildJsonObject {
                     put("text", text)
                     put("session_id", liveId)
-                    if (truncateBeforeUserOrdinal != null) {
-                        put("truncate_before_user_ordinal", truncateBeforeUserOrdinal)
-                        // The server refuses truncating submits with 4029 unless the
-                        // rewind is explicitly confirmed, so a stale ordinal on an
-                        // ordinary submit can never silently drop history. Ordinal 0
-                        // (regenerating the first turn) empties the transcript and
-                        // needs the second opt-in, or the server answers 4028. It also
-                        // refuses an ordinal with no row id at all, as 4004 — ordinals
-                        // shift under compaction, so a durable session requires the
-                        // row id to say which physical row is meant.
-                        if (truncateBeforeRowId != null) put("truncate_before_row_id", truncateBeforeRowId)
+                    if (truncateBeforeRowId != null) {
+                        // A rewind (edit, retry) is aimed at the target's durable row id
+                        // alone: ordinals drift — a steered message is stored wherever the
+                        // agent picked it up — and a mismatched ordinal is refused (4030).
+                        // The cut is explicit (4029 without confirm_truncate), and cutting
+                        // at the first turn empties the transcript, which needs its own
+                        // opt-in (4028); both are the user's own action here.
+                        put("truncate_before_row_id", truncateBeforeRowId)
                         put("confirm_truncate", true)
-                        if (truncateBeforeUserOrdinal == 0) put("confirm_empty_truncate", true)
+                        put("confirm_empty_truncate", true)
                     }
                 }
                 sessionRepository.onLiveSession(
@@ -650,8 +739,11 @@ class ChatViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
+                onRefused?.invoke()
                 _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Failed to send: ${e.message}"),
+                    errorEvent = ErrorEvent.Error(
+                        if (truncateBeforeRowId != null) rewindFailure(e) else "Failed to send: ${e.message}",
+                    ),
                     isSending = false,
                 ) }
             }
@@ -1473,6 +1565,8 @@ class ChatViewModel @Inject constructor(
         private const val MAX_BOOT_SAMPLE_MS = 180_000L
         private const val KEY_ASSISTANT_NAME = "assistant_display_name"
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
+        private const val MESSAGE_NOT_LOCATED =
+            "Could not find this message in the stored chat, so nothing was changed. Reopen the chat and try again."
     }
 
     override fun onCleared() {

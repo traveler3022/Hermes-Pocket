@@ -196,6 +196,9 @@ data class ChatUiState(
     /** This device's own rolling average for how long a cold start takes, in ms (0 = unknown). */
     val bootEstimateMs: Long = 0L,
     val inputText: String = "",
+    /** The sent message being edited: the composer holds its text, and sending
+     *  replaces it and everything after it. Null when composing normally. */
+    val editingMessageId: String? = null,
     val isSending: Boolean = false,
     val errorEvent: ErrorEvent? = null,
     val showSessionDrawer: Boolean = false,

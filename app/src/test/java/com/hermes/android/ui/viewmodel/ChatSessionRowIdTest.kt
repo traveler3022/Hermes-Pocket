@@ -20,9 +20,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * A retry/regenerate is an ordinal-only truncate on the wire unless the target user
- * message's durable row id rides along with it — the server rejects an ordinal with
- * no row id as RPC 4004. session.history is where that row id is learned.
+ * Edit, delete and retry cut the stored transcript at a user message's durable row id;
+ * session.history is where that row id is learned.
  */
 class ChatSessionRowIdTest {
 
@@ -70,19 +69,20 @@ class ChatSessionRowIdTest {
     }
 
     @Test
-    fun `resolveUserRowId returns the nth user turn's row id`() = runTest {
+    fun `serverUserTurns returns the stored user turns with their row ids`() = runTest {
         val gateway = FakeGatewayClient { historyWithRowIds() }
         val sessions = ChatSessionDelegate(gateway, SessionRepository(gateway, NoTasks), this) {}
 
-        assertEquals(101L, sessions.resolveUserRowId("s1", 0))
-        assertEquals(104L, sessions.resolveUserRowId("s1", 1))
+        val turns = sessions.serverUserTurns("s1")
+
+        assertEquals(listOf("first" to 101L, "second" to 104L), turns?.map { it.text to it.rowId })
     }
 
     @Test
-    fun `resolveUserRowId gives up quietly when the gateway fails`() = runTest {
+    fun `serverUserTurns gives up quietly when the gateway fails`() = runTest {
         val gateway = FakeGatewayClient { error("gateway unreachable") }
         val sessions = ChatSessionDelegate(gateway, SessionRepository(gateway, NoTasks), this) {}
 
-        assertNull(sessions.resolveUserRowId("s1", 0))
+        assertNull(sessions.serverUserTurns("s1"))
     }
 }

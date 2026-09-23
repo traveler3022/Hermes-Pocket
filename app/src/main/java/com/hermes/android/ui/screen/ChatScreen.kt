@@ -198,6 +198,7 @@ fun ChatScreen(
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
+    var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
 
     // Feature #4: Detect if user has scrolled away from bottom
@@ -872,6 +873,8 @@ fun ChatScreen(
                                 resolveUrl = viewModel::resolveMediaUrl,
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
+                                onEditMessage = viewModel::startEditing,
+                                onDeleteMessage = { id -> deleteFromMessageId = id },
                             )
                             }
                         }
@@ -922,6 +925,40 @@ fun ChatScreen(
                     AgentTodoCard(todos = uiState.activeTodos)
                 }
 
+                // Editing a sent message: say so above the composer, with the way out.
+                if (uiState.editingMessageId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = HxSpace.screen, end = 4.dp, top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = t(
+                                "Editing message — sending replaces it and everything after it",
+                                "ویرایش پیام — با ارسال، این پیام و هرچه بعدش آمده جایگزین می‌شود",
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = viewModel::cancelEditing) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = t("Cancel edit", "لغو ویرایش"),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+
                 // Input bar
                 InputBar(
                     text = uiState.inputText,
@@ -940,6 +977,30 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    deleteFromMessageId?.let { messageId ->
+        AlertDialog(
+            onDismissRequest = { deleteFromMessageId = null },
+            title = { Text(t("Delete message?", "حذف پیام؟")) },
+            text = {
+                Text(
+                    t(
+                        "This message and everything after it will be removed from the chat, for Hermes too. This cannot be undone.",
+                        "این پیام و همهٔ پیام‌های بعد از آن از گفتگو حذف می‌شوند، برای Hermes هم. قابل برگشت نیست.",
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteFromMessageId = null
+                    viewModel.deleteFromMessage(messageId)
+                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteFromMessageId = null }) { Text(t("Cancel", "لغو")) }
+            },
+        )
     }
 
     // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
