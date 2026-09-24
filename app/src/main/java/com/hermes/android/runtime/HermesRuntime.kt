@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.StateFlow
  * terminal app) or as an embedded Python (future production).
  *
  * ## Implementations
- * - The current migration adapter (bound via Hilt in `di/RuntimeModule.kt`).
- * - (future) `EmbeddedPythonRuntime` — production target (ADR-009).
- * - (hypothetical) `NativeKotlinRuntime` — far-future rewrite.
+ * - `TermuxBridge` — Hermes inside the Termux app.
+ * - `ProotLinuxRuntime` — Hermes in the built-in Alpine Linux, run by proot.
+ *
+ * [SwitchableHermesRuntime] routes to the one the user picked; it is the binding in
+ * `di/RuntimeModule.kt`.
  *
  * ## Design Constraints (per Step 2 approval)
  * - UI and business logic depend ONLY on this interface.

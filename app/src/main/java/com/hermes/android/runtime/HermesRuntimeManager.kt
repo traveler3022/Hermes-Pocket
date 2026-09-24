@@ -15,11 +15,10 @@ import javax.inject.Singleton
  * the Hilt binding in [com.hermes.android.di.RuntimeModule] changes;
  * every consumer of [HermesRuntimeManager] keeps working unchanged.
  *
- * ## Future extension
+ * ## Switching
  *
- * The manager may eventually support runtime switching at runtime
- * (e.g. user chooses between "Migration adapter (development)" and "Embedded (beta)").
- * For now it just holds the single bound implementation.
+ * [selectRuntime] switches between Termux and the built-in Linux; [runtime] is the
+ * [SwitchableHermesRuntime] router, so it always reaches the selected one.
  *
  * Reference: ADR-001 (migration adapter), ADR-009 (production embedded Python)
  */

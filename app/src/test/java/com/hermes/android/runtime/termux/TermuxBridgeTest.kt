@@ -16,8 +16,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -334,6 +338,55 @@ class TermuxBridgeTest {
         assertTrue("Fallback must have non-null command", fallback.command != null)
         assertTrue("Fallback command must contain 'echo legacy'", fallback.command!!.contains("echo legacy"))
         assertTrue("Fallback title must mention fallback", fallback.title.contains("fallback", ignoreCase = true))
+    }
+
+    @Test
+    fun `an install that finished while nobody waited is picked up from the state resync`() = runBlocking {
+        val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")
+        bridgeTest_setState(RuntimeState.Detected(runtimeInfo))
+
+        // What detect()'s resync broadcasts when ~/.hermes/install.state says done.
+        completionFlow.value = TermuxInstallProgressReceiver.InstallCompletion.Completed
+
+        val state = withTimeout(2_000) { bridge.state.first { it !is RuntimeState.Detected } }
+        assertTrue("A finished install must mark the runtime installed, got $state", state is RuntimeState.Installed)
+        assertTrue(
+            "Install on an installed runtime must not dispatch the script again",
+            bridge.install(ProgressEmitter { }) is InstallResult.Success,
+        )
+        coVerify(exactly = 0) { executor.executeBackgroundScript(any(), any()) }
+    }
+
+    @Test
+    fun `a cancelled install does not stay Installing`() = runTest {
+        val runtimeInfo = RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")
+        bridgeTest_setState(RuntimeState.Detected(runtimeInfo))
+        stubHealthyPrerequisites()
+        every { installer.generateInstallScript() } returns "echo install"
+        every { executor.executeBackgroundScript(any(), any()) } returns
+            TermuxCommandExecutor.Result.Accepted
+
+        val job = launch { bridge.install(ProgressEmitter { }) }
+        kotlinx.coroutines.delay(5_000)
+        assertEquals(RuntimeState.Installing, bridge.state.value)
+        job.cancel()
+        job.join()
+
+        assertEquals(RuntimeState.Detected(runtimeInfo), bridge.state.value)
+    }
+
+    @Test
+    fun `an install that times out leaves an error, not Installing`() = runTest {
+        bridgeTest_setState(RuntimeState.Detected(RuntimeInfo(type = RuntimeType.TERMUX, version = "1.0.0")))
+        stubHealthyPrerequisites()
+        every { installer.generateInstallScript() } returns "echo install"
+        every { executor.executeBackgroundScript(any(), any()) } returns
+            TermuxCommandExecutor.Result.Accepted
+
+        val result = bridge.install(ProgressEmitter { })
+
+        assertTrue(result is InstallResult.Failure)
+        assertTrue("Got ${bridge.state.value}", bridge.state.value is RuntimeState.Error)
     }
 
     // ── Helper ──────────────────────────────────────────────────────────

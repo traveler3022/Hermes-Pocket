@@ -24,6 +24,9 @@ import com.hermes.android.runtime.VerifyResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,6 +90,28 @@ class TermuxBridge @Inject constructor(
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
 
     override val installProgress: StateFlow<InstallProgress?> = progressFlow.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        // An install that finished while nothing waited for it (the app died or left setup
+        // mid-install) is reported "done" by detect()'s state resync. Only install() read
+        // completionFlow, so setup offered Install again and the script redid every stage.
+        scope.launch {
+            completionFlow.collect { completion ->
+                val current = _state.value
+                if (completion is TermuxInstallProgressReceiver.InstallCompletion.Completed &&
+                    current is RuntimeState.Detected
+                ) {
+                    val info = current.info.copy(hermesVersion = "installed")
+                    if (_state.compareAndSet(current, RuntimeState.Installed(info))) {
+                        cacheInstallState(info)
+                        Timber.i("[Install] Termux reports a finished install; runtime marked installed")
+                    }
+                }
+            }
+        }
+    }
 
     override suspend fun detect(): DetectionResult {
         _state.value = RuntimeState.Detecting
@@ -188,6 +213,8 @@ class TermuxBridge @Inject constructor(
 
     override suspend fun install(progressEmitter: ProgressEmitter): InstallResult {
         val currentState = _state.value
+        // Installed here = detect()'s state resync found an install that already finished.
+        if (currentState is RuntimeState.Installed) return InstallResult.Success(currentState.info)
         if (currentState !is RuntimeState.Detected) {
             return InstallResult.Failure("Runtime must be detected before install. Current state: $currentState")
         }
@@ -203,7 +230,11 @@ class TermuxBridge @Inject constructor(
             PrerequisiteResult.Ready -> Unit
         }
 
-        _state.value = RuntimeState.Installing
+        if (!_state.compareAndSet(currentState, RuntimeState.Installing)) {
+            // The resync reported the finished install during the preflight.
+            (_state.value as? RuntimeState.Installed)?.let { return InstallResult.Success(it.info) }
+            return InstallResult.Failure("Runtime changed state before install. Current state: ${_state.value}")
+        }
         completionFlow.value = TermuxInstallProgressReceiver.InstallCompletion.Pending
         progressFlow.value = InstallProgress(
             stage = "starting",
@@ -246,30 +277,41 @@ class TermuxBridge @Inject constructor(
             }
 
             // Forward progressFlow updates to the caller's emitter.
-            val progressJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
-                .launch {
-                    progressFlow.collectLatest { progress ->
-                        if (progress != null) progressEmitter.emit(progress)
-                    }
+            val progressJob = scope.launch {
+                progressFlow.collectLatest { progress ->
+                    if (progress != null) progressEmitter.emit(progress)
                 }
-
-            // Wait for completion (with a generous timeout — install can take 5-10 min on first run)
-            val result = withTimeoutOrNull(INSTALL_TIMEOUT) {
-                var lastCompletion: TermuxInstallProgressReceiver.InstallCompletion =
-                    TermuxInstallProgressReceiver.InstallCompletion.Pending
-                while (lastCompletion is TermuxInstallProgressReceiver.InstallCompletion.Pending) {
-                    kotlinx.coroutines.delay(POLL_INTERVAL_MS)
-                    lastCompletion = completionFlow.value
-                }
-                lastCompletion
             }
 
-            progressJob.cancel()
+            // Wait for completion (with a generous timeout — install can take 5-10 min on first run)
+            val result = try {
+                withTimeoutOrNull(INSTALL_TIMEOUT) {
+                    var lastCompletion: TermuxInstallProgressReceiver.InstallCompletion =
+                        TermuxInstallProgressReceiver.InstallCompletion.Pending
+                    while (lastCompletion is TermuxInstallProgressReceiver.InstallCompletion.Pending) {
+                        kotlinx.coroutines.delay(POLL_INTERVAL_MS)
+                        lastCompletion = completionFlow.value
+                    }
+                    lastCompletion
+                }
+            } catch (e: CancellationException) {
+                // Setup closed mid-install. The script runs on in Termux, but nothing waits for
+                // it: Installing would stay forever (the service then refuses to start as
+                // "busy"). Detected offers Install again, whose lock attaches to the live run,
+                // and detect()'s state resync reports it when it finishes.
+                _state.compareAndSet(RuntimeState.Installing, RuntimeState.Detected(currentState.info))
+                throw e
+            } finally {
+                // Not a child of this call: a cancelled install() used to leave it collecting forever.
+                progressJob.cancel()
+            }
 
             return when (result) {
                 null -> {
                     Timber.w("Install timed out after $INSTALL_TIMEOUT")
-                    InstallResult.Failure("Install timed out — no completion signal received from Termux")
+                    val msg = "Install timed out — no completion signal received from Termux"
+                    _state.value = RuntimeState.Error(msg)
+                    InstallResult.Failure(msg)
                 }
                 TermuxInstallProgressReceiver.InstallCompletion.Completed -> {
                     Timber.i("Install completed successfully")
