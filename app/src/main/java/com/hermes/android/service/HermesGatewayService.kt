@@ -256,17 +256,6 @@ class HermesGatewayService : Service() {
         }
     }
 
-    /**
-     * Android 15+: a dataSync service gets six foreground hours a day (a phone left offline
-     * overnight keeps the status card up). Past them the system calls this, and a service
-     * that has not stopped within seconds crashes the app. Opening the app resets the budget,
-     * and MainActivity starts the service again.
-     */
-    override fun onTimeout(startId: Int, fgsType: Int) {
-        Timber.w("[GatewayService] Foreground time limit reached; stopping")
-        stopSelf()
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     // ── Notification ──────────────────────────────────────────────────────
@@ -339,7 +328,7 @@ class HermesGatewayService : Service() {
      */
     private fun promote(notification: Notification) {
         try {
-            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } catch (e: Exception) {
             Timber.w(e, "[GatewayService] Could not enter foreground; posting normally")
             runCatching { getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification) }

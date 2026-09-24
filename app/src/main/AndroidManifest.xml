@@ -11,7 +11,7 @@
 
     <!-- Foreground Service — keeps Hermes gateway alive (ADR-004) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Notifications — tool approval, gateway status (ADR-003) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -77,11 +77,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Gateway Foreground Service (ADR-004) -->
+        <!-- Gateway Foreground Service (ADR-004). specialUse, not dataSync: from Android 15 a
+             dataSync service may not start from BOOT_COMPLETED and gets six foreground hours a day. -->
         <service
             android:name=".service.HermesGatewayService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs the user's on-device AI agent (Hermes in its built-in Linux) while it works in the background" />
+        </service>
 
         <!-- Boot Receiver (ADR-004, temporary during migration) -->
         <receiver
