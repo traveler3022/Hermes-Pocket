@@ -35,16 +35,27 @@ internal object ServerRequestParser {
                     )
                 },
             )
-            "approval" -> GatewayEvent.ApprovalRequest(
-                sessionId = sid,
-                command = params.text("command").orEmpty(),
-                description = params.text("description").orEmpty(),
-                patternKeys = params["pattern_keys"].strings().orEmpty(),
-                // Absent means unrestricted — only an explicit false hides "always allow".
-                allowPermanent = params.text("allow_permanent") != "false",
-                requestId = params.text("request_id").orEmpty(),
-                serverRequestId = id,
-            )
+            "approval" -> {
+                // The server lists what it accepts: a smart-denied command only
+                // once/deny, one that may not be stored permanently no "always".
+                // The sheet offered deny/once/always whatever it said, and never
+                // "session" (allow for the rest of this chat).
+                val choices = params["choices"].strings() ?: when {
+                    params.flag("smart_denied") -> listOf("once", "deny")
+                    params.text("allow_permanent") == "false" -> listOf("once", "session", "deny")
+                    else -> APPROVAL_CHOICES
+                }
+                GatewayEvent.ApprovalRequest(
+                    sessionId = sid,
+                    command = params.text("command").orEmpty(),
+                    description = params.text("description").orEmpty(),
+                    patternKeys = params["pattern_keys"].strings().orEmpty(),
+                    allowPermanent = "always" in choices,
+                    requestId = params.text("request_id").orEmpty(),
+                    serverRequestId = id,
+                    choices = choices,
+                )
+            }
             "sudo" -> GatewayEvent.SudoRequest(sid, id)
             "secret" -> GatewayEvent.SecretRequest(
                 sid,

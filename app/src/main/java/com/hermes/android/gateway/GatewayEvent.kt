@@ -216,6 +216,8 @@ sealed class GatewayEvent {
         val requestId: String = "",
         /** The `srq-…` id `request.cancel` names when the server withdraws it. */
         val serverRequestId: String = "",
+        /** The answers the server accepts, from once | session | always | deny. */
+        val choices: List<String> = APPROVAL_CHOICES,
     ) : GatewayEvent()
 
     /**
@@ -369,3 +371,6 @@ sealed class GatewayEvent {
         val rawPayload: Map<String, kotlinx.serialization.json.JsonElement>,
     ) : GatewayEvent()
 }
+
+/** Every answer an approval can take, when the server does not narrow them. */
+val APPROVAL_CHOICES = listOf("once", "session", "always", "deny")

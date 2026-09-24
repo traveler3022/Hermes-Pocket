@@ -145,6 +145,8 @@ data class PendingApprovalUi(
     val serverRequestId: String = "",
     /** Stored id of [sessionId]'s chat, when known: the drawer's rows are keyed by it. */
     val sessionKey: String? = null,
+    /** The answers the server accepts, from once | session | always | deny. */
+    val choices: List<String> = listOf("once", "session", "always", "deny"),
 )
 
 /**

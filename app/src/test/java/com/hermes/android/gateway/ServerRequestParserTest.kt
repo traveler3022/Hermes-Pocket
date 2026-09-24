@@ -128,6 +128,19 @@ class ServerRequestParserTest {
     }
 
     @Test
+    fun `an approval offers the answers the server lists`() {
+        fun choices(build: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) =
+            (parse("approval", buildJsonObject { put("command", "rm x"); build() }) as GatewayEvent.ApprovalRequest)
+
+        assertEquals(listOf("once", "deny"), choices { put("choices", buildJsonArray { add("once"); add("deny") }) }.choices)
+        val smart = choices { put("smart_denied", true) }
+        assertEquals(listOf("once", "deny"), smart.choices)
+        assertFalse(smart.allowPermanent)
+        assertEquals(listOf("once", "session", "deny"), choices { put("allow_permanent", false) }.choices)
+        assertEquals(listOf("once", "session", "always", "deny"), choices { }.choices)
+    }
+
+    @Test
     fun `sudo and secret keep only what the prompt needs`() {
         val sudo = parse("sudo", buildJsonObject {
             put("session_id", "s1")

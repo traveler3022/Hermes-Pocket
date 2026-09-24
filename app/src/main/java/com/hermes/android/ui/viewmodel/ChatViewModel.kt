@@ -1552,6 +1552,7 @@ class ChatViewModel @Inject constructor(
                         allowPermanent = event.allowPermanent,
                         serverRequestId = event.serverRequestId,
                         sessionKey = approvalKey,
+                        choices = event.choices,
                     ),
                 ) }
             }

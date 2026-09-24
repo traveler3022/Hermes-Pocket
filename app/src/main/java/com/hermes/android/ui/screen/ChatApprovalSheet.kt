@@ -52,7 +52,8 @@ import com.hermes.android.ui.viewmodel.PendingApprovalUi
  * notification for when the app is backgrounded; answering either one
  * dismisses both.
  *
- * Choice values match ApprovalActionReceiver: "once" | "always" | "deny".
+ * Choice values match ApprovalActionReceiver: "once" | "session" | "always" | "deny";
+ * only the ones the server listed in [PendingApprovalUi.choices] are offered.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,15 +178,29 @@ internal fun ApprovalSheet(
                 ) {
                     Text(t("Deny", "رد"))
                 }
-                Button(
-                    onClick = { onRespond("once") },
-                    modifier = Modifier.weight(1.4f),
-                ) {
-                    Text(t("Allow once", "یک‌بار مجاز"))
+                if ("once" in approval.choices) {
+                    Button(
+                        onClick = { onRespond("once") },
+                        modifier = Modifier.weight(1.4f),
+                    ) {
+                        Text(t("Allow once", "یک‌بار مجاز"))
+                    }
                 }
             }
 
-            if (approval.allowPermanent) {
+            if ("session" in approval.choices) {
+                TextButton(
+                    onClick = { onRespond("session") },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text(
+                        t("Allow for this chat", "در این گفتگو مجاز باش"),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+
+            if (approval.allowPermanent && "always" in approval.choices) {
                 TextButton(
                     onClick = { onRespond("always") },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
