@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.android.runtime.linux.ProotEnvironment
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.i18n.t
@@ -50,12 +52,26 @@ import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import timber.log.Timber
 
+/**
+ * Holds the shell while the screen is on the back stack. Rotation, a theme change or a
+ * split-screen resize recreates the Activity (it declares no configChanges); the shell used
+ * to live in the view and was SIGKILLed with it, along with whatever ran in it.
+ */
+internal class LinuxTerminalSessionHolder : ViewModel() {
+    var session: TerminalSession? = null
+
+    override fun onCleared() {
+        session?.finishIfRunning()
+    }
+}
+
 /** A shell in the built-in Linux, drawn by Termux's terminal-view library. */
 @Composable
 fun LinuxTerminalScreen(
     createLaunchSpec: suspend () -> Result<ProotEnvironment.TerminalLaunchSpec>,
     onNavigateBack: () -> Unit,
 ) {
+    val holder: LinuxTerminalSessionHolder = viewModel()
     val spec by produceState<Result<ProotEnvironment.TerminalLaunchSpec>?>(null) { value = createLaunchSpec() }
     var title by remember { mutableStateOf("Linux") }
     val modifiers = remember { StickyModifiers() }
@@ -74,6 +90,7 @@ fun LinuxTerminalScreen(
                     )
                     else -> TerminalPane(
                         spec = result.getOrThrow(),
+                        holder = holder,
                         modifiers = modifiers,
                         onTitle = { title = it.ifBlank { "Linux" } },
                         onReady = { terminal = it },
@@ -89,6 +106,7 @@ fun LinuxTerminalScreen(
 @Composable
 private fun TerminalPane(
     spec: ProotEnvironment.TerminalLaunchSpec,
+    holder: LinuxTerminalSessionHolder,
     modifiers: StickyModifiers,
     onTitle: (String) -> Unit,
     onReady: (TerminalView) -> Unit,
@@ -104,25 +122,33 @@ private fun TerminalPane(
         factory = { context ->
             // The emulator copies the scheme once, when it is created on the first layout,
             // so the scheme has to be right before the session exists.
-            useColors(background, foreground)
+            val colorsChanged = useColors(background, foreground)
             val view = TerminalView(context, null)
             val client = TerminalClient(view, modifiers, fontPx, onTitle, onFinishedEnter)
             view.setTerminalViewClient(client)
             view.setTextSize(fontPx)
             view.setTypeface(Typeface.MONOSPACE)
             view.isFocusableInTouchMode = true
-            val shell = TerminalSession(
-                spec.executable, spec.workingDirectory, spec.arguments, spec.environment,
-                SCROLLBACK_ROWS, client,
-            )
+            // A shell kept from before the Activity was recreated carries on in this view. It
+            // ends in the holder, never here: finishIfRunning() is a SIGKILL, and this view goes
+            // away on every rotation.
+            val kept = holder.session
+            val shell = if (kept != null) {
+                kept.updateTerminalSessionClient(client)
+                if (colorsChanged) kept.emulator?.mColors?.reset()
+                onTitle(kept.title.orEmpty())
+                kept
+            } else {
+                TerminalSession(
+                    spec.executable, spec.workingDirectory, spec.arguments, spec.environment,
+                    SCROLLBACK_ROWS, client,
+                ).also { holder.session = it }
+            }
             view.attachSession(shell)
             onReady(view)
             view.post { client.focusAndShowKeyboard() }
             view
         },
-        // The shell lives exactly as long as its view. finishIfRunning() is a SIGKILL, so it
-        // must never be reachable from an effect that restarts on recomposition.
-        onRelease = { view -> view.currentSession?.finishIfRunning() },
         update = { view ->
             if (useColors(background, foreground)) view.currentSession?.emulator?.mColors?.reset()
             view.setBackgroundColor(background)
