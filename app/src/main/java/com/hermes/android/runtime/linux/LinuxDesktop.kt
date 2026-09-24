@@ -38,10 +38,14 @@ import javax.inject.Singleton
 
 /**
  * Aether's Alpine Chrome (`AlpineChromeController`), for Hermes: a virtual X display (Xvnc :99)
- * running openbox and Chromium, shown in the app through noVNC. Chromium exposes CDP on
- * [CdpPort], and Hermes' own browser tools drive it through `browser.cdp_url`, so the user
- * watches — and can take over — the same browser the agent uses. Other programs the agent
- * starts with `DISPLAY=:99` (xdotool, xterm, …) show up on the same desktop.
+ * running openbox and Chromium, shown in the app through noVNC. Hermes' own browser tools drive
+ * this Chromium through `browser.cdp_url`, so the user watches — and can take over — the same
+ * browser the agent uses. Other programs the agent starts with `DISPLAY=:99` (xdotool, xterm, …)
+ * show up on the same desktop.
+ *
+ * Every app on the phone shares 127.0.0.1, so Chromium opens no debugging port of its own: it
+ * speaks CDP over a pipe to `cdp_pipe.py` (assets/desktop), which serves it on [CdpPort] only
+ * under a per-install secret path ([cdpUrl]) that Hermes and this class know.
  *
  * The stack is the guest script `hermes-desktop` ([DesktopScript]), so the agent can also
  * start it from its terminal; this class only launches it, watches the ports and stops it.
@@ -59,7 +63,7 @@ class LinuxDesktop @Inject constructor(
     }
 
     data class Settings(
-        /** Hermes' browser tools use this Chromium (`browser.cdp_url`); it starts on demand ([onHermesStarted]). */
+        /** Hermes' browser tools use this Chromium (`browser.cdp_url`); it starts on demand ([beforeHermesStarts]). */
         val agentBrowser: Boolean = true,
         val resolution: Resolution = Resolution.PHONE,
         val homepage: String = DefaultHomepage,
@@ -102,13 +106,29 @@ class LinuxDesktop @Inject constructor(
     /** Whether the VNC bridge is up — i.e. the desktop is streamable right now. */
     val viewing: StateFlow<Boolean> = _viewing.asStateFlow()
 
-    /** noVNC's page for the in-app viewer; carries the VNC password, which is never empty. */
+    /** Port of the running VNC bridge; a free one is picked each time the viewer opens. */
+    @Volatile
+    private var viewerPort = NoVncPort
+
+    /**
+     * noVNC's page for the in-app viewer; carries the VNC password, which is never empty.
+     * Load it only after [startViewer] succeeds: that is what proves the port is ours.
+     */
     val viewerUrl: String
         get() {
             val password = URLEncoder.encode(_settings.value.effectiveVncPassword, "UTF-8")
-            return "http://127.0.0.1:$NoVncPort/vnc_lite.html?autoconnect=true&scale=true&show_dot=true" +
+            return "http://127.0.0.1:$viewerPort/vnc_lite.html?autoconnect=true&scale=true&show_dot=true" +
                 "&path=websockify&password=$password"
         }
+
+    /** Per-install secret in Chromium's DevTools address; without it the port answers 404. */
+    private val cdpSecret: String by lazy {
+        prefs.getString(KEY_CDP_SECRET, null)?.takeIf { it.isNotBlank() }
+            ?: randomHex(16).also { prefs.edit().putString(KEY_CDP_SECRET, it).apply() }
+    }
+
+    /** What Hermes' `browser.cdp_url` is set to. */
+    private val cdpUrl: String get() = "http://127.0.0.1:$CdpPort/$cdpSecret"
 
     /**
      * The password Xvnc enforces: the user's when they share on the LAN, an auto-generated
@@ -139,7 +159,10 @@ class LinuxDesktop @Inject constructor(
         return (1..8).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
     }
 
-    /** Chromium, the X server, noVNC and agent-browser are all present. */
+    private fun randomHex(bytes: Int): String =
+        ByteArray(bytes).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+
+    /** Chromium, the X server, noVNC, agent-browser and the CDP proxy's python3 are all present. */
     suspend fun isInstalled(): Boolean =
         environment.isRootfsInstalled && runCatching { environment.run(VerifyCommand).ok }.getOrDefault(false)
 
@@ -191,19 +214,29 @@ class LinuxDesktop @Inject constructor(
     suspend fun startViewer(): Result<Unit> {
         start().onFailure { return Result.failure(it) }
         return withContext(Dispatchers.IO) {
-            if (viewerProcess?.isAlive == true && portOpen(NoVncPort)) {
+            if (viewerProcess?.isAlive == true && portOpen(viewerPort)) {
                 _viewing.value = true
                 return@withContext Result.success(Unit)
             }
             runCatching {
                 stopViewerProcess()
+                // A port nobody holds right now, not a fixed one another app could sit on.
+                val port = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1")).use { it.localPort }
+                // The page URL carries the VNC password, so the listener must prove it is our
+                // websockify before the viewer loads it: it serves this file, fresh each time.
+                val nonce = randomHex(16)
+                environment.guestFile(ViewerNoncePath).writeText(nonce)
                 val log = environment.guestFile(LogPath).also { it.parentFile?.mkdirs() }
-                val started = environment.processBuilder("hermes-desktop view")
+                val started = environment.processBuilder("hermes-desktop view $port")
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(log))
                     .start()
                     .also { it.outputStream.close() }
                 viewerProcess = started
-                check(waitForPort(NoVncPort)) { "The VNC bridge did not come up." }
+                check(waitForPort(port)) { "The VNC bridge did not come up." }
+                check(servedText(port, ViewerNoncePath.substringAfterLast('/')) == nonce) {
+                    "Another app is using the viewer's port; try again."
+                }
+                viewerPort = port
                 _viewing.value = true
             }.onFailure {
                 stopViewerProcess()
@@ -270,13 +303,16 @@ class LinuxDesktop @Inject constructor(
     }
 
     /**
-     * Called once Hermes itself is up. Writes the guest config and stops there: Chromium and
-     * its X server are several hundred megabytes of RAM that most sessions never touch, so
-     * the desktop now starts when something actually needs it — the agent's first browser
-     * call (the skill tells it to run `hermes-desktop start`) or the user opening the viewer.
+     * Called just before Hermes starts, so the gateway reads a current `gateway.env` (the
+     * browser's secret address). It used to run once Hermes was up, and the gateway after an
+     * install or an update ran with no or a stale `BROWSER_CDP_URL`. Writes the guest config
+     * and stops there: Chromium and its X server are several hundred megabytes of RAM that
+     * most sessions never touch, so the desktop starts when something actually needs it — the
+     * agent's first browser call (the skill tells it to run `hermes-desktop start`) or the user
+     * opening the viewer.
      */
-    suspend fun onHermesStarted() {
-        if (!_settings.value.agentBrowser || !environment.isRootfsInstalled) return
+    suspend fun beforeHermesStarts() {
+        if (!environment.isRootfsInstalled) return
         withContext(Dispatchers.IO) { runCatching { writeGuestFiles() } }
     }
 
@@ -289,7 +325,7 @@ class LinuxDesktop @Inject constructor(
     suspend fun applyAgentBrowser(enabled: Boolean): Result<Unit> = runCatching {
         if (!environment.isRootfsInstalled || !stdioHub.isReady) return@runCatching
         val command = if (enabled) {
-            "hermes config set browser.cdp_url http://127.0.0.1:$CdpPort"
+            "hermes config set browser.cdp_url $cdpUrl"
         } else {
             "hermes config unset browser.cdp_url"
         }
@@ -354,8 +390,22 @@ class LinuxDesktop @Inject constructor(
         )
     }
 
-    // The desktop is up when Chromium is; the noVNC bridge is a separate, user-driven thing.
-    private suspend fun isUp(): Boolean = withContext(Dispatchers.IO) { portOpen(CdpPort) }
+    /**
+     * The desktop is up when Chromium answers through our proxy; the noVNC bridge is a
+     * separate, user-driven thing. The proxy proves it knows the secret without it being sent,
+     * so another app holding the port is neither mistaken for the desktop nor handed the secret.
+     */
+    private suspend fun isUp(): Boolean = withContext(Dispatchers.IO) {
+        val challenge = randomHex(16)
+        servedText(CdpPort, "hermes-probe?c=$challenge") == cdpProbeAnswer(cdpSecret, challenge)
+    }
+
+    /** Body of `http://127.0.0.1:[port]/[path]`, or null when nothing (or an error) answers. */
+    private fun servedText(port: Int, path: String): String? = runCatching {
+        http.newCall(Request.Builder().url("http://127.0.0.1:$port/$path").build()).execute().use { reply ->
+            if (reply.isSuccessful) reply.body?.string()?.trim() else null
+        }
+    }.getOrNull()
 
     private fun portOpen(port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }
@@ -370,6 +420,9 @@ class LinuxDesktop @Inject constructor(
         script.parentFile?.mkdirs()
         script.writeText(DesktopScript)
         script.setExecutable(true, false)
+        val proxy = environment.guestFile(CdpProxyPath)
+        proxy.parentFile?.mkdirs()
+        context.assets.open(CdpProxyAsset).use { input -> proxy.outputStream().use { input.copyTo(it) } }
 
         val current = _settings.value
         val stateDir = environment.guestFile(StateDir).apply { mkdirs() }
@@ -383,14 +436,17 @@ class LinuxDesktop @Inject constructor(
                 // below is enforced either way.
                 appendLine("VNC_LAN=${if (onLan) 1 else 0}")
                 appendLine("VNC_PASSWORD=${shellQuote(current.effectiveVncPassword)}")
+                appendLine("CDP_SECRET=$cdpSecret")
             },
         )
         stateDir.resolve("desktop.env").setReadable(false, false)
         stateDir.resolve("desktop.env").setReadable(true, true)
         // Read by the gateway script at startup — the env wins over config.yaml.
         stateDir.resolve("gateway.env").writeText(
-            if (current.agentBrowser) "export BROWSER_CDP_URL=http://127.0.0.1:$CdpPort\n" else "",
+            if (current.agentBrowser) "export BROWSER_CDP_URL=$cdpUrl\n" else "",
         )
+        stateDir.resolve("gateway.env").setReadable(false, false)
+        stateDir.resolve("gateway.env").setReadable(true, true)
         writeSkill()
         writeFonts()
     }
@@ -421,7 +477,7 @@ class LinuxDesktop @Inject constructor(
     }
 
     private suspend fun evaluate(expression: String): Any? = withContext(Dispatchers.IO) {
-        val targets = http.newCall(Request.Builder().url("http://127.0.0.1:$CdpPort/json/list").build())
+        val targets = http.newCall(Request.Builder().url("$cdpUrl/json/list").build())
             .execute().use { JSONArray(it.body?.string().orEmpty()) }
         val page = (0 until targets.length()).map { targets.getJSONObject(it) }
             .firstOrNull { it.optString("type") == "page" && it.optString("webSocketDebuggerUrl").isNotBlank() }
@@ -488,7 +544,7 @@ class LinuxDesktop @Inject constructor(
         const val VerifyCommand =
             "(chromium-browser --version || chromium --version) && command -v Xvnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
-                "command -v xdotool && command -v agent-browser"
+                "command -v xdotool && command -v agent-browser && command -v python3"
 
         private const val PREFS_NAME = "hermes_linux_desktop"
         private const val KEY_AGENT_BROWSER = "agent_browser"
@@ -497,9 +553,14 @@ class LinuxDesktop @Inject constructor(
         private const val KEY_VNC_LAN = "vnc_lan"
         private const val KEY_VNC_PASSWORD = "vnc_password"
         private const val KEY_VNC_SECRET = "vnc_local_secret"
+        private const val KEY_CDP_SECRET = "cdp_secret"
 
         private const val StartTimeoutMillis = 60_000L
         private const val ScriptPath = "/usr/local/bin/hermes-desktop"
+        private const val CdpProxyAsset = "desktop/cdp_pipe.py"
+        private const val CdpProxyPath = "/usr/local/lib/hermes/cdp_pipe.py"
+        /** Served by the viewer's websockify (its --web root is /usr/share/novnc); see [startViewer]. */
+        private const val ViewerNoncePath = "/usr/share/novnc/hermes-viewer.txt"
         private const val StateDir = "/root/.hermes/android"
         private const val ProfileDir = "/root/.hermes/chrome-profile"
         private const val LogPath = "/root/.hermes/logs/desktop.log"
@@ -569,16 +630,19 @@ class LinuxDesktop @Inject constructor(
         private val DesktopScript = """
             #!/bin/sh
             # Written by the Hermes Android app on every start — edits are overwritten.
-            # Usage: hermes-desktop [start|stop|status|wait]
+            # Usage: hermes-desktop [start|stop|status|wait|view PORT]
             STATE=$StateDir
             PIDS="${'$'}STATE/desktop.pids"
             LOG=$LogPath
             CDP_PORT=$CdpPort VNC_PORT=$VncPort NOVNC_PORT=$NoVncPort
-            WIDTH=1080 HEIGHT=2040 HOMEPAGE=about:blank VNC_LAN=0 VNC_PASSWORD=
+            CDP_PROXY=$CdpProxyPath
+            WIDTH=1080 HEIGHT=2040 HOMEPAGE=about:blank VNC_LAN=0 VNC_PASSWORD= CDP_SECRET=
             [ -f "${'$'}STATE/desktop.env" ] && . "${'$'}STATE/desktop.env"
-            export DISPLAY=:99
+            export DISPLAY=:99 CDP_SECRET
 
-            running() { curl -sf -m 2 "http://127.0.0.1:${'$'}CDP_PORT/json/version" >/dev/null 2>&1; }
+            # Chromium answers through cdp_pipe.py, which proves it knows CDP_SECRET without
+            # it being sent: another app holding the port gets no secret and no "running".
+            running() { python3 "${'$'}CDP_PROXY" probe --port "${'$'}CDP_PORT" >/dev/null 2>&1; }
             # The desktop's own process is alive. Unlike running(), this does not depend on a
             # busy Chromium answering within two seconds.
             alive() { [ -f "${'$'}PIDS" ] && kill -0 "${'$'}(cut -d' ' -f1 "${'$'}PIDS")" 2>/dev/null; }
@@ -601,12 +665,12 @@ class LinuxDesktop @Inject constructor(
                     alive || running || { echo "the desktop is not running" >&2; exit 1; }
                     for i in ${'$'}(seq 1 50); do [ -S "${'$'}STATE/vnc.sock" ] && break; sleep 0.1; done
                     exec websockify --web=/usr/share/novnc \
-                        --unix-target="${'$'}STATE/vnc.sock" 127.0.0.1:"${'$'}NOVNC_PORT" ;;
+                        --unix-target="${'$'}STATE/vnc.sock" 127.0.0.1:"${'$'}{2:-${'$'}NOVNC_PORT}" ;;
                 wait)
                     for i in ${'$'}(seq 1 120); do running && { echo running; exit 0; }; sleep 0.5; done
                     echo "desktop did not start; see ${'$'}LOG" >&2; exit 1 ;;
                 start) ;;
-                *) echo "usage: hermes-desktop [start|stop|status|wait|view]" >&2; exit 2 ;;
+                *) echo "usage: hermes-desktop [start|stop|status|wait|view PORT]" >&2; exit 2 ;;
             esac
 
             if running || alive; then
@@ -630,6 +694,8 @@ class LinuxDesktop @Inject constructor(
                 $ProfileDir/SingletonSocket $ProfileDir/SingletonCookie
             CHROME_BIN="${'$'}(command -v chromium-browser || command -v chromium || true)"
             if [ -z "${'$'}CHROME_BIN" ]; then echo "Chromium is not installed"; exit 1; fi
+            # Without a secret the browser would be anybody's; the app writes one into desktop.env.
+            if [ -z "${'$'}CDP_SECRET" ]; then echo "No CDP secret in desktop.env; start the desktop from the app"; exit 1; fi
 
             # Always authenticate. Every app on an Android device shares 127.0.0.1, so an
             # open Xvnc is an open door, not a local-only convenience. A stale desktop.env
@@ -674,22 +740,16 @@ class LinuxDesktop @Inject constructor(
             openbox &
             OPENBOX_PID=${'$'}!
 
-            (
-                fails=0
-                while [ "${'$'}fails" -lt 5 ]; do
-                    began=${'$'}(date +%s)
-                    "${'$'}CHROME_BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu \
-                        --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
-                        --no-default-browser-check --password-store=basic \
-                        --remote-debugging-address=127.0.0.1 --remote-debugging-port="${'$'}CDP_PORT" \
-                        --user-data-dir=$ProfileDir \
-                        --window-size="${'$'}WIDTH,${'$'}HEIGHT" --window-position=0,0 --start-maximized \
-                        --ozone-platform=x11 "${'$'}HOMEPAGE" || true
-                    if [ ${'$'}(( ${'$'}(date +%s) - began )) -lt 15 ]; then fails=${'$'}((fails + 1)); else fails=0; fi
-                    sleep 1
-                done
-                echo "Chromium keeps exiting; giving up"
-            ) &
+            # Chromium opens no debugging port: it speaks CDP over a pipe to cdp_pipe.py, which
+            # serves it on CDP_PORT under CDP_SECRET only, and restarts Chromium if it exits
+            # (up to five quick failures), as the agent's endpoint must stay up.
+            python3 "${'$'}CDP_PROXY" serve --port "${'$'}CDP_PORT" -- \
+                "${'$'}CHROME_BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu \
+                --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
+                --no-default-browser-check --password-store=basic \
+                --user-data-dir=$ProfileDir \
+                --window-size="${'$'}WIDTH,${'$'}HEIGHT" --window-position=0,0 --start-maximized \
+                --ozone-platform=x11 "${'$'}HOMEPAGE" &
             CHROME_LOOP=${'$'}!
 
             for i in ${'$'}(seq 1 300); do
@@ -731,8 +791,10 @@ class LinuxDesktop @Inject constructor(
             - Start the desktop before your first browser call of a session:
               `nohup hermes-desktop start >/dev/null 2>&1 &` then `hermes-desktop wait`.
               It is idempotent and returns at once when the desktop is already up.
-            - The `browser_*` tools then drive this Chromium over CDP
-              (`browser.cdp_url = http://127.0.0.1:9222`). Prefer them for web pages.
+            - The `browser_*` tools then drive this Chromium over CDP; `browser.cdp_url` is
+              already set, and its secret path is the only way in (a bare
+              `http://127.0.0.1:9222` answers 404), so no other app on the phone can drive
+              this browser. Prefer these tools for web pages.
             - A browser tool that fails to connect means the desktop is down — start it as
               above and retry.
             - `hermes-desktop stop` when a long job no longer needs a browser; it gives the
@@ -755,4 +817,11 @@ class LinuxDesktop @Inject constructor(
             by tapping in the viewer.
         """.trimIndent() + "\n"
     }
+}
+
+/** What cdp_pipe.py answers to `/hermes-probe?c=[challenge]`: HMAC-SHA256 keyed by the secret, hex. */
+internal fun cdpProbeAnswer(secret: String, challenge: String): String {
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+    mac.init(javax.crypto.spec.SecretKeySpec(secret.toByteArray(), "HmacSHA256"))
+    return mac.doFinal(challenge.toByteArray()).joinToString("") { "%02x".format(it) }
 }

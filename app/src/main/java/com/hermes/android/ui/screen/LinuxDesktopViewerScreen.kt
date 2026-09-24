@@ -48,10 +48,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.runtime.linux.LinuxDesktop
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.LinuxDesktopViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** The agent's desktop, streamed through noVNC, driven with touch gestures and the phone keyboard. */
@@ -68,15 +72,20 @@ fun LinuxDesktopViewerScreen(
     var touchMode by rememberSaveable { mutableStateOf(false) }
     var connecting by remember { mutableStateOf(true) }
     var failure by remember { mutableStateOf<String?>(null) }
+    // Null until startViewing() has proven the bridge's port is ours: the URL carries the VNC password.
+    var page by remember { mutableStateOf<ViewerPage?>(null) }
+    var connectJob by remember { mutableStateOf<Job?>(null) }
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     fun connect() {
-        scope.launch {
+        // A second start while one is under way would kill the bridge the first one is waiting on.
+        if (connectJob?.isActive == true) return
+        connectJob = scope.launch {
             connecting = true
             viewModel.startViewing().fold(
                 onSuccess = {
                     failure = null
-                    web?.loadUrl(viewModel.viewerUrl)
+                    page = ViewerPage(viewModel.viewerUrl, (page?.attempt ?: 0) + 1)
                 },
                 onFailure = { failure = it.message },
             )
@@ -84,7 +93,22 @@ fun LinuxDesktopViewerScreen(
         }
     }
 
-    LaunchedEffect(Unit) { connect() }
+    // Streams only while the screen is in view: leaving the app closes the VNC bridge, and
+    // coming back opens a fresh one. Chromium keeps running for the agent either way; only
+    // the Stop button or the agent's `hermes-desktop stop` turns the browser off.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> connect()
+                Lifecycle.Event.ON_STOP -> viewModel.stopViewing()
+                else -> Unit
+            }
+        }
+        // Replays ON_START when the screen is already started, which is the first connect.
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(touchMode, remote) { remote?.setTouchMode(touchMode) }
     DisposableEffect(Unit) {
         onDispose {
@@ -132,7 +156,7 @@ fun LinuxDesktopViewerScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (desktopState == LinuxDesktop.State.Running) {
                 DesktopPage(
-                    url = viewModel.viewerUrl,
+                    page = page,
                     touchMode = touchMode,
                     onTap = { _, y ->
                         scope.launch { if (viewModel.shouldShowKeyboard(y)) keyboard?.show() }
@@ -160,10 +184,13 @@ fun LinuxDesktopViewerScreen(
     }
 }
 
+/** A noVNC page to load; [attempt] makes a reconnect to the same URL load it again. */
+private data class ViewerPage(val url: String, val attempt: Int)
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun DesktopPage(
-    url: String,
+    page: ViewerPage?,
     touchMode: Boolean,
     onTap: (x: Int, y: Int) -> Unit,
     onCreated: (WebView) -> Unit,
@@ -201,8 +228,13 @@ private fun DesktopPage(
                     }
                 }
                 keepSystemGesturesOff(this)
-                loadUrl(url)
                 onCreated(this)
+            }
+        },
+        update = { view ->
+            if (page != null && view.tag != page) {
+                view.tag = page
+                view.loadUrl(page.url)
             }
         },
     )

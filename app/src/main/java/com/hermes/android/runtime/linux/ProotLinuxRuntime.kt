@@ -327,6 +327,8 @@ class ProotLinuxRuntime @Inject constructor(
         }
 
         stopProcess()
+        // The gateway reads gateway.env (the browser's secret address) once, at start.
+        desktop.beforeHermesStarts()
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
         val process = withContext(Dispatchers.IO) {
@@ -357,8 +359,6 @@ class ProotLinuxRuntime @Inject constructor(
             throw IllegalStateException(message)
         }
         _state.value = RuntimeState.Running(currentInfo(), handle)
-        // The agent's browser is this Alpine's Chromium; bring it up alongside Hermes.
-        scope.launch { runCatching { desktop.onHermesStarted() } }
         handle
     }
 
