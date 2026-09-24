@@ -60,19 +60,23 @@ class ChangesViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingDiff = true, selectedHash = hash)
             try {
+                val diff = repository.checkpointDiff(sid, hash)
+                // Another checkpoint was picked (or the diff closed) while this one loaded.
+                if (_uiState.value.selectedHash != hash) return@launch
                 _uiState.value = _uiState.value.copy(
-                    selectedDiff = repository.checkpointDiff(sid, hash),
+                    selectedDiff = diff,
                     isLoadingDiff = false,
                 )
             } catch (e: Exception) {
                 Timber.w(e, "[Changes] diff failed")
+                if (_uiState.value.selectedHash != hash) return@launch
                 _uiState.value = _uiState.value.copy(isLoadingDiff = false, error = e.message)
             }
         }
     }
 
     fun closeDiff() {
-        _uiState.value = _uiState.value.copy(selectedDiff = null, selectedHash = null)
+        _uiState.value = _uiState.value.copy(selectedDiff = null, selectedHash = null, isLoadingDiff = false)
     }
 
     fun restore(hash: String) {
@@ -90,6 +94,9 @@ class ChangesViewModel @Inject constructor(
                     } else {
                         "Restore did not apply"
                     },
+                    // Like undo: turns removed on the server must leave the open chat too.
+                    transcriptChanges = _uiState.value.transcriptChanges +
+                        if (result.success && result.historyRemoved > 0) 1 else 0,
                 )
                 load(sid)
             } catch (e: Exception) {

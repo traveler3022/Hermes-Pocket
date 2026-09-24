@@ -140,11 +140,19 @@ fun ConfigScreen(
     val runtimeViewModel: com.hermes.android.ui.viewmodel.RuntimeViewModel = hiltViewModel()
     val connection by runtimeViewModel.connectionState.collectAsStateWithLifecycle()
     val serverConfig by runtimeViewModel.serverConfig.collectAsStateWithLifecycle()
+    val runtimeChoice by runtimeViewModel.runtimeChoice.collectAsStateWithLifecycle()
+    // On-device runtimes have no server URL; name the runtime instead of "No server configured".
+    val connectionTitle = if (runtimeViewModel.isRemoteRuntime) {
+        serverConfig.serverUrl
+    } else when (runtimeChoice) {
+        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.BuiltInLinux -> t("Built-in Linux", "لینوکس داخلی")
+        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.Termux -> "Termux"
+    }
 
     // Nested navigation: null = the top-level category menu; a value = drilled
     // into that category. The back arrow pops one level (category -> menu ->
     // out of Settings), so Settings can grow deep without one giant scroll.
-    var section by remember { mutableStateOf<SettingsSection?>(null) }
+    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<SettingsSection?>(null) }
 
     androidx.activity.compose.BackHandler(enabled = section != null) { section = section?.parent }
 
@@ -170,7 +178,7 @@ fun ConfigScreen(
                 null -> SettingsMenu(
                     state = uiState,
                     connection = connection,
-                    serverUrl = serverConfig.serverUrl,
+                    serverUrl = connectionTitle,
                     onOpen = { section = it },
                     onNavigateToRuntime = onNavigateToRuntime,
                     onNavigateToLinux = onNavigateToLinux,

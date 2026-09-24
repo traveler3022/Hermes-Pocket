@@ -128,7 +128,7 @@ internal fun SettingsMenu(
             DomainSpec(
                 title = t("General Settings", "تنظیمات عمومی"),
                 subtitle = t(
-                    "Appearance, approval, personality, platforms",
+                    "Appearance, approval, personality, platforms, advanced",
                     "ظاهر، تأیید، شخصیت، پلتفرم\u200Cها، پیشرفته",
                 ),
                 icon = Icons.Default.Security,

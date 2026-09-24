@@ -132,6 +132,8 @@ fun RuntimeSetupScreen(
     com.hermes.android.ui.design.HermesScaffold(
         title = if (isRemote) {
             com.hermes.android.ui.i18n.t("Server Connection", "اتصال سرور")
+        } else if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
+            com.hermes.android.ui.i18n.t("Built-in Linux & Agent", "لینوکس داخلی و ایجنت")
         } else {
             com.hermes.android.ui.i18n.t("Termux & Agent Setup", "راه‌اندازی ترموکس و ایجنت")
         },
@@ -202,12 +204,16 @@ fun RuntimeSetupScreen(
 
                 TextButton(
                     onClick = {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                android.net.Uri.parse("https://github.com/NousResearch/hermes_agent"),
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
+                        // The repo is hermes-agent (hyphen); hermes_agent is a 404.
+                        val guide = "https://github.com/NousResearch/hermes-agent"
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(guide))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        } catch (e: android.content.ActivityNotFoundException) {
+                            scope.launch { snackbarHostState.showSnackbar(guide) }
+                        }
                     },
                 ) {
                     Icon(
@@ -386,11 +392,14 @@ fun RuntimeSetupScreen(
                                     Text("Copy Logs")
                                 }
                             }
-                            Text(
-                                text = "Logs are also saved to: /sdcard/Download/hermes_logs.txt",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            // Only the Termux log fetch writes this file.
+                            if (!isRemote && runtimeChoice == RuntimeChoiceUi.Termux) {
+                                Text(
+                                    text = "Logs are also saved to: /sdcard/Download/hermes_logs.txt",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             Text(
                                 text = logText,
                                 style = MaterialTheme.typography.bodySmall,

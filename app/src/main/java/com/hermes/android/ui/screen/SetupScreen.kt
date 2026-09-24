@@ -1,6 +1,7 @@
 package com.hermes.android.ui.screen
 
 import android.content.Intent
+import android.widget.Toast
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -334,7 +335,12 @@ private fun ApiKeyStep(state: SetupUiState, viewModel: SetupViewModel) {
     )
     if (provider.keyUrl.isNotEmpty()) {
         TextButton(onClick = {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.keyUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // No browser (or it is disabled): ActivityNotFoundException would close the app.
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.keyUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: android.content.ActivityNotFoundException) {
+                Toast.makeText(context, provider.keyUrl, Toast.LENGTH_LONG).show()
+            }
         }) {
             Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
