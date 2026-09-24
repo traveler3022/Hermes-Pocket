@@ -77,6 +77,24 @@ class ChatStreamingDelegateTest {
         assertEquals("And here is why.", delegate.withoutSealedInterims("The answer is 42.\n\nAnd here is why."))
     }
 
+    @Test
+    fun `a message sent mid-turn closes the live bubble even with nothing in it`() {
+        val first = startTurn()
+        delegate.enqueueDelta("(o_o) reasoning...", isReasoning = true)
+
+        val next = delegate.continueBelow()
+
+        assertFalse(assistants()[0].isStreaming)
+        assertEquals("(o_o) reasoning...", assistants()[0].reasoning)
+        assertNotEquals(first, next)
+        assertEquals(next, delegate.currentAssistantMessageId)
+    }
+
+    @Test
+    fun `nothing streaming leaves nothing to continue`() {
+        assertNull(delegate.continueBelow())
+    }
+
     /**
      * Regression: the two delta buffers were plain `StringBuilder`s written from
      * the gateway's IO thread and drained from the ViewModel scope, and the

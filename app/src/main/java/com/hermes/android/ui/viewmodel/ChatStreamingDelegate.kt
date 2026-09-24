@@ -119,6 +119,30 @@ internal class ChatStreamingDelegate(
         return nextId
     }
 
+    /**
+     * Close the live bubble where it stands and hand back the id the rest of the
+     * turn streams into, or null when no bubble is live. Unlike [sealInterim] a
+     * bubble with nothing in it yet is kept, so the tools before it stay folded.
+     */
+    fun continueBelow(): String? {
+        flushBuffer()
+        val closedId = activeAssistantMessageId ?: return null
+        var closedText: String? = null
+        state.update { it.copy(
+            messages = it.messages.updateFirst({ msg ->
+                msg is ChatMessage.Assistant && msg.isStreaming && msg.id == closedId
+            }) { msg ->
+                closedText = (msg as ChatMessage.Assistant).text.trimStart()
+                msg.copy(isStreaming = false)
+            }
+        ) }
+        val text = closedText ?: return null
+        if (text.isNotBlank()) sealedInterimTexts += text
+        val nextId = java.util.UUID.randomUUID().toString()
+        activeAssistantMessageId = nextId
+        return nextId
+    }
+
     /** Drop the lead-in that [sealInterim] already put on screen this turn. */
     fun withoutSealedInterims(finalText: String): String {
         var tail = finalText.trimStart()

@@ -792,11 +792,19 @@ class ChatViewModel @Inject constructor(
                         put("confirm_empty_truncate", true)
                     }
                 }
-                sessionRepository.onLiveSession(
+                val reply = sessionRepository.onLiveSession(
                     liveId = sessionId,
                     storedId = _uiState.value.activeSessionKey,
                     onRebound = { sessionDelegate.adoptRebound(_uiState, sessionId, it) },
                 ) { liveId -> submitToFirstAddressable(truncateBeforeRowIds) { params(liveId, it) } }
+                // A message sent mid-turn is folded into the running turn, which
+                // keeps streaming without a new message.start. Its bubble sat above
+                // the message, so the rest of the turn landed there and its tools
+                // below it with no bubble to fold into.
+                val status = ((reply as? JsonObject)?.get("status") as? JsonPrimitive)?.content
+                if (status == "redirected" || status == "steered") {
+                    streamingDelegate.continueBelow()?.let { openAssistantBubble(it) }
+                }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
                 onRefused?.invoke()
