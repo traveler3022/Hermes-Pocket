@@ -24,6 +24,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Configuration screen.
@@ -150,9 +151,9 @@ class ConfigViewModel @Inject constructor(
                 )
                 val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
                 _uiState.value = _uiState.value.copy(
-                    approvalMode = (obj?.get("approval_mode") as? JsonPrimitive)?.content ?: "manual",
-                    reasoning = (obj?.get("reasoning") as? JsonPrimitive)?.content ?: "medium",
-                    personality = (obj?.get("personality") as? JsonPrimitive)?.content ?: "",
+                    approvalMode = (obj?.get("approval_mode") as? JsonPrimitive)?.contentOrNull ?: "manual",
+                    reasoning = (obj?.get("reasoning") as? JsonPrimitive)?.contentOrNull ?: "medium",
+                    personality = (obj?.get("personality") as? JsonPrimitive)?.contentOrNull ?: "",
                 )
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load behavior config")
@@ -251,7 +252,7 @@ class ConfigViewModel @Inject constructor(
                     GatewayMethods.SHELL_EXEC,
                     mapOf("command" to JsonPrimitive("cat ~/.hermes/SOUL.md 2>/dev/null || echo ''")),
                 )
-                val soul = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                val soul = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                 _uiState.value = _uiState.value.copy(soulMd = soul, isLoadingSoul = false)
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load SOUL.md")
@@ -430,7 +431,7 @@ class ConfigViewModel @Inject constructor(
                 //    reset the agent so the change applies to the current chat.
                 val sid = try {
                     val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.content }
+                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.contentOrNull }
                 } catch (e: Exception) {
                     null
                 }
@@ -442,13 +443,13 @@ class ConfigViewModel @Inject constructor(
                 val result = gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
                 val obj = result as? JsonObject
                 val unknown = (obj?.get("unknown") as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                    ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
                 if (toolName in unknown) {
                     _uiState.value = _uiState.value.copy(
                         errorMessage = "\"$toolName\" cannot be toggled on this server",
                     )
                 } else {
-                    val reset = (obj?.get("reset") as? JsonPrimitive)?.content == "true"
+                    val reset = (obj?.get("reset") as? JsonPrimitive)?.contentOrNull == "true"
                     Timber.i("[Config] Tool $toolName -> $enabled (live session reset=$reset)")
                 }
                 // Re-read from the server so switches show the REAL state
@@ -475,14 +476,14 @@ class ConfigViewModel @Inject constructor(
                     mapOf("command" to JsonPrimitive("cat ~/.hermes/memories/USER.md 2>/dev/null || echo '(not found)'")),
                 )
                 val userMd = (userResult as? JsonObject)
-                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: "(not found)"
+                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "(not found)"
 
                 val memResult = gatewayClient.request(
                     GatewayMethods.SHELL_EXEC,
                     mapOf("command" to JsonPrimitive("cat ~/.hermes/memories/MEMORY.md 2>/dev/null || echo '(not found)'")),
                 )
                 val memoryMd = (memResult as? JsonObject)
-                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: "(not found)"
+                    ?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "(not found)"
 
                 _uiState.value = _uiState.value.copy(
                     memoryUserMd = userMd,
@@ -533,7 +534,7 @@ class ConfigViewModel @Inject constructor(
                     GatewayMethods.SHELL_EXEC,
                     mapOf("command" to JsonPrimitive("cat ~/.hermes/.env 2>/dev/null || echo ''")),
                 )
-                val env = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                val env = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                 _uiState.value = _uiState.value.copy(envText = env, isLoadingEnv = false)
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load .env")
@@ -655,14 +656,14 @@ class ConfigViewModel @Inject constructor(
                     """.trimIndent()
                 )
                 val root = kotlinx.serialization.json.Json.parseToJsonElement(out) as JsonObject
-                val activeProv = (root["active_provider"] as? JsonPrimitive)?.content ?: ""
+                val activeProv = (root["active_provider"] as? JsonPrimitive)?.contentOrNull ?: ""
                 val providers = (root["providers"] as? JsonArray)?.mapNotNull { el ->
                     val obj = el as? JsonObject ?: return@mapNotNull null
-                    val slug = (obj["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+                    val slug = (obj["name"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
                     HermesProviderConfig(
                         slug = slug,
-                        baseUrl = (obj["base_url"] as? JsonPrimitive)?.content ?: "",
-                        defaultModel = (obj["default_model"] as? JsonPrimitive)?.content ?: "",
+                        baseUrl = (obj["base_url"] as? JsonPrimitive)?.contentOrNull ?: "",
+                        defaultModel = (obj["default_model"] as? JsonPrimitive)?.contentOrNull ?: "",
                         isPrimary = slug == activeProv,
                     )
                 } ?: emptyList()
@@ -725,8 +726,8 @@ class ConfigViewModel @Inject constructor(
                 """.trimIndent(),
             )
             val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
-            val ids = (obj?.get("models") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
-            val err = (obj?.get("error") as? JsonPrimitive)?.content.takeIf { ids.isEmpty() }
+            val ids = (obj?.get("models") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+            val err = (obj?.get("error") as? JsonPrimitive)?.contentOrNull.takeIf { ids.isEmpty() }
             ProviderProbe(ids, err)
         } catch (e: Exception) {
             Timber.w(e, "[Config] probeProviderModels failed")
@@ -834,11 +835,11 @@ class ConfigViewModel @Inject constructor(
                 val detected = runCatching {
                     val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
                     val arr = obj?.get("models") as? JsonArray
-                    val chosen = (obj?.get("chosen") as? JsonPrimitive)?.content ?: ""
-                    val err = (obj?.get("error") as? JsonPrimitive)?.content ?: ""
-                    val hintIgnored = (obj?.get("hint_ignored") as? JsonPrimitive)?.content?.toBoolean() ?: false
-                    val typedHint = (obj?.get("hint") as? JsonPrimitive)?.content ?: ""
-                    val ids = arr?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+                    val chosen = (obj?.get("chosen") as? JsonPrimitive)?.contentOrNull ?: ""
+                    val err = (obj?.get("error") as? JsonPrimitive)?.contentOrNull ?: ""
+                    val hintIgnored = (obj?.get("hint_ignored") as? JsonPrimitive)?.contentOrNull?.toBoolean() ?: false
+                    val typedHint = (obj?.get("hint") as? JsonPrimitive)?.contentOrNull ?: ""
+                    val ids = arr?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
                     listOf(ids, chosen, err, hintIgnored, typedHint)
                 }.getOrDefault(listOf(emptyList<String>(), "", "", false, ""))
                 @Suppress("UNCHECKED_CAST")
@@ -1145,10 +1146,10 @@ class ConfigViewModel @Inject constructor(
             put("command", pythonStdinCommand(script))
         }.toMap())
         val obj = result as? JsonObject
-        val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: -1
-        val stdout = (obj?.get("stdout") as? JsonPrimitive)?.content ?: ""
+        val code = (obj?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: -1
+        val stdout = (obj?.get("stdout") as? JsonPrimitive)?.contentOrNull ?: ""
         if (code != 0) {
-            val stderr = (obj?.get("stderr") as? JsonPrimitive)?.content ?: "unknown error"
+            val stderr = (obj?.get("stderr") as? JsonPrimitive)?.contentOrNull ?: "unknown error"
             throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: stderr)
         }
         return stdout.trim()
@@ -1169,7 +1170,7 @@ class ConfigViewModel @Inject constructor(
                 val params = buildJsonObject { put("days", 30) }
                 val result = gatewayClient.request(GatewayMethods.INSIGHTS_GET, params.toMap())
                 val obj = result as? JsonObject
-                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
                 _uiState.value = _uiState.value.copy(
                     insights = InsightsData(
                         days = intOf("days").takeIf { it > 0 } ?: 30,
@@ -1202,9 +1203,9 @@ class ConfigViewModel @Inject constructor(
                     mapOf("command" to JsonPrimitive(trimmed)),
                 )
                 val obj = result as? JsonObject
-                val stdout = (obj?.get("stdout") as? JsonPrimitive)?.content.orEmpty()
-                val stderr = (obj?.get("stderr") as? JsonPrimitive)?.content.orEmpty()
-                val code = (obj?.get("code") as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                val stdout = (obj?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
+                val stderr = (obj?.get("stderr") as? JsonPrimitive)?.contentOrNull.orEmpty()
+                val code = (obj?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
                 val output = buildString {
                     if (stdout.isNotBlank()) append(stdout.trimEnd())
                     if (stderr.isNotBlank()) {

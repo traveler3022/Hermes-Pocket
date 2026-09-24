@@ -17,6 +17,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Skills Browser screen.
@@ -66,7 +67,7 @@ class SkillsViewModel @Inject constructor(
     private fun parseSearchResults(result: kotlinx.serialization.json.JsonElement): List<SkillItem> {
         val rows = (result as? JsonObject)?.get("results") as? kotlinx.serialization.json.JsonArray ?: return emptyList()
         return rows.mapNotNull { row ->
-            val name = ((row as? JsonObject)?.get("name") as? JsonPrimitive)?.content ?: return@mapNotNull null
+            val name = ((row as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
             SkillItem(name = name, category = "Search results")
         }
     }
@@ -94,7 +95,7 @@ class SkillsViewModel @Inject constructor(
             skillsObj.entries.flatMap { (category, namesArr) ->
                 val names = namesArr as? kotlinx.serialization.json.JsonArray ?: return@flatMap emptyList()
                 names.mapNotNull { nameEl ->
-                    val name = (nameEl as? JsonPrimitive)?.content ?: return@mapNotNull null
+                    val name = (nameEl as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
                     SkillItem(
                         name = name,
                         category = category,
@@ -239,7 +240,7 @@ class SkillsViewModel @Inject constructor(
                     GatewayMethods.SHELL_EXEC,
                     mapOf("command" to JsonPrimitive("cat ~/.hermes/skills/${safeSkillSlug(name)}.md 2>/dev/null || echo ''")),
                 )
-                val content = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.content } ?: ""
+                val content = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                 _uiState.value = _uiState.value.copy(editingSkillContent = content, isLoadingSkillContent = false)
             } catch (e: Exception) {
                 Timber.w(e, "[Skills] Failed to load skill content")

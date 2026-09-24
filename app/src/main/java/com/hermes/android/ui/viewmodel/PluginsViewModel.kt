@@ -17,6 +17,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Plugins Manager screen.
@@ -76,12 +77,12 @@ class PluginsViewModel @Inject constructor(
             val pluginsArr = obj["plugins"] as? JsonArray ?: return emptyList()
             pluginsArr.mapNotNull { pluginEl ->
                 val plugin = pluginEl as? JsonObject ?: return@mapNotNull null
-                val name = (plugin["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
-                val status = (plugin["status"] as? JsonPrimitive)?.content ?: ""
+                val name = (plugin["name"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                val status = (plugin["status"] as? JsonPrimitive)?.contentOrNull ?: ""
                 PluginItem(
                     name = name,
-                    description = (plugin["description"] as? JsonPrimitive)?.content ?: "",
-                    source = (plugin["source"] as? JsonPrimitive)?.content ?: "",
+                    description = (plugin["description"] as? JsonPrimitive)?.contentOrNull ?: "",
+                    source = (plugin["source"] as? JsonPrimitive)?.contentOrNull ?: "",
                     status = status,
                     enabled = status.lowercase() != "disabled",
                 )

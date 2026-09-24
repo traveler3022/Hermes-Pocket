@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Read-side of the gateway's project browser (`projects.tree` /
@@ -104,12 +105,12 @@ class ProjectsRepository @Inject constructor(
         ) as? JsonObject ?: return null
         val facts = result["facts"] as? JsonObject ?: return null
         return facts.entries.joinToString("\n") { (k, v) ->
-            "$k: ${(v as? JsonPrimitive)?.content ?: v.toString()}"
+            "$k: ${(v as? JsonPrimitive)?.contentOrNull ?: v.toString()}"
         }
     }
 
     private fun JsonObject.str(key: String): String =
-        (this[key] as? JsonPrimitive)?.content ?: ""
+        (this[key] as? JsonPrimitive)?.contentOrNull ?: ""
 
     private fun JsonObject.toElementMap(): Map<String, JsonElement> =
         entries.associate { (k, v) -> k to v }

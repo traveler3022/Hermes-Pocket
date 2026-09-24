@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Deletes a stored chat. The server refuses (4023) while any live worker has that
@@ -16,7 +17,7 @@ suspend fun GatewayClient.deleteStoredSession(storedId: String) {
     val rows = ((request(GatewayMethods.SESSION_ACTIVE_LIST) as? JsonObject)?.get("sessions") as? JsonArray)
         ?.mapNotNull { it as? JsonObject }
         .orEmpty()
-    fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.content.orEmpty()
+    fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
     val liveIds = rows
         .filter { it.str("session_key") == storedId || it.str("id") == storedId }
         .map { it.str("id") }

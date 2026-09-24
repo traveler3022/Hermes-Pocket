@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
+import kotlinx.serialization.json.contentOrNull
 
 fun parseModelOptions(result: JsonElement): List<ModelOption> {
     return try {
@@ -18,16 +19,16 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
         val providersArr = obj["providers"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
         providersArr.flatMap { providerEl ->
             val providerObj = providerEl as? JsonObject ?: return@flatMap emptyList()
-            val slug = providerObj["slug"]?.let { (it as? JsonPrimitive)?.content } ?: ""
-            val providerName = providerObj["name"]?.let { (it as? JsonPrimitive)?.content } ?: ""
+            val slug = providerObj["slug"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
+            val providerName = providerObj["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
             val models = providerObj["models"] as? kotlinx.serialization.json.JsonArray ?: return@flatMap emptyList()
             models.mapNotNull { modelEl ->
-                val modelId = (modelEl as? JsonPrimitive)?.content ?: return@mapNotNull null
+                val modelId = (modelEl as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
                 ModelOption(
                     provider = slug,
                     modelId = modelId,
                     name = modelId,
-                    requiresApiKey = providerObj["authenticated"]?.let { (it as? JsonPrimitive)?.content } == "false",
+                    requiresApiKey = providerObj["authenticated"]?.let { (it as? JsonPrimitive)?.contentOrNull } == "false",
                     providerName = providerName,
                 )
             }
@@ -46,14 +47,14 @@ fun parseToolList(result: JsonElement): List<ToolOption> {
         toolsets.mapNotNull { tsEl ->
             val ts = tsEl as? JsonObject ?: return@mapNotNull null
             val tools = (ts["tools"] as? JsonArray)
-                ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
                 ?: emptyList()
             ToolOption(
-                name = ts["name"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                description = ts["description"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                enabled = ts["enabled"]?.let { (it as? JsonPrimitive)?.content } != "false",
+                name = ts["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                description = ts["description"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                enabled = ts["enabled"]?.let { (it as? JsonPrimitive)?.contentOrNull } != "false",
                 toolset = null,
-                toolCount = ts["tool_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+                toolCount = ts["tool_count"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() }
                     ?: tools.size,
                 tools = tools,
             )
@@ -70,13 +71,13 @@ fun parseConfigSections(result: JsonElement): String {
         buildString {
             for (sectionEl in sections) {
                 val section = sectionEl as? JsonObject ?: continue
-                val title = section["title"]?.let { (it as? JsonPrimitive)?.content } ?: ""
+                val title = section["title"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                 appendLine("## $title")
                 val rows = section["rows"] as? kotlinx.serialization.json.JsonArray ?: continue
                 for (rowEl in rows) {
                     val row = rowEl as? kotlinx.serialization.json.JsonArray ?: continue
-                    val label = row.getOrNull(0)?.let { (it as? JsonPrimitive)?.content } ?: ""
-                    val value = row.getOrNull(1)?.let { (it as? JsonPrimitive)?.content } ?: ""
+                    val label = row.getOrNull(0)?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
+                    val value = row.getOrNull(1)?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                     appendLine("  $label: $value")
                 }
                 appendLine()
@@ -93,14 +94,14 @@ fun parseCredentialEntries(json: String): List<CredentialEntry> {
         arr?.mapNotNull { el ->
             val obj = el as? JsonObject ?: return@mapNotNull null
             CredentialEntry(
-                index = (obj["index"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
-                id = (obj["id"] as? JsonPrimitive)?.content,
-                label = (obj["label"] as? JsonPrimitive)?.content,
-                authType = (obj["auth_type"] as? JsonPrimitive)?.content,
-                tokenPreview = (obj["token_preview"] as? JsonPrimitive)?.content ?: "***",
-                priority = (obj["priority"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
-                lastStatus = (obj["last_status"] as? JsonPrimitive)?.content,
-                requestCount = (obj["request_count"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+                index = (obj["index"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0,
+                id = (obj["id"] as? JsonPrimitive)?.contentOrNull,
+                label = (obj["label"] as? JsonPrimitive)?.contentOrNull,
+                authType = (obj["auth_type"] as? JsonPrimitive)?.contentOrNull,
+                tokenPreview = (obj["token_preview"] as? JsonPrimitive)?.contentOrNull ?: "***",
+                priority = (obj["priority"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0,
+                lastStatus = (obj["last_status"] as? JsonPrimitive)?.contentOrNull,
+                requestCount = (obj["request_count"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0,
             )
         } ?: emptyList()
     } catch (e: Exception) {

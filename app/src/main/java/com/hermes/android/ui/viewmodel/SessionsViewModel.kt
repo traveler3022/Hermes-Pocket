@@ -26,6 +26,7 @@ import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.Base64
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Sessions & Memory screen.
@@ -92,16 +93,16 @@ class SessionsViewModel @Inject constructor(
             arr.mapNotNull { item ->
                 val s = item as? JsonObject ?: return@mapNotNull null
                 SessionSummary(
-                    id = s["id"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    title = s["title"]?.let { (it as? JsonPrimitive)?.content }
+                    id = s["id"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                    title = s["title"]?.let { (it as? JsonPrimitive)?.contentOrNull }
                         ?: "Untitled",
                     // Fix S9F01: field is "preview" not "last_message"
-                    lastMessagePreview = s["preview"]?.let { (it as? JsonPrimitive)?.content },
+                    lastMessagePreview = s["preview"]?.let { (it as? JsonPrimitive)?.contentOrNull },
                     // Fix S9F01: field is "started_at" not "updated_at"
                     updatedAt = (s["started_at"] ?: s["updated_at"])
-                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
+                        ?.let { (it as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong() }
                         ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis(),
-                    messageCount = s["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() }
+                    messageCount = s["message_count"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() }
                         ?: 0,
                 )
             }
@@ -224,11 +225,11 @@ class SessionsViewModel @Inject constructor(
             arr.mapNotNull { item ->
                 val m = item as? JsonObject ?: return@mapNotNull null
                 // Support both "text" (Hermes WS) and "content" (OpenAI-style)
-                val content = m["text"]?.let { (it as? JsonPrimitive)?.content }
-                    ?: m["content"]?.let { (it as? JsonPrimitive)?.content }
+                val content = m["text"]?.let { (it as? JsonPrimitive)?.contentOrNull }
+                    ?: m["content"]?.let { (it as? JsonPrimitive)?.contentOrNull }
                     ?: ""
                 HistoryMessage(
-                    role = m["role"]?.let { (it as? JsonPrimitive)?.content } ?: "unknown",
+                    role = m["role"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "unknown",
                     content = content,
                     timestamp = 0L,
                 )
@@ -301,7 +302,7 @@ class SessionsViewModel @Inject constructor(
                     put("max_tokens", 32)
                 }
                 val result = gatewayClient.request(GatewayMethods.LLM_ONESHOT, params.toMap())
-                val text = (result as? JsonObject)?.get("text")?.let { (it as? JsonPrimitive)?.content }
+                val text = (result as? JsonObject)?.get("text")?.let { (it as? JsonPrimitive)?.contentOrNull }
                     ?.trim()?.trim('"')
                 if (!text.isNullOrBlank()) onSuggestion(text)
             } catch (e: Exception) {
@@ -460,9 +461,9 @@ class SessionsViewModel @Inject constructor(
                 val params = buildJsonObject { put("session_id", sessionId) }
                 val result = gatewayClient.request(GatewayMethods.SESSION_USAGE, params.toMap())
                 val obj = result as? JsonObject
-                fun longOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+                fun longOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
                 val credits = (obj?.get("credits_lines") as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.content } ?: emptyList()
+                    ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
                 _uiState.value = _uiState.value.copy(
                     selectedSessionUsage = SessionUsage(
                         calls = longOf("calls"),
@@ -496,10 +497,10 @@ class SessionsViewModel @Inject constructor(
                 val procs = arr.mapNotNull { item ->
                     val p = item as? JsonObject ?: return@mapNotNull null
                     AgentProcess(
-                        sessionId = (p["session_id"] as? JsonPrimitive)?.content ?: "",
-                        command = (p["command"] as? JsonPrimitive)?.content ?: "",
-                        status = (p["status"] as? JsonPrimitive)?.content ?: "",
-                        uptimeSeconds = (p["uptime"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+                        sessionId = (p["session_id"] as? JsonPrimitive)?.contentOrNull ?: "",
+                        command = (p["command"] as? JsonPrimitive)?.contentOrNull ?: "",
+                        status = (p["status"] as? JsonPrimitive)?.contentOrNull ?: "",
+                        uptimeSeconds = (p["uptime"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L,
                     )
                 }
                 _uiState.value = _uiState.value.copy(activeAgents = procs)
@@ -526,7 +527,7 @@ class SessionsViewModel @Inject constructor(
                 val params = buildJsonObject { put("days", days) }
                 val result = gatewayClient.request(GatewayMethods.INSIGHTS_GET, params.toMap())
                 val obj = result as? JsonObject
-                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                fun intOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
                 _uiState.value = _uiState.value.copy(
                     insights = InsightsData(
                         days = intOf("days").takeIf { it > 0 } ?: days,

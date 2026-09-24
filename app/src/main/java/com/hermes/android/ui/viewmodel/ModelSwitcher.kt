@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /** Result of a `config.set model` call. */
 sealed interface ModelSwitchOutcome {
@@ -58,7 +59,7 @@ class ModelSwitcher @Inject constructor(
             if (sid != null) mapOf("session_id" to JsonPrimitive(sid)) else emptyMap(),
         )
         val obj = result as? JsonObject
-        fun text(key: String) = (obj?.get(key) as? JsonPrimitive)?.content
+        fun text(key: String) = (obj?.get(key) as? JsonPrimitive)?.contentOrNull
         return ModelCatalog(parseModelOptions(result), text("model"), text("provider"))
     }
 
@@ -123,7 +124,7 @@ class ModelSwitcher @Inject constructor(
                 }
             }
             val obj = result as? JsonObject
-            fun flag(key: String) = (obj?.get(key) as? JsonPrimitive)?.content == "true"
+            fun flag(key: String) = (obj?.get(key) as? JsonPrimitive)?.contentOrNull == "true"
             fun text(key: String) = (obj?.get(key) as? JsonPrimitive)
                 ?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
             if (flag("confirm_required")) {
@@ -149,7 +150,7 @@ class ModelSwitcher @Inject constructor(
 
     private suspend fun <T> withScratchSession(block: suspend (String) -> T): T {
         val created = gatewayClient.request(GatewayMethods.SESSION_CREATE) as? JsonObject
-        val sid = (created?.get("session_id") as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+        val sid = (created?.get("session_id") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
             ?: throw GatewayException("session.create returned no session_id")
         return try {
             block(sid)

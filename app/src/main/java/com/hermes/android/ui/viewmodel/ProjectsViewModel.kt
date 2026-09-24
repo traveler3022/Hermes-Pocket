@@ -15,6 +15,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /** Project browser with session creation support. */
 @HiltViewModel
@@ -94,7 +95,7 @@ class ProjectsViewModel @Inject constructor(
                 )
                 val sessionId = (result as? JsonObject)
                     ?.get("session_id")
-                    ?.let { (it as? JsonPrimitive)?.content }
+                    ?.let { (it as? JsonPrimitive)?.contentOrNull }
                 if (!sessionId.isNullOrBlank()) {
                     _uiState.value = _uiState.value.copy(createdSessionId = sessionId)
                     Timber.i("[Projects] Created session $sessionId for project path $path")

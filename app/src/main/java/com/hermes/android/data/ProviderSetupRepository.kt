@@ -24,6 +24,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.contentOrNull
 
 /** A provider offered in first-run setup; [envVar] is where Hermes reads its key. */
 data class SetupProvider(
@@ -87,7 +88,7 @@ class ProviderSetupRepository @Inject constructor(
             ok = result.bool("ok"),
             reachable = result.bool("reachable"),
             message = result.text("message").orEmpty(),
-            models = (result["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty(),
+            models = (result["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
         )
     }
 
@@ -111,7 +112,7 @@ class ProviderSetupRepository @Inject constructor(
             ?.mapNotNull { it as? JsonObject }
             ?.firstOrNull { it.text("slug") == provider.slug }
             ?: return emptyList()
-        return (row["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+        return (row["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
     }
 
     suspend fun setDefaultModel(
@@ -240,7 +241,7 @@ class ProviderSetupRepository @Inject constructor(
     /** OpenAI `/models` shape: `{"data":[{"id":…}]}`. */
     private fun modelIds(body: String): List<String> {
         val data = runCatching { json.parseToJsonElement(body).jsonObject["data"] as? JsonArray }.getOrNull() ?: return emptyList()
-        return data.mapNotNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content }
+        return data.mapNotNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull }
     }
 
     /** ws://host:port/api/ws?token=T → (http://host:port, T). */
@@ -253,7 +254,7 @@ class ProviderSetupRepository @Inject constructor(
     }
 
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    private fun JsonObject.bool(key: String): Boolean = (this[key] as? JsonPrimitive)?.content == "true"
+    private fun JsonObject.bool(key: String): Boolean = (this[key] as? JsonPrimitive)?.contentOrNull == "true"
 
     private companion object {
         val JsonMedia = "application/json".toMediaType()

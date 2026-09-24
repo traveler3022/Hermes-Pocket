@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
+import kotlinx.serialization.json.contentOrNull
 
 internal class ChatAttachmentDelegate(
     private val gatewayClient: GatewayClient,
@@ -78,7 +79,7 @@ internal class ChatAttachmentDelegate(
                         ?: throw IllegalStateException("PDF attach returned no pages")
                     pages.mapIndexedNotNull { idx, pageEl ->
                         val page = pageEl as? JsonObject ?: return@mapIndexedNotNull null
-                        val path = (page["path"] as? JsonPrimitive)?.content
+                        val path = (page["path"] as? JsonPrimitive)?.contentOrNull
                         PendingAttachment(
                             name = "$name (p.${idx + 1})",
                             isImage = true,
@@ -93,7 +94,7 @@ internal class ChatAttachmentDelegate(
                         put("filename", name)
                     }
                     val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
-                    val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.content
+                    val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.contentOrNull
                     listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
                 } else {
                     val params = buildJsonObject {
@@ -102,7 +103,7 @@ internal class ChatAttachmentDelegate(
                         put("name", name)
                     }
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
-                    val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.content
+                    val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.contentOrNull
                         ?: throw IllegalStateException("Gateway returned no file reference")
                     listOf(PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString()))
                 }

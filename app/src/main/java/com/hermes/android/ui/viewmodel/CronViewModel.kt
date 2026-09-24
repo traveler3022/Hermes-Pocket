@@ -16,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Cron Scheduler screen.
@@ -72,15 +73,15 @@ class CronViewModel @Inject constructor(
                 val j = item as? JsonObject ?: return@mapNotNull null
                 CronJob(
                     // _format_job uses "job_id" (not "id")
-                    id = j["job_id"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    name = j["name"]?.let { (it as? JsonPrimitive)?.content } ?: "Untitled",
-                    schedule = j["schedule"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    promptPreview = j["prompt_preview"]?.let { (it as? JsonPrimitive)?.content } ?: "",
-                    enabled = j["enabled"]?.let { (it as? JsonPrimitive)?.content } != "false",
-                    lastRunAt = j["last_run_at"]?.let { (it as? JsonPrimitive)?.content },
-                    nextRunAt = j["next_run_at"]?.let { (it as? JsonPrimitive)?.content },
-                    lastStatus = j["last_status"]?.let { (it as? JsonPrimitive)?.content },
-                    state = j["state"]?.let { (it as? JsonPrimitive)?.content } ?: "scheduled",
+                    id = j["job_id"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                    name = j["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "Untitled",
+                    schedule = j["schedule"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                    promptPreview = j["prompt_preview"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "",
+                    enabled = j["enabled"]?.let { (it as? JsonPrimitive)?.contentOrNull } != "false",
+                    lastRunAt = j["last_run_at"]?.let { (it as? JsonPrimitive)?.contentOrNull },
+                    nextRunAt = j["next_run_at"]?.let { (it as? JsonPrimitive)?.contentOrNull },
+                    lastStatus = j["last_status"]?.let { (it as? JsonPrimitive)?.contentOrNull },
+                    state = j["state"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "scheduled",
                 )
             }
         } catch (e: Exception) {
@@ -146,13 +147,13 @@ class CronViewModel @Inject constructor(
             put("schedule", schedule)
             put("prompt", prompt)
         })
-        return (result["job_id"] as? JsonPrimitive)?.content
+        return (result["job_id"] as? JsonPrimitive)?.contentOrNull
     }
 
     private suspend fun manage(params: JsonObject): JsonObject {
         val result = gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap()) as? JsonObject
             ?: throw IllegalStateException("Empty reply from cron.manage")
-        (result["error"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }?.let { throw IllegalStateException(it) }
+        (result["error"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }?.let { throw IllegalStateException(it) }
         return result
     }
 

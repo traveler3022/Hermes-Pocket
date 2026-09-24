@@ -14,6 +14,7 @@ import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.contentOrNull
 
 /** A published build of the app, as GitHub describes it. */
 data class AppRelease(
@@ -113,7 +114,7 @@ class AppReleaseRepository @Inject constructor() {
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
 
     private fun JsonObject.boolean(key: String): Boolean =
-        (this[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: false
+        (this[key] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: false
 
     companion object {
         const val PROJECT_URL = "https://github.com/traveler3022/Hermes-Pocket"
