@@ -10,6 +10,7 @@ import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
+import com.hermes.android.gateway.asText
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,11 +26,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Chat screen — coordinator that delegates to focused
@@ -184,8 +185,8 @@ class ChatViewModel @Inject constructor(
                 val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG) as? JsonObject
                 val pairs = (result?.get("pairs") as? JsonArray)?.mapNotNull { row ->
                     val arr = row as? JsonArray ?: return@mapNotNull null
-                    val name = (arr.getOrNull(0) as? JsonPrimitive)?.content ?: return@mapNotNull null
-                    val desc = (arr.getOrNull(1) as? JsonPrimitive)?.content ?: ""
+                    val name = (arr.getOrNull(0) as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                    val desc = (arr.getOrNull(1) as? JsonPrimitive)?.contentOrNull ?: ""
                     SlashCommandSuggestion(command = name, description = desc)
                 } ?: emptyList()
                 if (pairs.isEmpty()) return@launch
@@ -302,7 +303,15 @@ class ChatViewModel @Inject constructor(
 
             eventCollectionJob = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 gatewayClient.events.collect { event ->
-                    handleEvent(event)
+                    // One malformed frame must not take the chat down: an exception
+                    // here crashed the app (viewModelScope has no handler) and, short
+                    // of that, would have ended this collector for good.
+                    try {
+                        handleEvent(event)
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        Timber.e(e, "[Chat] could not handle ${event::class.simpleName}")
+                    }
                 }
             }
 
@@ -485,12 +494,12 @@ class ChatViewModel @Inject constructor(
                 it.queuedPrompt
             },
         ) }
-        if (queued) return
+        if (sessionId == null) return
 
         if (isSlashCommand(text)) {
-            handleSlashCommand(text, sessionId!!)
+            handleSlashCommand(text, sessionId)
         } else {
-            sendPrompt(outgoing, sessionId!!)
+            sendPrompt(outgoing, sessionId)
         }
     }
 
@@ -671,9 +680,9 @@ class ChatViewModel @Inject constructor(
                     params = jsonToElementMap(params),
                 )
                 val obj = result as? JsonObject
-                val status = (obj?.get("status") as? JsonPrimitive)?.content
+                val status = (obj?.get("status") as? JsonPrimitive)?.contentOrNull
                 if (status == "rejected") {
-                    val note = (obj?.get("text") as? JsonPrimitive)?.content
+                    val note = (obj?.get("text") as? JsonPrimitive)?.contentOrNull
                     _uiState.update { it.copy(
                         messages = _uiState.value.messages + ChatMessage.Status(
                             id = UUID.randomUUID().toString(),
@@ -731,9 +740,9 @@ class ChatViewModel @Inject constructor(
                     val row = entry as? JsonObject ?: continue
                     // The registry names a process id "session_id" (a "proc_…"
                     // handle), which is not the chat session id.
-                    val procId = (row["session_id"] as? JsonPrimitive)?.content
+                    val procId = (row["session_id"] as? JsonPrimitive)?.contentOrNull
                     if (procId.isNullOrBlank()) continue
-                    if ((row["status"] as? JsonPrimitive)?.content == "exited") continue
+                    if ((row["status"] as? JsonPrimitive)?.contentOrNull == "exited") continue
                     gatewayClient.request(
                         method = GatewayMethods.PROCESS_KILL,
                         params = jsonToElementMap(buildJsonObject {
@@ -801,7 +810,7 @@ class ChatViewModel @Inject constructor(
                 // keeps streaming without a new message.start. Its bubble sat above
                 // the message, so the rest of the turn landed there and its tools
                 // below it with no bubble to fold into.
-                val status = ((reply as? JsonObject)?.get("status") as? JsonPrimitive)?.content
+                val status = ((reply as? JsonObject)?.get("status") as? JsonPrimitive)?.contentOrNull
                 if (status == "redirected" || status == "steered") {
                     streamingDelegate.continueBelow()?.let { openAssistantBubble(it) }
                 }
@@ -884,7 +893,7 @@ class ChatViewModel @Inject constructor(
                 put("text", arg)
             }),
         ) as? JsonObject
-        val taskId = (result?.get("task_id") as? JsonPrimitive)?.content
+        val taskId = (result?.get("task_id") as? JsonPrimitive)?.contentOrNull
         postSlashStatus(
             when {
                 taskId == null -> "/$name: no task started"
@@ -958,7 +967,7 @@ class ChatViewModel @Inject constructor(
             if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
         }
         (obj["lines"] as? JsonArray)?.let { arr ->
-            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.content }.joinToString("\n")
+            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString("\n")
             if (joined.isNotBlank()) return joined
         }
         return null
@@ -1070,8 +1079,16 @@ class ChatViewModel @Inject constructor(
                 )
                 Timber.i("[Chat] Approval response sent: $choice")
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Timber.e(e, "[Chat] Failed to respond to approval")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(e.message ?: "Unknown error")) }
+                // Never delivered (no socket, timed out): the agent is still blocked on
+                // it and the sheet was already gone, so nothing could answer it again.
+                // A refusal from the server (it carries a code) means the request is gone.
+                val undelivered = (e as? GatewayException)?.code == null
+                _uiState.update { it.copy(
+                    pendingApproval = if (undelivered && it.pendingApproval == null) pending else it.pendingApproval,
+                    errorEvent = ErrorEvent.Error(e.message ?: "Unknown error"),
+                ) }
             }
         }
     }
@@ -1191,7 +1208,7 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.SessionInfo -> {
                 val settled = GatewayEventHelpers.isSettledSessionInfo(event.info) &&
                     backgroundSessions.onSettled(sid, isActive = sid == activeSid)
-                val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
+                val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.contentOrNull
                 if (!stored.isNullOrBlank() && sid == activeSid) {
                     _uiState.update {
                         if (it.activeSessionId == sid && it.activeSessionKey == null) it.copy(activeSessionKey = stored) else it
@@ -1461,9 +1478,12 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ToolProgress -> {
+                // tool.progress names its tool but carries no id. Matching any running
+                // card put one tool's output on another when two ran at once.
                 _uiState.update { it.copy(
                     messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.ToolCall && msg.isRunning
+                        msg is ChatMessage.ToolCall && msg.isRunning &&
+                            (event.name == null || msg.toolName == event.name)
                     }) { msg ->
                         (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
                     }
@@ -1576,19 +1596,19 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.SubagentEvent -> {
                 when (event.subagentType) {
                     "spawn_requested", "start" -> {
-                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
+                        val subagentId = event.payload["id"].asText()
                             ?: "subagent-${UUID.randomUUID()}"
                         val msg = ChatMessage.SubagentCard(
                             id = subagentId,
                             timestamp = System.currentTimeMillis(),
                             subagentType = event.subagentType,
-                            text = event.payload["description"]?.jsonPrimitive?.content ?: "Sub-agent",
+                            text = event.payload["description"].asText() ?: "Sub-agent",
                         )
                         _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
                     }
                     "complete" -> {
-                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
-                        val text = event.payload["text"]?.jsonPrimitive?.content ?: ""
+                        val subagentId = event.payload["id"].asText()
+                        val text = event.payload["text"].asText() ?: ""
                         _uiState.update { it.copy(
                             messages = _uiState.value.messages.updateFirst({ msg ->
                                 msg is ChatMessage.SubagentCard && !msg.isComplete &&
@@ -1599,8 +1619,8 @@ class ChatViewModel @Inject constructor(
                         ) }
                     }
                     "thinking", "progress" -> {
-                        val subagentId = event.payload["id"]?.jsonPrimitive?.content
-                        val text = event.payload["text"]?.jsonPrimitive?.content ?: return
+                        val subagentId = event.payload["id"].asText()
+                        val text = event.payload["text"].asText() ?: return
                         _uiState.update { it.copy(
                             messages = _uiState.value.messages.updateFirst({ msg ->
                                 msg is ChatMessage.SubagentCard && !msg.isComplete &&
@@ -1672,13 +1692,13 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { it.copy(isSending = false) }
                     viewModelScope.launch { recoverActiveSession(eventSid, turnEnded = true) }
                 }
-                (event.info["reasoning_effort"] as? JsonPrimitive)?.content
+                (event.info["reasoning_effort"] as? JsonPrimitive)?.contentOrNull
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
-                (event.info["model"] as? JsonPrimitive)?.content
+                (event.info["model"] as? JsonPrimitive)?.contentOrNull
                     ?.takeIf { it.isNotBlank() && event.sessionId == _uiState.value.activeSessionId }
                     ?.let { model ->
-                        val provider = (event.info["provider"] as? JsonPrimitive)?.content
+                        val provider = (event.info["provider"] as? JsonPrimitive)?.contentOrNull
                         _uiState.update {
                             it.copy(sessionModel = model, sessionProvider = provider, sessionInfoSeq = it.sessionInfoSeq + 1)
                         }

@@ -106,6 +106,24 @@ class SessionHistoryShapeTest {
     }
 
     @Test
+    fun `a tool row shows the arguments the server sent as an object`() = runTest {
+        val tool = load(serverHistory()).messages.filterIsInstance<ChatMessage.ToolCall>().single()
+
+        assertEquals("""{"command":"ls"}""", tool.argsText)
+    }
+
+    @Test
+    fun `a timestamp in fractional seconds keeps its time`() = runTest {
+        val history = buildJsonObject {
+            put("messages", buildJsonArray {
+                add(buildJsonObject { put("role", "user"); put("text", "hi"); put("timestamp", 1727000000.25) })
+            })
+        }
+
+        assertEquals(1_727_000_000_250L, load(history).messages.single().timestamp)
+    }
+
+    @Test
     fun `nothing from history is ever still streaming`() = runTest {
         val messages = load(serverHistory()).messages.filterIsInstance<ChatMessage.Assistant>()
 

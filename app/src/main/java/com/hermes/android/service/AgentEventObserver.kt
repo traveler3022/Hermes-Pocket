@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Process-lifetime completion watcher for proactive notifications.
@@ -108,65 +109,13 @@ class AgentEventObserver @Inject constructor(
 
         scope.launch {
             gatewayClient.events.collect { event ->
-                when (event) {
-                    is GatewayEvent.MessageStart -> {
-                        markTurnEvent(event.sessionId)
-                        event.sessionId?.let {
-                            completedUnsettled.remove(it)
-                            watched.putIfAbsent(it, "")
-                        }
-                        publishWork()
-                        // A lost completion event must not leave "working" up forever.
-                        if (gatewayClient.connectionState.value is ConnectionState.Connected) ensureReconcileLoop(scope)
-                    }
-                    is GatewayEvent.ToolStart -> {
-                        // Tool steps do not change the notification (one quiet
-                        // "working" card, not a live play-by-play) — they only
-                        // matter for a session nobody told us about yet.
-                        markTurnEvent(event.sessionId)
-                        event.sessionId?.let {
-                            completedUnsettled.remove(it)
-                            if (watched.putIfAbsent(it, "") == null) publishWork()
-                        }
-                    }
-                    is GatewayEvent.MessageComplete -> {
-                        markTurnEvent(event.sessionId)
-                        event.sessionId?.let { completedUnsettled.add(it) }
-                        val title = event.sessionId?.let { watched.remove(it) }
-                        publishWork()
-                        // Claimed whether or not a notification goes out here: the background
-                        // task worker finds the same finished task under its stored id and would
-                        // announce it a second time (or later, for a turn watched in the app).
-                        event.sessionId?.let { liveId ->
-                            completionTracker.claim(liveId)
-                            storedByLive[liveId]?.let { completionTracker.claim(it) }
-                        }
-                        if (!foregroundState.isForeground) {
-                            notifier.showTurnComplete(event.sessionId, event.text, title)
-                        }
-                    }
-                    is GatewayEvent.BackgroundComplete -> {
-                        // claim() so the periodic worker won't re-notify the
-                        // same completion on its next window.
-                        if (!foregroundState.isForeground &&
-                            completionTracker.claim(event.taskId)
-                        ) {
-                            notifier.showBackgroundTaskComplete(
-                                taskId = event.taskId,
-                                sessionId = event.sessionId,
-                                preview = event.text,
-                            )
-                        }
-                    }
-                    is GatewayEvent.SessionInfo -> {
-                        val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.content
-                        if (!stored.isNullOrBlank()) event.sessionId?.let { storedByLive[it] = stored }
-                        // Sent right after the server clears `running` at the end of a turn.
-                        if ((event.info["running"] as? JsonPrimitive)?.content == "false") {
-                            event.sessionId?.let { completedUnsettled.remove(it) }
-                        }
-                    }
-                    else -> Unit
+                // A throw here (a notification the system refused, say) ended this
+                // collector for the life of the process: no more "done" notifications.
+                try {
+                    onEvent(event, scope)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Timber.e(e, "[AgentObserver] could not handle ${event::class.simpleName}")
                 }
             }
         }
@@ -175,6 +124,69 @@ class AgentEventObserver @Inject constructor(
             gatewayClient.connectionState.collect { state ->
                 if (state is ConnectionState.Connected) ensureReconcileLoop(scope)
             }
+        }
+    }
+
+    private fun onEvent(event: GatewayEvent, scope: CoroutineScope) {
+        when (event) {
+            is GatewayEvent.MessageStart -> {
+                markTurnEvent(event.sessionId)
+                event.sessionId?.let {
+                    completedUnsettled.remove(it)
+                    watched.putIfAbsent(it, "")
+                }
+                publishWork()
+                // A lost completion event must not leave "working" up forever.
+                if (gatewayClient.connectionState.value is ConnectionState.Connected) ensureReconcileLoop(scope)
+            }
+            is GatewayEvent.ToolStart -> {
+                // Tool steps do not change the notification (one quiet
+                // "working" card, not a live play-by-play) — they only
+                // matter for a session nobody told us about yet.
+                markTurnEvent(event.sessionId)
+                event.sessionId?.let {
+                    completedUnsettled.remove(it)
+                    if (watched.putIfAbsent(it, "") == null) publishWork()
+                }
+            }
+            is GatewayEvent.MessageComplete -> {
+                markTurnEvent(event.sessionId)
+                event.sessionId?.let { completedUnsettled.add(it) }
+                val title = event.sessionId?.let { watched.remove(it) }
+                publishWork()
+                // Claimed whether or not a notification goes out here: the background
+                // task worker finds the same finished task under its stored id and would
+                // announce it a second time (or later, for a turn watched in the app).
+                event.sessionId?.let { liveId ->
+                    completionTracker.claim(liveId)
+                    storedByLive[liveId]?.let { completionTracker.claim(it) }
+                }
+                if (!foregroundState.isForeground) {
+                    notifier.showTurnComplete(event.sessionId, event.text, title)
+                }
+            }
+            is GatewayEvent.BackgroundComplete -> {
+                // claim() so the periodic worker won't re-notify the
+                // same completion on its next window.
+                if (!foregroundState.isForeground &&
+                    completionTracker.claim(event.taskId)
+                ) {
+                    notifier.showBackgroundTaskComplete(
+                        taskId = event.taskId,
+                        sessionId = event.sessionId,
+                        preview = event.text,
+                    )
+                }
+            }
+            is GatewayEvent.SessionInfo -> {
+                val stored = (event.info["stored_session_id"] as? JsonPrimitive)?.contentOrNull
+                if (!stored.isNullOrBlank()) event.sessionId?.let { storedByLive[it] = stored }
+                // Sent right after the server clears `running` at the end of a turn.
+                if ((event.info["running"] as? JsonPrimitive)?.contentOrNull == "false") {
+                    event.sessionId?.let { completedUnsettled.remove(it) }
+                }
+            }
+            else -> Unit
         }
     }
 
@@ -207,7 +219,7 @@ class AgentEventObserver @Inject constructor(
         val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
             ?.mapNotNull { it as? JsonObject } ?: return
 
-        fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.content ?: ""
+        fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull ?: ""
 
         val streamingNow = mutableMapOf<String, JsonObject>()
         for (row in rows) {

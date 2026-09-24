@@ -77,7 +77,9 @@ internal class ChatDrawerDelegate(
                 gatewayClient.deleteStoredSession(sessionId)
                 Timber.i("[Chat] Deleted $sessionId")
                 forgetSessionActivity(sessionId)
-                if (state.value.activeSessionId == sessionId) {
+                // Drawer rows carry the stored id; the open chat's live id differs from it,
+                // so comparing only that left a deleted chat on screen, bound to a closed session.
+                if (state.value.activeSessionKey == sessionId || state.value.activeSessionId == sessionId) {
                     state.update { it.copy(
                         activeSessionId = null,
                         activeSessionKey = null,

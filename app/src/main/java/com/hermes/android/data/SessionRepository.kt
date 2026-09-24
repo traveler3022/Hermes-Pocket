@@ -13,6 +13,7 @@ import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Milestone A — the single home for session-protocol semantics.
@@ -79,6 +80,8 @@ class SessionRepository @Inject constructor(
         val result = try {
             gatewayClient.request(first, params)
         } catch (firstError: Exception) {
+            // Superseded (a newer chat was picked): not a refusal worth a second call.
+            if (firstError is kotlinx.coroutines.CancellationException) throw firstError
             Timber.w("[Repo] $first failed (${firstError.message}); trying $second for $sessionId")
             gatewayClient.request(second, params)
         }
@@ -167,7 +170,7 @@ class SessionRepository @Inject constructor(
     }
 
     private fun JsonArray?.orEmptyStrings(): List<String> =
-        this?.mapNotNull { (it as? JsonPrimitive)?.content }?.filter { it.isNotBlank() } ?: emptyList()
+        this?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.filter { it.isNotBlank() } ?: emptyList()
 
     /**
      * Launch delegated work: a titled session + one prompt, registered so the
@@ -541,10 +544,10 @@ class SessionRepository @Inject constructor(
         (this[key] as? JsonPrimitive)?.booleanOrNull
 
     private fun JsonObject.str(key: String): String =
-        (this[key] as? JsonPrimitive)?.content ?: ""
+        (this[key] as? JsonPrimitive)?.contentOrNull ?: ""
 
     private fun JsonObject.int(key: String): Int =
-        (this[key] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toInt() ?: 0
+        (this[key] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: 0
 
     private fun JsonObject.toElementMap(): Map<String, JsonElement> =
         entries.associate { (k, v) -> k to v }

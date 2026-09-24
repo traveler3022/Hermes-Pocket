@@ -4,6 +4,7 @@ import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.GatewayException
+import com.hermes.android.gateway.asText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,7 +86,7 @@ internal class ChatSessionDelegate(
             val attached = sessionRepository.attach(sessionId, preferLive = isLiveId)
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
-            val running = (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+            val running = (attached.raw["running"] as? JsonPrimitive)?.contentOrNull == "true"
             state.update { it.copy(
                 activeSessionId = liveSessionId,
                 // A drawer row hands over the stored id itself; a live id
@@ -178,7 +179,7 @@ internal class ChatSessionDelegate(
         val endedMeanwhile = turnEnds != turnEndsBefore
         // message.complete goes out before the server clears `running`.
         val running = !turnEnded && !endedMeanwhile &&
-            (attached.raw["running"] as? JsonPrimitive)?.content == "true"
+            (attached.raw["running"] as? JsonPrimitive)?.contentOrNull == "true"
         val snapshot = parseSessionHistory(attached.raw)
         var applied = false
         state.update { current ->
@@ -244,7 +245,7 @@ internal class ChatSessionDelegate(
                 } else {
                     sessionRepository.attach(liveId, preferLive = true)
                 }
-                attached.liveId != liveId || (attached.raw["running"] as? JsonPrimitive)?.content != "true"
+                attached.liveId != liveId || (attached.raw["running"] as? JsonPrimitive)?.contentOrNull != "true"
             } catch (e: Exception) {
                 Timber.w("[Chat] Could not re-attach background session $liveId: ${e.message}")
                 true
@@ -327,14 +328,14 @@ internal class ChatSessionDelegate(
             arr.mapNotNull { item ->
                 val session = item as? JsonObject ?: return@mapNotNull null
                 SessionItem(
-                    id = session["id"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null,
-                    title = session["title"]?.let { (it as? JsonPrimitive)?.content }?.ifBlank { null }
+                    id = session["id"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: return@mapNotNull null,
+                    title = session["title"]?.let { (it as? JsonPrimitive)?.contentOrNull }?.ifBlank { null }
                         ?: "Untitled",
-                    lastMessagePreview = session["preview"]?.let { (it as? JsonPrimitive)?.content },
+                    lastMessagePreview = session["preview"]?.let { (it as? JsonPrimitive)?.contentOrNull },
                     updatedAt = (session["started_at"] ?: session["updated_at"])
-                        ?.let { (it as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong() }
+                        ?.let { (it as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong() }
                         ?.let { normalizeEpochMillis(it) } ?: System.currentTimeMillis(),
-                    messageCount = session["message_count"]?.let { (it as? JsonPrimitive)?.content?.toIntOrNull() },
+                    messageCount = session["message_count"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() },
                 )
             }
         } catch (e: Exception) {
@@ -351,26 +352,30 @@ internal class ChatSessionDelegate(
                 ?: return emptyList()
             arr.mapNotNull { item ->
                 val msg = item as? JsonObject ?: return@mapNotNull null
-                val role = msg["role"]?.let { (it as? JsonPrimitive)?.content } ?: return@mapNotNull null
-                val content = msg["content"]?.let { (it as? JsonPrimitive)?.content }
-                    ?: msg["text"]?.let { (it as? JsonPrimitive)?.content } ?: ""
-                val ts = msg["timestamp"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-                    ?.let(::normalizeEpochMillis) ?: System.currentTimeMillis()
-                val id = msg["id"]?.let { (it as? JsonPrimitive)?.content } ?: UUID.randomUUID().toString()
-                val rowId = msg["row_id"]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() }
+                val role = msg["role"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: return@mapNotNull null
+                val content = msg["content"]?.let { (it as? JsonPrimitive)?.contentOrNull }
+                    ?: msg["text"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
+                // Seconds with a fraction (`1727000000.25`): toLongOrNull() refused
+                // them and every message from history was stamped "now".
+                val ts = msg["timestamp"].asText()?.toDoubleOrNull()?.let(::epochMillisOf)
+                    ?: System.currentTimeMillis()
+                val id = msg["id"].asText() ?: UUID.randomUUID().toString()
+                val rowId = msg["row_id"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toLongOrNull() }
                 when (role) {
                     "user" -> ChatMessage.User(id = id, timestamp = ts, text = content, rowId = rowId)
                     "assistant" -> ChatMessage.Assistant(
                         id = id, timestamp = ts, text = content,
                         isStreaming = false,
-                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.content },
+                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.contentOrNull },
                     )
                     "tool" -> ChatMessage.ToolCall(
                         id = id, timestamp = ts,
-                        toolName = msg["name"]?.let { (it as? JsonPrimitive)?.content } ?: "tool",
-                        argsText = msg["args"]?.let { (it as? JsonPrimitive)?.content },
-                        resultText = msg["result"]?.let { (it as? JsonPrimitive)?.content } ?: content,
-                        error = msg["error"]?.let { (it as? JsonPrimitive)?.content },
+                        toolName = msg["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "tool",
+                        // `args` is an object here, as in tool.start: read as a string it
+                        // was null and every tool card from history had no arguments.
+                        argsText = (msg["args_text"] ?: msg["args"]).asText(),
+                        resultText = msg["result"].asText() ?: content,
+                        error = msg["error"].asText(),
                         isRunning = false, durationS = null,
                     )
                     else -> null
