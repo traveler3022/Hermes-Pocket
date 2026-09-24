@@ -214,9 +214,53 @@ class SkillsViewModel @Inject constructor(
     // skills.manage only supports list/search/install/browse/inspect —
     // "install" pulls a named skill from the remote skills hub, it can't
     // create one from scratch. There's no dedicated create/edit/delete RPC,
-    // so this writes directly to ~/.hermes/skills/<name>.md (one skill per
-    // markdown file, the same convention SOUL.md uses elsewhere in Settings)
-    // and reloads via skills.reload afterward.
+    // so this edits ~/.hermes/skills directly and reloads via skills.reload.
+    //
+    // Hermes only loads a skill from a folder holding SKILL.md
+    // (tools/skills_tool.py _find_all_skills), listed under its frontmatter
+    // `name:` or else the folder name. This used to read and write
+    // ~/.hermes/skills/<name>.md, which Hermes never scans: a new skill never
+    // appeared, editing showed an empty file, and delete removed nothing.
+
+    /**
+     * Python defining `root` and `find(name)`: the SKILL.md Hermes lists under
+     * [name] in ~/.hermes/skills, or None. Same order as Hermes' own scan.
+     */
+    private val findSkillPython = """
+        import base64, pathlib, re, shutil
+        root = pathlib.Path.home() / '.hermes' / 'skills'
+        def find(name):
+            if not root.is_dir():
+                return None
+            for p in sorted(root.rglob('SKILL.md')):
+                try:
+                    head = p.read_text(encoding='utf-8', errors='replace')[:4000]
+                except OSError:
+                    continue
+                m = re.match(r'---\s*\n(.*?)\n---', head, re.S)
+                n = re.search(r'^name:[ \t]*(.*)', m.group(1), re.M) if m else None
+                listed = n.group(1).strip().strip('"\'') if n else p.parent.name
+                if listed == name:
+                    return p
+            return None
+    """.trimIndent()
+
+    /** Run [script] through shell.exec; stdout, or throws with stderr's last line. */
+    private suspend fun runPython(script: String): String {
+        val result = gatewayClient.request(
+            GatewayMethods.SHELL_EXEC,
+            mapOf("command" to JsonPrimitive(pythonStdinCommand(script))),
+        ) as? JsonObject
+        val code = (result?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: -1
+        if (code != 0) {
+            val stderr = (result?.get("stderr") as? JsonPrimitive)?.contentOrNull.orEmpty()
+            throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: "exit $code")
+        }
+        return (result?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
+    }
+
+    private fun b64Utf8(s: String): String =
+        Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 
     /** Open the editor for a brand-new skill. */
     fun startNewSkill() {
@@ -236,15 +280,20 @@ class SkillsViewModel @Inject constructor(
                 isLoadingSkillContent = true,
             )
             try {
-                val result = gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf("command" to JsonPrimitive("cat ~/.hermes/skills/${safeSkillSlug(name)}.md 2>/dev/null || echo ''")),
+                val content = runPython(
+                    findSkillPython + "\n" +
+                        "p = find(base64.b64decode('${b64Utf8(name)}').decode())\n" +
+                        "print(p.read_text(encoding='utf-8') if p else '', end='')\n"
                 )
-                val content = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
                 _uiState.value = _uiState.value.copy(editingSkillContent = content, isLoadingSkillContent = false)
             } catch (e: Exception) {
                 Timber.w(e, "[Skills] Failed to load skill content")
-                _uiState.value = _uiState.value.copy(isLoadingSkillContent = false)
+                // Closed, not left open empty: saving that would wipe the skill.
+                dismissSkillEditor()
+                _uiState.value = _uiState.value.copy(
+                    isLoadingSkillContent = false,
+                    errorMessage = "Failed to load skill: ${e.message}",
+                )
             }
         }
     }
@@ -263,28 +312,28 @@ class SkillsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(errorMessage = "Skill name can't be empty")
             return
         }
+        // The editor locks the name of an existing skill, so this is either a
+        // new skill or the one being edited, never a rename.
+        val editing = _uiState.value.editingSkillOriginalName
         viewModelScope.launch {
             try {
-                val originalSlug = _uiState.value.editingSkillOriginalName?.let { safeSkillSlug(it) }
-                val b64Content = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                val renameLine = if (originalSlug != null && originalSlug != slug) {
-                    "old = pathlib.Path.home() / '.hermes' / 'skills' / '$originalSlug.md'\nold.unlink(missing_ok=True)\n"
-                } else ""
-                gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf(
-                        "command" to JsonPrimitive(
-                            pythonStdinCommand(
-                                "import base64, pathlib\n" +
-                                "d = pathlib.Path.home() / '.hermes' / 'skills'\n" +
-                                "d.mkdir(parents=True, exist_ok=True)\n" +
-                                renameLine +
-                                "p = d / '$slug.md'\n" +
-                                "p.write_text(base64.b64decode('$b64Content').decode())\n" +
-                                "print('OK')\n"
-                            )
-                        ),
-                    ),
+                runPython(
+                    findSkillPython + "\n" +
+                        "name = base64.b64decode('${b64Utf8(editing ?: name.trim())}').decode()\n" +
+                        "content = base64.b64decode('${b64Utf8(content)}').decode()\n" +
+                        "p = find(name)\n" +
+                        (if (editing == null) {
+                            "if p is not None or (root / '$slug' / 'SKILL.md').exists():\n" +
+                                "    raise SystemExit('a skill named ' + name + ' already exists')\n" +
+                                "p = root / '$slug' / 'SKILL.md'\n"
+                        } else {
+                            "p = p or root / '$slug' / 'SKILL.md'\n"
+                        }) +
+                        "p.parent.mkdir(parents=True, exist_ok=True)\n" +
+                        "p.write_text(content, encoding='utf-8')\n" +
+                        // The flat file older versions of the app wrote (never loaded).
+                        "(root / '$slug.md').unlink(missing_ok=True)\n" +
+                        "print(p)\n"
                 )
                 Timber.i("[Skills] Saved: $slug")
                 dismissSkillEditor()
@@ -296,19 +345,47 @@ class SkillsViewModel @Inject constructor(
         }
     }
 
-    fun deleteSkill(name: String) {
+    /** Ask before deleting: it removes the skill's whole folder. */
+    fun requestDeleteSkill(name: String) {
+        _uiState.value = _uiState.value.copy(pendingDeleteSkill = name)
+    }
+
+    fun cancelDeleteSkill() {
+        _uiState.value = _uiState.value.copy(pendingDeleteSkill = null)
+    }
+
+    fun confirmDeleteSkill() {
+        val name = _uiState.value.pendingDeleteSkill ?: return
+        _uiState.value = _uiState.value.copy(pendingDeleteSkill = null)
+        deleteSkill(name)
+    }
+
+    private fun deleteSkill(name: String) {
         val slug = safeSkillSlug(name)
         viewModelScope.launch {
             try {
-                gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf(
-                        "command" to JsonPrimitive(
-                            "rm -f ~/.hermes/skills/$slug.md ~/.hermes/skills/$slug.markdown 2>/dev/null; echo OK"
-                        ),
-                    ),
+                val removed = runPython(
+                    findSkillPython + "\n" +
+                        "p = find(base64.b64decode('${b64Utf8(name)}').decode())\n" +
+                        "gone = False\n" +
+                        // Never the skills root itself (a SKILL.md lying directly in it).
+                        "if p is not None and p.parent != root and root in p.parents:\n" +
+                        "    shutil.rmtree(p.parent)\n" +
+                        "    gone = True\n" +
+                        "for legacy in (root / '$slug.md', root / '$slug.markdown'):\n" +
+                        "    if legacy.exists():\n" +
+                        "        legacy.unlink()\n" +
+                        "        gone = True\n" +
+                        "print('OK' if gone else 'MISSING', end='')\n"
                 )
-                Timber.i("[Skills] Deleted: $slug")
+                if (removed != "OK") {
+                    // Bundled, plugin or external_dirs skills live outside ~/.hermes/skills.
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "\"$name\" isn't in ~/.hermes/skills, so it can't be deleted here",
+                    )
+                    return@launch
+                }
+                Timber.i("[Skills] Deleted: $name")
                 reloadSkills()
             } catch (e: Exception) {
                 Timber.e(e, "[Skills] Delete failed")
@@ -335,6 +412,8 @@ data class SkillsUiState(
     val editingSkillOriginalName: String? = null,
     val editingSkillContent: String = "",
     val isLoadingSkillContent: Boolean = false,
+    /** Skill waiting on the delete confirmation, or null. */
+    val pendingDeleteSkill: String? = null,
 )
 
 data class SkillItem(

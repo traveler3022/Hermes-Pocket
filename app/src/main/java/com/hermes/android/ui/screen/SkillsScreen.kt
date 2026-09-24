@@ -89,8 +89,29 @@ fun SkillsScreen(
         )
     }
 
+    uiState.pendingDeleteSkill?.let { name ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelDeleteSkill() },
+            title = { Text(t("Delete skill?", "مهارت حذف شود؟")) },
+            text = {
+                Text(t(
+                    "\"$name\" and its folder in ~/.hermes/skills will be deleted.",
+                    "«$name» و پوشه‌اش در ~/.hermes/skills حذف می‌شود.",
+                ))
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmDeleteSkill() }) {
+                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelDeleteSkill() }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
+    }
+
     // Manual add/edit — skills.manage has no create/edit RPC, so this reads
-    // and writes ~/.hermes/skills/<name>.md directly (see SkillsViewModel).
+    // and writes ~/.hermes/skills/<name>/SKILL.md directly (see SkillsViewModel).
     if (uiState.editingSkillName != null) {
         var nameField by remember(uiState.editingSkillOriginalName) {
             mutableStateOf(uiState.editingSkillOriginalName ?: "")
@@ -258,7 +279,7 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         },
-                        onClick = { viewModel.deleteSkill(skill.name); menuExpanded = false },
+                        onClick = { viewModel.requestDeleteSkill(skill.name); menuExpanded = false },
                     )
                 }
             }
