@@ -2,13 +2,10 @@ package com.hermes.android.ui.viewmodel
 
 import com.hermes.android.data.deleteStoredSession
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayMethods
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import timber.log.Timber
 
 internal class ChatDrawerDelegate(
@@ -16,6 +13,7 @@ internal class ChatDrawerDelegate(
     private val scope: CoroutineScope,
     private val loadSessionList: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
+    private val renameSession: suspend (sessionId: String, title: String) -> Unit,
     private val forgetSessionActivity: (String) -> Unit,
 ) {
     fun togglePin(state: MutableStateFlow<ChatUiState>, sessionId: String) {
@@ -47,11 +45,8 @@ internal class ChatDrawerDelegate(
         state.update { it.copy(drawerRenameTarget = null) }
         scope.launch {
             try {
-                val params = buildJsonObject {
-                    put("session_id", target.sessionId)
-                    put("title", newTitle)
-                }
-                gatewayClient.request(GatewayMethods.SESSION_TITLE, jsonToElementMap(params))
+                // Drawer rows carry the stored id, which session.title answers with 4001.
+                renameSession(target.sessionId, newTitle)
                 Timber.i("[Chat] Renamed ${target.sessionId} -> $newTitle")
                 loadSessionList(state)
             } catch (e: Exception) {
@@ -94,6 +89,4 @@ internal class ChatDrawerDelegate(
             }
         }
     }
-
-    private fun jsonToElementMap(obj: kotlinx.serialization.json.JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 }

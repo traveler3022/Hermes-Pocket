@@ -379,6 +379,50 @@ class SessionRepositoryTest {
         assertEquals("user", t[0].role)
         assertEquals("hi", t[0].text)
         assertEquals("hello", t[1].text)
+        // Reading a task's transcript must not become the chat's reconnect target.
+        assertTrue(gateway.calls.none { it.trackSession })
+    }
+
+    @Test
+    fun `storedMessages reads history on the live id when resume carries none`() = runTest {
+        gateway.handler = { method, params ->
+            when (method) {
+                GatewayMethods.SESSION_RESUME -> buildJsonObject { put("session_id", "liveH") }
+                GatewayMethods.SESSION_HISTORY -> {
+                    assertEquals("liveH", params.str("session_id"))
+                    buildJsonObject {
+                        put("messages", buildJsonArray {
+                            add(buildJsonObject { put("role", "user"); put("text", "q") })
+                        })
+                    }
+                }
+                else -> error("unexpected $method")
+            }
+        }
+        val stored = repo.storedMessages("storedH")
+        assertEquals("liveH", stored.liveId)
+        assertEquals(1, stored.messages?.size)
+        assertTrue(gateway.calls.none { it.trackSession })
+    }
+
+    @Test
+    fun `rename titles the live id, not the stored id from the list`() = runTest {
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.SESSION_RESUME -> buildJsonObject { put("session_id", "liveR") }
+                GatewayMethods.SESSION_TITLE -> buildJsonObject { put("title", "New") }
+                else -> error("unexpected $method")
+            }
+        }
+        repo.rename("storedR", "New")
+        assertEquals(
+            listOf(GatewayMethods.SESSION_RESUME, GatewayMethods.SESSION_TITLE),
+            gateway.calls.map { it.method },
+        )
+        val title = gateway.calls.last().params
+        assertEquals("liveR", title.str("session_id"))
+        assertEquals("New", title.str("title"))
+        assertTrue(gateway.calls.none { it.trackSession })
     }
 
     // ── onLiveSession: a reclaimed live id ─────────────────────────────────

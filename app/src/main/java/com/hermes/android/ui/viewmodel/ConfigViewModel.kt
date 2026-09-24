@@ -142,10 +142,13 @@ class ConfigViewModel @Inject constructor(
                     approvals = d.get('approvals') or {}
                     agent = d.get('agent') or {}
                     display = d.get('display') or {}
+                    # Unquoted `mode: off` is YAML for False; Hermes reads that as off.
+                    mode = approvals.get('mode')
+                    mode = 'off' if mode is False else str(mode or 'manual')
                     print(json.dumps({
-                        'approval_mode': str(approvals.get('mode', 'manual')),
+                        'approval_mode': mode,
                         'reasoning': str(agent.get('reasoning_effort', '') or 'medium'),
-                        'personality': str(display.get('personality', '')),
+                        'personality': str(display.get('personality') or ''),
                     }))
                     """.trimIndent()
                 )
@@ -425,20 +428,16 @@ class ConfigViewModel @Inject constructor(
                 //    `unknown`. We used to ignore the response and flip the
                 //    switch locally, so non-configurable toolsets LOOKED
                 //    toggled while the server did nothing.
-                // 2. Without session_id the change only lands in config.yaml —
-                //    the LIVE agent keeps its current toolsets until the
-                //    session is reset. Passing session_id makes the server
-                //    reset the agent so the change applies to the current chat.
-                val sid = try {
-                    val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-                    (mr as? JsonObject)?.get("session_id")?.let { (it as? JsonPrimitive)?.contentOrNull }
-                } catch (e: Exception) {
-                    null
-                }
+                // 2. No session_id: the change lands in config.yaml and the
+                //    next chat picks it up. With a live session_id the server
+                //    rebuilds that chat's agent (_reset_session_agent), which
+                //    drops its /model override and marks a running turn as
+                //    stopped — too much for a settings switch. The stored id
+                //    from session.most_recent that used to go here never
+                //    matched a live session, so that reset never happened.
                 val params = buildJsonObject {
                     put("action", if (enabled) "enable" else "disable")
                     put("names", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(toolName))))
-                    if (!sid.isNullOrBlank()) put("session_id", sid)
                 }
                 val result = gatewayClient.request(GatewayMethods.TOOLS_CONFIGURE, params.toMap())
                 val obj = result as? JsonObject
@@ -449,8 +448,7 @@ class ConfigViewModel @Inject constructor(
                         errorMessage = "\"$toolName\" cannot be toggled on this server",
                     )
                 } else {
-                    val reset = (obj?.get("reset") as? JsonPrimitive)?.contentOrNull == "true"
-                    Timber.i("[Config] Tool $toolName -> $enabled (live session reset=$reset)")
+                    Timber.i("[Config] Tool $toolName -> $enabled")
                 }
                 // Re-read from the server so switches show the REAL state
                 // instead of an optimistic local flip.
@@ -647,9 +645,9 @@ class ConfigViewModel @Inject constructor(
                     active = active_raw[len('custom:'):] if active_raw.startswith('custom:') else ''
                     print(json.dumps({
                         'providers': [{
-                            'name': str((c or {}).get('name', '')),
-                            'base_url': str((c or {}).get('base_url', '')),
-                            'default_model': str((c or {}).get('default_model', '')),
+                            'name': str(c.get('name') or ''),
+                            'base_url': str(c.get('base_url') or ''),
+                            'default_model': str(c.get('default_model') or ''),
                         } for c in custom if isinstance(c, dict) and c.get('name')],
                         'active_provider': active,
                     }))
@@ -1003,10 +1001,10 @@ class ConfigViewModel @Inject constructor(
                     import json, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'auth.json'
                     d = json.loads(p.read_text()) if p.exists() else {}
-                    pool = d.get('credential_pool', {}).get('$poolKey', [])
+                    pool = (d.get('credential_pool') or {}).get('$poolKey') or []
                     out = []
                     for i, e in enumerate(pool, 1):
-                        tok = e.get('access_token', '')
+                        tok = str(e.get('access_token') or '')
                         out.append({
                             'index': i,
                             'id': e.get('id'),
@@ -1066,8 +1064,9 @@ class ConfigViewModel @Inject constructor(
             import base64, json, uuid, pathlib
             p = pathlib.Path.home() / '.hermes' / 'auth.json'
             d = json.loads(p.read_text()) if p.exists() else {}
-            pool = d.setdefault('credential_pool', {})
-            existing = pool.get('$poolKey', []) if ${if (append) "True" else "False"} else []
+            pool = d.get('credential_pool') or {}
+            d['credential_pool'] = pool
+            existing = (pool.get('$poolKey') or []) if ${if (append) "True" else "False"} else []
             next_priority = (max((e.get('priority', 0) for e in existing), default=-1) + 1) if existing else 0
             entry = {
                 'id': uuid.uuid4().hex[:6],
@@ -1111,8 +1110,9 @@ class ConfigViewModel @Inject constructor(
                     import json, pathlib
                     p = pathlib.Path.home() / '.hermes' / 'auth.json'
                     d = json.loads(p.read_text()) if p.exists() else {}
-                    pool = d.get('credential_pool', {})
-                    entries = pool.get('$poolKey', [])
+                    pool = d.get('credential_pool') or {}
+                    d['credential_pool'] = pool
+                    entries = pool.get('$poolKey') or []
                     pool['$poolKey'] = [e for e in entries if e.get('id') != '${safeSlug(credentialId)}']
                     if not pool['$poolKey']:
                         pool.pop('$poolKey', None)

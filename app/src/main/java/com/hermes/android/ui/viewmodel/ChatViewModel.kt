@@ -105,6 +105,7 @@ class ChatViewModel @Inject constructor(
         gatewayClient, viewModelScope,
         loadSessionList = { sessionDelegate.loadList(it) },
         createNewSession = { sessionDelegate.create(it) },
+        renameSession = { id, title -> sessionRepository.rename(id, title) },
         forgetSessionActivity = { sessionId ->
             liveIdsFor(sessionId).forEach {
                 backgroundSessions.forget(it)

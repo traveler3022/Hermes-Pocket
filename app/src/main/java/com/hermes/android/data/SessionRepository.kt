@@ -72,18 +72,24 @@ class SessionRepository @Inject constructor(
      * active_list rows, notification extras) 4007 on resume, so we fall back
      * to `session.activate`. Callers that know they hold a live id pass
      * [preferLive] to try activate first and save the doomed round-trip.
+     * Callers attaching a chat that is not the one on screen pass
+     * [trackSession] false, so a reconnect does not resume that chat instead.
      */
-    suspend fun attach(sessionId: String, preferLive: Boolean = false): AttachedSession {
+    suspend fun attach(
+        sessionId: String,
+        preferLive: Boolean = false,
+        trackSession: Boolean = true,
+    ): AttachedSession {
         val params = buildJsonObject { put("session_id", sessionId) }.toElementMap()
         val first = if (preferLive) GatewayMethods.SESSION_ACTIVATE else GatewayMethods.SESSION_RESUME
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
         val result = try {
-            gatewayClient.request(first, params)
+            gatewayClient.request(first, params, trackSession = trackSession)
         } catch (firstError: Exception) {
             // Superseded (a newer chat was picked): not a refusal worth a second call.
             if (firstError is kotlinx.coroutines.CancellationException) throw firstError
             Timber.w("[Repo] $first failed (${firstError.message}); trying $second for $sessionId")
-            gatewayClient.request(second, params)
+            gatewayClient.request(second, params, trackSession = trackSession)
         }
         val obj = result as? JsonObject
             ?: throw IllegalStateException("attach($sessionId): non-object payload")
@@ -267,21 +273,53 @@ class SessionRepository @Inject constructor(
      * live and finished tasks.
      */
     suspend fun transcript(sessionId: String): List<TranscriptEntry> {
-        val attached = attach(sessionId)
-        val messages = attached.raw["messages"] as? JsonArray
-            ?: run {
-                val hist = gatewayClient.request(
-                    GatewayMethods.SESSION_HISTORY,
-                    buildJsonObject { put("session_id", attached.liveId) }.toElementMap(),
-                )
-                (hist as? JsonObject)?.get("messages") as? JsonArray
-            }
-            ?: return emptyList()
+        val messages = storedMessages(sessionId).messages ?: return emptyList()
         return messages.mapNotNull { it as? JsonObject }.mapNotNull { m ->
             val role = m.str("role").ifEmpty { return@mapNotNull null }
             val text = m.str("content").ifEmpty { m.str("text") }
             if (text.isBlank()) null else TranscriptEntry(role, text)
         }
+    }
+
+    /** A chat's raw history rows, and the live id they were read through. */
+    data class StoredMessages(val liveId: String, val messages: JsonArray?)
+
+    /**
+     * Raw history rows of a chat that is not on screen, by either id kind.
+     * `session.history` only takes live ids and list rows carry stored ones,
+     * so this attaches first; the resume payload usually carries the
+     * messages itself. Not tracked: looking at a chat must not make a
+     * reconnect resume it in place of the open one.
+     */
+    suspend fun storedMessages(sessionId: String): StoredMessages {
+        val attached = attach(sessionId, trackSession = false)
+        val messages = attached.raw["messages"] as? JsonArray
+            ?: run {
+                val hist = gatewayClient.request(
+                    GatewayMethods.SESSION_HISTORY,
+                    buildJsonObject { put("session_id", attached.liveId) }.toElementMap(),
+                    trackSession = false,
+                )
+                (hist as? JsonObject)?.get("messages") as? JsonArray
+            }
+        return StoredMessages(attached.liveId, messages)
+    }
+
+    /**
+     * Rename a chat by either id kind. `session.title` only takes live ids
+     * (a stored id answers 4001), and the drawer and Sessions list hold
+     * stored ones. Resume reuses the chat's live session when it has one.
+     */
+    suspend fun rename(sessionId: String, title: String) {
+        val liveId = attach(sessionId, trackSession = false).liveId
+        gatewayClient.request(
+            GatewayMethods.SESSION_TITLE,
+            buildJsonObject {
+                put("session_id", liveId)
+                put("title", title)
+            }.toElementMap(),
+            trackSession = false,
+        )
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
+import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.deleteStoredSession
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -44,6 +45,7 @@ sealed interface SessionsEffect {
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val sessionRepository: SessionRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -121,28 +123,37 @@ class SessionsViewModel @Inject constructor(
                 selectedSessionHistory = emptyList(),
                 selectedSessionUsage = null,
             )
-            // Fetch token usage for the opened session in parallel.
-            loadUsage(sessionId)
-            val messages = try {
-                // Hermes session.history resolves via _sess_nowait → params["session_id"].
-                val params = buildJsonObject { put("session_id", sessionId) }
-                val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, params.toMap())
-                parseHistory(result).also { msgs ->
-                    Timber.i("[Sessions] session.history returned ${msgs.size} messages for $sessionId")
+            val (liveId, messages) = try {
+                fetchHistory(sessionId).also { (_, msgs) ->
+                    Timber.i("[Sessions] history returned ${msgs.size} messages for $sessionId")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w(e, "[Sessions] session.history RPC failed — trying filesystem fallback")
-                loadHistoryFromFilesystem(sessionId)
+                Timber.w(e, "[Sessions] history RPC failed — trying filesystem fallback")
+                null to loadHistoryFromFilesystem(sessionId)
             }
+            // Another chat was opened (or this one closed) while this one loaded.
+            if (_uiState.value.selectedSessionId != sessionId) return@launch
 
             _uiState.value = _uiState.value.copy(
                 selectedSessionHistory = messages,
                 isLoadingHistory = false,
                 errorMessage = if (messages.isEmpty()) tForContext(context, "No messages found for this session.", "پیامی برای این گفتگو پیدا نشد") else null,
             )
+            liveId?.let { loadUsage(sessionId, it) }
         }
+    }
+
+    /**
+     * History of a listed chat and the live id it was read through. List rows
+     * carry stored ids, and session.history / session.usage / session.title
+     * only take live ones (a stored id answers 4001), so this attaches first.
+     */
+    private suspend fun fetchHistory(sessionId: String): Pair<String?, List<HistoryMessage>> {
+        val stored = sessionRepository.storedMessages(sessionId)
+        val messages = stored.messages?.let { parseHistory(JsonObject(mapOf("messages" to it))) }.orEmpty()
+        return stored.liveId to messages
     }
 
     private suspend fun loadHistoryFromFilesystem(sessionId: String): List<HistoryMessage> {
@@ -243,6 +254,7 @@ class SessionsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedSessionId = null,
             selectedSessionHistory = emptyList(),
+            isLoadingHistory = false,
         )
     }
 
@@ -314,11 +326,7 @@ class SessionsViewModel @Inject constructor(
     fun renameSession(sessionId: String, newTitle: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
-                    put("session_id", sessionId)
-                    put("title", newTitle)
-                }
-                gatewayClient.request(GatewayMethods.SESSION_TITLE, params.toMap())
+                sessionRepository.rename(sessionId, newTitle)
                 Timber.i("[Sessions] Renamed $sessionId to: $newTitle")
                 hideRenameDialog()
                 loadSessions()
@@ -365,12 +373,7 @@ class SessionsViewModel @Inject constructor(
                 val messages = if (_uiState.value.selectedSessionId == sessionId) {
                     _uiState.value.selectedSessionHistory
                 } else {
-                    val params = buildJsonObject { put("session_id", sessionId) }
-                    val result = gatewayClient.request(
-                        GatewayMethods.SESSION_HISTORY,
-                        params.toMap(),
-                    )
-                    parseHistory(result)
+                    fetchHistory(sessionId).second
                 }
 
                 // Find session title
@@ -453,17 +456,22 @@ class SessionsViewModel @Inject constructor(
     /**
      * Fetch token usage for a session. Hermes `session.usage` (param session_id)
      * returns { calls, input, output, total, credits_lines? }. Surfaces the
-     * user's main concern — how many tokens a session burned.
+     * user's main concern — how many tokens a session burned. Takes the
+     * [liveId] [fetchHistory] attached, since session.usage refuses stored ids;
+     * the counters are the live agent's, so a chat resumed just now shows none.
      */
-    fun loadUsage(sessionId: String) {
+    private fun loadUsage(sessionId: String, liveId: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject { put("session_id", sessionId) }
-                val result = gatewayClient.request(GatewayMethods.SESSION_USAGE, params.toMap())
+                val params = buildJsonObject { put("session_id", liveId) }
+                val result = gatewayClient.request(
+                    GatewayMethods.SESSION_USAGE, params.toMap(), trackSession = false,
+                )
                 val obj = result as? JsonObject
                 fun longOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
                 val credits = (obj?.get("credits_lines") as? JsonArray)
                     ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
+                if (_uiState.value.selectedSessionId != sessionId) return@launch
                 _uiState.value = _uiState.value.copy(
                     selectedSessionUsage = SessionUsage(
                         calls = longOf("calls"),
