@@ -83,11 +83,32 @@ class OkHttpGatewayClient @Inject constructor(
     // already resets isStreaming/activeAssistantMessageId before any retry can
     // re-collect, so nothing actually needs the old events replayed — 0 removes
     // the risk entirely instead of relying on that ordering.
+    // Collectors run on the main thread; a long frame there (a big reply
+    // re-rendering) lets token-rate deltas pile up, and 256 filled in seconds.
     private val _events = MutableSharedFlow<GatewayEvent>(
         replay = 0,
-        extraBufferCapacity = 256,
+        extraBufferCapacity = 2048,
     )
     override val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
+
+    /** Sessions that lost an event to a full buffer; each is owed an [GatewayEvent.EventGap]. */
+    private val droppedEventSessions = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * A dropped event used to be only a log line: a lost message.complete left the
+     * chat "working" for good. Its session now gets the same EventGap a seq hole
+     * does, as soon as there is room, so the chat rebuilds from the server.
+     */
+    private fun emitEvent(event: GatewayEvent, label: String) {
+        val sid = event.sessionId
+        if (sid != null && sid in droppedEventSessions && _events.tryEmit(GatewayEvent.EventGap(sid))) {
+            droppedEventSessions.remove(sid)
+        }
+        if (!_events.tryEmit(event)) {
+            Timber.w("[Gateway] Event buffer full, dropped: $label")
+            if (sid != null) droppedEventSessions.add(sid)
+        }
+    }
 
     @Volatile
     private var webSocket: WebSocket? = null
@@ -369,6 +390,14 @@ class OkHttpGatewayClient @Inject constructor(
                 nonTrackingRequestIds.remove(id)
                 throw GatewayException("Request $method timed out after ${timeoutMs}ms")
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // The caller gave up (a newer chat was picked, the screen went away).
+            // Wrapped as a GatewayException it read as a failed request: a
+            // superseded resume showed "Failed to resume", and the caller's own
+            // cancellation checks never saw it.
+            pendingRequests.remove(id)
+            nonTrackingRequestIds.remove(id)
+            throw e
         } catch (e: Exception) {
             pendingRequests.remove(id)
             nonTrackingRequestIds.remove(id)
@@ -748,7 +777,7 @@ class OkHttpGatewayClient @Inject constructor(
             // secret), and a response to one of our own calls ("id" only). A
             // server request used to land in handleResponse, fail its Long id
             // parse and vanish — the agent then waited out its whole timeout.
-            val method = (obj["method"] as? JsonPrimitive)?.content
+            val method = (obj["method"] as? JsonPrimitive)?.contentOrNull
             if (method != null && method != "event" && "id" in obj) {
                 handleServerRequest(obj)
             } else if ("id" in obj) {
@@ -764,7 +793,7 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     private fun handleResponse(obj: JsonObject) {
-        val id = obj["id"]?.jsonPrimitive?.content?.toLongOrNull() ?: return
+        val id = obj["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return
         val response = json.decodeFromJsonElement(GatewayResponse.serializer(), obj)
 
         val deferred = pendingRequests.remove(id) ?: run {
@@ -804,7 +833,7 @@ class OkHttpGatewayClient @Inject constructor(
      */
     private fun handleServerRequest(obj: JsonObject) {
         val id = (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
-        val method = (obj["method"] as? JsonPrimitive)?.content ?: return
+        val method = (obj["method"] as? JsonPrimitive)?.contentOrNull ?: return
         val params = obj["params"] as? JsonObject ?: JsonObject(emptyMap())
         val event = ServerRequestParser.parse(id, method, params)
         if (event == null) {
@@ -825,9 +854,7 @@ class OkHttpGatewayClient @Inject constructor(
             )
             return
         }
-        if (!_events.tryEmit(event)) {
-            Timber.w("[Gateway] Event buffer full, dropped server request: $method")
-        }
+        emitEvent(event, "server request $method")
     }
 
     override fun respondToServerRequest(id: String, result: JsonObject): Boolean =
@@ -842,18 +869,18 @@ class OkHttpGatewayClient @Inject constructor(
     private fun sendFrame(frame: JsonObject): Boolean = webSocket?.send(frame.toString()) == true
 
     private fun handleEvent(obj: JsonObject, onState: (WsState) -> Unit = {}) {
-        val params = obj["params"]?.jsonObject ?: return
-        val eventType = (params["event"] ?: params["type"])?.jsonPrimitive?.content ?: return
+        val params = obj["params"] as? JsonObject ?: return
+        val eventType = (params["event"] ?: params["type"]).asText() ?: return
         // Broadcasts (sessions.changed, cron.changed, …) carry session_id "":
         // they belong to no session, and adopting that empty id as the one to
         // resume is how a reconnect silently lands in a brand new chat.
         val sid = (params["sid"] ?: params["session_id"]).sessionIdOrNull()
-        val payload = params["payload"]?.jsonObject ?: JsonObject(emptyMap())
+        val payload = params["payload"] as? JsonObject ?: JsonObject(emptyMap())
         // A hole in the per-session seq means frames were lost on this socket;
         // announce it before the event so the chat rebuilds from the server.
         val seq = (params["seq"] as? JsonPrimitive)?.longOrNull
         if (sid != null && seq != null && eventSequence.isGap(sid, seq)) {
-            _events.tryEmit(GatewayEvent.EventGap(sid))
+            emitEvent(GatewayEvent.EventGap(sid), "event.gap")
         }
 
         val event = parseEvent(eventType, sid, payload)
@@ -871,9 +898,7 @@ class OkHttpGatewayClient @Inject constructor(
         } else if (event.sessionId != null) {
             lastSessionId = event.sessionId
         }
-        if (!_events.tryEmit(event)) {
-            Timber.w("[Gateway] Event buffer full, dropped: $eventType")
-        }
+        emitEvent(event, eventType)
     }
 
     private fun parseEvent(
@@ -882,56 +907,61 @@ class OkHttpGatewayClient @Inject constructor(
         payload: JsonObject,
     ): GatewayEvent {
         val p = payload
+        // Fields are read with asText(): `.jsonPrimitive.content` turned a JSON null into
+        // the text "null" (shown as a reply or its reasoning) and threw on an object,
+        // which dropped the whole event.
         return when (eventType) {
             "gateway.ready" -> GatewayEvent.GatewayReady(
                 sessionId = sid,
                 skin = p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) },
             )
-            "gateway.stderr" -> GatewayEvent.GatewayStderr(sid, p["line"]?.jsonPrimitive?.content ?: "")
+            "gateway.stderr" -> GatewayEvent.GatewayStderr(sid, p["line"].asText() ?: "")
             "gateway.start_timeout" -> GatewayEvent.GatewayStartTimeout(
                 sid,
-                p["cwd"]?.jsonPrimitive?.content,
-                p["python"]?.jsonPrimitive?.content,
-                p["stderr_tail"]?.jsonPrimitive?.content,
+                p["cwd"].asText(),
+                p["python"].asText(),
+                p["stderr_tail"].asText(),
             )
             "gateway.protocol_error" -> GatewayEvent.GatewayProtocolError(
-                sid, p["preview"]?.jsonPrimitive?.content,
+                sid, p["preview"].asText(),
             )
             "session.info" -> GatewayEvent.SessionInfo(sid, p.toMap())
             "session.title" -> GatewayEvent.SessionTitle(
                 sid,
                 p["session_id"].sessionIdOrNull() ?: sid.orEmpty(),
-                p["title"]?.jsonPrimitive?.content ?: "",
+                p["title"].asText() ?: "",
             )
             "sessions.changed" -> GatewayEvent.SessionsChanged(sid)
             "message.start" -> GatewayEvent.MessageStart(sid)
             "message.delta" -> GatewayEvent.MessageDelta(
                 sid,
-                p["text"]?.jsonPrimitive?.content ?: "",
-                p["rendered"]?.jsonPrimitive?.content,
+                p["text"].asText() ?: "",
+                p["rendered"].asText(),
             )
-            "message.interim" -> GatewayEvent.MessageInterim(sid, p["text"]?.jsonPrimitive?.content ?: "")
+            "message.interim" -> GatewayEvent.MessageInterim(sid, p["text"].asText() ?: "")
             "message.complete" -> GatewayEvent.MessageComplete(
                 sid,
-                p["text"]?.jsonPrimitive?.content ?: "",
-                p["rendered"]?.jsonPrimitive?.content,
-                p["reasoning"]?.jsonPrimitive?.content,
-                p["usage"]?.jsonObject?.toMap()
-                    ?.mapNotNull { (k, v) -> v.jsonPrimitive.content.toLongOrNull()?.let { k to it } }?.toMap(),
-                p["response_previewed"]?.jsonPrimitive?.booleanOrNull ?: false,
+                p["text"].asText() ?: "",
+                p["rendered"].asText(),
+                p["reasoning"].asText(),
+                // `usage: null` or a nested value in it threw here, and the whole
+                // message.complete was dropped: the turn never ended on screen.
+                (p["usage"] as? JsonObject)
+                    ?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.contentOrNull?.toLongOrNull()?.let { k to it } }?.toMap(),
+                (p["response_previewed"] as? JsonPrimitive)?.booleanOrNull ?: false,
             )
-            "thinking.delta" -> GatewayEvent.ThinkingDelta(sid, p["text"]?.jsonPrimitive?.content ?: "")
-            "reasoning.delta" -> GatewayEvent.ReasoningDelta(sid, p["text"]?.jsonPrimitive?.content ?: "")
-            "reasoning.available" -> GatewayEvent.ReasoningAvailable(sid, p["text"]?.jsonPrimitive?.content)
+            "thinking.delta" -> GatewayEvent.ThinkingDelta(sid, p["text"].asText() ?: "")
+            "reasoning.delta" -> GatewayEvent.ReasoningDelta(sid, p["text"].asText() ?: "")
+            "reasoning.available" -> GatewayEvent.ReasoningAvailable(sid, p["text"].asText())
             "status.update" -> GatewayEvent.StatusUpdate(
                 sid,
-                p["kind"]?.jsonPrimitive?.content,
-                p["text"]?.jsonPrimitive?.content,
+                p["kind"].asText(),
+                p["text"].asText(),
             )
             "tool.start" -> GatewayEvent.ToolStart(
                 sid,
-                p["tool_id"]?.jsonPrimitive?.content ?: "",
-                p["name"]?.jsonPrimitive?.content,
+                p["tool_id"].asText() ?: "",
+                p["name"].asText(),
                 // args_text only comes on verbose sessions; every other session sends the raw args.
                 (p["args_text"] ?: p["args"]).asText(),
                 p["context"].asText(),
@@ -953,42 +983,42 @@ class OkHttpGatewayClient @Inject constructor(
                 error = p["error"].asText(),
                 todos = p["todos"]?.let { GatewayEventHelpers.parseTodos(it) },
             )
-            "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"]?.jsonPrimitive?.content)
+            "tool.generating" -> GatewayEvent.ToolGenerating(sid, p["name"].asText())
             "tool.progress" -> GatewayEvent.ToolProgress(
                 sid,
-                p["name"]?.jsonPrimitive?.content,
-                p["preview"]?.jsonPrimitive?.content,
+                p["name"].asText(),
+                p["preview"].asText(),
             )
             // Approval / clarify / sudo / secret arrive as server requests
             // (handleServerRequest); this withdraws one that timed out or was
             // interrupted before it was answered.
             "request.cancel" -> GatewayEvent.RequestCancel(
                 sid,
-                p["id"]?.jsonPrimitive?.content ?: "",
-                p["method"]?.jsonPrimitive?.content ?: "",
+                p["id"].asText() ?: "",
+                p["method"].asText() ?: "",
             )
             "notification.show" -> GatewayEvent.NotificationShow(
                 sid,
-                p["key"]?.jsonPrimitive?.content,
-                p["kind"]?.jsonPrimitive?.content,
-                p["level"]?.jsonPrimitive?.content,
-                p["text"]?.jsonPrimitive?.content,
-                p["ttl_ms"]?.jsonPrimitive?.content?.toLongOrNull(),
+                p["key"].asText(),
+                p["kind"].asText(),
+                p["level"].asText(),
+                p["text"].asText(),
+                p["ttl_ms"].asText()?.toLongOrNull(),
             )
             "notification.clear" -> GatewayEvent.NotificationClear(
                 sid,
-                p["key"]?.jsonPrimitive?.content,
+                p["key"].asText(),
             )
             "billing.step_up.verification" -> GatewayEvent.BillingStepUpVerification(
                 sid,
-                p["verification_url"]?.jsonPrimitive?.content ?: "",
-                p["user_code"]?.jsonPrimitive?.content,
+                p["verification_url"].asText() ?: "",
+                p["user_code"].asText(),
             )
-            "voice.status" -> GatewayEvent.VoiceStatus(sid, p["state"]?.jsonPrimitive?.content)
+            "voice.status" -> GatewayEvent.VoiceStatus(sid, p["state"].asText())
             "voice.transcript" -> GatewayEvent.VoiceTranscript(
                 sid,
-                p["text"]?.jsonPrimitive?.content,
-                p["no_speech_limit"]?.jsonPrimitive?.content == "true",
+                p["text"].asText(),
+                p["no_speech_limit"].asText() == "true",
             )
             "subagent.spawn_requested", "subagent.start", "subagent.thinking",
             "subagent.tool", "subagent.progress", "subagent.complete" -> GatewayEvent.SubagentEvent(
@@ -996,72 +1026,31 @@ class OkHttpGatewayClient @Inject constructor(
             )
             "background.complete" -> GatewayEvent.BackgroundComplete(
                 sid,
-                p["task_id"]?.jsonPrimitive?.content ?: "",
-                p["text"]?.jsonPrimitive?.content ?: "",
+                p["task_id"].asText() ?: "",
+                p["text"].asText() ?: "",
             )
             "btw.complete" -> GatewayEvent.BtwComplete(
                 sid,
-                p["task_id"]?.jsonPrimitive?.content ?: "",
-                p["text"]?.jsonPrimitive?.content ?: "",
-                p["question"]?.jsonPrimitive?.contentOrNull,
+                p["task_id"].asText() ?: "",
+                p["text"].asText() ?: "",
+                p["question"].asText(),
             )
-            "review.summary" -> GatewayEvent.ReviewSummary(sid, p["text"]?.jsonPrimitive?.content)
+            "review.summary" -> GatewayEvent.ReviewSummary(sid, p["text"].asText())
             "browser.progress" -> GatewayEvent.BrowserProgress(
                 sid,
-                p["level"]?.jsonPrimitive?.content,
-                p["message"]?.jsonPrimitive?.content,
+                p["level"].asText(),
+                p["message"].asText(),
             )
             "skin.changed" -> GatewayEvent.SkinChanged(sid, p["skin"]?.let { GatewayEventHelpers.parseSkinMap(it) })
             "dashboard.new_session_requested" -> GatewayEvent.DashboardNewSessionRequested(
-                sid, p["reason"]?.jsonPrimitive?.content,
+                sid, p["reason"].asText(),
             )
-            "error" -> GatewayEvent.Error(sid, p["message"]?.jsonPrimitive?.content)
+            "error" -> GatewayEvent.Error(sid, p["message"].asText())
             "todo.updated" -> GatewayEvent.TodoUpdated(
                 sid,
                 p["todos"]?.let { GatewayEventHelpers.parseTodos(it) } ?: emptyList(),
             )
             else -> GatewayEvent.Unknown(sid, eventType, p.toMap())
-        }
-    }
-
-    private fun parseSkinMap(element: JsonElement): Map<String, String> {
-        return try {
-            element.jsonObject.toMap().mapValues { it.value.jsonPrimitive.content }
-        } catch (e: Exception) {
-            emptyMap()
-        }
-    }
-
-    /**
-     * Mirrors `parseTodos` in `ui-tui/src/app/turnController.ts`: drop items
-     * without a known status or with empty id/content instead of failing the
-     * whole event.
-     */
-    private fun parseTodos(element: JsonElement): List<GatewayEvent.TodoItem>? {
-        val array = element as? kotlinx.serialization.json.JsonArray ?: return null
-        val validStatuses = setOf("pending", "in_progress", "completed", "cancelled")
-        return array.mapNotNull { item ->
-            val obj = item as? JsonObject ?: return@mapNotNull null
-            val status = obj["status"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            if (status !in validStatuses) return@mapNotNull null
-            val id = obj["id"]?.jsonPrimitive?.content?.trim().orEmpty()
-            val content = obj["content"]?.jsonPrimitive?.content?.trim().orEmpty()
-            if (id.isEmpty() || content.isEmpty()) return@mapNotNull null
-            GatewayEvent.TodoItem(id = id, content = content, status = status)
-        }
-    }
-
-    private fun parseStringList(element: JsonElement): List<String>? {
-        return try {
-            val array = when (element) {
-                is kotlinx.serialization.json.JsonArray -> element
-                is JsonObject -> element["choices"] as? kotlinx.serialization.json.JsonArray
-                    ?: element["pattern_keys"] as? kotlinx.serialization.json.JsonArray
-                else -> null
-            }
-            array?.map { it.jsonPrimitive.content }
-        } catch (e: Exception) {
-            null
         }
     }
 

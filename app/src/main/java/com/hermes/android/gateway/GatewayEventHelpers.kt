@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Helper functions for parsing gateway event payloads.
@@ -25,12 +26,6 @@ internal object GatewayEventHelpers {
     private val BUSY_SESSION_STATUSES = setOf("working", "waiting", "streaming", "running")
 
     /**
-     * Whether a `session.info` payload says the session is not running. The
-     * gateway sends one right after it clears `running` at the end of a turn,
-     * which is later than message.complete, so it is the first frame that
-     * proves a turn is over to a client that missed or outran the completion.
-     */
-    /**
      * Side-job failures (title generation, compression summary) that do not touch the
      * reply. The server keeps these out of its own chat surfaces (`_TELEGRAM_NOISY_STATUS_RE`
      * in gateway/run.py); this is the auxiliary part of that list.
@@ -46,8 +41,14 @@ internal object GatewayEventHelpers {
 
     fun isAuxiliaryNoise(text: String): Boolean = AUXILIARY_NOISE.containsMatchIn(text)
 
+    /**
+     * Whether a `session.info` payload says the session is not running. The
+     * gateway sends one right after it clears `running` at the end of a turn,
+     * which is later than message.complete, so it is the first frame that
+     * proves a turn is over to a client that missed or outran the completion.
+     */
     fun isSettledSessionInfo(info: Map<String, JsonElement>): Boolean =
-        (info["running"] as? JsonPrimitive)?.content == "false"
+        (info["running"] as? JsonPrimitive)?.contentOrNull == "false"
 
     fun parseSkinMap(element: JsonElement): Map<String, String> {
         return try {
@@ -67,10 +68,10 @@ internal object GatewayEventHelpers {
         val validStatuses = setOf("pending", "in_progress", "completed", "cancelled")
         return array.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
-            val status = obj["status"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val status = obj["status"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
             if (status !in validStatuses) return@mapNotNull null
-            val id = obj["id"]?.jsonPrimitive?.content?.trim().orEmpty()
-            val content = obj["content"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val id = obj["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            val content = obj["content"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
             if (id.isEmpty() || content.isEmpty()) return@mapNotNull null
             GatewayEvent.TodoItem(id = id, content = content, status = status)
         }

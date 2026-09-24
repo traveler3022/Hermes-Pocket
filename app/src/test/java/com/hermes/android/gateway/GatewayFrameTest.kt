@@ -135,6 +135,36 @@ class GatewayFrameTest {
     }
 
     @Test
+    fun `message complete with null fields still ends the turn and shows no null text`() = runTest {
+        val got = collect(this)
+        receive(frame("message.complete", payload = buildJsonObject {
+            put("text", "done")
+            put("reasoning", kotlinx.serialization.json.JsonNull)
+            put("usage", kotlinx.serialization.json.JsonNull)
+        }))
+
+        val complete = got.single() as GatewayEvent.MessageComplete
+        assertEquals("done", complete.text)
+        assertEquals(null, complete.reasoning)
+        assertEquals(null, complete.usage)
+    }
+
+    @Test
+    fun `message complete with a nested usage value still arrives`() = runTest {
+        val got = collect(this)
+        receive(frame("message.complete", payload = buildJsonObject {
+            put("text", "done")
+            putJsonObject("usage") {
+                put("input", 5)
+                putJsonObject("cache") { put("read", 1) }
+            }
+        }))
+
+        val complete = got.single() as GatewayEvent.MessageComplete
+        assertEquals(mapOf("input" to 5L), complete.usage)
+    }
+
+    @Test
     fun `request cancel names the request it withdraws`() = runTest {
         val got = collect(this)
         receive(frame("request.cancel", payload = buildJsonObject {
