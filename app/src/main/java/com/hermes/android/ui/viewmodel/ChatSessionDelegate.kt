@@ -102,6 +102,7 @@ internal class ChatSessionDelegate(
                 // just left: a busy chat (opened from its "working"
                 // notification, say) shows the stop button, an idle one send.
                 isSending = running,
+                thinkingStatus = "",
             ) }
             loadReasoningLevel()
             // Questions the agent is still blocked on come back with the resume.

@@ -63,6 +63,8 @@ internal fun AssistantMessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    /** The agent's live status line; only the streaming reply is given one. */
+    thinkingStatus: String = "",
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -95,6 +97,7 @@ internal fun AssistantMessageBubble(
                             items = traceItems,
                             isStreaming = message.isStreaming,
                             messageId = message.id,
+                            status = thinkingStatus,
                         )
                     }
                     // A turn can end on a tool rather than a sentence, leaving

@@ -116,7 +116,6 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadDraft()
-        loadAssistantName()
         watchForQueuedPromptFlush()
         connectAndCollect()
         // Asked once at init the catalog raced Hermes' boot and usually failed, leaving
@@ -437,6 +436,7 @@ class ChatViewModel @Inject constructor(
                 // stayed true; if session.new then failed nothing ever cleared it and
                 // the composer stayed locked.
                 isSending = false,
+                thinkingStatus = "",
             ) }
             sessionDelegate.create(_uiState)
         }
@@ -713,6 +713,7 @@ class ChatViewModel @Inject constructor(
                 (msg as ChatMessage.ToolCall).copy(isRunning = false, resultText = msg.resultText ?: "Interrupted")
             },
             isSending = false,
+            thinkingStatus = "",
         ) }
         if (sessionId == null) return
         viewModelScope.launch {
@@ -999,22 +1000,6 @@ class ChatViewModel @Inject constructor(
 
     private fun clearDraft() {
         prefs.edit().remove(KEY_DRAFT).apply()
-    }
-
-    // ── Display name ─────────────────────────────────────────────────────
-
-    private fun loadAssistantName() {
-        val saved = prefs.getString(KEY_ASSISTANT_NAME, null)
-        if (!saved.isNullOrBlank()) {
-            _uiState.update { it.copy(assistantName = saved) }
-        }
-    }
-
-    fun setAssistantName(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return
-        prefs.edit().putString(KEY_ASSISTANT_NAME, trimmed).apply()
-        _uiState.update { it.copy(assistantName = trimmed) }
     }
 
     // ── Search ───────────────────────────────────────────────────────────
@@ -1328,6 +1313,7 @@ class ChatViewModel @Inject constructor(
                 streamingDelegate.finalizeOrphanedMessage("(interrupted)")
                 streamingDelegate.reset()
                 openAssistantBubble(streamingDelegate.onMessageStart())
+                if (_uiState.value.thinkingStatus.isNotEmpty()) _uiState.update { it.copy(thinkingStatus = "") }
             }
 
             is GatewayEvent.MessageDelta -> {
@@ -1395,6 +1381,7 @@ class ChatViewModel @Inject constructor(
                     },
                     isSending = false,
                     activeTodos = emptyList(),
+                    thinkingStatus = "",
                 ) }
                 streamingDelegate.reset()
                 if (recoverOnTurnEnd || replyOnlyInHistory) {
@@ -1412,9 +1399,13 @@ class ChatViewModel @Inject constructor(
 
             // Reasoning needs a bubble to land in just like text does; with none open
             // (a chat joined mid-turn) every chunk was flushed into nothing.
+            // thinking.delta is the agent's spinner / wait line ("(◕‿◕) pondering...",
+            // a slow-provider notice, "" to clear), not reasoning. Appended to the
+            // reasoning, it filled the trace with spinner phrases run together.
             is GatewayEvent.ThinkingDelta -> {
-                ensureStreamingBubble()
-                streamingDelegate.enqueueDelta(event.text, isReasoning = true)
+                val status = event.text.trim()
+                if (status.isNotEmpty()) ensureStreamingBubble()
+                if (status != _uiState.value.thinkingStatus) _uiState.update { it.copy(thinkingStatus = status) }
             }
 
             is GatewayEvent.ReasoningDelta -> {
@@ -1498,15 +1489,22 @@ class ChatViewModel @Inject constructor(
                 val isRateLimit = event.message?.contains("rate_limit", ignoreCase = true) == true ||
                         event.message?.contains("429") == true
                 val displayMsg = if (isRateLimit) "Rate limited — please wait" else event.message
+                // A failed turn ends with this event alone, no message.complete
+                // (tui_gateway's turn dispatcher), so the reply kept its typing dots
+                // until the next turn. It ends here like any other turn.
+                sessionDelegate.onTurnEnded()
+                streamingDelegate.flushBuffer()
                 _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateAll({ msg ->
+                    messages = it.messages.updateAll({ msg ->
                         msg is ChatMessage.ToolCall && msg.isRunning
                     }) { msg ->
                         (msg as ChatMessage.ToolCall).copy(isRunning = false, error = displayMsg)
-                    },
+                    }.closeStrayReplies(),
                     errorEvent = ErrorEvent.Warning(displayMsg ?: "Unknown error"),
                     isSending = false,
+                    thinkingStatus = "",
                 ) }
+                streamingDelegate.reset()
             }
 
             is GatewayEvent.StatusUpdate -> {
@@ -1538,6 +1536,10 @@ class ChatViewModel @Inject constructor(
                         allowPermanent = event.allowPermanent,
                     )
                 }
+                // The drawer marks the waiting chat by its stored id; the event only has the live one.
+                val approvalKey = event.sessionId?.let { sid ->
+                    storedIdByLiveId[sid] ?: _uiState.value.activeSessionKey.takeIf { sid == activeSid }
+                }
                 // The approval sheet and the notification show the request. It is not added
                 // to the chat: as plain text it stayed there for good, raw command and all.
                 _uiState.update { it.copy(
@@ -1549,6 +1551,7 @@ class ChatViewModel @Inject constructor(
                         patternKeys = event.patternKeys,
                         allowPermanent = event.allowPermanent,
                         serverRequestId = event.serverRequestId,
+                        sessionKey = approvalKey,
                     ),
                 ) }
             }
@@ -1793,7 +1796,6 @@ class ChatViewModel @Inject constructor(
         private const val MIN_BOOT_SAMPLE_MS = 1_500L
         /** Above this, something stalled; averaging it in would poison the estimate. */
         private const val MAX_BOOT_SAMPLE_MS = 180_000L
-        private const val KEY_ASSISTANT_NAME = "assistant_display_name"
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
         private const val MESSAGE_NOT_LOCATED =
             "Could not find this message in the stored chat, so nothing was changed. Reopen the chat and try again."

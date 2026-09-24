@@ -229,6 +229,7 @@ internal fun MessageBubble(
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     traceItems: List<HxTraceItem> = emptyList(),
+    thinkingStatus: String = "",
     onEditMessage: ((messageId: String) -> Unit)? = null,
     onDeleteMessage: ((messageId: String) -> Unit)? = null,
 ) {
@@ -267,6 +268,7 @@ internal fun MessageBubble(
                 onBranch = onBranch,
                 onDownloadFile = onDownloadFile,
                 traceItems = traceItems,
+                thinkingStatus = thinkingStatus,
             )
         }
 

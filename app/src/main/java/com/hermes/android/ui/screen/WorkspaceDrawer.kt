@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -327,14 +328,24 @@ internal fun rememberWorkspaceDestinations(
     onAgent: () -> Unit,
     onScheduled: () -> Unit,
     onServer: () -> Unit,
-): List<WorkspaceDestination> = listOf(
-    WorkspaceDestination(
-        label = t("Workbench", "میز کار"),
-        icon = HxIcons.LayoutGrid,
-        badge = waitingCount,
-        onClick = onWorkbench,
-    ),
-    WorkspaceDestination(t("Agent", "عامل"), HxIcons.Bot, null, onAgent),
-    WorkspaceDestination(t("Scheduled", "زمان‌بندی‌شده"), HxIcons.Clock, null, onScheduled),
-    WorkspaceDestination(t("Server", "سرور"), HxIcons.Server, null, onServer),
-)
+): List<WorkspaceDestination> {
+    val workbench = t("Workbench", "میز کار")
+    val agent = t("Agent", "عامل")
+    val scheduled = t("Scheduled", "زمان‌بندی‌شده")
+    val server = t("Server", "سرور")
+    // Remembered, as the name says: a new list on every call made the drawer
+    // recompose along with the chat behind it.
+    return remember(waitingCount, workbench, agent, scheduled, server, onWorkbench, onAgent, onScheduled, onServer) {
+        listOf(
+            WorkspaceDestination(
+                label = workbench,
+                icon = HxIcons.LayoutGrid,
+                badge = waitingCount,
+                onClick = onWorkbench,
+            ),
+            WorkspaceDestination(agent, HxIcons.Bot, null, onAgent),
+            WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
+            WorkspaceDestination(server, HxIcons.Server, null, onServer),
+        )
+    }
+}

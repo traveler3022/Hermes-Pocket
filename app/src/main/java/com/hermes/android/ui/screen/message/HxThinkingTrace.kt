@@ -335,6 +335,8 @@ internal fun HxThinkingTrace(
     isStreaming: Boolean,
     messageId: String,
     modifier: Modifier = Modifier,
+    /** What the agent says it is doing (thinking.delta); blank when it says nothing. */
+    status: String = "",
 ) {
     if (items.isEmpty()) return
     val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
@@ -393,6 +395,10 @@ internal fun HxThinkingTrace(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // The server clears its status once tokens flow, so one that is set is
+            // about right now (a slow provider, a retry) and outranks older reasoning.
+            status.isNotBlank() -> HxShimmerText(text = status)
 
             preview.isNotEmpty() -> HxStatusLine(text = preview)
 

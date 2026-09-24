@@ -143,6 +143,8 @@ data class PendingApprovalUi(
     val allowPermanent: Boolean = true,
     /** The `srq-…` id `request.cancel` names when the server withdraws this approval. */
     val serverRequestId: String = "",
+    /** Stored id of [sessionId]'s chat, when known: the drawer's rows are keyed by it. */
+    val sessionKey: String? = null,
 )
 
 /**
@@ -232,12 +234,9 @@ data class ChatUiState(
     val sessionModel: String? = null,
     val sessionProvider: String? = null,
     val sessionInfoSeq: Int = 0,
-    // Client-side display name shown in the top bar / drawer header. Purely
-    // cosmetic (local prefs) — does not affect the agent's actual identity
-    // (SOUL.md / display.personality on the server).
-    val assistantName: String = "Hermes",
-    // Client-side avatar image (local file path), customized from Settings.
-    // Null shows the default icon.
+    /** The agent's live status line (thinking.delta: a wait notice, a spinner
+     *  phrase). Replaced, never appended; blank when there is none. */
+    val thinkingStatus: String = "",
 )
 
 /**

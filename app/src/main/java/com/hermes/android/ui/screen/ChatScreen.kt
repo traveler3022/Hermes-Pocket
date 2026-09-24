@@ -130,7 +130,8 @@ import kotlinx.coroutines.launch
 // Extracted composables (same package, no import needed):
 // - ChatConnection.kt: ConnectionIndicator, ConnectionRetryBanner, ShimmerSkeleton
 // - ChatContentBlocks.kt: InlineImageBlock, CodeBlockCard, MermaidBlockCard, HtmlBlockCard, ArtifactCard, extractCodeBlocks
-// - ChatSessionDrawer.kt: SessionDrawerRow, AgentTodoCard
+// - WorkspaceDrawer.kt: WorkspaceDrawerSheet
+// - AgentTodoCard.kt: AgentTodoCard
 // - ChatMessages.kt: ThinkingBlock, MessageBubble
 // - ChatInputBar.kt: InputBar
 // - ChatUtils.kt: formatRelativeTime, highlightText, thinkingDotStr
@@ -194,7 +195,6 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
-    var showRenameAssistantDialog by remember { mutableStateOf(false) }
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
@@ -331,12 +331,6 @@ fun ChatScreen(
         }
     }
 
-    // The avatar is customized from Settings (a separate ViewModel writing
-    // the same prefs key) — re-read it every time this screen re-enters
-    // composition so a change made there shows up on return.
-    LaunchedEffect(Unit) {
-    }
-
     // When a new message arrives, scroll the latest USER message to the TOP
     // of the viewport. This mirrors the Gemini / ChatGPT mobile pattern: the
     // user's question stays pinned at the top of the visible area, leaving
@@ -454,18 +448,26 @@ fun ChatScreen(
                     scope.launch { drawerState.close() }
                     action()
                 }
+                // Read here as values, not inside the row lambdas: rows reading uiState
+                // re-ran on every streaming flush, drawer closed or not.
+                val sessionActivity = uiState.sessionActivity
+                val waitingIds = remember(uiState.pendingApproval) {
+                    uiState.pendingApproval?.let { setOfNotNull(it.sessionId, it.sessionKey) }.orEmpty()
+                }
                 WorkspaceDrawerSheet(
                     sessions = drawerSessions,
-                    activeSessionId = uiState.activeSessionId,
+                    // Rows are keyed by stored id; the live id never matched one, so the
+                    // open chat was never highlighted.
+                    activeSessionId = uiState.activeSessionKey ?: uiState.activeSessionId,
                     pulseOf = { session ->
                         when {
-                            uiState.pendingApproval?.sessionId == session.id -> SessionPulse.Waiting
-                            uiState.sessionActivity[session.id]?.isRunning == true -> SessionPulse.Running
-                            uiState.sessionActivity[session.id]?.failed == true -> SessionPulse.Failed
+                            session.id in waitingIds -> SessionPulse.Waiting
+                            sessionActivity[session.id]?.isRunning == true -> SessionPulse.Running
+                            sessionActivity[session.id]?.failed == true -> SessionPulse.Failed
                             else -> SessionPulse.None
                         }
                     },
-                    unreadOf = { session -> uiState.sessionActivity[session.id]?.unreadReplies ?: 0 },
+                    unreadOf = { session -> sessionActivity[session.id]?.unreadReplies ?: 0 },
                     destinations = rememberWorkspaceDestinations(
                         waitingCount = if (uiState.pendingApproval != null) 1 else 0,
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },
@@ -874,6 +876,11 @@ fun ChatScreen(
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 traceItems = turnWork[message.id].orEmpty(),
+                                thinkingStatus = if (message is ChatMessage.Assistant && message.isStreaming) {
+                                    uiState.thinkingStatus
+                                } else {
+                                    ""
+                                },
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToClarifyBatch = viewModel::respondToClarifyBatch,
@@ -1101,34 +1108,4 @@ fun ChatScreen(
         onReasoningLevelChange = viewModel::setReasoningLevel,
         onDismissSheet = { showModelSheet = false },
     )
-
-    // Rename dialog — client-side display name only (top bar / drawer header).
-    if (showRenameAssistantDialog) {
-        var nameInput by remember(uiState.assistantName) { mutableStateOf(uiState.assistantName) }
-        AlertDialog(
-            onDismissRequest = { showRenameAssistantDialog = false },
-            title = { Text(t("Rename assistant", "تغییر نام دستیار")) },
-            text = {
-                OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = { nameInput = it },
-                    singleLine = true,
-                    placeholder = { Text("Hermes") },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setAssistantName(nameInput)
-                    showRenameAssistantDialog = false
-                }) {
-                    Text(t("Save", "ذخیره"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameAssistantDialog = false }) {
-                    Text(t("Cancel", "انصراف"))
-                }
-            },
-        )
-    }
 }
