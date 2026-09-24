@@ -121,8 +121,8 @@ fun LinuxDesktopScreen(
                 SettingRow(
                     title = t("Agent browses here", "عامل با این مرورگر کار کند"),
                     subtitle = t(
-                        "Hermes' browser tools use this Chromium, so you can watch and take over. Starts with Hermes.",
-                        "ابزارهای مرورگر Hermes از همین Chromium استفاده می‌کنند و شما کارش را زنده می‌بینید و می‌توانید دست بگیرید. همراه Hermes روشن می‌شود.",
+                        "Hermes' browser tools use this Chromium, so you can watch and take over. It starts when the agent first browses or you open the viewer.",
+                        "ابزارهای مرورگر Hermes از همین Chromium استفاده می‌کنند و شما کارش را زنده می‌بینید و می‌توانید دست بگیرید. وقتی عامل اولین بار مرور کند یا نمایشگر را باز کنید روشن می‌شود.",
                     ),
                     icon = Icons.Default.SmartToy,
                     trailing = {
@@ -183,7 +183,7 @@ fun LinuxDesktopScreen(
                             checked = settings.vncLan,
                             onCheckedChange = { on ->
                                 if (on && settings.vncPassword.isEmpty()) {
-                                    dialog = DesktopDialog.Password
+                                    dialog = DesktopDialog.PasswordToShare
                                 } else {
                                     viewModel.update { it.copy(vncLan = on) }
                                 }
@@ -227,19 +227,24 @@ fun LinuxDesktopScreen(
                 dialog = null
             },
         )
-        DesktopDialog.Password -> TextSettingDialog(
-            title = t("VNC password", "رمز VNC"),
-            initial = settings.vncPassword,
-            keyboardType = KeyboardType.Password,
-            password = true,
-            hint = t("6–8 characters; VNC uses only the first 8.", "۶ تا ۸ کاراکتر؛ VNC فقط ۸ کاراکتر اول را می‌خواند."),
-            isValid = { it.length >= 6 },
-            onDismiss = { dialog = null },
-            onSave = { value ->
-                viewModel.update { it.copy(vncPassword = value, vncLan = true) }
-                dialog = null
-            },
-        )
+        DesktopDialog.Password, DesktopDialog.PasswordToShare -> {
+            // Only the LAN switch shares the desktop. Saving from the password row used to
+            // turn LAN access on as well, exposing VNC to the network unasked.
+            val share = dialog == DesktopDialog.PasswordToShare
+            TextSettingDialog(
+                title = t("VNC password", "رمز VNC"),
+                initial = settings.vncPassword,
+                keyboardType = KeyboardType.Password,
+                password = true,
+                hint = t("6–8 characters; VNC uses only the first 8.", "۶ تا ۸ کاراکتر؛ VNC فقط ۸ کاراکتر اول را می‌خواند."),
+                isValid = { it.length >= 6 },
+                onDismiss = { dialog = null },
+                onSave = { value ->
+                    viewModel.update { it.copy(vncPassword = value, vncLan = it.vncLan || share) }
+                    dialog = null
+                },
+            )
+        }
         DesktopDialog.Resolution -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text(t("Screen size", "اندازهٔ صفحه")) },
@@ -287,7 +292,8 @@ fun LinuxDesktopScreen(
     }
 }
 
-private enum class DesktopDialog { Homepage, Password, Resolution, ClearData }
+/** [PasswordToShare]: opened by the LAN switch, so saving it also turns sharing on. */
+private enum class DesktopDialog { Homepage, Password, PasswordToShare, Resolution, ClearData }
 
 @Composable
 private fun StatusCard(

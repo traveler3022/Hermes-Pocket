@@ -59,7 +59,7 @@ class LinuxDesktop @Inject constructor(
     }
 
     data class Settings(
-        /** Hermes' browser tools use this Chromium (`browser.cdp_url`); it starts with Hermes. */
+        /** Hermes' browser tools use this Chromium (`browser.cdp_url`); it starts on demand ([onHermesStarted]). */
         val agentBrowser: Boolean = true,
         val resolution: Resolution = Resolution.PHONE,
         val homepage: String = DefaultHomepage,
