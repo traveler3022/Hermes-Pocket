@@ -15,7 +15,8 @@ composeBom = "2026.06.01"
 navigationCompose = "2.9.8"
 # Held below the BOM's 1.4.0: its drawer settles on an underdamped spring (0.9),
 # so the sheet overshoots the edge and springs back. 1.3.x uses a 256 ms tween.
-material3 = "1.3.2"
+# Strict: a plain version loses to the BOM's constraint and 1.4.0 shipped anyway.
+material3 = { strictly = "1.3.2" }
 
 # Hilt
 hilt = "2.57.2"
