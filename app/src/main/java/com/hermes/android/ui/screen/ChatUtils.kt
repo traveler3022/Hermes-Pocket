@@ -150,29 +150,37 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun highlightText(text: String, query: String): AnnotatedString {
-    if (query.isBlank()) return AnnotatedString(text)
+    val matches = searchMatches(text, query)
+    if (matches.isEmpty()) return AnnotatedString(text)
     val highlightColor = MaterialTheme.colorScheme.tertiary
     val highlightBg = MaterialTheme.colorScheme.tertiaryContainer
     return buildAnnotatedString {
-        val lowerText = text.lowercase()
-        val lowerQuery = query.lowercase()
         var start = 0
-        var matchIndex = lowerText.indexOf(lowerQuery, start)
-        while (matchIndex >= 0) {
-            // Append text before match
-            append(text.substring(start, matchIndex))
-            // Append highlighted match
+        for (match in matches) {
+            append(text.substring(start, match.first))
             withStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Bold, background = highlightBg)) {
-                append(text.substring(matchIndex, matchIndex + query.length))
+                append(text.substring(match.first, match.last + 1))
             }
-            start = matchIndex + query.length
-            matchIndex = lowerText.indexOf(lowerQuery, start)
+            start = match.last + 1
         }
-        // Append remaining text
-        if (start < text.length) {
-            append(text.substring(start))
-        }
+        if (start < text.length) append(text.substring(start))
     }
+}
+
+/**
+ * Where [query] occurs in [text], ignoring case, as ranges of [text] itself. Found in
+ * text.lowercase() instead, the ranges cut the original at the wrong places whenever
+ * lowercasing changed the length ("İ" becomes two chars) and threw out of bounds.
+ */
+internal fun searchMatches(text: String, query: String): List<IntRange> {
+    if (query.isBlank()) return emptyList()
+    val found = mutableListOf<IntRange>()
+    var at = text.indexOf(query, 0, ignoreCase = true)
+    while (at >= 0) {
+        found += at until at + query.length
+        at = text.indexOf(query, at + query.length, ignoreCase = true)
+    }
+    return found
 }
 
 

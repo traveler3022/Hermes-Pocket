@@ -1,9 +1,7 @@
 package com.hermes.android.ui.screen
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -31,21 +29,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
@@ -68,7 +59,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,30 +74,18 @@ import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
 import com.hermes.android.ui.viewmodel.SessionItem
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
-import android.app.DownloadManager
 import android.content.Context
-import android.net.Uri
-import android.os.Environment
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.TextField
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -118,13 +96,6 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
-import com.hermes.android.ui.design.hxSoftShadow
-import com.hermes.android.ui.component.ContentBlock
-import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.viewmodel.DrawerRenameState
-import com.hermes.android.ui.viewmodel.PendingAttachment
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 
 // Extracted composables (same package, no import needed):
@@ -654,6 +625,18 @@ fun ChatScreen(
                                     onClick = {
                                         showOverflow = false
                                         showContext = true
+                                    },
+                                )
+                                // Checkpoints, file restore and undo. The sheet has been here
+                                // since July with nothing that opened it, and /rollback is left
+                                // out of the / list because this is where it lives.
+                                DropdownMenuItem(
+                                    text = { Text(t("Changes", "تغییرات")) },
+                                    leadingIcon = { Icon(HxIcons.Undo, contentDescription = null) },
+                                    enabled = uiState.activeSessionId != null,
+                                    onClick = {
+                                        showOverflow = false
+                                        showChanges = true
                                     },
                                 )
                             }
