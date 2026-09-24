@@ -35,12 +35,30 @@ class GuestFiles(private val rootfs: File) {
                 continue
             }
             if (++hops > MAX_LINK_HOPS) throw FileNotFoundException("Too many symlinks: $guestPath")
-            val target = Files.readSymbolicLink(candidate.toPath()).toString()
+            val target = guestTarget(Files.readSymbolicLink(candidate.toPath()).toString())
             if (target.startsWith("/")) resolved.clear()
             split(target).asReversed().forEach(pending::addFirst)
         }
         if (resolved.firstOrNull() in SystemMounts) throw FileNotFoundException("Not shared: $guestPath")
         return File(rootfs, resolved.joinToString("/"))
+    }
+
+    /** [rootfs] as a host path, as given and with symlinks resolved (/data/user/0 → /data/data). */
+    private val hostRoots: List<String> by lazy {
+        listOf(rootfs.absolutePath, runCatching { rootfs.canonicalPath }.getOrDefault(rootfs.absolutePath)).distinct()
+    }
+
+    /**
+     * proot's link2symlink (every hard link in the guest: git objects, uv) writes host paths
+     * into its links, which the guest sees without the rootfs prefix. Read as guest paths they
+     * led nowhere, so such files were missing from the Files app.
+     */
+    private fun guestTarget(target: String): String {
+        for (root in hostRoots) {
+            if (target == root) return ROOT
+            if (target.startsWith("$root/")) return target.substring(root.length)
+        }
+        return target
     }
 
     fun exists(guestPath: String): Boolean = hostFile(guestPath).exists()

@@ -203,7 +203,7 @@ class HermesGatewayService : Service() {
             is RuntimeState.NotDetected,
             is RuntimeState.Error -> {
                 setStatus(tr("Checking the Hermes runtime…", "در حال بررسی محیط اجرای Hermes…"))
-                when (val detection = hermesRuntime.detect()) {
+                val detected = when (val detection = hermesRuntime.detect()) {
                     is DetectionResult.Missing -> {
                         setStatus(tr("Runtime setup required", "نیاز به راه‌اندازی محیط اجرا"))
                         throw IllegalStateException(detection.title)
@@ -212,9 +212,13 @@ class HermesGatewayService : Service() {
                         setStatus(tr("Runtime incompatible", "محیط اجرا سازگار نیست"))
                         throw IllegalStateException(detection.reason)
                     }
-                    is DetectionResult.Available -> Unit
+                    is DetectionResult.Available -> detection.info
                 }
-                if (hermesRuntime.state.value is RuntimeState.Installed) {
+                // From the detection, not hermesRuntime.state: the router's state is a flow
+                // derived on another thread that has not caught up with detect() yet. It still
+                // read NotDetected, so nearly every cold start failed here with "not installed
+                // yet" — and a start at boot, with no chat screen to dial, left Hermes down.
+                if (detected.hermesVersion != null) {
                     setStatus(tr("Starting Hermes…", "در حال روشن کردن Hermes…"))
                     hermesRuntime.startGateway()
                     return

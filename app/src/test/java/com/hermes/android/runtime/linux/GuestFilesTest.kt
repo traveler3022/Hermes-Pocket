@@ -33,6 +33,32 @@ class GuestFilesTest {
     }
 
     @Test
+    fun `a link2symlink link holding the host path resolves inside the rootfs`() {
+        // proot turns a hard link into symlinks to a hidden .l2s. file, by host path.
+        File(rootfs, "root/.l2s.notes0001").writeText("hello")
+        Files.createSymbolicLink(
+            File(rootfs, "root/notes.txt").toPath(),
+            File(rootfs.absolutePath, "root/.l2s.notes0001").toPath(),
+        )
+        assertEquals("hello", files.hostFile("/root/notes.txt").readText())
+        assertEquals(listOf("notes.txt"), files.list("/root"))
+    }
+
+    @Test
+    fun `a link2symlink link through the canonical host path resolves too`() {
+        // Android hands out /data/user/0/… while proot writes the resolved /data/data/… path.
+        val alias = File(tmp.root, "alias")
+        Files.createSymbolicLink(alias.toPath(), tmp.root.toPath())
+        val viaAlias = GuestFiles(File(alias, "rootfs"))
+        File(rootfs, "root/.l2s.a0001").writeText("x")
+        Files.createSymbolicLink(
+            File(rootfs, "root/a").toPath(),
+            File(rootfs.canonicalPath, "root/.l2s.a0001").toPath(),
+        )
+        assertEquals("x", viaAlias.hostFile("/root/a").readText())
+    }
+
+    @Test
     fun `relative symlink resolves against its own directory`() {
         Files.createSymbolicLink(File(rootfs, "root/bb").toPath(), File("../bin/busybox").toPath())
         assertEquals(File(rootfs, "bin/busybox"), files.hostFile("/root/bb"))
