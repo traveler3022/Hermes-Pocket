@@ -232,28 +232,30 @@ class RuntimeViewModel @Inject constructor(
     }
 
     fun startInstall() {
+        // The Install button stays up until the runtime reports Installing, and the
+        // Termux preflight probe takes a while: a second tap started a second install.
+        if (_installing.value) return
+        _installing.value = true
         viewModelScope.launch {
             _errorMessage.value = null
-
-            // Preflight gate: verify every prerequisite (Termux installed,
-            // allow-external-apps enabled, enough storage) BEFORE starting, so
-            // the install can't die halfway on a missing precondition. Show the
-            // fix instead of a corrupted partial install.
-            when (val prereq = runtimeManager.runtime.checkInstallPrerequisites()) {
-                is PrerequisiteResult.Blocked -> {
-                    _errorMessage.value = "${prereq.title}\n\n${prereq.instructions}"
-                    return@launch
-                }
-                PrerequisiteResult.Ready -> Unit
-            }
-
-            _installing.value = true
 
             val emitter = ProgressEmitter { progress ->
                 Timber.d("[Runtime] Progress: ${progress.stage} — ${progress.message}")
             }
 
             try {
+                // Preflight gate: verify every prerequisite (Termux installed,
+                // allow-external-apps enabled, enough storage) BEFORE starting, so
+                // the install can't die halfway on a missing precondition. Show the
+                // fix instead of a corrupted partial install.
+                when (val prereq = runtimeManager.runtime.checkInstallPrerequisites()) {
+                    is PrerequisiteResult.Blocked -> {
+                        _errorMessage.value = "${prereq.title}\n\n${prereq.instructions}"
+                        return@launch
+                    }
+                    PrerequisiteResult.Ready -> Unit
+                }
+
                 val result = runtimeManager.runtime.install(emitter)
                 when (result) {
                     is InstallResult.Success -> {

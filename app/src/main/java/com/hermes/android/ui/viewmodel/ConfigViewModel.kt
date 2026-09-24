@@ -1141,19 +1141,7 @@ class ConfigViewModel @Inject constructor(
      * See [pythonStdinCommand] for why the script isn't sent as `-c` or a
      * heredoc (both are rejected with 4005).
      */
-    private suspend fun execPython(script: String): String {
-        val result = gatewayClient.request(GatewayMethods.SHELL_EXEC, buildJsonObject {
-            put("command", pythonStdinCommand(script))
-        }.toMap())
-        val obj = result as? JsonObject
-        val code = (obj?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: -1
-        val stdout = (obj?.get("stdout") as? JsonPrimitive)?.contentOrNull ?: ""
-        if (code != 0) {
-            val stderr = (obj?.get("stderr") as? JsonPrimitive)?.contentOrNull ?: "unknown error"
-            throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: stderr)
-        }
-        return stdout.trim()
-    }
+    private suspend fun execPython(script: String): String = gatewayClient.execPython(script).trim()
 
     // ── UI actions ────────────────────────────────────────────────────────
 

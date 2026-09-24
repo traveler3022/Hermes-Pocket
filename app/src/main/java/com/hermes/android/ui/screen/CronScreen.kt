@@ -431,7 +431,7 @@ private fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
 private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = null) {
     var name by remember(existingJob) { mutableStateOf(existingJob?.name ?: "") }
     var pick by remember(existingJob) { mutableStateOf(parseCron(existingJob?.schedule)) }
-    var prompt by remember(existingJob) { mutableStateOf(existingJob?.promptPreview ?: "") }
+    var prompt by remember(existingJob) { mutableStateOf(existingJob?.let { it.fullPrompt ?: it.promptPreview } ?: "") }
     val schedule = pick.toCron()
     val isEdit = existingJob != null
     val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog

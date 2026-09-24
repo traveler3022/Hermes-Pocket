@@ -92,13 +92,6 @@ class CronViewModel @Inject constructor(
     fun createJob(name: String, schedule: String, prompt: String) {
         viewModelScope.launch {
             try {
-                // server.py:12185: action="add", params: name, schedule, prompt
-                val params = buildJsonObject {
-                    put("action", "add")
-                    put("name", name)
-                    put("schedule", schedule)
-                    put("prompt", prompt)
-                }
                 addJob(name, schedule, prompt)
                 Timber.i("[Cron] Job created: $name")
                 _uiState.value = _uiState.value.copy(showCreateDialog = false)
@@ -157,8 +150,45 @@ class CronViewModel @Inject constructor(
         return result
     }
 
+    /**
+     * Open the editor with the job's full prompt. The list only carries
+     * `prompt_preview` — the first 100 characters plus "..." — and the editor
+     * used to start from that, so saving any edit (even just the schedule)
+     * replaced a longer prompt with its truncated preview for good. There is
+     * no RPC for the full prompt; it is read from the cron store instead, and
+     * when that fails the editor stays closed rather than truncate the job.
+     */
     fun startEditJob(job: CronJob) {
-        _uiState.value = _uiState.value.copy(editingJob = job)
+        if (!job.promptPreview.endsWith("...")) {
+            _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = job.promptPreview))
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val out = gatewayClient.execPython(
+                    """
+                    import base64, json, pathlib
+                    jid = base64.b64decode('${b64(job.id)}').decode()
+                    p = pathlib.Path.home() / '.hermes' / 'cron' / 'jobs.json'
+                    data = json.loads(p.read_text(encoding='utf-8-sig'), strict=False) if p.exists() else {}
+                    jobs = data.get('jobs', []) if isinstance(data, dict) else data
+                    job = next((j for j in jobs or [] if isinstance(j, dict) and str(j.get('id')) == jid), None)
+                    if job is None:
+                        raise SystemExit('job not found in ~/.hermes/cron/jobs.json')
+                    print(json.dumps({'prompt': str(job.get('prompt') or '')}))
+                    """.trimIndent()
+                )
+                val prompt = ((kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject)
+                    ?.get("prompt") as? JsonPrimitive)?.contentOrNull
+                    ?: throw IllegalStateException("no prompt in the cron store")
+                _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = prompt))
+            } catch (e: Exception) {
+                Timber.e(e, "[Cron] Could not read the full prompt of ${job.id}")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Can't edit: couldn't read the full prompt (${e.message})",
+                )
+            }
+        }
     }
 
     fun hideEditDialog() {
@@ -170,11 +200,11 @@ class CronViewModel @Inject constructor(
             try {
                 // server.py:12199: action in {"remove", "pause", "resume"}
                 val action = if (enabled) "resume" else "pause"
-                val params = buildJsonObject {
+                // manage(): a refusal comes back as {"error": …} inside a success reply.
+                manage(buildJsonObject {
                     put("action", action)
                     put("name", jobId)
-                }
-                gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap())
+                })
                 Timber.i("[Cron] Job $jobId -> $action")
                 _uiState.value = _uiState.value.copy(
                     jobs = _uiState.value.jobs.map {
@@ -183,6 +213,7 @@ class CronViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 Timber.e(e, "[Cron] Toggle failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to ${if (enabled) "resume" else "pause"} job: ${e.message}")
             }
         }
     }
@@ -191,15 +222,15 @@ class CronViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // server.py:12199: action="remove", param name=job_id
-                val params = buildJsonObject {
+                manage(buildJsonObject {
                     put("action", "remove")
                     put("name", jobId)
-                }
-                gatewayClient.request(GatewayMethods.CRON_MANAGE, params.toMap())
+                })
                 Timber.i("[Cron] Job removed: $jobId")
                 loadJobs()
             } catch (e: Exception) {
                 Timber.e(e, "[Cron] Remove failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to delete job: ${e.message}")
             }
         }
     }
@@ -235,4 +266,6 @@ data class CronJob(
     val nextRunAt: String?,
     val lastStatus: String?,
     val state: String,
+    /** The whole prompt, set only on the job handed to the editor. */
+    val fullPrompt: String? = null,
 )

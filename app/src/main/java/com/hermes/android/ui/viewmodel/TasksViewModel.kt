@@ -194,19 +194,23 @@ class TasksViewModel @Inject constructor(
             )
             try {
                 val entries = repository.transcript(sessionId)
+                // Closed, or another task opened, while this one loaded: a late
+                // answer used to pop the closed sheet back open.
+                if (_uiState.value.openResult?.sessionId != sessionId) return@launch
                 _uiState.value = _uiState.value.copy(
                     openResult = ResultSheet(sessionId, title, entries),
                     isLoadingResult = false,
                 )
             } catch (e: Exception) {
                 Timber.w(e, "[Tasks] transcript failed")
+                if (_uiState.value.openResult?.sessionId != sessionId) return@launch
                 _uiState.value = _uiState.value.copy(isLoadingResult = false, error = e.message)
             }
         }
     }
 
     fun closeResult() {
-        _uiState.value = _uiState.value.copy(openResult = null)
+        _uiState.value = _uiState.value.copy(openResult = null, isLoadingResult = false)
     }
 
     fun interrupt(sessionId: String) {

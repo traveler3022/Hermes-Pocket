@@ -245,20 +245,6 @@ class SkillsViewModel @Inject constructor(
             return None
     """.trimIndent()
 
-    /** Run [script] through shell.exec; stdout, or throws with stderr's last line. */
-    private suspend fun runPython(script: String): String {
-        val result = gatewayClient.request(
-            GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive(pythonStdinCommand(script))),
-        ) as? JsonObject
-        val code = (result?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: -1
-        if (code != 0) {
-            val stderr = (result?.get("stderr") as? JsonPrimitive)?.contentOrNull.orEmpty()
-            throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: "exit $code")
-        }
-        return (result?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
-    }
-
     private fun b64Utf8(s: String): String =
         Base64.encodeToString(s.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 
@@ -280,7 +266,7 @@ class SkillsViewModel @Inject constructor(
                 isLoadingSkillContent = true,
             )
             try {
-                val content = runPython(
+                val content = gatewayClient.execPython(
                     findSkillPython + "\n" +
                         "p = find(base64.b64decode('${b64Utf8(name)}').decode())\n" +
                         "print(p.read_text(encoding='utf-8') if p else '', end='')\n"
@@ -317,7 +303,7 @@ class SkillsViewModel @Inject constructor(
         val editing = _uiState.value.editingSkillOriginalName
         viewModelScope.launch {
             try {
-                runPython(
+                gatewayClient.execPython(
                     findSkillPython + "\n" +
                         "name = base64.b64decode('${b64Utf8(editing ?: name.trim())}').decode()\n" +
                         "content = base64.b64decode('${b64Utf8(content)}').decode()\n" +
@@ -364,7 +350,7 @@ class SkillsViewModel @Inject constructor(
         val slug = safeSkillSlug(name)
         viewModelScope.launch {
             try {
-                val removed = runPython(
+                val removed = gatewayClient.execPython(
                     findSkillPython + "\n" +
                         "p = find(base64.b64decode('${b64Utf8(name)}').decode())\n" +
                         "gone = False\n" +

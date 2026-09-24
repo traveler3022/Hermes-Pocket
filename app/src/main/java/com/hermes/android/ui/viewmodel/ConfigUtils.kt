@@ -1,6 +1,11 @@
 package com.hermes.android.ui.viewmodel
 
 import android.util.Base64
+import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.GatewayMethods
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Base64 (no-wrap) encoding for smuggling arbitrary values into embedded
@@ -34,3 +39,21 @@ fun safeSlug(s: String): String =
  */
 fun pythonStdinCommand(script: String): String =
     "printf %s '${b64(script)}' | base64 -d | python3 -"
+
+/**
+ * Run [script] on the server ([pythonStdinCommand] through shell.exec) and
+ * return its stdout. Throws with stderr's last line when it exits non-zero,
+ * so a failed write reports its cause instead of passing for success.
+ */
+suspend fun GatewayClient.execPython(script: String): String {
+    val result = request(
+        GatewayMethods.SHELL_EXEC,
+        mapOf("command" to JsonPrimitive(pythonStdinCommand(script))),
+    ) as? JsonObject
+    val code = (result?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: -1
+    if (code != 0) {
+        val stderr = (result?.get("stderr") as? JsonPrimitive)?.contentOrNull.orEmpty()
+        throw IllegalStateException(stderr.lines().lastOrNull { it.isNotBlank() } ?: "exit $code")
+    }
+    return (result?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
+}
