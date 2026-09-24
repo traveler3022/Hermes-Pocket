@@ -124,6 +124,28 @@ class SessionHistoryShapeTest {
     }
 
     @Test
+    fun `a tool row with only its summary shows the summary`() = runTest {
+        val history = buildJsonObject {
+            put("messages", buildJsonArray {
+                add(buildJsonObject { put("role", "tool"); put("name", "terminal"); put("context", "ls -la") })
+            })
+        }
+
+        assertEquals("ls -la", load(history).messages.filterIsInstance<ChatMessage.ToolCall>().single().argsText)
+    }
+
+    @Test
+    fun `reasoning stored as reasoning_content still shows`() = runTest {
+        val history = buildJsonObject {
+            put("messages", buildJsonArray {
+                add(buildJsonObject { put("role", "assistant"); put("text", "Hi."); put("reasoning_content", "greet back") })
+            })
+        }
+
+        assertEquals("greet back", load(history).messages.filterIsInstance<ChatMessage.Assistant>().single().reasoning)
+    }
+
+    @Test
     fun `nothing from history is ever still streaming`() = runTest {
         val messages = load(serverHistory()).messages.filterIsInstance<ChatMessage.Assistant>()
 

@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -118,6 +119,23 @@ class ChatTurnEventsTest {
         gateway.eventFlow.emit(GatewayEvent.MessageComplete("live-1", "Done.", null, null, null))
         assertEquals("", vm.uiState.value.thinkingStatus)
         assertEquals("step one", vm.replies().single().reasoning)
+    }
+
+    @Test
+    fun `a sub-agent is one card, from spawn to its result`() = runTest(main) {
+        val vm = viewModel()
+        fun frame(stage: String, vararg fields: Pair<String, String>) = GatewayEvent.SubagentEvent(
+            "live-1", stage, mapOf("subagent_id" to JsonPrimitive("sa-1")) + fields.associate { (k, v) -> k to JsonPrimitive(v) },
+        )
+
+        gateway.eventFlow.emit(frame("spawn_requested", "goal" to "read the logs"))
+        gateway.eventFlow.emit(frame("start", "goal" to "read the logs"))
+        gateway.eventFlow.emit(frame("thinking", "text" to "opening app.log"))
+        gateway.eventFlow.emit(frame("complete", "summary" to "3 errors found"))
+
+        val card = vm.uiState.value.messages.filterIsInstance<ChatMessage.SubagentCard>().single()
+        assertTrue(card.isComplete)
+        assertEquals("3 errors found", card.text)
     }
 
     @Test

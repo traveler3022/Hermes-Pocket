@@ -367,14 +367,18 @@ internal class ChatSessionDelegate(
                     "assistant" -> ChatMessage.Assistant(
                         id = id, timestamp = ts, text = content,
                         isStreaming = false,
-                        reasoning = msg["reasoning"]?.let { (it as? JsonPrimitive)?.contentOrNull },
+                        // Providers store it under either name (tui_gateway passes both through).
+                        reasoning = REASONING_KEYS.firstNotNullOfOrNull { key ->
+                            (msg[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+                        },
                     )
                     "tool" -> ChatMessage.ToolCall(
                         id = id, timestamp = ts,
                         toolName = msg["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "tool",
                         // `args` is an object here, as in tool.start: read as a string it
                         // was null and every tool card from history had no arguments.
-                        argsText = (msg["args_text"] ?: msg["args"]).asText(),
+                        // Older gateways send only `context`, the one-line summary (the command, the path).
+                        argsText = (msg["args_text"] ?: msg["args"]).asText() ?: msg["context"].asText(),
                         resultText = msg["result"].asText() ?: content,
                         error = msg["error"].asText(),
                         isRunning = false, durationS = null,
@@ -389,6 +393,10 @@ internal class ChatSessionDelegate(
     }
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
+
+    private companion object {
+        val REASONING_KEYS = listOf("reasoning", "reasoning_content")
+    }
 }
 
 /**

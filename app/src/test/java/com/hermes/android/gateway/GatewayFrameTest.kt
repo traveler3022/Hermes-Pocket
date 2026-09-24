@@ -165,6 +165,19 @@ class GatewayFrameTest {
     }
 
     @Test
+    fun `a sub-agent frame arrives as its bare stage with its payload`() = runTest {
+        val got = collect(this)
+        receive(frame("subagent.start", payload = buildJsonObject {
+            put("subagent_id", "sa-1")
+            put("goal", "read the logs")
+        }))
+
+        val event = got.single() as GatewayEvent.SubagentEvent
+        assertEquals("start", event.subagentType)
+        assertEquals("sa-1", event.payload["subagent_id"].asText())
+    }
+
+    @Test
     fun `request cancel names the request it withdraws`() = runTest {
         val got = collect(this)
         receive(frame("request.cancel", payload = buildJsonObject {

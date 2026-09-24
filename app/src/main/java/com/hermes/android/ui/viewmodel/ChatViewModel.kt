@@ -1596,45 +1596,7 @@ class ChatViewModel @Inject constructor(
 
             is GatewayEvent.RequestCancel -> onRequestCancel(event.requestId)
 
-            is GatewayEvent.SubagentEvent -> {
-                when (event.subagentType) {
-                    "spawn_requested", "start" -> {
-                        val subagentId = event.payload["id"].asText()
-                            ?: "subagent-${UUID.randomUUID()}"
-                        val msg = ChatMessage.SubagentCard(
-                            id = subagentId,
-                            timestamp = System.currentTimeMillis(),
-                            subagentType = event.subagentType,
-                            text = event.payload["description"].asText() ?: "Sub-agent",
-                        )
-                        _uiState.update { it.copy(messages = _uiState.value.messages + msg) }
-                    }
-                    "complete" -> {
-                        val subagentId = event.payload["id"].asText()
-                        val text = event.payload["text"].asText() ?: ""
-                        _uiState.update { it.copy(
-                            messages = _uiState.value.messages.updateFirst({ msg ->
-                                msg is ChatMessage.SubagentCard && !msg.isComplete &&
-                                    (subagentId == null || msg.id == subagentId)
-                            }) { msg ->
-                                (msg as ChatMessage.SubagentCard).copy(isComplete = true, text = text.ifEmpty { msg.text })
-                            }
-                        ) }
-                    }
-                    "thinking", "progress" -> {
-                        val subagentId = event.payload["id"].asText()
-                        val text = event.payload["text"].asText() ?: return
-                        _uiState.update { it.copy(
-                            messages = _uiState.value.messages.updateFirst({ msg ->
-                                msg is ChatMessage.SubagentCard && !msg.isComplete &&
-                                    (subagentId == null || msg.id == subagentId)
-                            }) { msg ->
-                                (msg as ChatMessage.SubagentCard).copy(text = text)
-                            }
-                        ) }
-                    }
-                }
-            }
+            is GatewayEvent.SubagentEvent -> onSubagentEvent(event)
 
             is GatewayEvent.NotificationShow -> {
                 val notifUi = NotificationUi(
@@ -1719,6 +1681,55 @@ class ChatViewModel @Inject constructor(
 
             else -> {
                 Timber.d("[Chat] Unhandled event: ${event::class.simpleName}")
+            }
+        }
+    }
+
+    /**
+     * A delegated child's progress (tools/delegate_tool.py, relayed by tui_gateway): every
+     * frame names the child by `subagent_id` and carries its `goal`; `text` is its latest
+     * line and `summary` its result. spawn_requested and start name the same child, so a
+     * card is updated in place rather than added twice.
+     */
+    private fun onSubagentEvent(event: GatewayEvent.SubagentEvent) {
+        val p = event.payload
+        val cardId = (p["subagent_id"] ?: p["id"]).asText()?.takeIf { it.isNotBlank() }?.let { "subagent-$it" }
+        fun isOpenCard(msg: ChatMessage) =
+            msg is ChatMessage.SubagentCard && !msg.isComplete && (cardId == null || msg.id == cardId)
+        when (event.subagentType) {
+            "spawn_requested", "start" -> {
+                val goal = (p["goal"] ?: p["description"] ?: p["text"]).asText()
+                    ?.takeIf { it.isNotBlank() } ?: "Sub-agent"
+                _uiState.update { state ->
+                    if (cardId != null && state.messages.any { it.id == cardId }) {
+                        state.copy(messages = state.messages.updateFirst({ it.id == cardId }) { msg ->
+                            (msg as ChatMessage.SubagentCard).copy(subagentType = event.subagentType, text = goal)
+                        })
+                    } else {
+                        state.copy(messages = state.messages + ChatMessage.SubagentCard(
+                            id = cardId ?: "subagent-${UUID.randomUUID()}",
+                            timestamp = System.currentTimeMillis(),
+                            subagentType = event.subagentType,
+                            text = goal,
+                        ))
+                    }
+                }
+            }
+            "complete" -> {
+                val result = (p["summary"] ?: p["text"]).asText().orEmpty()
+                _uiState.update { state ->
+                    state.copy(messages = state.messages.updateFirst(::isOpenCard) { msg ->
+                        (msg as ChatMessage.SubagentCard).copy(isComplete = true, text = result.ifEmpty { msg.text })
+                    })
+                }
+            }
+            "thinking", "progress", "tool" -> {
+                val line = (p["text"] ?: p["tool_preview"]).asText()?.takeIf { it.isNotBlank() } ?: return
+                _uiState.update { state ->
+                    state.copy(messages = state.messages.updateFirst(::isOpenCard) { msg ->
+                        (msg as ChatMessage.SubagentCard).copy(text = line)
+                    })
+                }
             }
         }
     }

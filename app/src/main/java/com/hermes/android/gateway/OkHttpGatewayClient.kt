@@ -1022,7 +1022,9 @@ class OkHttpGatewayClient @Inject constructor(
             )
             "subagent.spawn_requested", "subagent.start", "subagent.thinking",
             "subagent.tool", "subagent.progress", "subagent.complete" -> GatewayEvent.SubagentEvent(
-                sid, eventType, p.toMap(),
+                // The chat matches on the bare stage (start, complete…); with the
+                // prefix left on, no sub-agent card ever appeared.
+                sid, eventType.removePrefix("subagent."), p.toMap(),
             )
             "background.complete" -> GatewayEvent.BackgroundComplete(
                 sid,
