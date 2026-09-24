@@ -43,6 +43,14 @@ class MainActivity : ComponentActivity() {
     /** Latest notification tap that reached the running activity (onNewIntent). */
     private val notificationOpen = mutableStateOf<NotificationOpen?>(null)
 
+    /**
+     * Text shared into the app, until the chat has taken it. Read from the launch
+     * intent on every onCreate and handed to every chat screen created, it pasted
+     * itself over the composer again after a rotation or when a chat was opened
+     * from Tasks.
+     */
+    private val pendingShare = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -60,7 +68,7 @@ class MainActivity : ComponentActivity() {
         requestBatteryOptimizationExemption()
         requestTermuxPermissionWhenSelected()
 
-        val sharedText = extractSharedText(intent)
+        pendingShare.value = if (savedInstanceState?.getBoolean(KEY_SHARE_TAKEN) == true) null else extractSharedText(intent)
         // Set when the user taps an agent-activity notification ("task done"):
         // opens the app straight into the session the result belongs to.
         val notificationSessionId = intent?.getStringExtra(
@@ -85,7 +93,8 @@ class MainActivity : ComponentActivity() {
                     ) {
                         HermesNavHost(
                             startInSetup = !setupState.isComplete,
-                            sharedText = sharedText,
+                            sharedText = pendingShare.value,
+                            onSharedTextTaken = { pendingShare.value = null },
                             notificationSessionId = notificationSessionId,
                             notificationOpen = notificationOpen.value,
                             themeModeState = themeModeState,
@@ -110,6 +119,11 @@ class MainActivity : ComponentActivity() {
             ?.let { notificationOpen.value = NotificationOpen(it) }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_SHARE_TAKEN, pendingShare.value == null)
+    }
+
     override fun onStart() {
         super.onStart()
         // Foreground = the strongest reconnect signal there is. onStartCommand
@@ -121,21 +135,6 @@ class MainActivity : ComponentActivity() {
         com.hermes.android.service.HermesGatewayService.start(this)
     }
 
-    /**
-     * Ask, at most once per install, to be exempt from battery optimization.
-     *
-     * This used to run unconditionally in [onCreate], so a user who declined
-     * got the same system dialog thrown in their face on every single app
-     * launch, forever, with no way to make it stop short of granting it. That
-     * is the kind of nagging that gets an app uninstalled — and it fired before
-     * the first frame was even drawn, so a brand-new user's first experience of
-     * Hermes was a permission dialog for an app they had not seen yet.
-     *
-     * Now: asked once, remembered, and never again. The exemption is a
-     * nice-to-have for keeping the gateway socket alive in Doze, not a
-     * requirement — the reconnect loop and the network callback already recover
-     * from being killed.
-     */
     /**
      * Termux's RUN_COMMAND permission only matters to the Termux runtime; the built-in Linux
      * runtime never talks to Termux, so ask only while Termux is the selected runtime —
@@ -154,6 +153,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Ask, at most once per install, to be exempt from battery optimization.
+     *
+     * This used to run unconditionally in [onCreate], so a user who declined
+     * got the same system dialog thrown in their face on every single app
+     * launch, forever, with no way to make it stop short of granting it. That
+     * is the kind of nagging that gets an app uninstalled — and it fired before
+     * the first frame was even drawn, so a brand-new user's first experience of
+     * Hermes was a permission dialog for an app they had not seen yet.
+     *
+     * Now: asked once, remembered, and never again. The exemption is a
+     * nice-to-have for keeping the gateway socket alive in Doze, not a
+     * requirement — the reconnect loop and the network callback already recover
+     * from being killed.
+     */
     @Suppress("BatteryLife")
     private fun requestBatteryOptimizationExemption() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -182,6 +196,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val PREFS_NAME = "hermes_prefs"
         const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
+        const val KEY_SHARE_TAKEN = "share_taken"
         const val TERMUX_RUN_COMMAND = "com.termux.permission.RUN_COMMAND"
     }
 }
@@ -204,6 +219,7 @@ class MainActivity : ComponentActivity() {
 private fun HermesNavHost(
     startInSetup: Boolean = false,
     sharedText: String? = null,
+    onSharedTextTaken: () -> Unit = {},
     notificationSessionId: String? = null,
     notificationOpen: NotificationOpen? = null,
     themeModeState: ThemeModeState? = null,
@@ -248,6 +264,7 @@ private fun HermesNavHost(
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToCron = { navController.navigate("cron") },
                 sharedText = shared,
+                onSharedTextTaken = onSharedTextTaken,
                 resumeSessionId = resumeId,
                 themeModeState = themeModeState,
             )

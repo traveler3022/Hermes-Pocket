@@ -144,6 +144,7 @@ fun ChatScreen(
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     sharedText: String? = null,
+    onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
@@ -394,6 +395,7 @@ fun ChatScreen(
     LaunchedEffect(sharedText) {
         if (!sharedText.isNullOrBlank()) {
             viewModel.updateInputText(sharedText)
+            onSharedTextTaken()
         }
     }
 
