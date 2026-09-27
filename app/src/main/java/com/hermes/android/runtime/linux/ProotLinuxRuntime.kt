@@ -447,15 +447,38 @@ class ProotLinuxRuntime @Inject constructor(
         private const val MIN_FREE_BYTES = 1_000_000_000L
         private val AnsiEscape = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 
+        // A dropped connection used to fail the whole install on its first error. Network steps
+        // now try again a few times, and a Retry skips everything already in place.
+        private val RETRY_FN = """
+            retry() {
+                n=1
+                until "${'$'}@"; do
+                    [ ${'$'}n -ge 5 ] && return 1
+                    echo "Network step failed (try ${'$'}n of 5) — trying again in ${'$'}((n * 3))s…"
+                    sleep ${'$'}((n * 3))
+                    n=${'$'}((n + 1))
+                done
+            }
+            # /etc/apk/cache keeps every downloaded package, so a retry only fetches what is missing.
+            apk_add() {
+                apk info -e "${'$'}@" >/dev/null 2>&1 && { echo "Already installed: ${'$'}*"; return 0; }
+                mkdir -p /etc/apk/cache
+                retry apk add --no-chown "${'$'}@"
+                rm -f /etc/apk/cache/*.apk
+            }
+        """.trimIndent()
+
         private val PACKAGES_SCRIPT = """
             set -e
-            apk add --no-cache --no-chown python3 git curl ca-certificates bash procps-ng libstdc++ libgcc
+            $RETRY_FN
+            apk_add python3 git curl ca-certificates bash procps-ng libstdc++ libgcc
         """.trimIndent()
         private const val PACKAGES_VERIFY = "python3 --version && git --version && curl --version && bash --version"
 
         private val NODE_SCRIPT = """
             set -e
-            apk add --no-cache --no-chown nodejs npm
+            $RETRY_FN
+            apk_add nodejs npm
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
@@ -567,11 +590,20 @@ class ProotLinuxRuntime @Inject constructor(
         // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
         private val HERMES_INSTALL_SCRIPT = """
             set -e
+            $RETRY_FN
+            # uv's own retries and read timeout, raised for slow connections that drop now and then.
+            export UV_HTTP_RETRIES=10 UV_HTTP_TIMEOUT=120
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
             mkdir -p "${'$'}HERMES_HOME"/bin "${'$'}HERMES_HOME"/logs
             if [ ! -x "${'$'}HERMES_HOME/bin/uv" ]; then
-                curl -LsSf --retry 3 https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${'$'}HERMES_HOME/bin" UV_NO_MODIFY_PATH=1 sh
+                # Not `curl | sh`: the pipe reports sh's success even when the download failed.
+                get_uv() {
+                    curl -LsSf --retry 3 -o /tmp/uv-install.sh https://astral.sh/uv/install.sh &&
+                        env UV_INSTALL_DIR="${'$'}HERMES_HOME/bin" UV_NO_MODIFY_PATH=1 sh /tmp/uv-install.sh &&
+                        [ -x "${'$'}HERMES_HOME/bin/uv" ]
+                }
+                retry get_uv
             fi
             UV="${'$'}HERMES_HOME/bin/uv"
             # Real files for git objects, not link2symlink's absolute-path symlinks (see HERMES_UPDATE_SCRIPT).
@@ -582,8 +614,8 @@ class ProotLinuxRuntime @Inject constructor(
                     git -C "${'$'}REPO" pull --ff-only || echo "git pull failed — keeping existing checkout"
                 fi
             else
-                rm -rf "${'$'}REPO"
-                git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
+                clone() { rm -rf "${'$'}REPO"; git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"; }
+                retry clone
             fi
             cd "${'$'}REPO"
             # uv.lock only covers the Python in pm/lock.json (3.14 now) and every core dep carries a
@@ -592,12 +624,12 @@ class ProotLinuxRuntime @Inject constructor(
             PY=${'$'}(python3 -c "import json; v = json.load(open('pm/lock.json'))['packages']['python']['version']; print('.'.join(v.split('+')[0].split('.')[:2]))" 2>/dev/null || echo 3.14)
             export UV_PYTHON_INSTALL_DIR="${'$'}HERMES_HOME/python" UV_PYTHON_PREFERENCE=only-managed
             echo "Downloading Python ${'$'}PY…"
-            "${'$'}UV" python install --no-bin "${'$'}PY"
+            retry "${'$'}UV" python install --no-bin "${'$'}PY"
             export UV_PYTHON="${'$'}PY" UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
-            if ! "${'$'}UV" sync --locked --no-dev --extra web; then
+            if ! retry "${'$'}UV" sync --locked --no-dev --extra web; then
                 echo "uv.lock sync failed — falling back to resolving from PyPI"
                 [ -x venv/bin/python ] || "${'$'}UV" venv venv
-                "${'$'}UV" pip install --python venv/bin/python -e '.[web]'
+                retry "${'$'}UV" pip install --python venv/bin/python -e '.[web]'
             fi
             ln -sf "${'$'}REPO/venv/bin/hermes" /usr/local/bin/hermes
 
