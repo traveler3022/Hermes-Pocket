@@ -25,7 +25,8 @@ libvnc() { src libvncserver https://github.com/LibVNC/libvncserver/archive/refs/
   cmake --build b -j"$J" && cmake --install b; }
 x11vnc() { src x11vnc https://github.com/LibVNC/x11vnc/archive/refs/tags/0.9.17.tar.gz
   autoreconf -fi
-  PKG_CONFIG_PATH=/opt/vnc/lib/pkgconfig:/opt/vnc/lib64/pkgconfig ./configure -q --prefix=/usr/local
+  # libvncserver is static, so its own libraries must be named at link time.
+  LIBS="-lz -ljpeg -lpng -lssl -lcrypto -lpthread" PKG_CONFIG_PATH=/opt/vnc/lib/pkgconfig:/opt/vnc/lib64/pkgconfig ./configure -q --prefix=/usr/local
   make -j"$J" && make install DESTDIR=$OUT; }
 openbox() { src openbox https://github.com/Mikachu/openbox/archive/refs/tags/release-3.6.1.tar.gz
   ./bootstrap
