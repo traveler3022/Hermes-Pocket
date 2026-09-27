@@ -30,6 +30,45 @@ fun safeSlug(s: String): String =
     s.filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
 
 /**
+ * Hermes replaced PyYAML with ruamel.yaml, so `import yaml` fails on a current
+ * install ("No module named 'yaml'"). This stands in a `yaml` module built on
+ * ruamel with Hermes' own policy (hermes_yaml.py: YAML 1.1, so `off` stays a
+ * boolean on read and gets quoted as a string on write). Older installs that
+ * still have PyYAML keep using it.
+ */
+private val YAML_COMPAT = """
+    try:
+        import yaml
+    except ImportError:
+        import io, sys, types
+        from ruamel.yaml import YAML
+        from ruamel.yaml.resolver import VersionedResolver
+        class _Yaml11Resolver(VersionedResolver):
+            @property
+            def processing_version(self):
+                return (1, 1)
+        def _safe_load(stream):
+            y = YAML(typ='safe', pure=True)
+            y.version = (1, 1)
+            return y.load(stream if isinstance(stream, (str, bytes)) else stream.read())
+        def _dump(data, stream=None, default_flow_style=False, allow_unicode=True, sort_keys=True, **_):
+            y = YAML(typ='safe', pure=True)
+            y.Resolver = _Yaml11Resolver
+            y.default_flow_style = default_flow_style
+            y.allow_unicode = allow_unicode
+            y.width = 2**31 - 1
+            y.sort_base_mapping_type_on_output = sort_keys
+            y.indent(mapping=2, sequence=4, offset=2)
+            out = stream if stream is not None else io.StringIO()
+            y.dump(data, out)
+            return None if stream is not None else out.getvalue()
+        yaml = types.ModuleType('yaml')
+        yaml.safe_load = _safe_load
+        yaml.dump = yaml.safe_dump = _dump
+        sys.modules['yaml'] = yaml
+""".trimIndent()
+
+/**
  * shell.exec command that runs [script] with `python3 -`.
  *
  * The gateway's safety filter answers 4005 for both `python3 -c` ("script
@@ -38,7 +77,7 @@ fun safeSlug(s: String): String =
  * python's stdin instead.
  */
 fun pythonStdinCommand(script: String): String =
-    "printf %s '${b64(script)}' | base64 -d | python3 -"
+    "printf %s '${b64(YAML_COMPAT + "\n" + script)}' | base64 -d | python3 -"
 
 /**
  * Run [script] on the server ([pythonStdinCommand] through shell.exec) and
