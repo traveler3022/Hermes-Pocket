@@ -150,6 +150,10 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
+    // Media3 — the in-app audio/video player
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+
     // Networking — WebSocket client to tui_gateway
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)

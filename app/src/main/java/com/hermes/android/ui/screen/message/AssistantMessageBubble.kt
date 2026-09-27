@@ -43,9 +43,11 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxAssistantMaxWidth
 import com.hermes.android.ui.component.ContentBlock
+import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -118,6 +120,7 @@ internal fun AssistantMessageBubble(
                                 when (block) {
                                     is ContentBlock.Image -> block.copy(url = resolveUrl(block.url))
                                     is ContentBlock.Video -> block.copy(url = resolveUrl(block.url))
+                                    is ContentBlock.Audio -> block.copy(url = resolveUrl(block.url))
                                     is ContentBlock.Html -> block.copy(url = resolveUrl(block.url))
                                     is ContentBlock.FileRef -> block.copy(url = resolveUrl(block.url))
                                     else -> block
@@ -156,20 +159,35 @@ internal fun AssistantMessageBubble(
                                     )
                                     is ContentBlock.Html -> HtmlBlockCard(
                                         url = block.url, name = block.name,
-                                        onOpenExternal = { openUrlExternally(assistantContext, block.url) },
+                                        onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                     )
                                     is ContentBlock.Video -> ArtifactCard(
                                         emoji = "\uD83C\uDFAC", name = block.name,
                                         actionLabel = t("Play", "پخش"),
-                                        onAction = { openUrlExternally(assistantContext, block.url) },
+                                        onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                         onDownload = { onDownloadFile(block.url, block.name) },
                                     )
-                                    is ContentBlock.FileRef -> ArtifactCard(
-                                        emoji = "\uD83D\uDCC4", name = block.name,
-                                        actionLabel = t("Download", "دانلود"),
-                                        onAction = { onDownloadFile(block.url, block.name) },
-                                        onDownload = null,
+                                    is ContentBlock.Audio -> ArtifactCard(
+                                        emoji = "\uD83C\uDFB5", name = block.name,
+                                        actionLabel = t("Play", "پخش"),
+                                        onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                        onDownload = { onDownloadFile(block.url, block.name) },
                                     )
+                                    is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
+                                        ArtifactCard(
+                                            emoji = "\uD83D\uDCC4", name = block.name,
+                                            actionLabel = t("Download", "دانلود"),
+                                            onAction = { onDownloadFile(block.url, block.name) },
+                                            onDownload = null,
+                                        )
+                                    } else {
+                                        ArtifactCard(
+                                            emoji = "\uD83D\uDCC4", name = block.name,
+                                            actionLabel = t("Open", "باز کردن"),
+                                            onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                            onDownload = { onDownloadFile(block.url, block.name) },
+                                        )
+                                    }
                                 }
                             }
                         }

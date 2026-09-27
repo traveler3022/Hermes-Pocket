@@ -12,8 +12,10 @@ package com.hermes.android.ui.component
  *
  *   Text    → markdown renderer          Image → AsyncImage (tap = fullscreen)
  *   Code    → monospace card + copy      Mermaid → WebView + mermaid.js
- *   Html    → open-in-browser card       Video → open-with-player card
- *   FileRef → download card
+ *   Html    → inline WebView card         Video/Audio → card opening the in-app player
+ *   FileRef → open (Markdown) or download card
+ *
+ * Which viewer a file gets is decided in one place, [fileKindOf].
  *
  * The parser is pure Kotlin (no Android imports) so it is unit-testable.
  */
@@ -24,8 +26,12 @@ sealed class ContentBlock {
     data class Mermaid(val code: String) : ContentBlock()
     data class Html(val url: String, val name: String) : ContentBlock()
     data class Video(val url: String, val name: String) : ContentBlock()
-    data class FileRef(val url: String, val name: String) : ContentBlock()
+    data class Audio(val url: String, val name: String) : ContentBlock()
+    data class FileRef(val url: String, val name: String, val kind: FileKind = FileKind.OTHER) : ContentBlock()
 }
+
+/** The viewer a file opens in (see FileViewerActivity). */
+enum class FileKind { IMAGE, VIDEO, AUDIO, HTML, MARKDOWN, OTHER }
 
 private val fenceRegex = Regex("```([A-Za-z0-9+_.-]*)[ \\t]*\\n([\\s\\S]*?)(?:```|$)")
 private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
@@ -49,12 +55,29 @@ private val bareMediaRegex = Regex(
     """(?<![\w/.~:-])(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.[A-Za-z0-9]{1,10}\b""",
 )
 
+// Hermes' own deliverable extensions (gateway/platforms/base.py MEDIA_DELIVERY_EXTS), longest first.
+private val mediaTagExts = listOf(
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg",
+    "mp4", "mov", "avi", "mkv", "webm", "3gp",
+    "mp3", "m2a", "wav", "ogg", "opus", "m4a", "flac",
+    "pdf", "docx", "doc", "odt", "rtf", "txt", "md", "epub",
+    "xlsx", "xls", "ods", "csv", "tsv", "json", "xml", "yaml", "yml",
+    "kmz", "kml", "geojson", "gpx",
+    "pptx", "ppt", "odp", "key",
+    "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "apk", "ipa",
+    "html", "htm",
+).sortedByDescending { it.length }.joinToString("|")
+
 // How Hermes' desktop chat delivers a file: "MEDIA:/root/out.pdf", often wrapped in quotes,
 // backticks or emphasis (gateway/platforms/base.py MEDIA_TAG_CLEANUP_RE). Any file type, with or
-// without an extension; the tag itself never shows as text.
+// without an extension; the tag itself never shows as text. A path ending in one of Hermes'
+// extensions may hold spaces, as Hermes itself reads it: "MEDIA:/root/Pruna - Nomen 3.mp3" was
+// cut at the first space into a card for "Pruna" (ENOENT) and a list item "Nomen 3.mp3".
 private val mediaTagRegex = Regex(
-    """[`"'*_]{0,3}MEDIA:\s*(?:`([^`\n]+)`|"([^"\n]+)"|'([^'\n]+)'|((?:~/|/)[^\s`"'<>*]+?))""" +
+    """[`"'*_]{0,3}MEDIA:\s*(?:`([^`\n]+)`|"([^"\n]+)"|'([^'\n]+)'|""" +
+        """((?:~/|/)[^\s`"'<>*]+?(?:[^\S\n]+[^\s`"'<>*]+?)*?\.(?:$mediaTagExts)|(?:~/|/)[^\s`"'<>*]+?))""" +
         """(?=[\s`"'*,;:)\]}]|MEDIA:|\.(?:\s|$)|$)[`"'*_]{0,3}""",
+    RegexOption.IGNORE_CASE,
 )
 
 private val nonFileExtensions = setOf(
@@ -65,16 +88,44 @@ private val imageExts = setOf(
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "heif", "tiff", "ico",
 )
 private val videoExts = setOf("mp4", "webm", "mov", "m4v", "mkv", "avi", "3gp")
-private val htmlExts = setOf("html", "htm")
+private val audioExts = setOf("mp3", "m2a", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "amr", "mid", "midi")
+private val htmlExts = setOf("html", "htm", "xhtml")
+private val markdownExts = setOf("md", "markdown")
+
+/**
+ * The one place that decides which viewer a file gets: by its MIME type when that says
+ * something, else by the extension of [name] (a file name, path or URL). A generic type
+ * such as application/octet-stream falls through to the extension.
+ */
+fun fileKindOf(name: String, mime: String? = null): FileKind {
+    val type = mime.orEmpty().substringBefore(';').trim().lowercase()
+    when {
+        type.startsWith("image/") -> return FileKind.IMAGE
+        type.startsWith("video/") -> return FileKind.VIDEO
+        type.startsWith("audio/") || type == "application/ogg" -> return FileKind.AUDIO
+        type == "text/html" || type == "application/xhtml+xml" -> return FileKind.HTML
+        type == "text/markdown" || type == "text/x-markdown" -> return FileKind.MARKDOWN
+    }
+    val ext = name.substringBefore('?').substringBefore('#').substringAfterLast('/')
+        .substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        in imageExts -> FileKind.IMAGE
+        in videoExts -> FileKind.VIDEO
+        in audioExts -> FileKind.AUDIO
+        in htmlExts -> FileKind.HTML
+        in markdownExts -> FileKind.MARKDOWN
+        else -> FileKind.OTHER
+    }
+}
 
 private fun classifyUrl(url: String, alt: String = ""): ContentBlock {
-    val ext = url.substringAfterLast('.', "").lowercase()
     val name = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }
-    return when (ext) {
-        in imageExts -> ContentBlock.Image(alt = name, url = url)
-        in videoExts -> ContentBlock.Video(url = url, name = name)
-        in htmlExts -> ContentBlock.Html(url = url, name = name)
-        else -> ContentBlock.FileRef(url = url, name = name)
+    return when (val kind = fileKindOf(url)) {
+        FileKind.IMAGE -> ContentBlock.Image(alt = name, url = url)
+        FileKind.VIDEO -> ContentBlock.Video(url = url, name = name)
+        FileKind.AUDIO -> ContentBlock.Audio(url = url, name = name)
+        FileKind.HTML -> ContentBlock.Html(url = url, name = name)
+        else -> ContentBlock.FileRef(url = url, name = name, kind = kind)
     }
 }
 

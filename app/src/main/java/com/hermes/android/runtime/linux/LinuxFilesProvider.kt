@@ -14,7 +14,6 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import timber.log.Timber
-import java.io.File
 import java.io.FileNotFoundException
 
 /** Shows the built-in Linux in Android's Files app and in every file picker. */
@@ -25,7 +24,7 @@ class LinuxFilesProvider : DocumentsProvider() {
 
     override fun onCreate(): Boolean {
         val context = context ?: return false
-        files = GuestFiles(File(context.filesDir, "linux/rootfs"))
+        files = GuestFiles(ProotEnvironment.rootfsDir(context))
         authority = authority(context)
         return true
     }
@@ -160,6 +159,13 @@ class LinuxFilesProvider : DocumentsProvider() {
         )
 
         fun authority(context: Context): String = "${context.packageName}.linux.documents"
+
+        /** Tells an open Files window that [guestDir] changed (e.g. a download landed in it). */
+        fun notifyChildrenChanged(context: Context, guestDir: String) {
+            context.contentResolver.notifyChange(
+                DocumentsContract.buildChildDocumentsUri(authority(context), guestDir), null, false,
+            )
+        }
 
         fun notifyRootsChanged(context: Context) {
             context.contentResolver.notifyChange(DocumentsContract.buildRootsUri(authority(context)), null, false)

@@ -21,7 +21,7 @@ class ProotEnvironment @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     val baseDir = File(context.filesDir, "linux")
-    val rootfsDir = File(baseDir, "rootfs")
+    val rootfsDir = ProotEnvironment.rootfsDir(context)
     private val hostLibDir = File(baseDir, "lib")
     private val hostTmpDir = File(baseDir, "tmp")
     private val fakeProcDir = File(baseDir, "proc")
@@ -196,6 +196,9 @@ class ProotEnvironment @Inject constructor(
     }
 
     companion object {
+        /** The built-in Linux's rootfs on the host; every other part of the app asks here. */
+        fun rootfsDir(context: Context): File = File(context.filesDir, "linux/rootfs")
+
         // A new name for the glibc rootfs: an Alpine one still on the phone counts as not installed,
         // so the next install replaces it (keeping /root, see RootfsInstaller.keepHome).
         const val READY_MARKER = ".hermes2-glibc-ready"

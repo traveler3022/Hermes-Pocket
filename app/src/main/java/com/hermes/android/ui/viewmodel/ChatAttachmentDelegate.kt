@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
+import com.hermes.android.data.DownloadStorage
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub
@@ -163,34 +164,16 @@ internal class ChatAttachmentDelegate(
         }
     }
 
+    private val downloadStorage = DownloadStorage(context)
+
     fun downloadFile(state: MutableStateFlow<ChatUiState>, url: String, filename: String) {
         scope.launch {
-            val derivedName = filename.ifBlank {
-                url.substringAfterLast('/').substringBefore('?')
-            }
-            val safeName = derivedName.ifBlank { "hermes_file" }
-                .let { name -> name.filter { it != '/' && it != '\\' } }
-                .ifBlank { "hermes_file" }
-                .let { if (!it.contains('.')) "$it.jpg" else it }
             try {
-                val bytes = gatewayClient.downloadFile(url)
-                val resolver = context.contentResolver
-                val values = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safeName)
-                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/Hermes")
-                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
-                }
-                val itemUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                    ?: error("Could not create download entry")
-                resolver.openOutputStream(itemUri)?.use { out -> out.write(bytes) }
-                    ?: error("Could not open output stream")
-                values.clear()
-                values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
-                resolver.update(itemUri, values, null, null)
-                Timber.i("[Chat] Downloaded $safeName (${bytes.size} bytes) -> Downloads/Hermes")
-                state.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to Downloads/Hermes: $safeName")) }
+                val savedAs = downloadStorage.save(url, filename) { gatewayClient.downloadFile(it) }
+                Timber.i("[Chat] Downloaded $url -> $savedAs")
+                state.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to $savedAs")) }
             } catch (e: Exception) {
-                Timber.e(e, "[Chat] Download failed: $safeName")
+                Timber.e(e, "[Chat] Download failed: $url")
                 state.update { it.copy(errorEvent = ErrorEvent.Error("Download failed: ${e.message}")) }
             }
         }

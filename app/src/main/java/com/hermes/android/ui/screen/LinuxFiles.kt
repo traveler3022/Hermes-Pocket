@@ -5,14 +5,14 @@ import android.content.Intent
 import android.provider.DocumentsContract
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
-import java.io.File
+import com.hermes.android.runtime.linux.ProotEnvironment
 
 /** Where Hermes works and leaves the files it makes: the gateway's working directory. */
 private const val HERMES_HOME_DIR = "/root"
 
 /** True once the built-in Linux is installed, so the Files app has something to show. */
 internal fun linuxFilesReady(context: Context): Boolean =
-    GuestFiles(File(context.filesDir, "linux/rootfs")).isReady
+    GuestFiles(ProotEnvironment.rootfsDir(context)).isReady
 
 /**
  * Opens Android's Files app on Hermes' home folder, with the rest of the Linux one level up.

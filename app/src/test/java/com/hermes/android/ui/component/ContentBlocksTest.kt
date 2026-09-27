@@ -173,4 +173,55 @@ class ContentBlocksTest {
         val blocks = parseContentBlocks("write `MEDIA:/root/x.png` to send a file")
         assertTrue(blocks.none { it is ContentBlock.Image })
     }
+
+    @Test
+    fun `unquoted MEDIA path with spaces is one audio file`() {
+        // The reply from the phone: the path was cut at "Pruna" and "- Nomen 3.mp3" became a list item.
+        val blocks = parseContentBlocks(
+            "**Pruna — «Nomen 3»**\nMEDIA:/root/.hermes/cache/scratch/Pruna - Nomen 3.mp3\nSource: archive.org",
+        )
+        val audio = blocks.filterIsInstance<ContentBlock.Audio>().single()
+        assertEquals("/root/.hermes/cache/scratch/Pruna - Nomen 3.mp3", audio.url)
+        assertEquals("Pruna - Nomen 3.mp3", audio.name)
+        assertTrue(blocks.filterIsInstance<ContentBlock.Text>().none { "Nomen 3.mp3" in it.markdown })
+    }
+
+    @Test
+    fun `glued MEDIA tags stay two files`() {
+        val blocks = parseContentBlocks("MEDIA:/root/a.pngMEDIA:/root/b.png")
+        assertEquals(listOf("/root/a.png", "/root/b.png"), blocks.filterIsInstance<ContentBlock.Image>().map { it.url })
+    }
+
+    @Test
+    fun `each file type gets its viewer`() {
+        assertEquals(FileKind.AUDIO, fileKindOf("/root/a.mp3"))
+        assertEquals(FileKind.AUDIO, fileKindOf("song.WAV"))
+        assertEquals(FileKind.AUDIO, fileKindOf("voice.m4a"))
+        assertEquals(FileKind.VIDEO, fileKindOf("clip.mp4"))
+        assertEquals(FileKind.VIDEO, fileKindOf("clip.webm"))
+        assertEquals(FileKind.MARKDOWN, fileKindOf("README.md"))
+        assertEquals(FileKind.HTML, fileKindOf("page.html"))
+        assertEquals(FileKind.HTML, fileKindOf("page.htm"))
+        assertEquals(FileKind.IMAGE, fileKindOf("photo.jpg"))
+        assertEquals(FileKind.IMAGE, fileKindOf("shot.png"))
+        assertEquals(FileKind.OTHER, fileKindOf("archive.zip"))
+        assertEquals(FileKind.OTHER, fileKindOf("Caddyfile"))
+        assertEquals(FileKind.MARKDOWN, fileKindOf("file:///data/x/root/Notes%20v2.md?x=1"))
+    }
+
+    @Test
+    fun `MIME type wins unless it is generic`() {
+        assertEquals(FileKind.AUDIO, fileKindOf("recording", "audio/x-wav"))
+        assertEquals(FileKind.AUDIO, fileKindOf("track.bin", "application/ogg"))
+        assertEquals(FileKind.MARKDOWN, fileKindOf("notes", "text/markdown; charset=utf-8"))
+        assertEquals(FileKind.VIDEO, fileKindOf("clip.mp4", "application/octet-stream"))
+        assertEquals(FileKind.OTHER, fileKindOf("blob", "application/octet-stream"))
+    }
+
+    @Test
+    fun `markdown and audio MEDIA files are typed`() {
+        val blocks = parseContentBlocks("MEDIA:/root/notes.md\nMEDIA:/root/v.opus")
+        assertEquals(FileKind.MARKDOWN, blocks.filterIsInstance<ContentBlock.FileRef>().single().kind)
+        assertEquals("/root/v.opus", blocks.filterIsInstance<ContentBlock.Audio>().single().url)
+    }
 }

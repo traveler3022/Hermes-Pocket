@@ -150,7 +150,7 @@ import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
-import java.io.File
+import com.hermes.android.runtime.linux.ProotEnvironment
 
 @Composable
 internal fun highlightText(text: String, query: String): AnnotatedString {
@@ -239,7 +239,7 @@ internal fun openUrlExternally(context: Context, url: String) {
 internal fun externalViewIntent(context: Context, url: String): Intent {
     val uri = Uri.parse(url)
     val guestPath = uri.takeIf { it.scheme == "file" }?.path
-        ?.let { guestPathIn(File(context.filesDir, "linux/rootfs").absolutePath, it) }
+        ?.let { guestPathIn(ProotEnvironment.rootfsDir(context).absolutePath, it) }
         ?: return Intent(Intent.ACTION_VIEW, uri)
     val document = DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), guestPath)
     val type = MimeTypeMap.getSingleton()

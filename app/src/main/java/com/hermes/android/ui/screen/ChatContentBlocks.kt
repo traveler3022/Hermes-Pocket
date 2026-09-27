@@ -350,10 +350,10 @@ internal fun MermaidBlockCard(
 internal fun HtmlBlockCard(
     url: String,
     name: String,
-    onOpenExternal: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     // HTML is renderable in-app: show it inline in a WebView, with a button to
-    // pop out to a full browser for interaction-heavy pages.
+    // open it full screen in the file viewer for interaction-heavy pages.
     var expanded by remember { mutableStateOf(true) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -377,10 +377,10 @@ internal fun HtmlBlockCard(
                         modifier = Modifier.size(18.dp),
                     )
                 }
-                IconButton(onClick = onOpenExternal, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
                     Icon(
                         HxIcons.ExternalLink,
-                        contentDescription = t("Open in browser", "باز کردن در مرورگر"),
+                        contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -402,8 +402,13 @@ internal fun HtmlBlockCard(
                         // refuses by default on Android 11+; the preview stayed an error page.
                         // Its scripts still can't read other files (file URLs keep no access
                         // to each other).
-                        it.settings.allowFileAccess = url.startsWith("file:")
-                        it.loadUrl(url)
+                        // Load only when the URL changes: update can rerun on recomposition,
+                        // and a reload there would restart the page.
+                        if (it.tag != url) {
+                            it.tag = url
+                            it.settings.allowFileAccess = url.startsWith("file:")
+                            it.loadUrl(url)
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
