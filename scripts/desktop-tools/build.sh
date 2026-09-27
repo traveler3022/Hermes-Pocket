@@ -4,7 +4,11 @@
 # Run in a bellsoft/alpaquita-linux-base:stream-glibc container; writes /out/desktop-tools-$(uname -m).tar.gz.
 set -eu
 OUT=/tmp/stage; J=$(nproc)
-t() { s=$(date +%s); "$@"; echo "== $1 took $(( $(date +%s)-s ))s"; }
+# Each step's output goes to /tmp/$1.log, printed only if the step fails.
+# (Not run as an if/|| condition: that would switch off set -e inside the step.)
+t() { s=$(date +%s); set +e; ( set -ex; exec >/tmp/$1.log 2>&1; "$@" ); rc=$?; set -e
+  if [ $rc -ne 0 ]; then tail -60 /tmp/$1.log; echo "== $1 FAILED"; exit 1; fi
+  echo "== $1 took $(( $(date +%s)-s ))s"; }
 deps() {
   apk add -q --no-chown gcc make glibc-dev pkgconf curl cmake autoconf automake libtool util-macros xorgproto \
     libx11-dev libxtst-dev libxi-dev libxinerama-dev libxkbcommon-dev libxext-dev libxfixes-dev libxdamage-dev \
