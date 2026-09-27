@@ -164,7 +164,7 @@ internal class ChatAttachmentDelegate(
         }
     }
 
-    private val downloadStorage = DownloadStorage(context)
+    private val downloadStorage by lazy { DownloadStorage(context) }
 
     fun downloadFile(state: MutableStateFlow<ChatUiState>, url: String, filename: String) {
         scope.launch {
