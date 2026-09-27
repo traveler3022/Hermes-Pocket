@@ -108,7 +108,11 @@ class ProotEnvironment @Inject constructor(
             }
         }
         args += listOf("-w", "/root", "/usr/bin/env", "-i")
-        (GuestEnv + extraEnv).forEach { (key, value) -> args += "$key=$value" }
+        // The rootfs has no zoneinfo and `env -i` drops the host's zone, so everything in it ran
+        // on UTC: a cron job set for 09:00 fired at 12:30 in Tehran, and the agent read the clock
+        // three and a half hours off. musl takes a POSIX TZ string without any zone database.
+        val zone = mapOf("TZ" to posixTimeZone(java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis())))
+        (GuestEnv + zone + extraEnv).forEach { (key, value) -> args += "$key=$value" }
         args += guestCommand
         return args
     }
@@ -220,4 +224,22 @@ class ProotEnvironment @Inject constructor(
             """.trimIndent() + "\n",
         )
     }
+}
+
+/**
+ * The phone's current UTC offset as a POSIX TZ string, e.g. `<+0330>-03:30` for Tehran.
+ * POSIX counts hours west of UTC, hence the flipped sign. Daylight-saving rules are not
+ * carried: a process started before a clock change keeps the old offset until restarted.
+ */
+internal fun posixTimeZone(offsetMillis: Int): String {
+    val minutes = offsetMillis / 60_000
+    val abs = kotlin.math.abs(minutes)
+    val hh = abs / 60
+    val mm = abs % 60
+    val east = minutes >= 0
+    return String.format(
+        java.util.Locale.ROOT,
+        "<%s%02d%02d>%s%02d:%02d",
+        if (east) "+" else "-", hh, mm, if (east) "-" else "+", hh, mm,
+    )
 }

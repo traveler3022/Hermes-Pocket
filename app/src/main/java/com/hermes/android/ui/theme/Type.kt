@@ -50,11 +50,32 @@ fun hermesTypography(
             lineHeight = sp(52),
             letterSpacing = sp(0),
         ),
+        displaySmall = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = sp(36),
+            lineHeight = sp(44),
+            letterSpacing = sp(0),
+        ),
         headlineLarge = TextStyle(
             fontFamily = fontFamily,
             fontWeight = FontWeight.Bold,
             fontSize = sp(30),
             lineHeight = sp(40),
+            letterSpacing = sp(0),
+        ),
+        headlineMedium = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = sp(26),
+            lineHeight = sp(34),
+            letterSpacing = sp(0),
+        ),
+        headlineSmall = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = sp(24),
+            lineHeight = sp(32),
             letterSpacing = sp(0),
         ),
         titleLarge = TextStyle(
@@ -98,6 +119,16 @@ fun hermesTypography(
             fontSize = sp(12),
             lineHeight = sp(20),
             letterSpacing = sp(0),
+        ),
+        // Every Material button, text button and tab draws its label in labelLarge. It was
+        // missing here, so it fell back to Material's default in the system font: buttons were
+        // in a different face and weight from the rest of the app.
+        labelLarge = TextStyle(
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = sp(14),
+            lineHeight = sp(20),
+            letterSpacing = spF(0.1f),
         ),
         labelMedium = TextStyle(
             fontFamily = fontFamily,

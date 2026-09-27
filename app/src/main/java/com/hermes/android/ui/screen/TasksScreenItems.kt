@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -258,7 +259,11 @@ internal fun NewTaskDialog(
         onDismissRequest = { if (!isLaunching) onDismiss() },
         title = { Text(t("New task", "تسک جدید")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+            // Scrolls: a few plan steps plus the model picker ran past the bottom of the dialog.
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
+            ) {
                 Text(
                     t(
                         "Runs in its own session on the server — you can close the app.",

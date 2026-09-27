@@ -50,7 +50,8 @@ fun t(en: String, fa: String): String {
         @Suppress("DEPRECATION")
         config.locale?.language
     } ?: Locale.getDefault().language
-    return if (language.equals("fa", ignoreCase = true) || language.equals("iw", ignoreCase = true)) fa else en
+    // Only Persian: "iw" (also matched here once) is Java's old code for Hebrew.
+    return if (language.equals("fa", ignoreCase = true)) fa else en
 }
 
 /**
@@ -76,5 +77,6 @@ fun tForContext(context: Context, en: String, fa: String): String {
         @Suppress("DEPRECATION")
         context.resources.configuration.locale?.language
     } ?: Locale.getDefault().language
-    return if (language.equals("fa", ignoreCase = true) || language.equals("iw", ignoreCase = true)) fa else en
+    // Only Persian: "iw" (also matched here once) is Java's old code for Hebrew.
+    return if (language.equals("fa", ignoreCase = true)) fa else en
 }

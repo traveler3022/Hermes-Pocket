@@ -153,6 +153,24 @@ fun CronScreen(
 
 @Composable
 private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
+    // Deleting asked nothing: one tap beside Edit and the job was gone for good.
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(t("Delete job?", "کار حذف شود؟")) },
+            text = { Text(t("\"${job.name}\" will stop running and be removed.", "«${job.name}» دیگر اجرا نمی‌شود و حذف می‌شود.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.deleteJob(job.id)
+                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
+    }
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -243,7 +261,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                         modifier = Modifier.size(17.dp),
                     )
                 }
-                IconButton(onClick = { viewModel.deleteJob(job.id) }, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = t("Delete", "حذف"),

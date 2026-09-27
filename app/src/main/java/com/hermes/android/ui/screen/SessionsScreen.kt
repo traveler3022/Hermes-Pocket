@@ -1,6 +1,7 @@
 package com.hermes.android.ui.screen
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -172,6 +173,9 @@ fun SessionsScreen(
     }
 
     val inHistoryDetail = uiState.selectedSessionId != null
+    // Back from a session's history returns to the list, like the top bar's arrow;
+    // it used to leave the Sessions screen altogether.
+    BackHandler(enabled = inHistoryDetail) { viewModel.closeHistory() }
 
     HermesScaffold(
         title = if (inHistoryDetail) {

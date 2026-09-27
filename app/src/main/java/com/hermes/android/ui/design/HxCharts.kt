@@ -112,7 +112,8 @@ fun HxSplitBar(
  * is harder to scan than either alone.
  */
 fun hxCompactCount(value: Long): String = when {
-    value >= 1_000_000 -> "%.1fM".format(value / 1_000_000.0)
-    value >= 1_000 -> "%.1fk".format(value / 1_000.0)
+    // Locale.ROOT: the device locale's format() turned these into Farsi digits after all.
+    value >= 1_000_000 -> String.format(java.util.Locale.ROOT, "%.1fM", value / 1_000_000.0)
+    value >= 1_000 -> String.format(java.util.Locale.ROOT, "%.1fk", value / 1_000.0)
     else -> value.toString()
 }

@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -82,7 +85,13 @@ fun SkillsScreen(
         AlertDialog(
             onDismissRequest = { viewModel.dismissInspect() },
             title = { Text(uiState.inspectedSkillName ?: "") },
-            text = { Text(uiState.inspectedSkillDetail ?: "") },
+            // A dialog's text doesn't scroll by itself: a long SKILL.md was cut off.
+            text = {
+                Text(
+                    uiState.inspectedSkillDetail ?: "",
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissInspect() }) { Text(t("Close", "بستن")) }
             },
@@ -142,7 +151,9 @@ fun SkillsScreen(
                             label = { Text(t("Content (Markdown)", "محتوا (مارک‌داون)")) },
                             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             minLines = 6,
-                            modifier = Modifier.fillMaxWidth(),
+                            // Bounded, so a long skill scrolls inside the field instead of
+                            // pushing the dialog past the screen.
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                         )
                     }
                 }

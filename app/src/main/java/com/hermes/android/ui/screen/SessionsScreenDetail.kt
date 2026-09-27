@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -139,7 +140,9 @@ internal fun HistoryDetailView(
                 contentPadding = PaddingValues(horizontal = HxSpace.md, vertical = HxSpace.xs),
                 verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
-                items(messages, key = { it.role + it.content.take(40) + messages.indexOf(it) }) { msg ->
+                // Keyed by position: the old key used indexOf(), which finds the first equal
+                // message, so two identical ones ("ok" twice) got the same key and crashed the list.
+                itemsIndexed(messages, key = { index, _ -> index }) { _, msg ->
                     HistoryMessageBubble(msg)
                 }
             }

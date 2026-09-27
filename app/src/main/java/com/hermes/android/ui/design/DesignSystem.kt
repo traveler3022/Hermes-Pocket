@@ -145,7 +145,7 @@ fun HermesScaffold(
                         IconButton(onClick = onBack) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = com.hermes.android.ui.i18n.t("Back", "بازگشت"),
                             )
                         }
                     }
@@ -443,6 +443,7 @@ fun HermesEmptyState(
                 text = caption,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.padding(horizontal = HxSpace.lg),
             )
         }

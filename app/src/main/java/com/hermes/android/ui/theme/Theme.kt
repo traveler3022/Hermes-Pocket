@@ -483,6 +483,8 @@ fun Hermes2Theme(
         ThemeMode.SYSTEM -> darkTheme
     }
 
+    // Wallpaper colours come with all their surface roles; only the hand-made palettes need them derived.
+    val isDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -504,7 +506,8 @@ fun Hermes2Theme(
     }
 
     MaterialTheme(
-        colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
+        colorScheme = (if (warmMode) colorScheme.warmed() else colorScheme)
+            .let { if (isDynamic) it else it.withSurfaceContainers(useDark) },
         typography = hermesTypography(fontFamily, fontScalePct),
         content = content
     )
@@ -525,5 +528,29 @@ private fun androidx.compose.material3.ColorScheme.warmed(): androidx.compose.ma
         primaryContainer = primaryContainer.warm(0.06f),
         secondaryContainer = secondaryContainer.warm(0.06f),
         tertiaryContainer = tertiaryContainer.warm(0.06f),
+    )
+}
+
+/**
+ * The palettes above set surface and surfaceVariant but none of Material 3's surface
+ * container roles, and those are what dialogs, bottom sheets, menus and cards are painted
+ * with. Left unset they fell back to Material's baseline, a lavender-tinted grey: every
+ * dialog in the neutral Carbon theme came up faintly purple. Derived here from each
+ * palette's own surface, stepping toward its text colour as Material's tones do.
+ */
+private fun androidx.compose.material3.ColorScheme.withSurfaceContainers(
+    dark: Boolean,
+): androidx.compose.material3.ColorScheme {
+    fun step(fraction: Float) = androidx.compose.ui.graphics.lerp(surface, onSurface, fraction)
+    val black = androidx.compose.ui.graphics.Color.Black
+    val white = androidx.compose.ui.graphics.Color.White
+    return copy(
+        surfaceContainerLowest = if (dark) androidx.compose.ui.graphics.lerp(surface, black, 0.35f) else white,
+        surfaceContainerLow = step(if (dark) 0.03f else 0.02f),
+        surfaceContainer = step(if (dark) 0.05f else 0.04f),
+        surfaceContainerHigh = step(if (dark) 0.08f else 0.06f),
+        surfaceContainerHighest = step(if (dark) 0.11f else 0.09f),
+        surfaceBright = step(if (dark) 0.12f else 0.0f),
+        surfaceDim = if (dark) androidx.compose.ui.graphics.lerp(surface, black, 0.2f) else step(0.10f),
     )
 }

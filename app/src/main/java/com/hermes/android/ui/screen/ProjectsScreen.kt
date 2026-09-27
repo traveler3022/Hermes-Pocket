@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -62,6 +63,8 @@ fun ProjectsScreen(
     }
 
     val detail = uiState.selectedProject
+    // Back from a project returns to the project list, like the top bar's arrow.
+    BackHandler(enabled = detail != null) { viewModel.closeProject() }
     HermesScaffold(
         title = detail?.label ?: t("Projects", "پروژه‌ها"),
         onBack = if (detail != null) { { viewModel.closeProject() } } else onNavigateBack,
