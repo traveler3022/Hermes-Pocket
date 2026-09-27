@@ -37,7 +37,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Hermes inside the bundled Alpine rootfs run by proot — no Termux or other host app needed.
+ * Hermes inside the bundled Linux rootfs run by proot — no Termux or other host app needed.
  * Mirrors Aether's bundled-Linux design: like Aether's `node bridge.mjs`, the gateway is a
  * child process (`python -m tui_gateway.entry`) spoken to over stdin/stdout via
  * [StdioGatewayHub] — no web server, port, token, or dial-and-retry.
@@ -471,7 +471,7 @@ class ProotLinuxRuntime @Inject constructor(
         private val PACKAGES_SCRIPT = """
             set -e
             $RETRY_FN
-            apk_add python3 git curl ca-certificates bash procps-ng libstdc++ libgcc
+            apk_add python3 git curl ca-certificates bash procps-ng libstdc++ libgcc libatomic
         """.trimIndent()
         private const val PACKAGES_VERIFY = "python3 --version && git --version && curl --version && bash --version"
 
@@ -511,11 +511,11 @@ class ProotLinuxRuntime @Inject constructor(
                 git -C "${'$'}REPO" merge-base --is-ancestor "${'$'}TARGET" "${'$'}head" 2>/dev/null && return 0
                 [ "${'$'}head" = "${'$'}(t 60 git ls-remote "${'$'}REMOTE" "refs/heads/${'$'}BRANCH" 2>/dev/null | cut -f1)" ]
             }
-            # hermes update provisions nodejs.org's Node (glibc) when Alpine's npm is out of its range; it
-            # cannot run on musl, and while it is there Hermes ignores the system Node altogether.
+            # hermes update may provision nodejs.org's Node in ~/.hermes/node; one that cannot run (a
+            # missing library, or left from the old Alpine rootfs) makes Hermes ignore the system Node.
             drop_broken_node() {
                 if [ -e "${'$'}HERMES_HOME/node/bin/node" ] && ! "${'$'}HERMES_HOME/node/bin/node" --version >/dev/null 2>&1; then
-                    echo "removing Hermes-managed Node that cannot run on Alpine; the system Node stays in use"
+                    echo "removing Hermes-managed Node that cannot run here; the system Node stays in use"
                     rm -rf "${'$'}HERMES_HOME/node"
                 fi
             }
@@ -586,8 +586,8 @@ class ProotLinuxRuntime @Inject constructor(
             exit 1
         """.trimIndent()
 
-        // install.sh has no Alpine support, so this mirrors its steps: clone, locked uv sync
-        // (every compiled dep ships musllinux aarch64 wheels), config templates, skills.
+        // Mirrors install.sh's steps without its package manager (which fetches its own Python,
+        // Node and ffmpeg, over 1 GB): clone, locked uv sync, config templates, skills.
         private val HERMES_INSTALL_SCRIPT = """
             set -e
             $RETRY_FN
@@ -619,18 +619,21 @@ class ProotLinuxRuntime @Inject constructor(
             fi
             cd "${'$'}REPO"
             # uv.lock only covers the Python in pm/lock.json (3.14 now) and every core dep carries a
-            # python_version >= that marker: on Alpine's 3.12 the locked sync failed and the PyPI
-            # fallback built Hermes without openai, rich, … . uv's musl build of that Python fixes it.
+            # python_version >= that marker, so an older Python gets Hermes without openai, rich, … .
+            # The system Python is used when it is that version; otherwise uv downloads it.
             PY=${'$'}(python3 -c "import json; v = json.load(open('pm/lock.json'))['packages']['python']['version']; print('.'.join(v.split('+')[0].split('.')[:2]))" 2>/dev/null || echo 3.14)
-            export UV_PYTHON_INSTALL_DIR="${'$'}HERMES_HOME/python" UV_PYTHON_PREFERENCE=only-managed
-            echo "Downloading Python ${'$'}PY…"
-            retry "${'$'}UV" python install --no-bin "${'$'}PY"
+            export UV_PYTHON_INSTALL_DIR="${'$'}HERMES_HOME/python"
+            if ! "${'$'}UV" python find --system "${'$'}PY" >/dev/null 2>&1; then
+                echo "Downloading Python ${'$'}PY…"
+                retry "${'$'}UV" python install --no-bin "${'$'}PY"
+            fi
             export UV_PYTHON="${'$'}PY" UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
             if ! retry "${'$'}UV" sync --locked --no-dev --extra web; then
                 echo "uv.lock sync failed — falling back to resolving from PyPI"
                 [ -x venv/bin/python ] || "${'$'}UV" venv venv
                 retry "${'$'}UV" pip install --python venv/bin/python -e '.[web]'
             fi
+            mkdir -p /usr/local/bin
             ln -sf "${'$'}REPO/venv/bin/hermes" /usr/local/bin/hermes
 
             mkdir -p "${'$'}HERMES_HOME"/cron "${'$'}HERMES_HOME"/sessions "${'$'}HERMES_HOME"/pairing "${'$'}HERMES_HOME"/hooks \
@@ -659,7 +662,7 @@ class ProotLinuxRuntime @Inject constructor(
             echo ${'$'}${'$'} > "${'$'}PIDFILE"
             export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
             # Commands the gateway runs for the app (shell.exec → `python3 -`) must get
-            # Hermes' own interpreter, which has PyYAML and the rest; Alpine's system
+            # Hermes' own interpreter, which has PyYAML and the rest; the system
             # python3 does not ("No module named 'yaml'" on the settings screen).
             export VIRTUAL_ENV="${'$'}REPO/venv" PATH="${'$'}REPO/venv/bin:${'$'}PATH"
             # Tools the agent runs (xdotool, scrot, GUI apps) land on the app's VNC desktop.

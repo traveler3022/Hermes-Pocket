@@ -143,7 +143,7 @@ class LinuxToolsViewModel @Inject constructor(
             ),
             PackageProfile(
                 "ssh", "SSH client", "کلاینت SSH",
-                listOf("openssh-client"),
+                listOf("openssh-client-default"),
                 "ssh -V",
             ),
             PackageProfile(

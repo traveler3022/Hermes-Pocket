@@ -12,7 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Runs commands inside the bundled Alpine rootfs via proot, the same approach Aether uses.
+ * Runs commands inside the bundled Linux rootfs via proot, the same approach Aether uses.
  * proot and its loader ship as jniLibs because nativeLibraryDir is the only app location
  * that may execve() on targetSdk >= 29.
  */
@@ -65,7 +65,7 @@ class ProotEnvironment @Inject constructor(
         }
 
     /**
-     * An interactive Alpine shell for a terminal emulator (Aether's `createTerminalLaunchSpec`):
+     * An interactive Linux shell for a terminal emulator (Aether's `createTerminalLaunchSpec`):
      * the same proot invocation as [processBuilder], but `sh -i` on the emulator's pty.
      */
     fun terminalLaunchSpec(): TerminalLaunchSpec {
@@ -110,7 +110,7 @@ class ProotEnvironment @Inject constructor(
         args += listOf("-w", "/root", "/usr/bin/env", "-i")
         // The rootfs has no zoneinfo and `env -i` drops the host's zone, so everything in it ran
         // on UTC: a cron job set for 09:00 fired at 12:30 in Tehran, and the agent read the clock
-        // three and a half hours off. musl takes a POSIX TZ string without any zone database.
+        // three and a half hours off. The C library takes a POSIX TZ string without any zone database.
         val zone = mapOf("TZ" to posixTimeZone(java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis())))
         (GuestEnv + zone + extraEnv).forEach { (key, value) -> args += "$key=$value" }
         args += guestCommand
@@ -179,7 +179,9 @@ class ProotEnvironment @Inject constructor(
     }
 
     companion object {
-        const val READY_MARKER = ".hermes2-alpine-ready"
+        // A new name for the glibc rootfs: an Alpine one still on the phone counts as not installed,
+        // so the next install replaces it (keeping /root, see RootfsInstaller.keepHome).
+        const val READY_MARKER = ".hermes2-glibc-ready"
         private const val OUTPUT_TAIL_LINES = 200
 
         private val GuestEnv = mapOf(

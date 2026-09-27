@@ -14,7 +14,11 @@ import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Unpacks the Alpine minirootfs bundled in the APK (same approach as Aether). */
+/**
+ * Unpacks the Linux rootfs bundled in the APK (same approach as Aether): BellSoft's Alpaquita
+ * Linux base, the glibc flavour — Hermes' own tools (its Python, uv, Node) are glibc builds
+ * that the earlier Alpine (musl) rootfs could not run.
+ */
 @Singleton
 class RootfsInstaller @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -29,7 +33,7 @@ class RootfsInstaller @Inject constructor(
         staging.mkdirs()
         // The APK build un-gzips *.gz assets and drops the extension, so the rootfs may be
         // packaged as either name. Same candidate list as Aether's AlpineRootfsAssetCandidates.
-        val base = "linux/alpine-minirootfs-${environment.abi}"
+        val base = "linux/rootfs-${environment.abi}"
         val compressed = "$base.tar.gz"
         val plain = "$base.tar"
         when {
@@ -42,10 +46,27 @@ class RootfsInstaller @Inject constructor(
             else -> throw IOException("Linux system image is missing from this build ($compressed or $plain)")
         }
         configure(staging)
+        keepHome(staging)
         deleteTree(environment.rootfsDir)
         if (!staging.renameTo(environment.rootfsDir)) throw IOException("Could not move rootfs into place")
         environment.markRootfsReady()
         onProgress("Built-in Linux is ready")
+    }
+
+    /**
+     * Replacing an existing rootfs (the Alpine one before this) must not take /root with it:
+     * Hermes' config, keys, chats and memories, and the files it made, live there. The folder is
+     * renamed across, not copied: link2symlink's hardlink stand-ins are symlinks to absolute
+     * paths under rootfs/root, which are valid again once staging becomes rootfs. What was built
+     * for the old system is dropped; the install stages rebuild it.
+     */
+    private fun keepHome(staging: File) {
+        val oldHome = File(environment.rootfsDir, "root")
+        if (!oldHome.isDirectory) return
+        val newHome = File(staging, "root")
+        deleteTree(newHome)
+        if (!oldHome.renameTo(newHome)) throw IOException("Could not keep the Linux home folder; nothing was changed")
+        for (built in BuiltForOldSystem) deleteTree(File(newHome, built))
     }
 
     private fun assetExists(path: String): Boolean =
@@ -184,6 +205,9 @@ class RootfsInstaller @Inject constructor(
         }
     }
 }
+
+/** Under /root: Python environments and runtimes that only run on the system they were made for. */
+private val BuiltForOldSystem = listOf(".hermes/hermes-agent/venv", ".hermes/python", ".hermes/node")
 
 /** Recursive delete that never follows symbolic links (the rootfs has links like /dev/fd). */
 internal fun deleteTree(root: File) {
