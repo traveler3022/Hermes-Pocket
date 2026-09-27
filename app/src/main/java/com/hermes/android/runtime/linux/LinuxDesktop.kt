@@ -56,10 +56,18 @@ class LinuxDesktop @Inject constructor(
     private val environment: ProotEnvironment,
     private val stdioHub: StdioGatewayHub,
 ) {
-    enum class Resolution(val width: Int, val height: Int, val titleEn: String, val titleFa: String) {
+    /** [pageWidth]: how wide Chromium lays pages out (CSS px), drawn scaled into [width] pixels. */
+    enum class Resolution(
+        val width: Int,
+        val height: Int,
+        val titleEn: String,
+        val titleFa: String,
+        val pageWidth: Int = width,
+    ) {
         // Not the phone's full 1080x2040: every frame is drawn on the CPU and sent over VNC, and
-        // half the pixels gave ~4x the frames on the server mock; the viewer scales it up.
-        PHONE(720, 1360, "Phone (portrait)", "گوشی (عمودی)"),
+        // half the pixels gave ~4x the frames on the server mock; the viewer scales it up. Pages
+        // still lay out 1080 wide: at 720, desktop sites (Google…) overflowed and overlapped.
+        PHONE(720, 1360, "Phone (portrait)", "گوشی (عمودی)", pageWidth = 1080),
         TABLET(1600, 1000, "Tablet (landscape)", "تبلت (افقی)"),
         DESKTOP(1920, 1080, "Desktop (1080p)", "دسکتاپ (1080p)"),
     }
@@ -433,6 +441,10 @@ class LinuxDesktop @Inject constructor(
             buildString {
                 appendLine("WIDTH=${current.resolution.width}")
                 appendLine("HEIGHT=${current.resolution.height}")
+                val resolution = current.resolution
+                appendLine("PAGE_W=${resolution.pageWidth}")
+                appendLine("PAGE_H=${resolution.height * resolution.pageWidth / resolution.width}")
+                appendLine("SCALE=${"%.4f".format(java.util.Locale.ROOT, resolution.width.toFloat() / resolution.pageWidth)}")
                 appendLine("HOMEPAGE=${shellQuote(current.homepage.ifBlank { DefaultHomepage })}")
                 // VNC_LAN only decides whether the VNC server also listens off-device; the password
                 // below is enforced either way.
@@ -804,7 +816,8 @@ class LinuxDesktop @Inject constructor(
                 --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
                 --no-default-browser-check --password-store=basic \
                 --user-data-dir=$ProfileDir \
-                --window-size="${'$'}WIDTH,${'$'}HEIGHT" --window-position=0,0 --start-maximized \
+                --force-device-scale-factor="${'$'}{SCALE:-1}" \
+                --window-size="${'$'}{PAGE_W:-${'$'}WIDTH},${'$'}{PAGE_H:-${'$'}HEIGHT}" --window-position=0,0 --start-maximized \
                 --ozone-platform=x11 "${'$'}HOMEPAGE" &
             CHROME_LOOP=${'$'}!
 
