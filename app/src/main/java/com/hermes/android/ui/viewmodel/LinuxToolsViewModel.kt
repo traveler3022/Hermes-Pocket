@@ -125,6 +125,18 @@ class LinuxToolsViewModel @Inject constructor(
         private const val STATUS_PREFIX = "HERMES2_PROFILE "
         private const val LOG_LINES = 12
 
+        /**
+         * ripgrep and fd are not in the Linux's package repo; their own static release builds
+         * run on any Linux. Pinned versions, arch from the guest (aarch64 on phones).
+         */
+        private const val RgFdInstall =
+            "set -e; a=\$(uname -m); cd /tmp; " +
+                "curl -fsSL --retry 3 https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-\$a-unknown-linux-musl.tar.gz | tar -xz; " +
+                "curl -fsSL --retry 3 https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-\$a-unknown-linux-musl.tar.gz | tar -xz; " +
+                "mkdir -p /usr/local/bin; " +
+                "install -m 755 ripgrep-15.2.0-\$a-unknown-linux-musl/rg fd-v10.5.0-\$a-unknown-linux-musl/fd /usr/local/bin/; " +
+                "rm -rf ripgrep-15.2.0-\$a-unknown-linux-musl fd-v10.5.0-\$a-unknown-linux-musl"
+
         private val Profiles = listOf(
             PackageProfile(
                 "python", "Python tools", "ابزارهای پایتون",
@@ -138,8 +150,9 @@ class LinuxToolsViewModel @Inject constructor(
             ),
             PackageProfile(
                 "git_search", "Git & code search", "Git و جستجوی کد",
-                listOf("git", "ripgrep", "fd"),
+                listOf("git"),
                 "git --version && rg --version && fd --version",
+                postInstall = RgFdInstall,
             ),
             PackageProfile(
                 "ssh", "SSH client", "کلاینت SSH",
