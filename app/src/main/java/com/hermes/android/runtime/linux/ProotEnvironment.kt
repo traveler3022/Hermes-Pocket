@@ -192,6 +192,9 @@ class ProotEnvironment @Inject constructor(
             // fails even as root. This rootfs is Hermes' private sandbox, not a system to protect.
             "PIP_BREAK_SYSTEM_PACKAGES" to "1",
             "UV_BREAK_SYSTEM_PACKAGES" to "1",
+            // Hermes' own package manager would, on every launch, fetch its glibc Python and uv
+            // (400+ MB) and fail on musl. The app installs the dependencies itself.
+            "HERMES_DISABLE_LAZY_INSTALLS" to "1",
             "PATH" to "/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         )
 

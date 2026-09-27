@@ -253,6 +253,7 @@ class ProotLinuxRuntime @Inject constructor(
     ) {
         var lines = 0
         val stageLog = StringBuilder()
+        val startedAt = System.currentTimeMillis()
         val result = environment.run(script) { line ->
             stageLog.appendLine(line)
             val clean = line.replace(AnsiEscape, "").trim()
@@ -263,6 +264,8 @@ class ProotLinuxRuntime @Inject constructor(
                 report(stage, clean.take(160), startPercent + span * lines / (lines + 60))
             }
         }
+        // Which stage a slow install spent its time in, for the install log.
+        stageLog.appendLine("[$stage] exit ${result.exitCode} after ${(System.currentTimeMillis() - startedAt) / 1000}s")
         log.append(stageLog)
         environment.guestFile("/root/.hermes/logs").mkdirs()
         environment.guestFile("/root/.hermes/logs/app-install.log").appendText(stageLog.toString())
@@ -583,10 +586,14 @@ class ProotLinuxRuntime @Inject constructor(
                 git clone --quiet --depth 1 --branch main https://github.com/NousResearch/hermes-agent.git "${'$'}REPO"
             fi
             cd "${'$'}REPO"
-            # Bytecode at install time, not on the first (and every failed-cache) import:
-            # a cold gateway start drops by about a quarter.
-            export UV_PYTHON=/usr/bin/python3 UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
-            export UV_COMPILE_BYTECODE=1
+            # uv.lock only covers the Python in pm/lock.json (3.14 now) and every core dep carries a
+            # python_version >= that marker: on Alpine's 3.12 the locked sync failed and the PyPI
+            # fallback built Hermes without openai, rich, … . uv's musl build of that Python fixes it.
+            PY=${'$'}(python3 -c "import json; v = json.load(open('pm/lock.json'))['packages']['python']['version']; print('.'.join(v.split('+')[0].split('.')[:2]))" 2>/dev/null || echo 3.14)
+            export UV_PYTHON_INSTALL_DIR="${'$'}HERMES_HOME/python" UV_PYTHON_PREFERENCE=only-managed
+            echo "Downloading Python ${'$'}PY…"
+            "${'$'}UV" python install --no-bin "${'$'}PY"
+            export UV_PYTHON="${'$'}PY" UV_PROJECT_ENVIRONMENT="${'$'}REPO/venv" UV_LINK_MODE=copy
             if ! "${'$'}UV" sync --locked --no-dev --extra web; then
                 echo "uv.lock sync failed — falling back to resolving from PyPI"
                 [ -x venv/bin/python ] || "${'$'}UV" venv venv
@@ -602,8 +609,10 @@ class ProotLinuxRuntime @Inject constructor(
             venv/bin/python tools/skills_sync.py || cp -r skills/* "${'$'}HERMES_HOME/skills/" 2>/dev/null || true
             echo "git" > .install_method
             "${'$'}UV" cache clean || true
+            # Bytecode for what the gateway actually imports (~370 files), written by one import.
+            # Compiling the whole venv and source tree took about 80s more for ~4200 files it never loads.
             echo "Precompiling Hermes for faster startup…"
-            venv/bin/python -m compileall -q -j 0 agent tools tui_gateway hermes_cli || true
+            PYTHONPATH="${'$'}REPO" venv/bin/python -c "import tui_gateway.server" >/dev/null 2>&1 || true
         """.trimIndent()
 
         // Same launch as Hermes' TUI (ui-tui/src/gatewayClient.ts startSpawnedGateway):
