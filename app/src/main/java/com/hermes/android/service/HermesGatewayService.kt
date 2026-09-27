@@ -136,10 +136,15 @@ class HermesGatewayService : Service() {
     private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean)
 
     private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean) {
-        // The app on screen already shows all of this, and a visible app needs no
-        // foreground service to stay alive; the card comes up once the user leaves.
-        if (visible) {
-            holdWakeLock(work != null)
+        // The app on screen already shows all of this; the card comes up once the user
+        // leaves. Not a turn's card, though: it goes up with the turn, on screen or not.
+        // Taking it down on screen meant taking the foreground back from the background
+        // when the user left mid-turn, which Android 12+ allows only for a few seconds
+        // after the app leaves the screen (or with the battery exemption). A phone busy
+        // with the built-in Linux can miss that, and Hermes was left mid-turn in a
+        // background process the system may kill. On screen, entering is always allowed.
+        if (visible && work == null) {
+            holdWakeLock(false)
             if (shownKey != null) {
                 shownKey = null
                 dismiss()
