@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.ProjectsRepository
+import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -88,7 +89,10 @@ class ProjectsViewModel @Inject constructor(
     fun createProjectSession(path: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject { put("cwd", path) }
+                val params = buildJsonObject {
+                    put("cwd", path)
+                    put("source", SessionRepository.CHAT_SOURCE)
+                }
                 val result = gatewayClient.request(
                     GatewayMethods.SESSION_CREATE,
                     params.toMap(),

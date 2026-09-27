@@ -141,4 +141,36 @@ class ContentBlocksTest {
             blocks,
         )
     }
+
+    @Test
+    fun `MEDIA tag becomes a file block and leaves no tag text`() {
+        val blocks = parseContentBlocks("Here is the report:\nMEDIA:/root/out/report_final.pdf")
+        val file = blocks.filterIsInstance<ContentBlock.FileRef>().single()
+        assertEquals("/root/out/report_final.pdf", file.url)
+        assertTrue(blocks.filterIsInstance<ContentBlock.Text>().none { "MEDIA" in it.markdown })
+    }
+
+    @Test
+    fun `MEDIA tag image in emphasis becomes an image`() {
+        val blocks = parseContentBlocks("**MEDIA:/root/a_b.png** and _MEDIA:/root/c.png_")
+        assertEquals(
+            listOf("/root/a_b.png", "/root/c.png"),
+            blocks.filterIsInstance<ContentBlock.Image>().map { it.url },
+        )
+    }
+
+    @Test
+    fun `quoted MEDIA path with spaces and extensionless path`() {
+        val blocks = parseContentBlocks("MEDIA:\"/root/my file.docx\"\nMEDIA:/root/Caddyfile")
+        assertEquals(
+            listOf("/root/my file.docx", "/root/Caddyfile"),
+            blocks.filterIsInstance<ContentBlock.FileRef>().map { it.url },
+        )
+    }
+
+    @Test
+    fun `MEDIA tag inside inline code stays code`() {
+        val blocks = parseContentBlocks("write `MEDIA:/root/x.png` to send a file")
+        assertTrue(blocks.none { it is ContentBlock.Image })
+    }
 }

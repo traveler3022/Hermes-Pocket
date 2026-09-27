@@ -592,5 +592,12 @@ class SessionRepository @Inject constructor(
 
     companion object {
         const val TASK_SOURCE = "pocket_task"
+
+        /**
+         * Source for the user's chats. Without one Hermes files the session as "tui" and tells
+         * the model there is no attachment channel ("this is a TUI, I can't send files");
+         * "desktop" is its graphical chat, where files arrive as MEDIA:/path and render.
+         */
+        const val CHAT_SOURCE = "desktop"
     }
 }

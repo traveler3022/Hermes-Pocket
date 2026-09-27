@@ -49,6 +49,14 @@ private val bareMediaRegex = Regex(
     """(?<![\w/.~:-])(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.[A-Za-z0-9]{1,10}\b""",
 )
 
+// How Hermes' desktop chat delivers a file: "MEDIA:/root/out.pdf", often wrapped in quotes,
+// backticks or emphasis (gateway/platforms/base.py MEDIA_TAG_CLEANUP_RE). Any file type, with or
+// without an extension; the tag itself never shows as text.
+private val mediaTagRegex = Regex(
+    """[`"'*_]{0,3}MEDIA:\s*(?:`([^`\n]+)`|"([^"\n]+)"|'([^'\n]+)'|((?:~/|/)[^\s`"'<>*]+?))""" +
+        """(?=[\s`"'*,;:)\]}]|MEDIA:|\.(?:\s|$)|$)[`"'*_]{0,3}""",
+)
+
 private val nonFileExtensions = setOf(
     "com", "org", "net", "io", "dev", "app", "co", "gov", "edu", "info", "biz", "me", "ai",
 )
@@ -100,6 +108,12 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
     for (match in links) {
         val target = match.groupValues[2]
         if (isLocalArtifact(target)) candidates += match.range to classifyUrl(target, alt = match.groupValues[1])
+    }
+    for (tag in mediaTagRegex.findAll(segment)) {
+        if (codeSpans.any { inside(tag.range, it) }) continue
+        // A closing `_` of _emphasis_ can't be told from the path by the regex; no file ends in one.
+        val path = tag.groupValues.drop(1).first { it.isNotEmpty() }.trim().trimEnd('_')
+        candidates += tag.range to classifyUrl(path)
     }
     for (bare in bareMediaRegex.findAll(segment)) {
         val ext = bare.value.substringAfterLast('.', "").lowercase()

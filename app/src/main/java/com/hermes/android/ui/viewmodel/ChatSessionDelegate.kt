@@ -54,7 +54,10 @@ internal class ChatSessionDelegate(
 
     suspend fun create(state: MutableStateFlow<ChatUiState>) {
         try {
-            val result = gatewayClient.request(GatewayMethods.SESSION_CREATE)
+            val result = gatewayClient.request(
+                GatewayMethods.SESSION_CREATE,
+                mapOf("source" to JsonPrimitive(SessionRepository.CHAT_SOURCE)),
+            )
             val sessionId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
             val storedId = ((result as? JsonObject)?.get("stored_session_id") as? JsonPrimitive)
                 ?.takeIf { it.isString }
