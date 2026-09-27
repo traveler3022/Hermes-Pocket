@@ -531,15 +531,51 @@ class LinuxDesktop @Inject constructor(
         const val DefaultHomepage = "https://duckduckgo.com"
         const val AgentBrowserSpec = "agent-browser@^0.26.0"
 
-        /** `apk add` set for the desktop — Aether's "chrome" profile plus Persian fonts and X tools. */
+        /**
+         * `apk add` set for the desktop. The Linux's repo has the X server (Xvfb) and the
+         * libraries, but not Chromium, a VNC server or the X tools: [PostInstall] brings those.
+         * The library list is what the desktop-tools build reports its binaries load
+         * (scripts/desktop-tools/build.sh); the rest are Chrome's and the CDP proxy's.
+         */
         val Packages = listOf(
-            "chromium", "font-noto", "font-noto-arabic", "font-noto-cjk",
-            "openbox", "tigervnc", "xprop", "novnc", "websockify",
-            "xdotool", "scrot", "xclip", "xterm",
+            "xvfb", "xauth", "fontconfig", "font-dejavu", "python3", "unzip",
+            // x11vnc, xdotool, openbox, xprop, xclip, xterm
+            "cairo", "freetype", "glib", "harfbuzz", "libjpeg-turbo", "libpng", "libssl3", "libx11",
+            "libxaw", "libxcursor", "libxdamage", "libxext", "libxfixes", "libxft", "libxi",
+            "libxinerama", "libxkbcommon", "libxml2", "libxmu", "libxpm", "libxrandr", "libxrender",
+            "libxt", "libxtst", "libncursesw", "pango", "zlib",
+            // Chrome for Testing
+            "nss", "gtk+3.0", "at-spi2-core", "libxcomposite", "mesa-gbm", "alsa-lib", "cups-libs",
+            "libdrm", "libxshmfence", "eudev-libs",
         )
 
-        /** After apk: the CLI Hermes' browser tools talk to Chromium through. */
-        const val PostInstall = "npm install -g --no-fund --no-audit $AgentBrowserSpec"
+        // 154 exits at start under proot (SIGTRAP, any flags); 153 runs. Checked 2026-09-27.
+        private const val ChromeVersion = "153.0.8010.52"
+        /** Where the app puts the desktop-tools tarball from the APK before [PostInstall] runs. */
+        const val ToolsTarball = "/tmp/hermes-desktop-tools.tar"
+
+        /**
+         * After apk: the X programs built for this Linux (from the APK, see [ToolsTarball] and
+         * .github/workflows/desktop-tools.yml), noVNC 1.6.0 (the viewer loads its vnc_lite.html),
+         * websockify, Google's Chrome for Testing (it has arm64 Linux builds; the repo has no
+         * Chromium), and the CLI Hermes' browser tools talk to Chromium through.
+         */
+        const val PostInstall = "set -e; a=\$(uname -m); cd /tmp; " +
+            "tar -xf $ToolsTarball -C /; rm -f $ToolsTarball; " +
+            "mkdir -p /usr/share/novnc; " +
+            "curl -fsSL --retry 3 https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz " +
+            "| tar -xz --strip-components=1 -C /usr/share/novnc; " +
+            "[ -x /opt/websockify/bin/pip ] || python3 -m venv /opt/websockify; " +
+            "/opt/websockify/bin/pip install -q websockify==0.13.0; " +
+            "ln -sf /opt/websockify/bin/websockify /usr/local/bin/websockify; " +
+            "case \$a in aarch64) p=linux-arm64 ;; *) p=linux64 ;; esac; " +
+            "if [ \"\$(cat /opt/chrome/.version 2>/dev/null)\" != $ChromeVersion ]; then " +
+            "curl -fL --retry 3 -o /tmp/chrome.zip " +
+            "https://storage.googleapis.com/chrome-for-testing-public/$ChromeVersion/\$p/chrome-\$p.zip; " +
+            "rm -rf /opt/chrome /tmp/chrome-\$p; unzip -q /tmp/chrome.zip -d /tmp; " +
+            "mv /tmp/chrome-\$p /opt/chrome; echo $ChromeVersion > /opt/chrome/.version; rm -f /tmp/chrome.zip; fi; " +
+            "ln -sf /opt/chrome/chrome /usr/local/bin/chromium; " +
+            "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
             "(chromium-browser --version || chromium --version) && command -v Xvfb && command -v x11vnc && command -v openbox && " +
