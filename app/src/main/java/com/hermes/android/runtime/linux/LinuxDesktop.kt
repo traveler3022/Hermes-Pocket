@@ -37,7 +37,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Aether's Alpine Chrome (`AlpineChromeController`), for Hermes: a virtual X display (Xvfb :99, shown through x11vnc)
+ * Aether's Alpine Chrome (`AlpineChromeController`), for Hermes: a virtual X display (Xvnc :99)
  * running openbox and Chromium, shown in the app through noVNC. Hermes' own browser tools drive
  * this Chromium through `browser.cdp_url`, so the user watches — and can take over — the same
  * browser the agent uses. Other programs the agent starts with `DISPLAY=:99` (xdotool, xterm, …)
@@ -57,7 +57,9 @@ class LinuxDesktop @Inject constructor(
     private val stdioHub: StdioGatewayHub,
 ) {
     enum class Resolution(val width: Int, val height: Int, val titleEn: String, val titleFa: String) {
-        PHONE(1080, 2040, "Phone (portrait)", "گوشی (عمودی)"),
+        // Not the phone's full 1080x2040: every frame is drawn on the CPU and sent over VNC, and
+        // half the pixels gave ~4x the frames on the server mock; the viewer scales it up.
+        PHONE(720, 1360, "Phone (portrait)", "گوشی (عمودی)"),
         TABLET(1600, 1000, "Tablet (landscape)", "تبلت (افقی)"),
         DESKTOP(1920, 1080, "Desktop (1080p)", "دسکتاپ (1080p)"),
     }
@@ -539,11 +541,11 @@ class LinuxDesktop @Inject constructor(
          */
         val Packages = listOf(
             "xvfb", "xauth", "fontconfig", "font-dejavu", "python3", "unzip",
-            // x11vnc, xdotool, openbox, xprop, xclip, xterm
+            // Xvnc, xdotool, openbox, xprop, xclip, xterm
             "cairo", "freetype", "glib", "harfbuzz", "libjpeg-turbo", "libpng", "libssl3", "libx11",
             "libxaw", "libxcursor", "libxdamage", "libxext", "libxfixes", "libxft", "libxi",
             "libxinerama", "libxkbcommon", "libxml2", "libxmu", "libxpm", "libxrandr", "libxrender",
-            "libxt", "libxtst", "libncursesw", "pango", "zlib", "dbus-libs",
+            "libxt", "libxtst", "libncursesw", "pango", "zlib", "dbus-libs", "linux-pam",
             // Chrome for Testing
             "nss", "gtk+3.0", "at-spi2-core", "libxcomposite", "mesa-gbm", "alsa-lib", "cups-libs",
             "libdrm", "libxshmfence", "eudev-libs",
@@ -560,8 +562,8 @@ class LinuxDesktop @Inject constructor(
          * debian_fetch.py), with the libraries of theirs this Linux does not have.
          */
         private const val DebianPackages =
-            "x11vnc libvncserver1 libvncclient1 libavahi-client3 libavahi-common3 " +
-                "libcrypt1 liblzo2-2 libjpeg62-turbo libgcrypt20 libgpg-error0 libsasl2-2 libsasl2-modules-db " +
+            "tigervnc-standalone-server tigervnc-tools libjpeg62-turbo libaudit1 libcap-ng0 libselinux1 " +
+                "libsystemd0 libunwind8 libxcvt0 " +
                 "xdotool libxdo3 " +
                 "openbox libobrender32v5 libobt2v5 libstartup-notification0 libxcb-util1 libimlib2t64 " +
                 "x11-utils xclip xterm libutempter0 libtinfo6"
@@ -574,6 +576,9 @@ class LinuxDesktop @Inject constructor(
          */
         const val PostInstall = "set -e; a=\$(uname -m); cd /tmp; " +
             "python3 $DebianFetchPath trixie $DebianPackages; " +
+            // Debian names them through its alternatives system, which is not run here.
+            "ln -sf /usr/local/bin/Xtigervnc /usr/local/bin/Xvnc; " +
+            "ln -sf /usr/local/bin/tigervncpasswd /usr/local/bin/vncpasswd; " +
             "mkdir -p /usr/share/novnc; " +
             "curl -fsSL --retry 3 https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz " +
             "| tar -xz --strip-components=1 -C /usr/share/novnc; " +
@@ -590,7 +595,7 @@ class LinuxDesktop @Inject constructor(
             "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
-            "(chromium-browser --version || chromium --version) && command -v Xvfb && command -v x11vnc && command -v openbox && " +
+            "(chromium-browser --version || chromium --version) && command -v Xvnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
                 "command -v xdotool && command -v agent-browser && command -v python3"
 
@@ -673,7 +678,7 @@ class LinuxDesktop @Inject constructor(
         /**
          * Aether's Chrome launch, as a standalone guest command. Chromium restarts if its
          * window is closed (the agent's CDP endpoint must stay up); the desktop lives as long
-         * as the X server (Xvfb) does.
+         * as the X server (Xvnc) does.
          */
         private val DesktopScript = """
             #!/bin/sh
@@ -752,19 +757,25 @@ class LinuxDesktop @Inject constructor(
             if [ -z "${'$'}VNC_PASSWORD" ]; then
                 VNC_PASSWORD=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)
             fi
-            x11vnc -storepasswd "${'$'}VNC_PASSWORD" "${'$'}STATE/vncpasswd" >/dev/null 2>&1
+            printf '%s\n' "${'$'}VNC_PASSWORD" | vncpasswd -f > "${'$'}STATE/vncpasswd"
             chmod 600 "${'$'}STATE/vncpasswd"
-            # No TCP port unless the user deliberately shares on the LAN: x11vnc listens on a
+            # No TCP port unless the user deliberately shares on the LAN: Xvnc listens on a
             # unix socket inside the rootfs, which the Android sandbox really does keep to
             # this app — unlike 127.0.0.1, which every app on the phone shares. websockify
             # bridges that socket to the viewer, and only while somebody is watching.
             rm -f "${'$'}STATE/vnc.sock"
-            if [ "${'$'}VNC_LAN" = 1 ]; then VNC_TCP="-rfbport ${'$'}VNC_PORT"; else VNC_TCP="-rfbport 0"; fi
+            VNC_ACCESS="-SecurityTypes VncAuth -PasswordFile ${'$'}STATE/vncpasswd"
+            VNC_ACCESS="${'$'}VNC_ACCESS -rfbunixpath ${'$'}STATE/vnc.sock -rfbunixmode 0600"
+            if [ "${'$'}VNC_LAN" = 1 ]; then
+                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport ${'$'}VNC_PORT"
+            else
+                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport -1"
+            fi
 
             cleanup() {
                 trap - EXIT INT TERM
                 echo "=== hermes-desktop stopped ${'$'}(date)"
-                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{X11VNC_PID:-} ${'$'}{VNC_PID:-}; do
+                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{VNC_PID:-}; do
                     kill "${'$'}pid" 2>/dev/null || true
                 done
                 pkill -x chromium 2>/dev/null || true; pkill -x chrome 2>/dev/null || true
@@ -772,18 +783,16 @@ class LinuxDesktop @Inject constructor(
             }
             trap cleanup EXIT INT TERM
 
-            # The X server (Xvfb) and its VNC server (x11vnc) are two programs here: the Linux's
-            # package repo has no TigerVNC. MIT-SHM stays off as before (no SysV shm on Android),
-            # hence x11vnc's -noshm; its socket is created under umask 077, i.e. mode 0600.
-            Xvfb :99 -screen 0 "${'$'}{WIDTH}x${'$'}{HEIGHT}x24" -nolisten tcp -nolock -ac -extension MIT-SHM &
+            # Xvnc is the X server and the VNC server in one (TigerVNC, from Debian): with Xvfb +
+            # x11vnc every frame was copied between two processes without shared memory (none on
+            # Android), about 1/6 of the frames on the server mock.
+            # shellcheck disable=SC2086
+            Xvnc :99 -geometry "${'$'}{WIDTH}x${'$'}{HEIGHT}" -depth 24 ${'$'}VNC_ACCESS \
+                -AlwaysShared -extension MIT-SHM -nolock -ac &
             VNC_PID=${'$'}!
             echo ${'$'}${'$'} > "${'$'}PIDS"
             for i in ${'$'}(seq 1 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
             test -S /tmp/.X11-unix/X99
-            # shellcheck disable=SC2086
-            (umask 077; exec x11vnc -display :99 -noshm -rfbauth "${'$'}STATE/vncpasswd" \
-                -unixsock "${'$'}STATE/vnc.sock" ${'$'}VNC_TCP -forever -shared -quiet) &
-            X11VNC_PID=${'$'}!
             openbox &
             OPENBOX_PID=${'$'}!
 
@@ -804,9 +813,9 @@ class LinuxDesktop @Inject constructor(
                 kill -0 "${'$'}CHROME_LOOP" 2>/dev/null || exit 1
                 sleep 0.1
             done
-            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}X11VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
+            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
-            wait "${'$'}VNC_PID" || echo "Xvfb exited with ${'$'}?"
+            wait "${'$'}VNC_PID" || echo "Xvnc exited with ${'$'}?"
         """.trimIndent() + "\n"
 
         private val DesktopSkill = """
