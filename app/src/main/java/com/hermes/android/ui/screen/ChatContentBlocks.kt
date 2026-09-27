@@ -397,7 +397,14 @@ internal fun HtmlBlockCard(
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         }
                     },
-                    update = { it.loadUrl(url) },
+                    update = {
+                        // A page the built-in Linux made is a file:// URL, which WebView
+                        // refuses by default on Android 11+; the preview stayed an error page.
+                        // Its scripts still can't read other files (file URLs keep no access
+                        // to each other).
+                        it.settings.allowFileAccess = url.startsWith("file:")
+                        it.loadUrl(url)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(320.dp)

@@ -176,12 +176,12 @@ internal fun InstallingContent(progress: InstallProgressUi?) {
         ) {
             CircularProgressIndicator()
             Text(
-                text = "Installing Hermes...",
+                text = t("Installing Hermes...", "در حال نصب Hermes..."),
                 style = MaterialTheme.typography.titleMedium,
             )
             progress?.let { p ->
                 Text(
-                    text = "Stage: ${p.stage}",
+                    text = t("Stage: ${p.stage}", "مرحله: ${p.stage}"),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
@@ -218,17 +218,17 @@ internal fun InstalledContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Hermes installed ✓",
+                text = t("Hermes installed ✓", "Hermes نصب شد ✓"),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Text(
-                text = "Version: ${hermesVersion ?: "unknown"}",
+                text = t("Version: ${hermesVersion ?: "unknown"}", "نسخه: ${hermesVersion ?: "نامشخص"}"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Text(
-                text = "Next step: Start the Agent Gateway",
+                text = t("Next step: Start the Agent Gateway", "قدم بعد: اجرای Hermes"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -256,7 +256,7 @@ internal fun ErrorContent(message: String, onRetry: () -> Unit, onFetchLogs: () 
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Error",
+                text = t("Error", "خطا"),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -266,8 +266,8 @@ internal fun ErrorContent(message: String, onRetry: () -> Unit, onFetchLogs: () 
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onRetry) { Text("Retry") }
-                Button(onClick = onFetchLogs) { Text("Fetch Logs") }
+                Button(onClick = onRetry) { Text(t("Retry", "تلاش دوباره")) }
+                Button(onClick = onFetchLogs) { Text(t("Fetch Logs", "دریافت لاگ")) }
             }
         }
     }

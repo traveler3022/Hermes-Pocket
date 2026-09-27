@@ -367,6 +367,8 @@ internal fun ConnectionRetryBanner(
 
 // ── Feature #32: Shimmer skeleton ────────────────────────────────────────
 
+// The bubbles have no content, so each needs a width of its own: with only a maximum
+// they measured 0 wide and the "connecting" screen stayed blank.
 @Composable
 internal fun ShimmerSkeleton() {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -403,6 +405,7 @@ internal fun ShimmerSkeleton() {
         ) {
             Box(
                 modifier = Modifier
+                    .fillMaxWidth(0.7f)
                     .widthIn(max = 280.dp)
                     .height(48.dp)
                     .background(shimmerBrush, RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)),
@@ -415,6 +418,7 @@ internal fun ShimmerSkeleton() {
         ) {
             Box(
                 modifier = Modifier
+                    .fillMaxWidth(0.85f)
                     .widthIn(max = 320.dp)
                     .height(80.dp)
                     .background(shimmerBrush, RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)),
@@ -427,6 +431,7 @@ internal fun ShimmerSkeleton() {
         ) {
             Box(
                 modifier = Modifier
+                    .fillMaxWidth(0.5f)
                     .widthIn(max = 200.dp)
                     .height(40.dp)
                     .background(shimmerBrush, RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)),
@@ -439,6 +444,7 @@ internal fun ShimmerSkeleton() {
         ) {
             Box(
                 modifier = Modifier
+                    .fillMaxWidth(0.9f)
                     .widthIn(max = 350.dp)
                     .height(100.dp)
                     .background(shimmerBrush, RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)),

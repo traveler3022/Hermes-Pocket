@@ -35,9 +35,7 @@ object GatewayModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
-            // Redact token from log output to prevent credential leakage
-            val redacted = message.replace(Regex("token=[^&\\s]+"), "token=REDACTED")
-            timber.log.Timber.d("[OkHttp] $redacted")
+            timber.log.Timber.d("[OkHttp] ${redactCredentials(message)}")
         }.apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
@@ -61,3 +59,11 @@ object GatewayModule {
         encodeDefaults = false
     }
 }
+
+private val CREDENTIAL_PARAM = Regex("(token|key)=[^&\\s]+", RegexOption.IGNORE_CASE)
+
+/**
+ * A log line without credentials: the gateway token, and API keys sent as a query
+ * parameter (the Gemini key check puts the key in the URL as `?key=`).
+ */
+internal fun redactCredentials(message: String): String = message.replace(CREDENTIAL_PARAM, "$1=REDACTED")

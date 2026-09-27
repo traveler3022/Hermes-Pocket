@@ -43,6 +43,7 @@ import com.hermes.android.ui.theme.AppFont
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -226,7 +227,8 @@ internal fun GeneralTab(
                         )
                         Slider(
                             value = themeModeState.fontScalePct.toFloat(),
-                            onValueChange = { themeModeState.updateFontScalePct(it.toInt()) },
+                            // Rounded, not truncated: a snapped step can land a hair under its value (114.99…).
+                            onValueChange = { themeModeState.updateFontScalePct(it.roundToInt()) },
                             valueRange = 80f..140f,
                             steps = 11,
                             modifier = Modifier.weight(1f),

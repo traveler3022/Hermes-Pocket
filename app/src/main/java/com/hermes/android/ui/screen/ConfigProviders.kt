@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -74,6 +75,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -462,8 +465,18 @@ internal fun ApiKeyRow(
                 label = { Text(t("API Key", "کلید API")) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
+                // Was plain text on a normal keyboard: the key sat readable on screen and the
+                // keyboard could learn it.
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             )
-            TextButton(onClick = { onSaveKey(provider, apiKey) }) {
+            TextButton(
+                onClick = {
+                    onSaveKey(provider, apiKey)
+                    apiKey = ""
+                },
+                enabled = apiKey.isNotBlank(),
+            ) {
                 Text(t("Save", "ذخیره"))
             }
         }
@@ -606,7 +619,7 @@ internal fun ProviderCard(
                             ) {
                                 Icon(Icons.Default.Star, null, Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(t("Set primary", "کلید اصلی"), style = MaterialTheme.typography.labelSmall)
+                                Text(t("Set primary", "پرووایدر اصلی شود"), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }

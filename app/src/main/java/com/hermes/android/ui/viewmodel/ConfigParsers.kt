@@ -32,7 +32,9 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
                     providerName = providerName,
                 )
             }
-        }
+        // The pickers key their lists by provider/model, and a repeated key crashes a
+        // LazyColumn; the catalogue is merged from several sources on the server.
+        }.distinctBy { it.provider to it.modelId }
     } catch (e: Exception) {
         Timber.w(e, "[Config] Failed to parse model options")
         emptyList()

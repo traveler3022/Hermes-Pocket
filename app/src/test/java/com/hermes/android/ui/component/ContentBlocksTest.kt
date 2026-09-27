@@ -78,4 +78,67 @@ class ContentBlocksTest {
         assertTrue(blocks.any { it is ContentBlock.Video })
         assertTrue(blocks.any { it is ContentBlock.FileRef && it.name == "report.pdf" })
     }
+
+    @Test
+    fun `a relative path in inline code stays text`() {
+        val text = "I changed `app/src/main/Foo.kt` to fix it."
+        assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
+    }
+
+    @Test
+    fun `a fraction is not a file`() {
+        val text = "Score: 4/5.0 overall, took 2/3.5 seconds"
+        assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
+    }
+
+    @Test
+    fun `a link to a web page stays a link`() {
+        val text = "Read [the docs](https://docs.python.org/3/library/re.html) first."
+        assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
+    }
+
+    @Test
+    fun `a link to a file the agent made is that file`() {
+        val blocks = parseContentBlocks("Here it is: [the report](/root/report.pdf).")
+        assertEquals(
+            listOf(
+                ContentBlock.Text("Here it is:"),
+                ContentBlock.FileRef(url = "/root/report.pdf", name = "the report"),
+                ContentBlock.Text("."),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun `a path that is a whole inline code span leaves no stray backticks`() {
+        val blocks = parseContentBlocks("Saved to `/root/report.html`.")
+        assertEquals(
+            listOf(
+                ContentBlock.Text("Saved to"),
+                ContentBlock.Html(url = "/root/report.html", name = "report.html"),
+                ContentBlock.Text("."),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun `a path inside a longer inline command stays code`() {
+        val text = "Run `python3 /root/app/main.py` now"
+        assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
+    }
+
+    @Test
+    fun `an absolute path in prose is still a file`() {
+        val blocks = parseContentBlocks("Run it with python3 /root/app/main.py now")
+        assertEquals(
+            listOf(
+                ContentBlock.Text("Run it with python3"),
+                ContentBlock.FileRef(url = "/root/app/main.py", name = "main.py"),
+                ContentBlock.Text("now"),
+            ),
+            blocks,
+        )
+    }
 }

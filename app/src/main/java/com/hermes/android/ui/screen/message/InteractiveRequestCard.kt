@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.i18n.t
@@ -159,6 +161,9 @@ private fun ColumnScope.MaskedInput(label: String?, placeholder: String, onSubmi
         },
         placeholder = { Text(placeholder) },
         visualTransformation = PasswordVisualTransformation(),
+        // Masking only hides the dots on screen; without this the keyboard treats a sudo
+        // password or an API key as ordinary text and may learn and suggest it later.
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
     )
     SendButton(enabled = value.isNotBlank()) { onSubmit(value) }
 }

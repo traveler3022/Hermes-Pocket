@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer. Keep in step with backup_rules.xml, which explains the excludes. -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
         <include domain="database" path="."/>
+        <exclude domain="sharedpref" path="hermes_remote_server.xml"/>
+        <exclude domain="sharedpref" path="hermes_runtime.xml"/>
+        <exclude domain="sharedpref" path="hermes_linux_desktop.xml"/>
+        <exclude domain="sharedpref" path="hermes_linux_runtime.xml"/>
+        <exclude domain="sharedpref" path="hermes_setup.xml"/>
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="."/>
         <include domain="database" path="."/>
+        <exclude domain="sharedpref" path="hermes_remote_server.xml"/>
+        <exclude domain="sharedpref" path="hermes_runtime.xml"/>
+        <exclude domain="sharedpref" path="hermes_linux_desktop.xml"/>
+        <exclude domain="sharedpref" path="hermes_linux_runtime.xml"/>
+        <exclude domain="sharedpref" path="hermes_setup.xml"/>
     </device-transfer>
 </data-extraction-rules>

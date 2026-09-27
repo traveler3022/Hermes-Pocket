@@ -29,6 +29,8 @@ sealed class ContentBlock {
 
 private val fenceRegex = Regex("```([A-Za-z0-9+_.-]*)[ \\t]*\\n([\\s\\S]*?)(?:```|$)")
 private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
+private val mdLinkRegex = Regex("""(?<!!)\[([^\]]*)]\(([^)\s]+)\)""")
+private val inlineCodeRegex = Regex("`[^`\n]+`")
 
 // Bare path/URL to a media artifact the agent wrote or linked, e.g.
 // "Saved to ~/.hermes/images/plot.png" or "file:///.../page.html".
@@ -40,8 +42,11 @@ private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
 // no path, e.g. "https://example.com") that would otherwise false-positive
 // as a "file" named "com". Unrecognized (non-image/video/html) extensions
 // still get a generic download card via classifyUrl's `else` branch.
+// The path has to start a token: without the lookbehind, "app/src/main/Foo.kt" matched
+// from its first slash and "4/5.0" from its only one, and the sentence around them was
+// cut in two by a download card for a file that doesn't exist.
 private val bareMediaRegex = Regex(
-    """(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.[A-Za-z0-9]{1,10}\b""",
+    """(?<![\w/.~:-])(?:file://|https?://|content://|~/|/)[^\s"'`<>\[\]()]+\.[A-Za-z0-9]{1,10}\b""",
 )
 
 private val nonFileExtensions = setOf(
@@ -65,34 +70,55 @@ private fun classifyUrl(url: String, alt: String = ""): ContentBlock {
     }
 }
 
-/** Extract media blocks (markdown images + bare artifact paths) from prose. */
+/** A link target that is a file the agent made, rather than a web page. */
+private fun isLocalArtifact(target: String): Boolean =
+    (target.startsWith("/") || target.startsWith("~/") || target.startsWith("file://")) &&
+        bareMediaRegex.matchEntire(target) != null
+
+/**
+ * Extract media blocks from prose: markdown images, markdown links to files the agent
+ * made, and bare artifact paths. Markdown syntax owns the paths inside it — a link to a
+ * web page stays a link for the markdown renderer (it used to be split around an inline
+ * web preview, leaving "[the docs](" and ")" behind), and a path inside a longer inline
+ * command stays code. A path that is a whole inline code span is the file, backticks and all.
+ */
 private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
-    // Collect all media matches, markdown-image matches taking priority over
-    // bare-path matches that fall inside them (the md url IS a bare path).
-    val mdMatches = mdImageRegex.findAll(segment).toList()
-    val bareMatches = bareMediaRegex.findAll(segment).filter { bare ->
-        val ext = bare.value.substringAfterLast('.', "").lowercase()
-        ext !in nonFileExtensions &&
-            mdMatches.none { md -> bare.range.first >= md.range.first && bare.range.last <= md.range.last }
+    val images = mdImageRegex.findAll(segment).toList()
+    val links = mdLinkRegex.findAll(segment).toList()
+    val codeSpans = inlineCodeRegex.findAll(segment).toList()
+    fun inside(range: IntRange, outer: MatchResult) = range.first >= outer.range.first && range.last <= outer.range.last
+
+    val candidates = mutableListOf<Pair<IntRange, ContentBlock>>()
+    for (match in images) {
+        // Markdown image syntax is ALWAYS an image, even when the URL has
+        // no file extension (common for web images, e.g. picsum.photos/200
+        // or a query-only CDN link). Only bare paths are classified by ext.
+        val alt = match.groupValues[1]
+        val url = match.groupValues[2]
+        candidates += match.range to ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url)
     }
-    val all = (mdMatches.map { it to true } + bareMatches.map { it to false })
-        .sortedBy { it.first.range.first }
+    for (match in links) {
+        val target = match.groupValues[2]
+        if (isLocalArtifact(target)) candidates += match.range to classifyUrl(target, alt = match.groupValues[1])
+    }
+    for (bare in bareMediaRegex.findAll(segment)) {
+        val ext = bare.value.substringAfterLast('.', "").lowercase()
+        if (ext in nonFileExtensions) continue
+        if (images.any { inside(bare.range, it) } || links.any { inside(bare.range, it) }) continue
+        val span = codeSpans.firstOrNull { inside(bare.range, it) }
+        when {
+            span == null -> candidates += bare.range to classifyUrl(bare.value)
+            span.value == "`${bare.value}`" -> candidates += span.range to classifyUrl(bare.value)
+        }
+    }
 
     var cursor = 0
-    for ((match, isMd) in all) {
-        val before = segment.substring(cursor, match.range.first)
+    for ((range, block) in candidates.sortedBy { it.first.first }) {
+        if (range.first < cursor) continue // inside one already taken
+        val before = segment.substring(cursor, range.first)
         if (before.isNotBlank()) out.add(ContentBlock.Text(before.trim()))
-        if (isMd) {
-            // Markdown image syntax is ALWAYS an image, even when the URL has
-            // no file extension (common for web images, e.g. picsum.photos/200
-            // or a query-only CDN link). Only bare paths are classified by ext.
-            val alt = match.groupValues[1]
-            val url = match.groupValues[2]
-            out.add(ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url))
-        } else {
-            out.add(classifyUrl(match.value))
-        }
-        cursor = match.range.last + 1
+        out.add(block)
+        cursor = range.last + 1
     }
     val tail = segment.substring(cursor)
     if (tail.isNotBlank()) out.add(ContentBlock.Text(tail.trim()))

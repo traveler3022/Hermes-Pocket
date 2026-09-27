@@ -3,6 +3,8 @@ package com.hermes.android.ui.screen
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
+import android.webkit.MimeTypeMap
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -132,6 +134,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -147,6 +150,7 @@ import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 internal fun highlightText(text: String, query: String): AnnotatedString {
@@ -220,8 +224,32 @@ internal fun rememberReduceMotion(): Boolean {
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 internal fun openUrlExternally(context: Context, url: String) {
     try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        context.startActivity(externalViewIntent(context, url))
     } catch (e: Exception) {
         Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
     }
 }
+
+/**
+ * ACTION_VIEW for [url]. A file of the built-in Linux arrives as a file:// URL into this
+ * app's private storage, which Android refuses to put in an intent (and the other app could
+ * not read anyway), so "Open in browser" and "Play" always failed for it. It goes out as a
+ * document of [LinuxFilesProvider] instead, with a read grant for that one file.
+ */
+internal fun externalViewIntent(context: Context, url: String): Intent {
+    val uri = Uri.parse(url)
+    val guestPath = uri.takeIf { it.scheme == "file" }?.path
+        ?.let { guestPathIn(File(context.filesDir, "linux/rootfs").absolutePath, it) }
+        ?: return Intent(Intent.ACTION_VIEW, uri)
+    val document = DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), guestPath)
+    val type = MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(guestPath.substringAfterLast('.', "").lowercase())
+        ?: "*/*"
+    return Intent(Intent.ACTION_VIEW)
+        .setDataAndType(document, type)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+
+/** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */
+internal fun guestPathIn(rootfs: String, hostPath: String): String? =
+    hostPath.removePrefix(rootfs).takeIf { it != hostPath && it.startsWith("/") }

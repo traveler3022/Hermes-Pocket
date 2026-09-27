@@ -125,7 +125,7 @@ fun PluginsScreen(
                                 trailing = {
                                     Switch(
                                         checked = plugin.enabled,
-                                        onCheckedChange = { viewModel.togglePlugin(plugin.name, it) },
+                                        onCheckedChange = { viewModel.togglePlugin(plugin, it) },
                                         enabled = plugin.source != "bundled",
                                     )
                                 },

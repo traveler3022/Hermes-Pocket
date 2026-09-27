@@ -81,6 +81,9 @@ class PluginsViewModel @Inject constructor(
                 val status = (plugin["status"] as? JsonPrimitive)?.contentOrNull ?: ""
                 PluginItem(
                     name = name,
+                    // The canonical registry key: bare names collide across plugin categories,
+                    // and the server resolves a toggle by key first.
+                    key = (plugin["key"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: name,
                     description = (plugin["description"] as? JsonPrimitive)?.contentOrNull ?: "",
                     source = (plugin["source"] as? JsonPrimitive)?.contentOrNull ?: "",
                     status = status,
@@ -98,21 +101,21 @@ class PluginsViewModel @Inject constructor(
      * — plugins.manage's `toggle` action (name + enable) was never called
      * from anywhere. "Plugins Manager" only ever listed plugins.
      */
-    fun togglePlugin(name: String, enable: Boolean) {
+    fun togglePlugin(plugin: PluginItem, enable: Boolean) {
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
                     put("action", "toggle")
-                    put("name", name)
+                    put("key", plugin.key)
                     put("enable", enable)
                 }
                 gatewayClient.request(GatewayMethods.PLUGINS_MANAGE, params.toMap())
-                Timber.i("[Plugins] $name -> enabled=$enable")
+                Timber.i("[Plugins] ${plugin.key} -> enabled=$enable")
                 loadPlugins()
             } catch (e: GatewayException) {
-                Timber.e(e, "[Plugins] Failed to toggle $name")
+                Timber.e(e, "[Plugins] Failed to toggle ${plugin.key}")
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to toggle $name: ${e.message}",
+                    errorMessage = "Failed to toggle ${plugin.name}: ${e.message}",
                 )
             }
         }
@@ -135,6 +138,7 @@ data class PluginsUiState(
 
 data class PluginItem(
     val name: String,
+    val key: String = name,
     val description: String = "",
     val source: String = "",
     val status: String = "",

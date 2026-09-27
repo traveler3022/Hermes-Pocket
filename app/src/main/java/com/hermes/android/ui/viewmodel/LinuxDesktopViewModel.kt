@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.runtime.linux.LinuxDesktop
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 data class LinuxDesktopUiState(
@@ -95,6 +97,13 @@ class LinuxDesktopViewModel @Inject constructor(
             _ui.update { it.copy(busy = true) }
             try {
                 block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Saving a setting rewrites the desktop's files in the rootfs; a failed write
+                // (a full disk) escaped the coroutine here and took the whole app down.
+                Timber.w(e, "[Desktop] action failed")
+                _ui.update { it.copy(message = e.message ?: e.javaClass.simpleName) }
             } finally {
                 _ui.update { it.copy(busy = false) }
             }

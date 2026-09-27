@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. Keep in step with data_extraction_rules.xml. -->
 <full-backup-content>
     <include domain="sharedpref" path="."/>
     <include domain="database" path="."/>
     <exclude domain="sharedpref" path="device.xml"/>
+    <!-- Credentials never leave the phone: the remote server's token, the Termux
+         dashboard token, the desktop's VNC password and browser secret. -->
+    <exclude domain="sharedpref" path="hermes_remote_server.xml"/>
+    <exclude domain="sharedpref" path="hermes_runtime.xml"/>
+    <exclude domain="sharedpref" path="hermes_linux_desktop.xml"/>
+    <!-- Describe what is installed on this phone. The built-in Linux lives in the files
+         domain, which is not backed up, so restored on a new phone these said "set up"
+         and skipped setup for a Hermes that isn't there. -->
+    <exclude domain="sharedpref" path="hermes_linux_runtime.xml"/>
+    <exclude domain="sharedpref" path="hermes_setup.xml"/>
 </full-backup-content>
