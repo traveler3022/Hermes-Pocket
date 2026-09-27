@@ -37,7 +37,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Aether's Alpine Chrome (`AlpineChromeController`), for Hermes: a virtual X display (Xvnc :99)
+ * Aether's Alpine Chrome (`AlpineChromeController`), for Hermes: a virtual X display (Xvfb :99, shown through x11vnc)
  * running openbox and Chromium, shown in the app through noVNC. Hermes' own browser tools drive
  * this Chromium through `browser.cdp_url`, so the user watches — and can take over — the same
  * browser the agent uses. Other programs the agent starts with `DISPLAY=:99` (xdotool, xterm, …)
@@ -131,12 +131,12 @@ class LinuxDesktop @Inject constructor(
     private val cdpUrl: String get() = "http://127.0.0.1:$CdpPort/$cdpSecret"
 
     /**
-     * The password Xvnc enforces: the user's when they share on the LAN, an auto-generated
+     * The password the VNC server enforces: the user's when they share on the LAN, an auto-generated
      * per-install secret otherwise.
      *
      * There is no such thing as a private loopback on Android — 127.0.0.1 is the same
      * interface for every app on the device, and INTERNET is a permission users are never
-     * asked about. An unauthenticated Xvnc (`-SecurityTypes None`) therefore handed any
+     * asked about. An unauthenticated VNC server therefore handed any
      * installed app full view and control of this desktop, including whatever the user is
      * signed into in its Chromium. `-localhost` does not help: it only excludes the LAN.
      */
@@ -432,7 +432,7 @@ class LinuxDesktop @Inject constructor(
                 appendLine("WIDTH=${current.resolution.width}")
                 appendLine("HEIGHT=${current.resolution.height}")
                 appendLine("HOMEPAGE=${shellQuote(current.homepage.ifBlank { DefaultHomepage })}")
-                // VNC_LAN only decides whether Xvnc also listens off-device; the password
+                // VNC_LAN only decides whether the VNC server also listens off-device; the password
                 // below is enforced either way.
                 appendLine("VNC_LAN=${if (onLan) 1 else 0}")
                 appendLine("VNC_PASSWORD=${shellQuote(current.effectiveVncPassword)}")
@@ -542,7 +542,7 @@ class LinuxDesktop @Inject constructor(
         const val PostInstall = "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
-            "(chromium-browser --version || chromium --version) && command -v Xvnc && command -v openbox && " +
+            "(chromium-browser --version || chromium --version) && command -v Xvfb && command -v x11vnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
                 "command -v xdotool && command -v agent-browser && command -v python3"
 
@@ -625,7 +625,7 @@ class LinuxDesktop @Inject constructor(
         /**
          * Aether's Chrome launch, as a standalone guest command. Chromium restarts if its
          * window is closed (the agent's CDP endpoint must stay up); the desktop lives as long
-         * as Xvnc does.
+         * as the X server (Xvfb) does.
          */
         private val DesktopScript = """
             #!/bin/sh
@@ -652,7 +652,7 @@ class LinuxDesktop @Inject constructor(
                     for pid in ${'$'}(cat "${'$'}PIDS"); do kill "${'$'}pid" 2>/dev/null || true; done
                     rm -f "${'$'}PIDS"
                 fi
-                pkill -x chromium 2>/dev/null || true
+                pkill -x chromium 2>/dev/null || true; pkill -x chrome 2>/dev/null || true
             }
 
             case "${'$'}{1:-start}" in
@@ -698,45 +698,44 @@ class LinuxDesktop @Inject constructor(
             if [ -z "${'$'}CDP_SECRET" ]; then echo "No CDP secret in desktop.env; start the desktop from the app"; exit 1; fi
 
             # Always authenticate. Every app on an Android device shares 127.0.0.1, so an
-            # open Xvnc is an open door, not a local-only convenience. A stale desktop.env
+            # open VNC server is an open door, not a local-only convenience. A stale desktop.env
             # without a password gets a random one — the viewer failing to connect is the
             # safe outcome; an unauthenticated desktop is not.
             if [ -z "${'$'}VNC_PASSWORD" ]; then
                 VNC_PASSWORD=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)
             fi
-            printf '%s\n' "${'$'}VNC_PASSWORD" | vncpasswd -f > "${'$'}STATE/vncpasswd"
+            x11vnc -storepasswd "${'$'}VNC_PASSWORD" "${'$'}STATE/vncpasswd" >/dev/null 2>&1
             chmod 600 "${'$'}STATE/vncpasswd"
-            # No TCP port unless the user deliberately shares on the LAN: Xvnc listens on a
+            # No TCP port unless the user deliberately shares on the LAN: x11vnc listens on a
             # unix socket inside the rootfs, which the Android sandbox really does keep to
             # this app — unlike 127.0.0.1, which every app on the phone shares. websockify
             # bridges that socket to the viewer, and only while somebody is watching.
             rm -f "${'$'}STATE/vnc.sock"
-            VNC_ACCESS="-SecurityTypes VncAuth -PasswordFile ${'$'}STATE/vncpasswd"
-            VNC_ACCESS="${'$'}VNC_ACCESS -rfbunixpath ${'$'}STATE/vnc.sock -rfbunixmode 0600"
-            if [ "${'$'}VNC_LAN" = 1 ]; then
-                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport ${'$'}VNC_PORT"
-            else
-                VNC_ACCESS="${'$'}VNC_ACCESS -rfbport -1"
-            fi
+            if [ "${'$'}VNC_LAN" = 1 ]; then VNC_TCP="-rfbport ${'$'}VNC_PORT"; else VNC_TCP="-rfbport 0"; fi
 
             cleanup() {
                 trap - EXIT INT TERM
                 echo "=== hermes-desktop stopped ${'$'}(date)"
-                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{VNC_PID:-}; do
+                for pid in ${'$'}{CHROME_LOOP:-} ${'$'}{OPENBOX_PID:-} ${'$'}{X11VNC_PID:-} ${'$'}{VNC_PID:-}; do
                     kill "${'$'}pid" 2>/dev/null || true
                 done
-                pkill -x chromium 2>/dev/null || true
+                pkill -x chromium 2>/dev/null || true; pkill -x chrome 2>/dev/null || true
                 rm -f "${'$'}PIDS"
             }
             trap cleanup EXIT INT TERM
 
-            # shellcheck disable=SC2086
-            Xvnc :99 -geometry "${'$'}{WIDTH}x${'$'}{HEIGHT}" -depth 24 ${'$'}VNC_ACCESS \
-                -AlwaysShared -extension MIT-SHM -nolock -ac &
+            # The X server (Xvfb) and its VNC server (x11vnc) are two programs here: the Linux's
+            # package repo has no TigerVNC. MIT-SHM stays off as before (no SysV shm on Android),
+            # hence x11vnc's -noshm; its socket is created under umask 077, i.e. mode 0600.
+            Xvfb :99 -screen 0 "${'$'}{WIDTH}x${'$'}{HEIGHT}x24" -nolisten tcp -nolock -ac -extension MIT-SHM &
             VNC_PID=${'$'}!
             echo ${'$'}${'$'} > "${'$'}PIDS"
             for i in ${'$'}(seq 1 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
             test -S /tmp/.X11-unix/X99
+            # shellcheck disable=SC2086
+            (umask 077; exec x11vnc -display :99 -noshm -rfbauth "${'$'}STATE/vncpasswd" \
+                -unixsock "${'$'}STATE/vnc.sock" ${'$'}VNC_TCP -forever -shared -quiet) &
+            X11VNC_PID=${'$'}!
             openbox &
             OPENBOX_PID=${'$'}!
 
@@ -757,9 +756,9 @@ class LinuxDesktop @Inject constructor(
                 kill -0 "${'$'}CHROME_LOOP" 2>/dev/null || exit 1
                 sleep 0.1
             done
-            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
+            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}X11VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
-            wait "${'$'}VNC_PID" || echo "Xvnc exited with ${'$'}?"
+            wait "${'$'}VNC_PID" || echo "Xvfb exited with ${'$'}?"
         """.trimIndent() + "\n"
 
         private val DesktopSkill = """
@@ -778,7 +777,7 @@ class LinuxDesktop @Inject constructor(
 
             # Built-in desktop (Hermes Android)
 
-            Hermes runs inside Alpine Linux on the user's phone. The app provides a virtual
+            Hermes runs inside a small Linux on the user's phone. The app provides a virtual
             desktop — X display `:99`, openbox, Chromium — which the user can watch live in
             the app's VNC viewer (Linux → Browser & desktop). Anything you do there, they can
             see, but only while they have that screen open.

@@ -17,31 +17,31 @@ deps() {
 }
 src() { cd /tmp && rm -rf "$1" && mkdir "$1" && curl -fsSL --retry 3 "$2" | tar -x"${3:-z}" --strip-components=1 -C "$1" && cd "$1"; }
 xdotool() { src xdotool https://github.com/jordansissel/xdotool/archive/refs/tags/v3.20211022.1.tar.gz
-  make -j"$J" WITHOUT_RPATH_FIX=1 >/dev/null && make install PREFIX=/usr/local DESTDIR=$OUT WITHOUT_RPATH_FIX=1 >/dev/null; }
+  make -j"$J" WITHOUT_RPATH_FIX=1 && make install PREFIX=/usr/local DESTDIR=$OUT WITHOUT_RPATH_FIX=1; }
 libvnc() { src libvncserver https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-0.9.15.tar.gz
   cmake -S . -B b -DCMAKE_INSTALL_PREFIX=/opt/vnc -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_SHARED_LIBS=OFF \
     -DWITH_GNUTLS=OFF -DWITH_GCRYPT=OFF -DWITH_SDL=OFF -DWITH_GTK=OFF -DWITH_EXAMPLES=OFF -DWITH_TESTS=OFF \
-    -DWITH_SYSTEMD=OFF -DWITH_LZO=OFF -DWITH_FFMPEG=OFF >/dev/null
-  cmake --build b -j"$J" >/dev/null && cmake --install b >/dev/null; }
+    -DWITH_SYSTEMD=OFF -DWITH_LZO=OFF -DWITH_FFMPEG=OFF
+  cmake --build b -j"$J" && cmake --install b; }
 x11vnc() { src x11vnc https://github.com/LibVNC/x11vnc/archive/refs/tags/0.9.17.tar.gz
-  autoreconf -fi >/dev/null 2>&1
-  PKG_CONFIG_PATH=/opt/vnc/lib/pkgconfig:/opt/vnc/lib64/pkgconfig ./configure -q --prefix=/usr/local >/dev/null
-  make -j"$J" >/dev/null 2>&1 && make install DESTDIR=$OUT >/dev/null 2>&1; }
+  autoreconf -fi
+  PKG_CONFIG_PATH=/opt/vnc/lib/pkgconfig:/opt/vnc/lib64/pkgconfig ./configure -q --prefix=/usr/local
+  make -j"$J" && make install DESTDIR=$OUT; }
 openbox() { src openbox https://github.com/Mikachu/openbox/archive/refs/tags/release-3.6.1.tar.gz
-  ./bootstrap >/dev/null 2>&1
+  ./bootstrap
   ./configure -q --prefix=/usr/local --disable-nls --disable-startup-notification --disable-imlib2 \
-    --disable-librsvg --disable-static >/dev/null
+    --disable-librsvg --disable-static
   # Only the man pages need docbook-to-man; stand in for it.
   printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/docbook-to-man && chmod +x /usr/local/bin/docbook-to-man
-  make -j"$J" >/dev/null 2>&1 && make install DESTDIR=$OUT >/dev/null 2>&1; }
+  make -j"$J" && make install DESTDIR=$OUT; }
 xprop() { src xprop https://www.x.org/releases/individual/app/xprop-1.2.8.tar.xz J
-  ./configure -q --prefix=/usr/local >/dev/null && make -j"$J" >/dev/null && make install DESTDIR=$OUT >/dev/null; }
+  ./configure -q --prefix=/usr/local && make -j"$J" && make install DESTDIR=$OUT; }
 xclip() { src xclip https://github.com/astrand/xclip/archive/refs/tags/0.13.tar.gz
-  autoreconf -fi >/dev/null 2>&1; ./configure -q --prefix=/usr/local >/dev/null
-  make -j"$J" >/dev/null && make install DESTDIR=$OUT >/dev/null; }
+  autoreconf -fi; ./configure -q --prefix=/usr/local
+  make -j"$J" && make install DESTDIR=$OUT; }
 xterm() { src xterm https://invisible-island.net/archives/xterm/xterm-403.tgz
-  ./configure -q --prefix=/usr/local --enable-wide-chars --with-freetype --disable-setuid --disable-setgid >/dev/null 2>&1
-  make -j"$J" >/dev/null 2>&1 && make install-bin DESTDIR=$OUT >/dev/null 2>&1; }
+  ./configure -q --prefix=/usr/local --enable-wide-chars --with-freetype --disable-setuid --disable-setgid
+  make -j"$J" && make install-bin DESTDIR=$OUT; }
 scrot() {
   # scrot needs imlib2, which the repo lacks: this stand-in saves the X display with Pillow.
   mkdir -p $OUT/usr/local/bin && cat > $OUT/usr/local/bin/scrot <<'SCROT'
