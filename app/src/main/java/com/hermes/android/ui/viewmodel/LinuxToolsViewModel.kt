@@ -77,6 +77,13 @@ class LinuxToolsViewModel @Inject constructor(
             _state.update { it.copy(installing = profile.id, log = listOf("$ $command"), error = null) }
             try {
                 var result = environment.run(command) { line -> appendLog(line) }
+                if (profile.id == DesktopProfileId) {
+                    // The post-install fetches the X programs the Linux's repo lacks from Debian.
+                    val staged = withContext(Dispatchers.IO) {
+                        environment.copyAssetToGuest(LinuxDesktop.DebianFetchAsset, LinuxDesktop.DebianFetchPath)
+                    }
+                    check(staged) { "debian_fetch.py is missing from this build" }
+                }
                 profile.postInstall?.let { post ->
                     appendLog("$ $post")
                     result = environment.run(post) { line -> appendLog(line) }

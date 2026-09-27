@@ -534,8 +534,8 @@ class LinuxDesktop @Inject constructor(
         /**
          * `apk add` set for the desktop. The Linux's repo has the X server (Xvfb) and the
          * libraries, but not Chromium, a VNC server or the X tools: [PostInstall] brings those.
-         * The library list is what the desktop-tools build reports its binaries load
-         * (scripts/desktop-tools/build.sh); the rest are Chrome's and the CDP proxy's.
+         * The library list is what the [DebianPackages] programs load from this Linux (checked
+         * with ldd on Alpaquita); the rest are Chrome's and the CDP proxy's.
          */
         val Packages = listOf(
             "xvfb", "xauth", "fontconfig", "font-dejavu", "python3", "unzip",
@@ -543,7 +543,7 @@ class LinuxDesktop @Inject constructor(
             "cairo", "freetype", "glib", "harfbuzz", "libjpeg-turbo", "libpng", "libssl3", "libx11",
             "libxaw", "libxcursor", "libxdamage", "libxext", "libxfixes", "libxft", "libxi",
             "libxinerama", "libxkbcommon", "libxml2", "libxmu", "libxpm", "libxrandr", "libxrender",
-            "libxt", "libxtst", "libncursesw", "pango", "zlib",
+            "libxt", "libxtst", "libncursesw", "pango", "zlib", "dbus-libs",
             // Chrome for Testing
             "nss", "gtk+3.0", "at-spi2-core", "libxcomposite", "mesa-gbm", "alsa-lib", "cups-libs",
             "libdrm", "libxshmfence", "eudev-libs",
@@ -551,12 +551,29 @@ class LinuxDesktop @Inject constructor(
 
         // 154 exits at start under proot (SIGTRAP, any flags); 153 runs. Checked 2026-09-27.
         private const val ChromeVersion = "153.0.8010.52"
+        /** Installs [DebianPackages]; copied from the APK into the Linux before [PostInstall] runs. */
+        const val DebianFetchAsset = "desktop/debian_fetch.py"
+        const val DebianFetchPath = "/usr/local/lib/hermes/debian_fetch.py"
+
         /**
-         * After apk: noVNC 1.6.0 (the viewer loads its vnc_lite.html),
+         * The X programs the Linux's repo lacks, from Debian's official archive (see
+         * debian_fetch.py), with the libraries of theirs this Linux does not have.
+         */
+        private const val DebianPackages =
+            "x11vnc libvncserver1 libvncclient1 libavahi-client3 libavahi-common3 " +
+                "libcrypt1 liblzo2-2 libjpeg62-turbo libgcrypt20 libgpg-error0 libsasl2-2 libsasl2-modules-db " +
+                "xdotool libxdo3 " +
+                "openbox libobrender32v5 libobt2v5 libstartup-notification0 libxcb-util1 libimlib2t64 " +
+                "x11-utils xclip xterm libutempter0 libtinfo6"
+
+        /**
+         * After apk: the X programs from Debian (see [DebianPackages]), noVNC 1.6.0 (the viewer
+         * loads its vnc_lite.html),
          * websockify, Google's Chrome for Testing (it has arm64 Linux builds; the repo has no
          * Chromium), and the CLI Hermes' browser tools talk to Chromium through.
          */
         const val PostInstall = "set -e; a=\$(uname -m); cd /tmp; " +
+            "python3 $DebianFetchPath trixie $DebianPackages; " +
             "mkdir -p /usr/share/novnc; " +
             "curl -fsSL --retry 3 https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz " +
             "| tar -xz --strip-components=1 -C /usr/share/novnc; " +
@@ -573,8 +590,9 @@ class LinuxDesktop @Inject constructor(
             "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
-            "(chromium-browser --version || chromium --version) && command -v Xvfb && " +
-                "command -v websockify && test -d /usr/share/novnc && command -v agent-browser && command -v python3"
+            "(chromium-browser --version || chromium --version) && command -v Xvfb && command -v x11vnc && command -v openbox && " +
+                "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
+                "command -v xdotool && command -v agent-browser && command -v python3"
 
         private const val PREFS_NAME = "hermes_linux_desktop"
         private const val KEY_AGENT_BROWSER = "agent_browser"
@@ -734,12 +752,8 @@ class LinuxDesktop @Inject constructor(
             if [ -z "${'$'}VNC_PASSWORD" ]; then
                 VNC_PASSWORD=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)
             fi
-            # x11vnc, openbox and xprop are not installed yet (the Linux's repo lacks them): without
-            # them Chromium still runs on the X display for the browser tools, just unwatched.
-            if command -v x11vnc >/dev/null; then
-                x11vnc -storepasswd "${'$'}VNC_PASSWORD" "${'$'}STATE/vncpasswd" >/dev/null 2>&1
-                chmod 600 "${'$'}STATE/vncpasswd"
-            fi
+            x11vnc -storepasswd "${'$'}VNC_PASSWORD" "${'$'}STATE/vncpasswd" >/dev/null 2>&1
+            chmod 600 "${'$'}STATE/vncpasswd"
             # No TCP port unless the user deliberately shares on the LAN: x11vnc listens on a
             # unix socket inside the rootfs, which the Android sandbox really does keep to
             # this app — unlike 127.0.0.1, which every app on the phone shares. websockify
@@ -767,12 +781,11 @@ class LinuxDesktop @Inject constructor(
             for i in ${'$'}(seq 1 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
             test -S /tmp/.X11-unix/X99
             # shellcheck disable=SC2086
-            if command -v x11vnc >/dev/null; then
-                (umask 077; exec x11vnc -display :99 -noshm -rfbauth "${'$'}STATE/vncpasswd" \
-                    -unixsock "${'$'}STATE/vnc.sock" ${'$'}VNC_TCP -forever -shared -quiet) &
-                X11VNC_PID=${'$'}!
-            fi
-            if command -v openbox >/dev/null; then openbox & OPENBOX_PID=${'$'}!; fi
+            (umask 077; exec x11vnc -display :99 -noshm -rfbauth "${'$'}STATE/vncpasswd" \
+                -unixsock "${'$'}STATE/vnc.sock" ${'$'}VNC_TCP -forever -shared -quiet) &
+            X11VNC_PID=${'$'}!
+            openbox &
+            OPENBOX_PID=${'$'}!
 
             # Chromium opens no debugging port: it speaks CDP over a pipe to cdp_pipe.py, which
             # serves it on CDP_PORT under CDP_SECRET only, and restarts Chromium if it exits
@@ -787,12 +800,11 @@ class LinuxDesktop @Inject constructor(
             CHROME_LOOP=${'$'}!
 
             for i in ${'$'}(seq 1 300); do
-                command -v xprop >/dev/null || { kill -0 "${'$'}CHROME_LOOP" 2>/dev/null || exit 1; break; }
                 xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -q '0x' && break
                 kill -0 "${'$'}CHROME_LOOP" 2>/dev/null || exit 1
                 sleep 0.1
             done
-            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}{X11VNC_PID:-} ${'$'}{OPENBOX_PID:-} ${'$'}CHROME_LOOP > "${'$'}PIDS"
+            echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}X11VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
             wait "${'$'}VNC_PID" || echo "Xvfb exited with ${'$'}?"
         """.trimIndent() + "\n"

@@ -50,6 +50,23 @@ class ProotEnvironment @Inject constructor(
     /** Host path of a file inside the guest, e.g. `/root/.hermes/logs/x.log`. */
     fun guestFile(guestPath: String): File = File(rootfsDir, guestPath.removePrefix("/"))
 
+    /**
+     * Copies the APK asset [base] (`.gz` or not: the APK build may un-gzip assets) into the
+     * guest at [guestPath], always uncompressed. Returns false when the asset is missing.
+     */
+    fun copyAssetToGuest(base: String, guestPath: String): Boolean {
+        val target = guestFile(guestPath).apply { parentFile?.mkdirs() }
+        for ((name, gz) in listOf("$base.gz" to true, base to false)) {
+            val input = runCatching { context.assets.open(name) }.getOrNull() ?: continue
+            input.use { raw ->
+                val stream = if (gz) java.util.zip.GZIPInputStream(raw.buffered(), 64 * 1024) else raw
+                target.outputStream().use { stream.copyTo(it, 64 * 1024) }
+            }
+            return true
+        }
+        return false
+    }
+
     fun processBuilder(
         command: String,
         extraEnv: Map<String, String> = emptyMap(),
