@@ -206,9 +206,21 @@ class HermesMarkdownParserTest {
     }
 
     @Test
-    fun `the language with more letters wins, not whichever came first`() {
+    fun `the language with more words wins, not whichever came first`() {
         assertEquals(true, isRtlText("برای نصب باید git را اجرا کنید"))
         assertEquals(false, isRtlText("Install the package پایتون now"))
+    }
+
+    @Test
+    fun `a persian sentence listing package names stays right to left`() {
+        // More Latin letters (54 to 47) but more Persian words.
+        assertEquals(
+            true,
+            isRtlText(
+                "**۷۹ بسته‌ی apk** که برای کروم نصب شده بودند (xvfb, gtk+3.0, mesa, nss, nsspr, " +
+                    "fontconfig, wayland, polkit, ttf-dejavu, …): تعداد کل بسته‌ها از **۱۹۴ به ۱۱۵** رسید.",
+            ),
+        )
     }
 
     @Test

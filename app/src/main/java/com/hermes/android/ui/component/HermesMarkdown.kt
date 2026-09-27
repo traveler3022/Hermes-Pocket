@@ -51,8 +51,8 @@ import com.hermes.android.ui.i18n.t
  * `AnnotatedString` — no View interop, cheap to recompose while streaming.
  *
  * ## What it handles
- * 1. **RTL.** Every block resolves its own direction from the letters it holds
- *    ([isRtlText]) and renders with `TextDirection.Content` + `TextAlign.Start`
+ * 1. **RTL.** Every block resolves its own direction from the words it holds
+ *    ([isRtlText]) and renders with that direction + `TextAlign.Start`
  *    across the full width, so a Persian paragraph is right-aligned and an
  *    English one left-aligned whatever the surrounding layout direction is
  *    (the in-app language does not change it). Code is always LTR.
@@ -332,9 +332,11 @@ private fun MdTable(
  * scrolling and streaming recompositions don't re-tokenise text that has not
  * changed.
  *
- * Fills the width it is given: `TextAlign.Start` on `TextDirection.Content`
- * puts the text at the side its own script starts on, but only inside a box
- * wider than the text.
+ * Fills the width it is given: `TextAlign.Start` puts the text at the side its
+ * direction starts on, but only inside a box wider than the text. The direction
+ * is [isRtlText]'s, the same one [BlockRow] lays the bullet out by: Compose's
+ * `TextDirection.Content` goes by the first letter instead, so a Persian item
+ * opening with a path read left-to-right beside a right-hand bullet.
  */
 @Composable
 private fun MdText(
@@ -344,10 +346,17 @@ private fun MdText(
     modifier: Modifier = Modifier,
 ) {
     val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
+    val direction = remember(raw) {
+        when (isRtlText(raw)) {
+            true -> TextDirection.Rtl
+            false -> TextDirection.Ltr
+            null -> TextDirection.Content
+        }
+    }
     Text(
         text = text,
         style = style.copy(
-            textDirection = TextDirection.Content,
+            textDirection = direction,
             textAlign = TextAlign.Start,
         ),
         modifier = modifier,

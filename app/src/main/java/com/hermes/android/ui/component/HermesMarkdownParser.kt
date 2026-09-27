@@ -367,9 +367,10 @@ internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnota
  * Which way a block of prose reads: `true` for right-to-left, `false` for
  * left-to-right, `null` when it has no letters to decide by (numbers, symbols).
  *
- * The side with more letters wins, so a Persian sentence that happens to open
- * with a Latin word (`git` …) still reads right-to-left, and an English one with
- * a Persian word in it stays left-to-right. Inline code and URLs are ignored:
+ * The side with more words wins (words, not letters: a Persian sentence listing
+ * package names like fontconfig or wayland has more Latin letters but is still
+ * Persian), so one that happens to open with a Latin word (`git` …) still reads
+ * right-to-left, and an English one with a Persian word in it stays left-to-right. Inline code and URLs are ignored:
  * they are Latin whatever language the sentence around them is in. A tie goes to
  * whichever letter came first.
  */
@@ -378,22 +379,33 @@ internal fun isRtlText(text: String): Boolean? {
     var ltr = 0
     var first: Boolean? = null
     var inCode = false
+    var inWord = false
     var i = 0
     while (i < text.length) {
         val ch = text[i]
         when {
-            ch == '`' -> inCode = !inCode
+            ch == '`' -> { inCode = !inCode; inWord = false }
             inCode -> Unit
             (ch == 'h') && (text.startsWith("http://", i) || text.startsWith("https://", i)) -> {
                 while (i < text.length && !text[i].isWhitespace()) i++
+                inWord = false
                 continue
             }
-            else -> when (Character.getDirectionality(ch)) {
-                Character.DIRECTIONALITY_LEFT_TO_RIGHT -> { ltr++; if (first == null) first = false }
-                Character.DIRECTIONALITY_RIGHT_TO_LEFT,
-                Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC,
-                -> { rtl++; if (first == null) first = true }
-                else -> Unit
+            // Zero-width non-joiner and combining marks sit inside Persian words (بسته‌ها).
+            ch == '\u200C' || Character.getType(ch) == Character.NON_SPACING_MARK.toInt() -> Unit
+            else -> {
+                val rtlLetter = when (Character.getDirectionality(ch)) {
+                    Character.DIRECTIONALITY_LEFT_TO_RIGHT -> false
+                    Character.DIRECTIONALITY_RIGHT_TO_LEFT,
+                    Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC,
+                    -> true
+                    else -> null
+                }
+                if (rtlLetter != null && !inWord) {
+                    if (rtlLetter) rtl++ else ltr++
+                    if (first == null) first = rtlLetter
+                }
+                inWord = rtlLetter != null
             }
         }
         i++
