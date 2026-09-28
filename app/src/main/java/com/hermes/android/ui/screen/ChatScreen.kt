@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import com.hermes.android.ui.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -713,6 +714,9 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .padding(padding)
+                    // The navigation bar is in [padding]; without consuming it the
+                    // composer's imePadding() added it again on top of the keyboard.
+                    .consumeWindowInsets(padding)
                     .fillMaxSize()
             ) {
                 // Feature #7: Connection error retry banner
