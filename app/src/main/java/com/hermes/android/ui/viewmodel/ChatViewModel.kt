@@ -547,9 +547,9 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { it.copy(messages = before, isSending = false) }
                 return@launch
             }
-            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows) {
+            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows, onRefused = {
                 _uiState.update { it.copy(messages = before) }
-            }
+            })
         }
     }
 
@@ -593,9 +593,9 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             // Refused (busy, stale): the server kept everything, so the screen must too.
-            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows) {
+            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows, onRefused = {
                 _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
-            }
+            })
         }
     }
 
