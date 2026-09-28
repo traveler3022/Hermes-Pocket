@@ -78,10 +78,17 @@ internal class ChatAttachmentDelegate(
                         )
                     }
                 } else if (mime.startsWith("image/")) {
+                    // image.attach takes only session_id and path, and rejects anything else
+                    // (tui_gateway/contracts/prompt_voice.py: ImageAttachParams); the filename
+                    // hint belongs to image.attach_bytes alone.
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        if (guestPath != null) put("path", guestPath) else put("content_base64", b64)
-                        put("filename", name)
+                        if (guestPath != null) {
+                            put("path", guestPath)
+                        } else {
+                            put("content_base64", b64)
+                            put("filename", name)
+                        }
                     }
                     val method = if (guestPath != null) "image.attach" else "image.attach_bytes"
                     val result = gatewayClient.request(method, jsonToElementMap(params))
