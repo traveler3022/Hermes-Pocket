@@ -779,17 +779,33 @@ class ChatViewModel @Inject constructor(
         error("no prompt.submit target")
     }
 
+    /**
+     * A prompt from an inline `::preview` page (`hermes.send`): a user turn with no bubble,
+     * typed `display_kind: hidden` as the desktop sends it, so the stored transcript skips it
+     * too. The page updating is the visible answer.
+     */
+    fun sendHiddenPrompt(text: String) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        _uiState.update { it.copy(isSending = true) }
+        sendPrompt(text, sessionId, hidden = true)
+    }
+
+    suspend fun readPreviewFile(file: String): String? =
+        attachmentDelegate.readPreviewFile(file, _uiState.value.sessionCwd)
+
     private fun sendPrompt(
         text: String,
         sessionId: String,
         truncateBeforeRowIds: List<Long> = emptyList(),
         onRefused: (() -> Unit)? = null,
+        hidden: Boolean = false,
     ) {
         viewModelScope.launch {
             try {
                 fun params(liveId: String, truncateBeforeRowId: Long?) = buildJsonObject {
                     put("text", text)
                     put("session_id", liveId)
+                    if (hidden) put("display_kind", "hidden")
                     if (truncateBeforeRowId != null) {
                         // A rewind (edit, retry) is aimed at the target's durable row id
                         // alone: ordinals drift — a steered message is stored wherever the
@@ -1657,6 +1673,9 @@ class ChatViewModel @Inject constructor(
                 (event.info["reasoning_effort"] as? JsonPrimitive)?.contentOrNull
                     ?.takeIf { it.isNotBlank() }
                     ?.let { effort -> _uiState.update { it.copy(reasoningLevel = effort) } }
+                (event.info["cwd"] as? JsonPrimitive)?.contentOrNull
+                    ?.takeIf { it.isNotBlank() && event.sessionId == _uiState.value.activeSessionId }
+                    ?.let { cwd -> _uiState.update { it.copy(sessionCwd = cwd) } }
                 (event.info["model"] as? JsonPrimitive)?.contentOrNull
                     ?.takeIf { it.isNotBlank() && event.sessionId == _uiState.value.activeSessionId }
                     ?.let { model ->

@@ -14,6 +14,7 @@ package com.hermes.android.ui.component
  *   Code    → monospace card + copy      Mermaid → WebView + mermaid.js
  *   Html    → inline WebView card         Video/Audio → card opening the in-app player
  *   FileRef → open (Markdown) or download card
+ *   Preview → `::preview{file="page.html"}`, the page live inside the reply
  *
  * Which viewer a file gets is decided in one place, [fileKindOf].
  *
@@ -28,6 +29,9 @@ sealed class ContentBlock {
     data class Video(val url: String, val name: String) : ContentBlock()
     data class Audio(val url: String, val name: String) : ContentBlock()
     data class FileRef(val url: String, val name: String, val kind: FileKind = FileKind.OTHER) : ContentBlock()
+
+    /** An HTML file the agent wrote, rendered live in the reply (the desktop's inline widget). */
+    data class Preview(val file: String, val height: Int?) : ContentBlock()
 }
 
 /** The viewer a file opens in (see FileViewerActivity). */
@@ -129,6 +133,58 @@ private fun classifyUrl(url: String, alt: String = ""): ContentBlock {
     }
 }
 
+// Hermes desktop's transcript directive (apps/desktop/src/lib/transcript-directives.ts): the whole
+// paragraph is `::name` or `::name{key="value"}`, nothing else. Only `preview` is claimed here; any
+// other name, or a directive with prose in its paragraph, stays text, as it does on the desktop.
+private val directiveRegex = Regex("""^::([a-z][a-z0-9-]{0,63})(?:\{([^{}]{0,1024})\})?$""")
+private val directiveAttrRegex = Regex("""([a-z][\w-]{0,63})=(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
+private val paragraphBreak = Regex("""\n[ \t]*\n""")
+
+// inline-preview-directive.tsx: the `height` attribute is the starting height, clamped to the frame's band.
+internal const val PREVIEW_MIN_HEIGHT = 120
+internal const val PREVIEW_MAX_HEIGHT = 1200
+
+/**
+ * What a paragraph stands for when it is one `::preview` directive, else null. An empty
+ * list is a directive that draws nothing (no file); a file that is not a page is the
+ * ordinary file card, as the desktop hands it to its attachment card.
+ */
+private fun directiveBlocks(paragraph: String): List<ContentBlock>? {
+    val trimmed = paragraph.trim()
+    if (!trimmed.startsWith("::") || trimmed.length > 1200 || '\n' in trimmed) return null
+    val match = directiveRegex.matchEntire(trimmed) ?: return null
+    if (match.groupValues[1] != "preview") return null
+    val attrs = directiveAttrRegex.findAll(match.groupValues[2]).associate {
+        it.groupValues[1].lowercase() to it.groupValues[2].ifEmpty { it.groupValues[3] }
+    }
+    val file = attrs["file"].orEmpty()
+    if (file.isEmpty()) return emptyList()
+    if (fileKindOf(file) != FileKind.HTML) return listOf(classifyUrl(file))
+    val height = attrs["height"]?.toIntOrNull()?.coerceIn(PREVIEW_MIN_HEIGHT, PREVIEW_MAX_HEIGHT)
+    return listOf(ContentBlock.Preview(file = file, height = height))
+}
+
+/** [parseProse], with each paragraph that is a directive taken out as its own block first. */
+private fun parseParagraphs(segment: String, out: MutableList<ContentBlock>) {
+    if ("::" !in segment) return parseProse(segment, out)
+    var paragraphStart = 0
+    var proseStart = 0
+    fun take(end: Int) {
+        val blocks = directiveBlocks(segment.substring(paragraphStart, end)) ?: return
+        val before = segment.substring(proseStart, paragraphStart)
+        if (before.isNotBlank()) parseProse(before, out)
+        out.addAll(blocks)
+        proseStart = end
+    }
+    for (gap in paragraphBreak.findAll(segment)) {
+        take(gap.range.first)
+        paragraphStart = gap.range.last + 1
+    }
+    take(segment.length)
+    val rest = segment.substring(proseStart)
+    if (rest.isNotBlank()) parseProse(rest, out)
+}
+
 /** A link target that is a file the agent made, rather than a web page. */
 private fun isLocalArtifact(target: String): Boolean =
     (target.startsWith("/") || target.startsWith("~/") || target.startsWith("file://")) &&
@@ -204,7 +260,7 @@ fun parseContentBlocks(text: String): List<ContentBlock> {
     var cursor = 0
     for (fence in fenceRegex.findAll(text)) {
         val before = text.substring(cursor, fence.range.first)
-        if (before.isNotBlank()) parseProse(before, out)
+        if (before.isNotBlank()) parseParagraphs(before, out)
         val lang = fence.groupValues[1].lowercase()
         val body = fence.groupValues[2].trimEnd()
         if (body.isNotBlank()) {
@@ -216,7 +272,7 @@ fun parseContentBlocks(text: String): List<ContentBlock> {
         cursor = fence.range.last + 1
     }
     val tail = text.substring(cursor.coerceAtMost(text.length))
-    if (tail.isNotBlank()) parseProse(tail, out)
+    if (tail.isNotBlank()) parseParagraphs(tail, out)
     if (out.isEmpty() && text.isNotBlank()) out.add(ContentBlock.Text(text))
     return out
 }

@@ -236,6 +236,8 @@ data class ChatUiState(
     val sessionModel: String? = null,
     val sessionProvider: String? = null,
     val sessionInfoSeq: Int = 0,
+    /** The open chat's working directory from its latest session.info; a relative `::preview` file is in it. */
+    val sessionCwd: String? = null,
     /** The agent's live status line (thinking.delta: a wait notice, a spinner
      *  phrase). Replaced, never appended; blank when there is none. */
     val thinkingStatus: String = "",

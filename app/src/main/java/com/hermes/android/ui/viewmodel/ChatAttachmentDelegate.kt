@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
@@ -175,6 +176,41 @@ internal class ChatAttachmentDelegate(
             if (token.isNotEmpty()) append("&token=").append(token)
         }
     }
+
+    /**
+     * The text of an HTML file the agent wrote, for an inline `::preview`: a relative path is
+     * in the chat's [cwd], as on the desktop (local-preview.ts). Null when it can't be read,
+     * is a web URL, is binary or is too large; the preview then shows the file card.
+     */
+    suspend fun readPreviewFile(file: String, cwd: String?): String? = withContext(Dispatchers.IO) {
+        val raw = file.trim().removeSurrounding("`")
+        if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
+            return@withContext null
+        }
+        val path = when {
+            raw.startsWith("/") || raw.startsWith("~") || raw.startsWith("file://") -> raw
+            cwd.isNullOrBlank() -> return@withContext null
+            else -> cwd.trimEnd('/') + "/" + raw.removePrefix("./")
+        }
+        try {
+            val url = resolveMediaUrl(path)
+            val bytes = when {
+                url.startsWith("file:") -> {
+                    val local = java.io.File(Uri.parse(url).path ?: return@withContext null)
+                    if (!local.isFile || local.length() > maxPreviewBytes) return@withContext null
+                    local.readBytes()
+                }
+                url.startsWith("http") -> gatewayClient.downloadFile(url)
+                else -> return@withContext null
+            }
+            if (bytes.size > maxPreviewBytes || bytes.contains(0.toByte())) null else bytes.toString(Charsets.UTF_8)
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Preview file unreadable: $path")
+            null
+        }
+    }
+
+    private val maxPreviewBytes = 5 * 1024 * 1024
 
     private val downloadStorage by lazy { DownloadStorage(context) }
 

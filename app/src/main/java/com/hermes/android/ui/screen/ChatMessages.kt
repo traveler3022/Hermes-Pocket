@@ -118,6 +118,8 @@ internal fun MessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    readPreview: suspend (file: String) -> String? = { null },
+    onPreviewSend: (String) -> Unit = {},
     traceItems: List<HxTraceItem> = emptyList(),
     thinkingStatus: String = "",
     onEditMessage: ((messageId: String) -> Unit)? = null,
@@ -157,6 +159,8 @@ internal fun MessageBubble(
                 resolveUrl = resolveUrl,
                 onBranch = onBranch,
                 onDownloadFile = onDownloadFile,
+                readPreview = readPreview,
+                onPreviewSend = onPreviewSend,
                 traceItems = traceItems,
                 thinkingStatus = thinkingStatus,
             )

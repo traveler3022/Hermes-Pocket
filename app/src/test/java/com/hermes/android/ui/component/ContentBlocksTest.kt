@@ -230,4 +230,40 @@ class ContentBlocksTest {
         val text = "you can use `![alt](https://example.com/cat.png)` for web images"
         assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
     }
+
+    @Test
+    fun `a preview directive paragraph is a live preview`() {
+        val blocks = parseContentBlocks("Here is the chart:\n\n::preview{file=\"/root/chart.html\"}\n\nTap a bar.")
+        assertEquals(
+            listOf(
+                ContentBlock.Text("Here is the chart:"),
+                ContentBlock.Preview(file = "/root/chart.html", height = null),
+                ContentBlock.Text("Tap a bar."),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun `preview height is clamped and a relative file is kept as written`() {
+        assertEquals(
+            listOf(ContentBlock.Preview(file = "demo.html", height = 1200)),
+            parseContentBlocks("::preview{file='demo.html' height=\"5000\"}"),
+        )
+    }
+
+    @Test
+    fun `a directive inside prose or under another name stays text`() {
+        val inProse = "Open it:\n::preview{file=\"demo.html\"}"
+        assertEquals(listOf(ContentBlock.Text(inProse)), parseContentBlocks(inProse))
+        assertEquals(listOf(ContentBlock.Text("::chart{file=\"demo.html\"}")), parseContentBlocks("::chart{file=\"demo.html\"}"))
+    }
+
+    @Test
+    fun `a preview of a file that is not a page is the file card`() {
+        assertEquals(
+            listOf(ContentBlock.FileRef(url = "/root/report.pdf", name = "report.pdf", kind = FileKind.OTHER)),
+            parseContentBlocks("::preview{file=\"/root/report.pdf\"}"),
+        )
+    }
 }

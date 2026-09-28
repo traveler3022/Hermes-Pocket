@@ -64,6 +64,9 @@ internal fun AssistantMessageBubble(
     resolveUrl: (String) -> String = { it },
     onBranch: () -> Unit = {},
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
+    /** Text of an HTML file for a `::preview` (null: unreadable), and a page's hidden prompt. */
+    readPreview: suspend (file: String) -> String? = { null },
+    onPreviewSend: (String) -> Unit = {},
     traceItems: List<HxTraceItem> = emptyList(),
     /** The agent's live status line; only the streaming reply is given one. */
     thinkingStatus: String = "",
@@ -161,6 +164,18 @@ internal fun AssistantMessageBubble(
                                         is ContentBlock.Html -> HtmlBlockCard(
                                             url = block.url, name = block.name,
                                             onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                        )
+                                        is ContentBlock.Preview -> InlinePreviewFrame(
+                                            file = block.file,
+                                            initialHeight = block.height,
+                                            streaming = message.isStreaming,
+                                            readPreview = readPreview,
+                                            onSend = onPreviewSend,
+                                            onOpen = {
+                                                FileViewerActivity.open(
+                                                    assistantContext, resolveUrl(block.file), block.file.substringAfterLast('/'),
+                                                )
+                                            },
                                         )
                                         is ContentBlock.Video -> ArtifactCard(
                                             emoji = "\uD83C\uDFAC", name = block.name,
