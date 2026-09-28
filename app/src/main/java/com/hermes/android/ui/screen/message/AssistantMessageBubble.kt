@@ -66,6 +66,7 @@ internal fun AssistantMessageBubble(
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     /** Text of an HTML file for a `::preview` (null: unreadable), and a page's hidden prompt. */
     readPreview: suspend (file: String) -> String? = { null },
+    resolvePreviewUrl: (file: String) -> String = { it },
     onPreviewSend: (String) -> Unit = {},
     traceItems: List<HxTraceItem> = emptyList(),
     /** The agent's live status line; only the streaming reply is given one. */
@@ -173,7 +174,7 @@ internal fun AssistantMessageBubble(
                                             onSend = onPreviewSend,
                                             onOpen = {
                                                 FileViewerActivity.open(
-                                                    assistantContext, resolveUrl(block.file), block.file.substringAfterLast('/'),
+                                                    assistantContext, resolvePreviewUrl(block.file), block.file.substringAfterLast('/'),
                                                 )
                                             },
                                         )

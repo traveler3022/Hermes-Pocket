@@ -15,13 +15,19 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,14 +35,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.hermes.android.ui.component.PREVIEW_MAX_HEIGHT
 import com.hermes.android.ui.component.PREVIEW_MIN_HEIGHT
+import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import java.util.UUID
 import kotlin.math.abs
@@ -52,6 +61,8 @@ import kotlin.math.roundToInt
  *  - `window.hermes.send(prompt)` / `data-hermes-send` send a prompt as a hidden user turn,
  *    one per second, at most 500 characters;
  *  - a page that can't be read is the ordinary file card.
+ * Unlike the desktop, a button under the frame opens the page in the full-screen viewer, where
+ * its links and the files beside it work.
  * The desktop's sandboxed iframe talks through postMessage; here the page talks through a
  * JavaScript interface, trusted only with the token this mount injected. The page gets no
  * file access and can't navigate the frame away.
@@ -189,7 +200,7 @@ internal fun InlinePreviewFrame(
         doc?.let { withPreviewChrome(it, token, previewThemePrelude(themeVars(colors), colors.surface.luminance() < 0.5f)) }
     }
 
-    Box(modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         if (framed == null) {
             val pulse by rememberInfiniteTransition(label = "previewPulse").animateFloat(
                 initialValue = 0.5f, targetValue = 1f,
@@ -238,6 +249,26 @@ internal fun InlinePreviewFrame(
                     .fillMaxWidth()
                     .height(height),
             )
+        }
+        // The frame is for a single-file widget; a page with links or files beside it
+        // works in the full-screen viewer, where it loads from its own folder.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = file.substringAfterLast('/'),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    HxIcons.ExternalLink,
+                    contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primary,
+                )
+            }
         }
     }
 }

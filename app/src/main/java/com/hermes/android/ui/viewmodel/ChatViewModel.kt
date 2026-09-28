@@ -793,6 +793,10 @@ class ChatViewModel @Inject constructor(
     suspend fun readPreviewFile(file: String): String? =
         attachmentDelegate.readPreviewFile(file, _uiState.value.sessionCwd)
 
+    /** The full-screen viewer's URL for a `::preview` file. */
+    fun resolvePreviewUrl(file: String): String =
+        resolveMediaUrl(attachmentDelegate.previewPath(file, _uiState.value.sessionCwd) ?: file)
+
     private fun sendPrompt(
         text: String,
         sessionId: String,

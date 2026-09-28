@@ -909,6 +909,7 @@ fun ChatScreen(
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                                 readPreview = viewModel::readPreviewFile,
+                                resolvePreviewUrl = viewModel::resolvePreviewUrl,
                                 onPreviewSend = viewModel::sendHiddenPrompt,
                                 onEditMessage = viewModel::startEditing,
                                 onDeleteMessage = { id -> deleteFromMessageId = id },

@@ -183,15 +183,7 @@ internal class ChatAttachmentDelegate(
      * is a web URL, is binary or is too large; the preview then shows the file card.
      */
     suspend fun readPreviewFile(file: String, cwd: String?): String? = withContext(Dispatchers.IO) {
-        val raw = file.trim().removeSurrounding("`")
-        if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
-            return@withContext null
-        }
-        val path = when {
-            raw.startsWith("/") || raw.startsWith("~") || raw.startsWith("file://") -> raw
-            cwd.isNullOrBlank() -> return@withContext null
-            else -> cwd.trimEnd('/') + "/" + raw.removePrefix("./")
-        }
+        val path = previewPath(file, cwd) ?: return@withContext null
         try {
             val url = resolveMediaUrl(path)
             val bytes = when {
@@ -211,6 +203,17 @@ internal class ChatAttachmentDelegate(
     }
 
     private val maxPreviewBytes = 5 * 1024 * 1024
+
+    /** Where a `::preview` file is: as written when absolute, else in [cwd]; null for a web URL or no cwd. */
+    fun previewPath(file: String, cwd: String?): String? {
+        val raw = file.trim().removeSurrounding("`")
+        if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) return null
+        return when {
+            raw.startsWith("/") || raw.startsWith("~") || raw.startsWith("file://") -> raw
+            cwd.isNullOrBlank() -> null
+            else -> cwd.trimEnd('/') + "/" + raw.removePrefix("./")
+        }
+    }
 
     private val downloadStorage by lazy { DownloadStorage(context) }
 
