@@ -20,7 +20,7 @@ class HermesMarkdownParserTest {
     private fun t(text: String) = listOf(MdSpan.Text(text))
     private fun para(text: String) = MdBlock.Para(t(text))
     private fun item(depth: Int, ordinal: Int?, checked: Boolean?, text: String) =
-        item(depth, ordinal, checked, t(text))
+        MdBlock.ListItem(depth, ordinal, checked, t(text))
     private fun inline(text: String, s: InlineStyle) = inline(parseInline(text), s)
 
     // ── Blocks ───────────────────────────────────────────────────────────
