@@ -26,6 +26,8 @@ import org.commonmark.parser.block.ParserState
  *   formula must not start or end with a space and must not be followed by a
  *   digit, so prices (`$5 and $10`) and shell variables (`$HOME and $PATH`) stay
  *   text.
+ *
+ * commonmark's `none()` results are null, hence the nullable return types.
  */
 internal class MathInline(val latex: String) : CustomNode()
 
@@ -44,7 +46,7 @@ internal object MathExtension : Parser.ParserExtension {
 }
 
 private class MathInlineParser : InlineContentParser {
-    override fun tryParse(inlineParserState: InlineParserState): ParsedInline {
+    override fun tryParse(inlineParserState: InlineParserState): ParsedInline? {
         val scanner = inlineParserState.scanner()
         scanner.next() // the '$' that brought us here
         val display = scanner.next('$')
@@ -91,7 +93,7 @@ private class MathBlockParser(firstLine: CharSequence) : AbstractBlockParser() {
 
     override fun getBlock() = block
 
-    override fun tryContinue(state: ParserState): BlockContinue {
+    override fun tryContinue(state: ParserState): BlockContinue? {
         if (block.closed) return BlockContinue.none()
         val line = state.line.content
         val trimmed = line.toString().trim()
@@ -115,7 +117,7 @@ private class MathBlockParser(firstLine: CharSequence) : AbstractBlockParser() {
     }
 
     object Factory : AbstractBlockParserFactory() {
-        override fun tryStart(state: ParserState, matchedBlockParser: MatchedBlockParser): BlockStart {
+        override fun tryStart(state: ParserState, matchedBlockParser: MatchedBlockParser): BlockStart? {
             if (state.indent >= 4) return BlockStart.none()
             val line = state.line.content
             val start = state.nextNonSpaceIndex
