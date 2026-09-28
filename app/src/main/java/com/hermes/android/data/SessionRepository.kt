@@ -80,7 +80,12 @@ class SessionRepository @Inject constructor(
         preferLive: Boolean = false,
         trackSession: Boolean = true,
     ): AttachedSession {
-        val params = buildJsonObject { put("session_id", sessionId) }.toElementMap()
+        // session.resume takes the source from the request, not the stored chat: without it a
+        // reopened chat came back as "tui" and the model said it could not send files.
+        val params = buildJsonObject {
+            put("session_id", sessionId)
+            put("source", CHAT_SOURCE)
+        }.toElementMap()
         val first = if (preferLive) GatewayMethods.SESSION_ACTIVATE else GatewayMethods.SESSION_RESUME
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
         val result = try {

@@ -655,7 +655,11 @@ class OkHttpGatewayClient @Inject constructor(
      */
     private suspend fun resumeSession(sessionId: String) {
         try {
-            val params = buildJsonObject { put("session_id", sessionId) }
+            val params = buildJsonObject {
+                put("session_id", sessionId)
+                // Resumed as "tui" otherwise; see SessionRepository.attach.
+                put("source", com.hermes.android.data.SessionRepository.CHAT_SOURCE)
+            }
             // lastSessionId is a LIVE id (that's what responses/events carry),
             // but session.resume resolves STORED db ids and 4007s on live ones
             // — so this auto-resume was silently failing every time. Attach to
