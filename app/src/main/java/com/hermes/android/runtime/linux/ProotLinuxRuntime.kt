@@ -200,9 +200,13 @@ class ProotLinuxRuntime @Inject constructor(
                 stopGateway()
                 report("update", "Downloading the newest Hermes Agent…", 5)
                 // Proot refuses to delete link2symlink entries ("Operation not permitted"), so what
-                // the guest can't remove is removed from here: a uv cache that past hardlinking
-                // poisoned (it breaks pip in the venv), and the .git dirs the repair set aside.
+                // the guest can't remove is removed from here: uv caches that past hardlinking
+                // poisoned (they break pip and the update), and the .git dirs the repair set aside.
                 deleteTree(environment.guestFile("/root/.cache/uv"))
+                // Hermes' own package manager keeps its uv cache here and hides every UV_* setting
+                // (UV_LINK_MODE=copy included) from uv, so the cache fills with .l2s link entries
+                // that the next `hermes update` fails to link ("Operation not permitted").
+                deleteTree(environment.guestFile("/root/.hermes/cache/uv"))
                 runStage("update", HERMES_UPDATE_SCRIPT, 5, 60, log, ::report)
                 environment.guestFile("/root/.hermes/hermes-agent")
                     .listFiles { f -> f.name.startsWith(".git-old-") }
