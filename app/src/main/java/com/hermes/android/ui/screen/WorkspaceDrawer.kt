@@ -1,7 +1,7 @@
 package com.hermes.android.ui.screen
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Folder
+import com.hermes.android.ui.icons.outlined.Folder
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

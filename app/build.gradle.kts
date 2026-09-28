@@ -60,6 +60,15 @@ android {
         }
     }
 
+    // The built-in Linux for x86_64 (emulators, Intel Chromebooks) is ~10 MB that no ARM phone
+    // uses, so it ships only on request: ./gradlew assembleDebug -Phermes.x86_64=true
+    if (providers.gradleProperty("hermes.x86_64").orNull == "true") {
+        sourceSets.getByName("main") {
+            assets.srcDir("src/x86_64/assets")
+            jniLibs.srcDir("src/x86_64/jniLibs")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -136,7 +145,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.navigation.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
 

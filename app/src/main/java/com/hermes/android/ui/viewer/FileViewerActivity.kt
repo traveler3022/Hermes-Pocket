@@ -28,9 +28,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.MusicNote
+import com.hermes.android.ui.icons.filled.Fullscreen
+import com.hermes.android.ui.icons.filled.FullscreenExit
+import com.hermes.android.ui.icons.filled.MusicNote
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap

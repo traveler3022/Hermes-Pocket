@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material.icons.automirrored.filled.Chat
+import com.hermes.android.ui.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,11 +30,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
+import com.hermes.android.ui.icons.filled.Code
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
+import com.hermes.android.ui.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,9 +82,9 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
 import android.content.Context
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.DataUsage
+import com.hermes.android.ui.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
+import com.hermes.android.ui.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
