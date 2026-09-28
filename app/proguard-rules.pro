@@ -57,7 +57,3 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
-
-# JLatexMath looks its macro classes up by name (Class.forName) and reads its fonts from assets.
--keep class org.scilab.forge.jlatexmath.** { *; }
--keep class ru.noties.jlatexmath.** { *; }

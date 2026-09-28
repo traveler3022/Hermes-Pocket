@@ -1,9 +1,5 @@
 package com.hermes.android.ui.component
 
-import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
-import android.util.LruCache
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -29,14 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.isSpecified
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -50,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import com.hermes.android.ui.i18n.t
-import ru.noties.jlatexmath.JLatexMathDrawable
 
 /**
  * Native-Compose markdown renderer for Hermes assistant/tool output.
@@ -73,11 +61,11 @@ import ru.noties.jlatexmath.JLatexMathDrawable
  * 3. **Streaming cost.** [IncrementalMdParser] keeps the blocks before the last
  *    blank line and re-parses only the growing tail, so callers can render real
  *    markdown while streaming.
- * 4. **Syntax.** CommonMark + GFM by commonmark-java (see
- *    [parseMdBlocks]): code spans with backticks inside, escapes, emphasis
- *    rules, nested lists, task lists, tables, strikethrough and bare URLs
- *    read as they do in Telegram and on the desktop.
- * 5. **Math.** `$…$` and `$$…$$` are drawn by JLatexMath, as in Telegram.
+ * 4. **Inline correctness.** `snake_case_name` and `*.kt` are not emphasis;
+ *    `\*` escapes work; `__bold__`, `***both***`, `~~strike~~` and bare URLs
+ *    are supported.
+ * 5. **Block coverage.** Nested lists (by indent), task lists, tables and
+ *    thematic breaks render instead of leaking their raw syntax.
  * 6. **Type scale.** Heading sizes derive from the caller's `style.fontSize`.
  *
  * Code/images/mermaid/html are already split out upstream by
@@ -125,7 +113,7 @@ fun HermesMarkdown(
                         else -> 1.04f
                     }
                     MdText(
-                        text = block.text,
+                        raw = block.text,
                         style = body.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = base * scale,
@@ -151,7 +139,7 @@ fun HermesMarkdown(
                         .background(rule),
                 )
 
-                is MdBlock.Quote -> BlockRow(block.text.directionText()) {
+                is MdBlock.Quote -> BlockRow(block.text) {
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -169,7 +157,7 @@ fun HermesMarkdown(
                             Spacer(Modifier.width(8.dp))
                         }
                         MdText(
-                            text = block.text,
+                            raw = block.text,
                             style = body.copy(color = muted, fontStyle = FontStyle.Italic),
                             inlineStyle = inlineStyle,
                             modifier = Modifier.weight(1f),
@@ -177,7 +165,7 @@ fun HermesMarkdown(
                     }
                 }
 
-                is MdBlock.ListItem -> BlockRow(block.text.directionText()) {
+                is MdBlock.ListItem -> BlockRow(block.text) {
                     val checked = block.checked
                     val ordinal = block.ordinal
                     Row(
@@ -201,7 +189,7 @@ fun HermesMarkdown(
                         )
                         Spacer(Modifier.width(7.dp))
                         MdText(
-                            text = block.text,
+                            raw = block.text,
                             style = if (checked == true) {
                                 body.copy(color = muted, textDecoration = TextDecoration.LineThrough)
                             } else {
@@ -215,11 +203,9 @@ fun HermesMarkdown(
 
                 is MdBlock.Table -> MdTable(block, body, inlineStyle, rule, muted)
 
-                is MdBlock.Math -> MathBlockView(block, body, base, codeBg, onCode, muted)
-
-                is MdBlock.Para -> BlockRow(block.text.directionText()) {
+                is MdBlock.Para -> BlockRow(block.text) {
                     MdText(
-                        text = block.text,
+                        raw = block.text,
                         style = body,
                         inlineStyle = inlineStyle,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
@@ -322,7 +308,7 @@ private fun MdTable(
                 ) {
                     row.forEach { cell ->
                         MdText(
-                            text = cell,
+                            raw = cell,
                             style = if (header) {
                                 style.copy(fontWeight = FontWeight.Bold)
                             } else {
@@ -354,119 +340,30 @@ private fun MdTable(
  */
 @Composable
 private fun MdText(
-    text: List<MdSpan>,
+    raw: String,
     style: TextStyle,
     inlineStyle: InlineStyle,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    val fontPx = with(density) { (if (style.fontSize.isSpecified) style.fontSize else DefaultFontSize).toPx() }
-    val color = style.color
-    val formulas = remember(text, fontPx, color) {
-        text.mathSources().associateWith { renderLatex(it, fontPx, color) }
-    }
-    val annotated = remember(text, inlineStyle, formulas) {
-        inline(text, inlineStyle) { formulas[it] != null }
-    }
-    val inlineContent = remember(formulas, density) {
-        formulas.mapNotNull { (latex, bitmap) ->
-            bitmap ?: return@mapNotNull null
-            mathContentId(latex) to InlineTextContent(
-                Placeholder(
-                    width = with(density) { bitmap.width.toSp() },
-                    height = with(density) { bitmap.height.toSp() },
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                ),
-            ) { Image(bitmap = bitmap, contentDescription = latex) }
-        }.toMap()
-    }
-    val direction = remember(text) {
-        when (isRtlText(text.directionText())) {
+    val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
+    val direction = remember(raw) {
+        when (isRtlText(raw)) {
             true -> TextDirection.Rtl
             false -> TextDirection.Ltr
             null -> TextDirection.Content
         }
     }
     Text(
-        text = annotated,
+        text = text,
         style = style.copy(
             textDirection = direction,
             textAlign = TextAlign.Start,
         ),
         modifier = modifier,
-        inlineContent = inlineContent,
     )
 }
 
-/**
- * A `$$` formula, centred and scrolling sideways when wider than the bubble. One
- * still being streamed, or one JLatexMath cannot draw, shows its source as code.
- */
-@Composable
-private fun MathBlockView(
-    block: MdBlock.Math,
-    style: TextStyle,
-    base: TextUnit,
-    codeBg: Color,
-    onCode: Color,
-    muted: Color,
-) {
-    val fontPx = with(LocalDensity.current) { (base * MathBlockScale).toPx() }
-    val color = style.color
-    val bitmap = if (block.closed) remember(block.latex, fontPx, color) { renderLatex(block.latex, fontPx, color) } else null
-    if (bitmap == null) {
-        CodeBlock(MdBlock.Code("latex", block.latex), style, base, codeBg, onCode, muted)
-        return
-    }
-    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-        Image(
-            bitmap = bitmap,
-            contentDescription = block.latex,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        )
-    }
-}
-
-/**
- * [latex] drawn by JLatexMath at [textSizePx] in [color], the way Telegram's
- * `Latex.render` does; null when it does not parse or would be absurdly large.
- * Remembered across recompositions: a streaming paragraph is rebuilt every
- * frame, its formulas are not.
- */
-internal fun renderLatex(latex: String, textSizePx: Float, color: Color): ImageBitmap? {
-    val key = "$textSizePx|${color.value}|$latex"
-    formulaCache.get(key)?.let { return it as? ImageBitmap }
-    val bitmap = drawLatex(latex, textSizePx, color)
-    formulaCache.put(key, bitmap ?: Unparseable)
-    return bitmap
-}
-
-private val formulaCache = LruCache<String, Any>(64)
-private val Unparseable = Any()
-
-private fun drawLatex(latex: String, textSizePx: Float, color: Color): ImageBitmap? = try {
-    val drawable = JLatexMathDrawable.builder(latex)
-        .textSize(textSizePx)
-        .color(color.toArgb())
-        .build()
-    val w = drawable.intrinsicWidth
-    val h = drawable.intrinsicHeight
-    if (w <= 0 || h <= 0 || w.toLong() * h > MaxFormulaPixels) {
-        null
-    } else {
-        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        drawable.setBounds(0, 0, w, h)
-        drawable.draw(AndroidCanvas(bitmap))
-        bitmap.asImageBitmap()
-    }
-} catch (e: Throwable) {
-    // A formula with a typo throws ParseException; it falls back to its source.
-    null
-}
-
 private val DefaultFontSize = 14.sp
-private const val MathBlockScale = 1.15f
-private const val MaxFormulaPixels = 4096L * 4096L
 private val TableCellWidth = 132.dp
 private const val MaxQuoteBars = 3
 

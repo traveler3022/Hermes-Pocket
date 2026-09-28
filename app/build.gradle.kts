@@ -179,14 +179,6 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
-    // Markdown parsing (CommonMark + GFM tables, strikethrough, task items, bare links) and LaTeX math
-    implementation(libs.commonmark)
-    implementation(libs.commonmark.ext.gfm.tables)
-    implementation(libs.commonmark.ext.gfm.strikethrough)
-    implementation(libs.commonmark.ext.autolink)
-    implementation(libs.commonmark.ext.task.list.items)
-    implementation(libs.jlatexmath.android)
-
     // Coil (image loading for HermesMarkdown)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
