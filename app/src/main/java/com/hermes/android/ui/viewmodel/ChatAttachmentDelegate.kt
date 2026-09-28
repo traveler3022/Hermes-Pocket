@@ -9,6 +9,7 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
+import com.hermes.android.runtime.linux.LinuxUploads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,7 @@ internal class ChatAttachmentDelegate(
 ) {
     private val maxAttachBytes = 25 * 1024 * 1024
     private val attachChunkSize = 1024 * 1024
+    private val linuxUploads by lazy { LinuxUploads(context) }
 
     fun attachFromUri(state: MutableStateFlow<ChatUiState>, uri: Uri) {
         val sessionId = state.value.activeSessionId ?: return
@@ -44,34 +46,17 @@ internal class ChatAttachmentDelegate(
                 } ?: uri.lastPathSegment ?: "attachment"
                 val mime = resolver.getType(uri) ?: "application/octet-stream"
 
-                // One continuous encoder: encoding each read separately put "=" padding
-                // mid-string whenever a read was not a multiple of 3 bytes, corrupting the file.
-                val encoded = java.io.ByteArrayOutputStream()
-                var totalSize = 0
-                resolver.openInputStream(uri)?.use { stream ->
-                    android.util.Base64OutputStream(encoded, Base64.NO_WRAP).use { encoder ->
-                        val buffer = ByteArray(attachChunkSize)
-                        while (true) {
-                            val read = stream.read(buffer)
-                            if (read <= 0) break
-                            totalSize += read
-                            if (totalSize > maxAttachBytes) {
-                                throw IllegalStateException("File too large (max 25 MB)")
-                            }
-                            encoder.write(buffer, 0, read)
-                        }
-                    }
-                } ?: throw IllegalStateException("Cannot read file")
-                val b64 = encoded.toString(Charsets.US_ASCII.name())
-
-                if (totalSize == 0) {
-                    throw IllegalStateException("File is empty")
-                }
+                // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
+                // Termux and remote gateways can't see the file, so they get the bytes.
+                val guestPath = if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
+                    linuxUploads.guestPath(uri, name)
+                } else null
+                val b64 = if (guestPath == null) readBase64(uri) else ""
 
                 val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("content_base64", b64.toString())
+                        if (guestPath != null) put("path", guestPath) else put("content_base64", b64)
                         put("filename", name)
                     }
                     val result = gatewayClient.request(GatewayMethods.PDF_ATTACH, jsonToElementMap(params))
@@ -91,16 +76,17 @@ internal class ChatAttachmentDelegate(
                 } else if (mime.startsWith("image/")) {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("content_base64", b64.toString())
+                        if (guestPath != null) put("path", guestPath) else put("content_base64", b64)
                         put("filename", name)
                     }
-                    val result = gatewayClient.request("image.attach_bytes", jsonToElementMap(params))
+                    val method = if (guestPath != null) "image.attach" else "image.attach_bytes"
+                    val result = gatewayClient.request(method, jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.contentOrNull
                     listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
-                        put("data_url", "data:$mime;base64,${b64}")
+                        if (guestPath != null) put("path", guestPath) else put("data_url", "data:$mime;base64,$b64")
                         put("name", name)
                     }
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
@@ -112,7 +98,7 @@ internal class ChatAttachmentDelegate(
                     pendingAttachments = state.value.pendingAttachments + newAttachments,
                     isAttaching = false,
                 ) }
-                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (size=${totalSize})")
+                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (${guestPath ?: "uploaded"})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Attach failed")
                 state.update { it.copy(
@@ -121,6 +107,32 @@ internal class ChatAttachmentDelegate(
                 ) }
             }
         }
+    }
+
+    /** The file's bytes as base64, for a gateway that can't open it by path. */
+    private fun readBase64(uri: Uri): String {
+        // One continuous encoder: encoding each read separately put "=" padding
+        // mid-string whenever a read was not a multiple of 3 bytes, corrupting the file.
+        val encoded = java.io.ByteArrayOutputStream()
+        var totalSize = 0
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            android.util.Base64OutputStream(encoded, Base64.NO_WRAP).use { encoder ->
+                val buffer = ByteArray(attachChunkSize)
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read <= 0) break
+                    totalSize += read
+                    if (totalSize > maxAttachBytes) {
+                        throw IllegalStateException("File too large (max 25 MB)")
+                    }
+                    encoder.write(buffer, 0, read)
+                }
+            }
+        } ?: throw IllegalStateException("Cannot read file")
+        if (totalSize == 0) {
+            throw IllegalStateException("File is empty")
+        }
+        return encoded.toString(Charsets.US_ASCII.name())
     }
 
     fun removeAttachment(state: MutableStateFlow<ChatUiState>, attachment: PendingAttachment) {
