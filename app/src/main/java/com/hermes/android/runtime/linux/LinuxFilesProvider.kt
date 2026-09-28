@@ -4,16 +4,20 @@ import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Binder
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
+import com.hermes.android.ui.viewer.FileGateActivity
 import timber.log.Timber
+import java.io.File
 import java.io.FileNotFoundException
 
 /** Shows the built-in Linux in Android's Files app and in every file picker. */
@@ -72,12 +76,24 @@ class LinuxFilesProvider : DocumentsProvider() {
         val path = GuestFiles.normalize(documentId)
         val file = files.hostFile(path)
         if (!file.isFile) throw FileNotFoundException("Not a file: $path")
+        if ('r' in mode && Binder.getCallingUid() != Process.myUid()) holdBackProgram(file)
         val flags = ParcelFileDescriptor.parseMode(mode)
         if (mode == "r") return ParcelFileDescriptor.open(file, flags)
         return ParcelFileDescriptor.open(file, flags, mainHandler) { error ->
             if (error != null) Timber.w(error, "[Files] write to %s ended with an error", path)
             notifyChildren(GuestFiles.parentOf(path))
         }
+    }
+
+    /**
+     * Another app (a copy in the Files app, an installer) reads a program only after the user
+     * confirmed it in Hermes; the notification leads there. See [FileGate].
+     */
+    private fun holdBackProgram(file: File) {
+        val risk = FileGate.riskOf(file)
+        if (risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && FileGate.isApproved(file))) return
+        context?.let { FileGateActivity.notifyHeldBack(it, file, risk) }
+        throw FileNotFoundException("Held back until confirmed in Hermes: ${file.name}")
     }
 
     override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {

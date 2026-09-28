@@ -134,7 +134,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.hermes.android.runtime.linux.FileGate
+import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
+import com.hermes.android.ui.viewer.FileGateActivity
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -150,6 +153,7 @@ import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.viewmodel.TodoItemUi
 import com.hermes.android.ui.viewmodel.TodoStatus
 import kotlinx.coroutines.launch
+import java.io.File
 import com.hermes.android.runtime.linux.ProotEnvironment
 
 @Composable
@@ -223,6 +227,10 @@ internal fun rememberReduceMotion(): Boolean {
 
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
 internal fun openUrlExternally(context: Context, url: String) {
+    heldBackProgram(context, url)?.let { file ->
+        context.startActivity(FileGateActivity.intent(context, file, open = true))
+        return
+    }
     try {
         context.startActivity(externalViewIntent(context, url))
     } catch (e: Exception) {
@@ -248,6 +256,16 @@ internal fun externalViewIntent(context: Context, url: String): Intent {
     return Intent(Intent.ACTION_VIEW)
         .setDataAndType(document, type)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+
+/** A program of the built-in Linux at [url] the user hasn't confirmed yet ([FileGate]), else null. */
+private fun heldBackProgram(context: Context, url: String): File? {
+    val rootfs = ProotEnvironment.rootfsDir(context)
+    val guestPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path
+        ?.let { guestPathIn(rootfs.absolutePath, it) } ?: return null
+    val file = runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile } ?: return null
+    val risk = FileGate.riskOf(file)
+    return file.takeUnless { risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && FileGate.isApproved(file)) }
 }
 
 /** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */

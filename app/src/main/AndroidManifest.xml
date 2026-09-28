@@ -143,6 +143,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Asks before a program of the built-in Linux leaves for the phone (FileGate). -->
+        <activity
+            android:name=".ui.viewer.FileGateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Hermes2.Gate" />
+
         <provider
             android:name=".runtime.linux.LinuxFilesProvider"
             android:authorities="${applicationId}.linux.documents"
