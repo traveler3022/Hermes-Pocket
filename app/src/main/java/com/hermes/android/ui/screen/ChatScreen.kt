@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import com.hermes.android.ui.component.ZoomableImage
 import com.hermes.android.ui.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -1028,16 +1029,10 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f))
-                    .clickable { fullscreenImageUrl = null },
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center,
             ) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentScale = ContentScale.Fit,
-                )
+                ZoomableImage(model = imageUrl, onTap = { fullscreenImageUrl = null })
                 IconButton(
                     onClick = { fullscreenImageUrl = null },
                     modifier = Modifier

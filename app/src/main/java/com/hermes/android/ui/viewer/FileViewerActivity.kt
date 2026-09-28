@@ -38,8 +38,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,19 +61,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -94,13 +94,13 @@ import androidx.media3.ui.compose.material3.indicator.PositionText
 import androidx.media3.ui.compose.material3.indicator.ProgressSlider
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
-import coil.compose.AsyncImage
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.ProotEnvironment
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
+import com.hermes.android.ui.component.ZoomableImage
 import com.hermes.android.ui.component.fileKindOf
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.AppLanguageState
@@ -283,7 +283,8 @@ private fun MediaViewer(uri: Uri, content: @Composable (ExoPlayer) -> Unit) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    content(player)
+    // Time runs left to right in any language: the slider, the times and back/forward.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { content(player) }
 }
 
 /** Playback state the stock components don't expose: buffering and playing. */
@@ -399,11 +400,25 @@ private fun AudioControls(player: Player, name: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        var artworkOpen by remember { mutableStateOf(false) }
+        if (artworkOpen && metadata.artworkData != null) {
+            Dialog(
+                onDismissRequest = { artworkOpen = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                ZoomableImage(
+                    model = metadata.artworkData,
+                    modifier = Modifier.background(Color.Black),
+                    onTap = { artworkOpen = false },
+                )
+            }
+        }
         Box(
             modifier = Modifier
                 .size(240.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(enabled = artwork != null) { artworkOpen = true },
             contentAlignment = Alignment.Center,
         ) {
             if (artwork != null) {
@@ -529,27 +544,10 @@ private fun HtmlViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
     if (gatewayFile && inline == null) Loading()
 }
 
-/** Fit to screen; pinch to zoom and pan. */
+/** Fit to screen; pinch or double-tap to zoom, drag to pan. */
 @Composable
 private fun ImageViewer(uri: Uri) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    val state = rememberTransformableState { zoom, pan, _ ->
-        scale = (scale * zoom).coerceIn(1f, 8f)
-        offsetX = if (scale == 1f) 0f else offsetX + pan.x
-        offsetY = if (scale == 1f) 0f else offsetY + pan.y
-    }
-    AsyncImage(
-        model = uri,
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .transformable(state)
-            .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY),
-    )
+    ZoomableImage(model = uri, modifier = Modifier.background(Color.Black))
 }
 
 @Composable
