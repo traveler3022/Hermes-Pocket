@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files copied from a remote gateway so another app can receive them through Share. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

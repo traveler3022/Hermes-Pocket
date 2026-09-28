@@ -910,6 +910,7 @@ fun ChatScreen(
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                                 readPreview = viewModel::readPreviewFile,
                                 resolvePreviewUrl = viewModel::resolvePreviewUrl,
+                                previewShareUri = viewModel::previewShareUri,
                                 onPreviewSend = viewModel::sendHiddenPrompt,
                                 onEditMessage = viewModel::startEditing,
                                 onDeleteMessage = { id -> deleteFromMessageId = id },

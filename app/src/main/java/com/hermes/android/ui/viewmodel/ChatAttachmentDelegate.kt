@@ -2,13 +2,16 @@ package com.hermes.android.ui.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import android.util.Base64
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
+import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.LinuxUploads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -203,6 +206,28 @@ internal class ChatAttachmentDelegate(
     }
 
     private val maxPreviewBytes = 5 * 1024 * 1024
+
+    /**
+     * A URI another app can read a `::preview` file from, for Share: the built-in Linux's own
+     * documents provider (no copy), or a copy in the cache for a remote gateway's file.
+     */
+    suspend fun previewShareUri(file: String, cwd: String?): Uri? = withContext(Dispatchers.IO) {
+        val path = previewPath(file, cwd)?.removePrefix("file://")
+            ?.replaceFirst(Regex("^~(?=/|$)"), "/root") ?: return@withContext null
+        try {
+            if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
+                if (hermesRuntime.hostFileForGuestPath(path)?.isFile != true) return@withContext null
+                return@withContext DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), path)
+            }
+            val bytes = gatewayClient.downloadFile(resolveMediaUrl(path))
+            val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+            val copy = java.io.File(dir, path.substringAfterLast('/')).apply { writeBytes(bytes) }
+            FileProvider.getUriForFile(context, "${context.packageName}.shared", copy)
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] Preview file can't be shared: $path")
+            null
+        }
+    }
 
     /** Where a `::preview` file is: as written when absolute, else in [cwd]; null for a web URL or no cwd. */
     fun previewPath(file: String, cwd: String?): String? {

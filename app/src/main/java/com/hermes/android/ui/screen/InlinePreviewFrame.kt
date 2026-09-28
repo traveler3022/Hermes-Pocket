@@ -1,12 +1,16 @@
 package com.hermes.android.ui.screen
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -23,6 +27,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +48,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.hermes.android.ui.component.PREVIEW_MAX_HEIGHT
@@ -48,6 +56,7 @@ import com.hermes.android.ui.component.PREVIEW_MIN_HEIGHT
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.t
 import java.util.UUID
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -168,7 +177,11 @@ internal fun InlinePreviewFrame(
     readPreview: suspend (String) -> String?,
     onSend: (String) -> Unit,
     onOpen: () -> Unit,
+    shareUri: suspend () -> Uri?,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareFailed = t("Couldn't share the file", "فایل قابل اشتراک نیست")
     var doc by remember(file) { mutableStateOf<String?>(null) }
     var failed by remember(file) { mutableStateOf(false) }
     var measured by remember(file) { mutableStateOf<Int?>(null) }
@@ -261,6 +274,32 @@ internal fun InlinePreviewFrame(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        val uri = shareUri()
+                        if (uri == null) {
+                            Toast.makeText(context, shareFailed, Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/html"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            clipData = ClipData.newRawUri(file.substringAfterLast('/'), uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(send, null))
+                    }
+                },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = t("Share", "اشتراک\u200Cگذاری"),
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primary,
+                )
+            }
             IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
                 Icon(
                     HxIcons.ExternalLink,
