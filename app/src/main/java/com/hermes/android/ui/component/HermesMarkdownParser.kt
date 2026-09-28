@@ -12,28 +12,77 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import org.commonmark.ext.autolink.AutolinkExtension
+import org.commonmark.ext.autolink.AutolinkType
+import org.commonmark.ext.gfm.strikethrough.Strikethrough
+import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
+import org.commonmark.ext.gfm.tables.TableBlock
+import org.commonmark.ext.gfm.tables.TableCell
+import org.commonmark.ext.gfm.tables.TableHead
+import org.commonmark.ext.gfm.tables.TableRow
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.ext.task.list.items.TaskListItemMarker
+import org.commonmark.ext.task.list.items.TaskListItemsExtension
+import org.commonmark.node.BlockQuote
+import org.commonmark.node.Code
+import org.commonmark.node.Emphasis
+import org.commonmark.node.FencedCodeBlock
+import org.commonmark.node.HardLineBreak
+import org.commonmark.node.Heading
+import org.commonmark.node.HtmlBlock
+import org.commonmark.node.HtmlInline
+import org.commonmark.node.IndentedCodeBlock
+import org.commonmark.node.Link
+import org.commonmark.node.LinkReferenceDefinition
+import org.commonmark.node.ListBlock
+import org.commonmark.node.ListItem
+import org.commonmark.node.Node
+import org.commonmark.node.OrderedList
+import org.commonmark.node.Paragraph
+import org.commonmark.node.SoftLineBreak
+import org.commonmark.node.StrongEmphasis
+import org.commonmark.node.Text
+import org.commonmark.node.ThematicBreak
+import org.commonmark.parser.Parser
 
 /**
  * Block model + parser behind [HermesMarkdown].
  *
+ * Parsing is CommonMark + GFM (tables, strikethrough, task items, bare links)
+ * by commonmark-java, the same parser Telegram's markdown messages go through
+ * (`MarkdownParser.java`) and the same spec the desktop app's remark follows,
+ * so a reply reads here the way it reads there. This file only flattens the
+ * syntax tree into the few block kinds the renderer draws.
+ *
  * Split out of the composable file so the rendering layer stays readable and
  * the parser can be unit-tested without Compose (`parseMdBlocks` is internal
- * and pure).
+ * and pure). Blocks hold [MdSpan]s, not colours: the theme is applied at draw
+ * time by [inline].
  */
 internal sealed class MdBlock {
-    data class Heading(val level: Int, val text: String) : MdBlock()
+    data class Heading(val level: Int, val text: List<MdSpan>) : MdBlock()
     data class Code(val language: String, val code: String) : MdBlock()
-    data class Quote(val depth: Int, val text: String) : MdBlock()
+    data class Quote(val depth: Int, val text: List<MdSpan>) : MdBlock()
     data class ListItem(
         val depth: Int,
         val ordinal: Int?,
         val checked: Boolean?,
-        val text: String,
+        val text: List<MdSpan>,
     ) : MdBlock()
-    data class Table(val rows: List<List<String>>, val hasHeader: Boolean) : MdBlock()
-    data class Para(val text: String) : MdBlock()
+    data class Table(val rows: List<List<List<MdSpan>>>, val hasHeader: Boolean) : MdBlock()
+    data class Para(val text: List<MdSpan>) : MdBlock()
     data object Rule : MdBlock()
 }
+
+/** One inline run: text, a code span, emphasis around runs, or a link over runs. */
+internal sealed class MdSpan {
+    data class Text(val text: String) : MdSpan()
+    data class Code(val code: String) : MdSpan()
+    data class Styled(val style: MdStyle, val children: List<MdSpan>) : MdSpan()
+    data class Link(val url: String, val children: List<MdSpan>) : MdSpan()
+}
+
+internal enum class MdStyle { Bold, Italic, Strike }
 
 internal data class InlineStyle(
     val linkColor: Color,
@@ -47,10 +96,12 @@ internal data class InlineStyle(
  * While a turn streams, the message text grows by a few characters at a time
  * and re-parsing all of it on every token is quadratic in message length.
  *
- * Markdown blocks are only closed at a blank line, so everything before the
- * last blank line can never change once seen. This parser keeps those blocks
- * and re-parses just the tail after it. Growth is detected by prefix check; any
- * other change (edit, retry, new message) falls back to a full parse.
+ * A blank line followed by a line that starts in column 0 and is not a list
+ * marker closes every open block in CommonMark (paragraph, list, quote, table),
+ * so nothing before such a point can change once it has been seen. This parser
+ * keeps those blocks and re-parses just the tail after it. Growth is detected by
+ * prefix check; any other change (edit, retry, new message) falls back to a full
+ * parse.
  */
 internal class IncrementalMdParser {
     private var lastSource: String = ""
@@ -69,8 +120,6 @@ internal class IncrementalMdParser {
             stableBlocks = emptyList()
         }
 
-        // Advance the stable point to the last blank line, but never inside an
-        // open fenced code block.
         val boundary = lastStableBoundary(source, stableOffset)
         if (boundary > stableOffset) {
             stableBlocks = stableBlocks + parseMdBlocks(source.substring(stableOffset, boundary))
@@ -81,284 +130,301 @@ internal class IncrementalMdParser {
         return stableBlocks + parseMdBlocks(source.substring(stableOffset))
     }
 
+    /**
+     * The start of the last line that opens a fresh top-level block: a complete
+     * line that follows a blank line, starts in column 0, is not a list item
+     * (which could continue the list before it) and is not inside a fenced code
+     * block.
+     */
     private fun lastStableBoundary(source: String, from: Int): Int {
-        var fences = 0
-        var lastBlank = from
+        var boundary = from
+        var fence: String? = null
+        var previousBlank = false
         var i = from
         while (i < source.length) {
             val end = source.indexOf('\n', i).let { if (it < 0) source.length else it }
-            val trimmed = source.substring(i, end).trimStart()
-            if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) fences++
-            if (trimmed.isEmpty() && fences % 2 == 0) lastBlank = (end + 1).coerceAtMost(source.length)
+            val line = source.substring(i, end).trimEnd('\r')
+            val trimmed = line.trimStart()
+            // Only a finished line can be judged: "1" may still become "1. item".
+            if (fence == null && previousBlank && i > from && end < source.length && trimmed.isNotEmpty() &&
+                line.length == trimmed.length && !listMarkerRe.containsMatchIn(line)
+            ) {
+                boundary = i
+            }
+            val run = fenceRe.find(trimmed)?.value
+            if (fence == null) {
+                if (run != null) fence = run
+            } else if (run != null && run[0] == fence[0] && run.length >= fence.length &&
+                trimmed.substring(run.length).isBlank()
+            ) {
+                fence = null
+            }
+            previousBlank = trimmed.isEmpty()
             i = end + 1
         }
-        // Keep the tail (everything after the last blank line) live.
-        return if (fences % 2 == 0) lastBlank else from
+        return boundary
     }
 }
 
-private val headingRe = Regex("^(#{1,6})\\s+(.*)$")
-private val bulletRe = Regex("^([-*+])\\s+(.*)$")
-private val numberRe = Regex("^(\\d{1,9})[.)]\\s+(.*)$")
-private val taskRe = Regex("^\\[([ xX])\\]\\s*(.*)$")
-private val ruleRe = Regex("^(?:\\s*[-*_]){3,}\\s*$")
-private val tableSepRe = Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
+private val listMarkerRe = Regex("^(?:[-*+]|\\d{1,9}[.)])(?:[ \t]|$)")
+private val fenceRe = Regex("^(?:`{3,}|~{3,})")
 
-/** Nesting deeper than this is drawn at this depth, so an over-indented line cannot push text off screen. */
+/** Nesting deeper than this is drawn at this depth, so a deep list cannot push text off screen. */
 private const val MaxListDepth = 6
+
+/** Characters a bare link may run into in Persian prose that are not part of the address. */
+private val trailingPersianPunctuation = charArrayOf('،', '؛')
+
+private val blockParser: Parser by lazy {
+    Parser.builder()
+        .extensions(
+            listOf(
+                TablesExtension.create(),
+                // One tilde would strike through `~/a and ~/b`.
+                StrikethroughExtension.builder().requireTwoTildes(true).build(),
+                AutolinkExtension.builder().linkTypes(AutolinkType.URL).build(),
+                TaskListItemsExtension.create(),
+            ),
+        )
+        .build()
+}
+
+/** Paragraphs only: what a single run of inline text means, whatever it opens with. */
+private val inlineParser: Parser by lazy {
+    Parser.builder()
+        .enabledBlockTypes(emptySet())
+        .extensions(
+            listOf(
+                StrikethroughExtension.builder().requireTwoTildes(true).build(),
+                AutolinkExtension.builder().linkTypes(AutolinkType.URL).build(),
+            ),
+        )
+        .build()
+}
 
 /** Split raw markdown into an ordered list of typed [MdBlock]s. Pure + testable. */
 internal fun parseMdBlocks(md: String): List<MdBlock> {
     if (md.isBlank()) return emptyList()
-    val lines = md.replace("\r\n", "\n").split("\n")
     val out = ArrayList<MdBlock>()
-    val para = StringBuilder()
-
-    fun flush() {
-        if (para.isNotBlank()) out.add(MdBlock.Para(para.toString().trim()))
-        para.setLength(0)
-    }
-
-    var i = 0
-    while (i < lines.size) {
-        val line = lines[i]
-        val trimmed = line.trimStart()
-        val indent = line.length - trimmed.length
-        val heading = headingRe.matchEntire(trimmed)
-        val bullet = bulletRe.matchEntire(trimmed)
-        val number = numberRe.matchEntire(trimmed)
-
-        when {
-            trimmed.startsWith("```") || trimmed.startsWith("~~~") -> {
-                flush()
-                val fence = trimmed.take(3)
-                val language = trimmed.removePrefix(fence).trim().takeWhile { !it.isWhitespace() }
-                i++
-                val code = StringBuilder()
-                while (i < lines.size && !lines[i].trimStart().startsWith(fence)) {
-                    code.append(lines[i]).append('\n')
-                    i++
-                }
-                // An unterminated fence is normal mid-stream: render what we have.
-                out.add(MdBlock.Code(language, code.toString().trimEnd('\n')))
-                i++
-            }
-
-            ruleRe.matches(line) -> {
-                flush(); out.add(MdBlock.Rule); i++
-            }
-
-            heading != null -> {
-                flush()
-                out.add(MdBlock.Heading(heading.groupValues[1].length, heading.groupValues[2].trim()))
-                i++
-            }
-
-            trimmed.startsWith(">") -> {
-                flush()
-                var depth = 0
-                var rest = trimmed
-                while (rest.startsWith(">")) {
-                    depth++
-                    rest = rest.removePrefix(">").trimStart()
-                }
-                out.add(MdBlock.Quote(depth, rest))
-                i++
-            }
-
-            // Table: a header row followed by a |---|---| separator.
-            trimmed.startsWith("|") && i + 1 < lines.size &&
-                tableSepRe.matches(lines[i + 1].trim()) -> {
-                flush()
-                val rows = ArrayList<List<String>>()
-                rows.add(splitRow(trimmed))
-                i += 2
-                while (i < lines.size && lines[i].trimStart().startsWith("|")) {
-                    rows.add(splitRow(lines[i].trimStart()))
-                    i++
-                }
-                out.add(MdBlock.Table(rows, hasHeader = true))
-            }
-
-            bullet != null -> {
-                flush()
-                val body = bullet.groupValues[2]
-                val task = taskRe.matchEntire(body)
-                out.add(
-                    MdBlock.ListItem(
-                        depth = (indent / 2).coerceAtMost(MaxListDepth),
-                        ordinal = null,
-                        checked = task?.let { it.groupValues[1].lowercase() == "x" },
-                        text = task?.groupValues?.get(2) ?: body,
-                    ),
-                )
-                i++
-            }
-
-            number != null -> {
-                flush()
-                out.add(
-                    MdBlock.ListItem(
-                        depth = (indent / 2).coerceAtMost(MaxListDepth),
-                        ordinal = number.groupValues[1].toIntOrNull() ?: 1,
-                        checked = null,
-                        text = number.groupValues[2],
-                    ),
-                )
-                i++
-            }
-
-            trimmed.isEmpty() -> { flush(); i++ }
-
-            else -> {
-                if (para.isNotEmpty()) para.append('\n')
-                para.append(trimmed)
-                i++
-            }
-        }
-    }
-    flush()
+    emitChildren(blockParser.parse(md), out, listDepth = 0, quoteDepth = 0)
     return out
 }
 
-private fun splitRow(line: String): List<String> =
-    line.trim().trim('|').split('|').map { it.trim() }
+/** Inline markdown on its own, e.g. a table cell or a line of a caption. */
+internal fun parseInline(text: String): List<MdSpan> {
+    val out = ArrayList<MdSpan>()
+    var block = inlineParser.parse(text).firstChild
+    while (block != null) {
+        if (out.isNotEmpty()) out.add(MdSpan.Text("\n"))
+        out.addAll(inlines(block))
+        block = block.next
+    }
+    return mergeText(out)
+}
+
+private fun emitChildren(parent: Node, out: MutableList<MdBlock>, listDepth: Int, quoteDepth: Int) {
+    var node = parent.firstChild
+    while (node != null) {
+        emitBlock(node, out, listDepth, quoteDepth)
+        node = node.next
+    }
+}
+
+private fun emitBlock(node: Node, out: MutableList<MdBlock>, listDepth: Int, quoteDepth: Int) {
+    when (node) {
+        is Paragraph -> {
+            val text = inlines(node)
+            if (text.isNotEmpty()) {
+                out.add(if (quoteDepth > 0) MdBlock.Quote(quoteDepth, text) else MdBlock.Para(text))
+            }
+        }
+        is Heading -> out.add(MdBlock.Heading(node.level, inlines(node)))
+        is FencedCodeBlock -> out.add(
+            MdBlock.Code(
+                language = node.info.orEmpty().trim().takeWhile { !it.isWhitespace() },
+                code = node.literal.orEmpty().trimEnd('\n'),
+            ),
+        )
+        is IndentedCodeBlock -> out.add(MdBlock.Code("", node.literal.orEmpty().trimEnd('\n')))
+        is ThematicBreak -> out.add(MdBlock.Rule)
+        is BlockQuote -> emitChildren(node, out, listDepth, quoteDepth + 1)
+        is ListBlock -> emitList(node, out, listDepth, quoteDepth)
+        is TableBlock -> out.add(table(node))
+        // Raw HTML is shown as written, as before.
+        is HtmlBlock -> node.literal.orEmpty().trimEnd('\n').takeIf { it.isNotBlank() }?.let {
+            out.add(MdBlock.Para(listOf(MdSpan.Text(it))))
+        }
+        is LinkReferenceDefinition -> Unit
+        else -> emitChildren(node, out, listDepth, quoteDepth)
+    }
+}
+
+/**
+ * One [MdBlock.ListItem] per item, numbered from the list's own start. What an
+ * item holds after its first paragraph (a nested list, a second paragraph, code)
+ * follows it one level deeper.
+ */
+private fun emitList(list: ListBlock, out: MutableList<MdBlock>, depth: Int, quoteDepth: Int) {
+    var number = (list as? OrderedList)?.markerStartNumber ?: 1
+    var item = list.firstChild
+    while (item != null) {
+        if (item is ListItem) {
+            var child: Node? = item.firstChild
+            val checked = (child as? TaskListItemMarker)?.isChecked
+            if (checked != null) child = child?.next
+            var text = emptyList<MdSpan>()
+            if (child is Paragraph) {
+                text = inlines(child)
+                child = child.next
+            }
+            out.add(
+                MdBlock.ListItem(
+                    depth = depth.coerceAtMost(MaxListDepth),
+                    ordinal = if (list is OrderedList) number else null,
+                    checked = checked,
+                    text = text,
+                ),
+            )
+            while (child != null) {
+                emitBlock(child, out, depth + 1, quoteDepth)
+                child = child.next
+            }
+            number++
+        }
+        item = item.next
+    }
+}
+
+private fun table(block: TableBlock): MdBlock.Table {
+    val rows = ArrayList<List<List<MdSpan>>>()
+    var hasHeader = false
+    var section = block.firstChild
+    while (section != null) {
+        if (section is TableHead) hasHeader = true
+        var row = section.firstChild
+        while (row != null) {
+            if (row is TableRow) {
+                val cells = ArrayList<List<MdSpan>>()
+                var cell = row.firstChild
+                while (cell != null) {
+                    if (cell is TableCell) cells.add(inlines(cell))
+                    cell = cell.next
+                }
+                rows.add(cells)
+            }
+            row = row.next
+        }
+        section = section.next
+    }
+    return MdBlock.Table(rows, hasHeader)
+}
+
+private fun inlines(parent: Node): List<MdSpan> {
+    val out = ArrayList<MdSpan>()
+    var node = parent.firstChild
+    while (node != null) {
+        addInline(node, out)
+        node = node.next
+    }
+    return mergeText(out)
+}
+
+private fun addInline(node: Node, out: MutableList<MdSpan>) {
+    when (node) {
+        is Text -> out.add(MdSpan.Text(node.literal))
+        is Code -> out.add(MdSpan.Code(node.literal))
+        is SoftLineBreak, is HardLineBreak -> out.add(MdSpan.Text("\n"))
+        is StrongEmphasis -> out.add(MdSpan.Styled(MdStyle.Bold, inlines(node)))
+        is Emphasis -> out.add(MdSpan.Styled(MdStyle.Italic, inlines(node)))
+        is Strikethrough -> out.add(MdSpan.Styled(MdStyle.Strike, inlines(node)))
+        is Link -> addLink(node, out)
+        is HtmlInline -> out.add(MdSpan.Text(node.literal))
+        // Images are lifted out upstream (parseContentBlocks); one that is left
+        // reads as its alt text, as in Telegram.
+        else -> out.addAll(inlines(node))
+    }
+}
+
+private fun addLink(link: Link, out: MutableList<MdSpan>) {
+    val children = inlines(link)
+    val url = link.destination.orEmpty()
+    // A bare link in Persian prose runs into the Persian comma; leave it outside.
+    val bare = children == listOf(MdSpan.Text(url))
+    val trimmed = if (bare) url.trimEnd(*trailingPersianPunctuation) else url
+    if (bare && trimmed.length < url.length) {
+        out.add(MdSpan.Link(trimmed, listOf(MdSpan.Text(trimmed))))
+        out.add(MdSpan.Text(url.substring(trimmed.length)))
+    } else {
+        out.add(MdSpan.Link(url, children))
+    }
+}
+
+/** Adjacent text runs as one, so equal text always gives equal spans. */
+private fun mergeText(spans: List<MdSpan>): List<MdSpan> {
+    val out = ArrayList<MdSpan>(spans.size)
+    for (span in spans) {
+        val last = out.lastOrNull()
+        if (span is MdSpan.Text && last is MdSpan.Text) {
+            out[out.lastIndex] = MdSpan.Text(last.text + span.text)
+        } else {
+            out.add(span)
+        }
+    }
+    return out
+}
 
 // ── Inline ───────────────────────────────────────────────────────────────
 
-private val autoLinkRe = Regex("""https?://[^\s<>"')\]]+""")
-
 /**
- * Inline markdown → [AnnotatedString]: escapes, code spans, bold, italic,
- * strikethrough, explicit links and bare URLs.
+ * [MdSpan]s → [AnnotatedString], with the theme's colours.
  *
  * Links are [LinkAnnotation.Url]s inside the string rather than annotations
  * resolved by a tap handler, so opening them is the platform's job and the text
  * stays an ordinary `Text` that can be selected across a link.
- *
- * Emphasis requires a delimiter that opens on a non-space character and is not
- * glued to a word character on the outside, so identifiers such as
- * `some_snake_case_name` and globs such as `*.kt` survive intact.
  */
-internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnotatedString {
-    var i = 0
+internal fun inline(spans: List<MdSpan>, s: InlineStyle): AnnotatedString = buildAnnotatedString {
+    appendSpans(spans, s)
+}
 
-    fun emphasisEnd(delim: String, start: Int): Int {
-        var j = start
-        while (j < text.length) {
-            val at = text.indexOf(delim, j)
-            if (at < 0) return -1
-            // Closing delimiter must not follow a space and must not be escaped.
-            val prev = text.getOrNull(at - 1)
-            if (prev != null && !prev.isWhitespace() && prev != '\\') return at
-            j = at + delim.length
-        }
-        return -1
-    }
-
-    fun link(url: String, label: String) {
-        withLink(
-            LinkAnnotation.Url(
-                url = url,
-                styles = TextLinkStyles(
-                    style = SpanStyle(
-                        color = s.linkColor,
-                        textDecoration = TextDecoration.Underline,
+private fun AnnotatedString.Builder.appendSpans(spans: List<MdSpan>, s: InlineStyle) {
+    for (span in spans) {
+        when (span) {
+            is MdSpan.Text -> append(span.text)
+            is MdSpan.Code -> withStyle(
+                SpanStyle(fontFamily = FontFamily.Monospace, background = s.codeBg, color = s.onCodeBg),
+            ) { append(span.code) }
+            is MdSpan.Styled -> withStyle(
+                when (span.style) {
+                    MdStyle.Bold -> SpanStyle(fontWeight = FontWeight.Bold)
+                    MdStyle.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
+                    MdStyle.Strike -> SpanStyle(textDecoration = TextDecoration.LineThrough)
+                },
+            ) { appendSpans(span.children, s) }
+            is MdSpan.Link -> withLink(
+                LinkAnnotation.Url(
+                    url = span.url,
+                    styles = TextLinkStyles(
+                        style = SpanStyle(color = s.linkColor, textDecoration = TextDecoration.Underline),
                     ),
                 ),
-            ),
-        ) { append(label) }
+            ) { appendSpans(span.children, s) }
+        }
     }
+}
 
-    while (i < text.length) {
-        val c = text[i]
-        when {
-            c == '\\' && i + 1 < text.length && !text[i + 1].isLetterOrDigit() -> {
-                append(text[i + 1]); i += 2
-            }
+/**
+ * The text [isRtlText] decides a block's direction by: what it reads, with code
+ * spans back in backticks so they do not count.
+ */
+internal fun List<MdSpan>.directionText(): String = buildString { appendDirection(this@directionText) }
 
-            c == '`' -> {
-                val fence = if (text.startsWith("``", i)) "``" else "`"
-                val end = text.indexOf(fence, i + fence.length)
-                if (end > i) {
-                    withStyle(
-                        SpanStyle(
-                            fontFamily = FontFamily.Monospace,
-                            background = s.codeBg,
-                            color = s.onCodeBg,
-                        ),
-                    ) { append(text.substring(i + fence.length, end).trim()) }
-                    i = end + fence.length
-                } else { append(c); i++ }
-            }
-
-            text.startsWith("***", i) || text.startsWith("___", i) -> {
-                val delim = text.substring(i, i + 3)
-                val end = emphasisEnd(delim, i + 3)
-                if (end > i && text.getOrNull(i + 3)?.isWhitespace() == false) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)) {
-                        append(text.substring(i + 3, end))
-                    }
-                    i = end + 3
-                } else { append(c); i++ }
-            }
-
-            text.startsWith("**", i) || text.startsWith("__", i) -> {
-                val delim = text.substring(i, i + 2)
-                val end = emphasisEnd(delim, i + 2)
-                if (end > i && text.getOrNull(i + 2)?.isWhitespace() == false) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(text.substring(i + 2, end))
-                    }
-                    i = end + 2
-                } else { append(c); i++ }
-            }
-
-            text.startsWith("~~", i) -> {
-                val end = emphasisEnd("~~", i + 2)
-                if (end > i) {
-                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                        append(text.substring(i + 2, end))
-                    }
-                    i = end + 2
-                } else { append(c); i++ }
-            }
-
-            (c == '*' || c == '_') && canOpenEmphasis(text, i) -> {
-                val end = emphasisEnd(c.toString(), i + 1)
-                if (end > i) {
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                        append(text.substring(i + 1, end))
-                    }
-                    i = end + 1
-                } else { append(c); i++ }
-            }
-
-            c == '[' -> {
-                val close = text.indexOf(']', i + 1)
-                val open = if (close > 0) close + 1 else -1
-                if (close > i && text.getOrNull(open) == '(') {
-                    val pClose = text.indexOf(')', open + 1)
-                    if (pClose > open) {
-                        link(url = text.substring(open + 1, pClose).trim(), label = text.substring(i + 1, close))
-                        i = pClose + 1
-                    } else { append(c); i++ }
-                } else { append(c); i++ }
-            }
-
-            c == 'h' && (i == 0 || !text[i - 1].isLetterOrDigit()) &&
-                (text.startsWith("http://", i) || text.startsWith("https://", i)) -> {
-                // The scheme is right here, so a match starts at i unless nothing follows it
-                // ("https:// "), in which case find() would jump ahead — that is not ours.
-                val match = autoLinkRe.find(text, i)?.takeIf { it.range.first == i }
-                val url = match?.value.orEmpty().trimEnd('.', ',', '؛', '،')
-                if (url.isEmpty()) { append(c); i++ } else {
-                    link(url = url, label = url)
-                    i += url.length
-                }
-            }
-
-            else -> { append(c); i++ }
+private fun StringBuilder.appendDirection(spans: List<MdSpan>) {
+    for (span in spans) {
+        when (span) {
+            is MdSpan.Text -> append(span.text)
+            is MdSpan.Code -> append('`').append(span.code.replace("`", "")).append('`')
+            is MdSpan.Styled -> appendDirection(span.children)
+            is MdSpan.Link -> appendDirection(span.children)
         }
     }
 }
@@ -415,14 +481,4 @@ internal fun isRtlText(text: String): Boolean? {
         ltr > rtl -> false
         else -> first
     }
-}
-
-/** `*` / `_` may open emphasis only at a word boundary with non-space content. */
-private fun canOpenEmphasis(text: String, i: Int): Boolean {
-    val next = text.getOrNull(i + 1) ?: return false
-    if (next.isWhitespace()) return false
-    val prev = text.getOrNull(i - 1)
-    // `snake_case` — an underscore glued to a word char never opens emphasis.
-    if (text[i] == '_' && prev != null && (prev.isLetterOrDigit() || prev == '_')) return false
-    return true
 }

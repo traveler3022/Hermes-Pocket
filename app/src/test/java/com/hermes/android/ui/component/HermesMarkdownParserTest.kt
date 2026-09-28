@@ -17,46 +17,69 @@ class HermesMarkdownParserTest {
 
     private val style = InlineStyle(linkColor = Color.Blue, codeBg = Color.Gray, onCodeBg = Color.Black)
 
+    private fun t(text: String) = listOf(MdSpan.Text(text))
+    private fun para(text: String) = MdBlock.Para(t(text))
+    private fun item(depth: Int, ordinal: Int?, checked: Boolean?, text: String) =
+        item(depth, ordinal, checked, t(text))
+    private fun inline(text: String, s: InlineStyle) = inline(parseInline(text), s)
+
     // ── Blocks ───────────────────────────────────────────────────────────
 
     @Test
     fun `a blank line ends a paragraph and single newlines stay inside it`() {
         assertEquals(
-            listOf(MdBlock.Para("a\nb"), MdBlock.Para("c")),
+            listOf(para("a\nb"), para("c")),
             parseMdBlocks("a\nb\n\nc"),
         )
     }
 
     @Test
     fun `headings carry their level`() {
-        assertEquals(listOf(MdBlock.Heading(2, "Title")), parseMdBlocks("## Title"))
+        assertEquals(listOf(MdBlock.Heading(2, t("Title"))), parseMdBlocks("## Title"))
         // No space after the hashes: a hashtag, not a heading.
-        assertEquals(listOf(MdBlock.Para("#tag")), parseMdBlocks("#tag"))
+        assertEquals(listOf(para("#tag")), parseMdBlocks("#tag"))
     }
 
     @Test
     fun `nested bullets take their depth from the indent`() {
         assertEquals(
             listOf(
-                MdBlock.ListItem(0, null, null, "one"),
-                MdBlock.ListItem(1, null, null, "two"),
+                item(0, null, null, "one"),
+                item(1, null, null, "two"),
             ),
             parseMdBlocks("- one\n  - two"),
         )
     }
 
     @Test
-    fun `an over-indented item is capped instead of pushing text off screen`() {
-        val item = parseMdBlocks(" ".repeat(20) + "- x").single() as MdBlock.ListItem
-        assertEquals(6, item.depth)
+    fun `a deeply nested item is capped instead of pushing text off screen`() {
+        val md = (0..8).joinToString("\n") { "  ".repeat(it) + "- x$it" }
+        val last = parseMdBlocks(md).last() as MdBlock.ListItem
+        assertEquals(6, last.depth)
+    }
+
+    @Test
+    fun `a list keeps counting across blank lines even when every item says one`() {
+        assertEquals(
+            listOf(item(0, 1, null, "a"), item(0, 2, null, "b")),
+            parseMdBlocks("1. a\n\n1. b"),
+        )
+    }
+
+    @Test
+    fun `what an item holds after its first line sits one level deeper`() {
+        assertEquals(
+            listOf(item(0, null, null, "a"), item(1, null, null, "b"), para("more")),
+            parseMdBlocks("- a\n\n  - b\n\n  more"),
+        )
     }
 
     @Test
     fun `numbered items keep their number`() {
         assertEquals(
             listOf(
-                MdBlock.ListItem(0, 1, null, "a"),
-                MdBlock.ListItem(0, 2, null, "b"),
+                item(0, 1, null, "a"),
+                item(0, 2, null, "b"),
             ),
             parseMdBlocks("1. a\n2) b"),
         )
@@ -66,8 +89,8 @@ class HermesMarkdownParserTest {
     fun `task items know whether they are checked`() {
         assertEquals(
             listOf(
-                MdBlock.ListItem(0, null, true, "done"),
-                MdBlock.ListItem(0, null, false, "todo"),
+                item(0, null, true, "done"),
+                item(0, null, false, "todo"),
             ),
             parseMdBlocks("- [x] done\n- [ ] todo"),
         )
@@ -75,23 +98,23 @@ class HermesMarkdownParserTest {
 
     @Test
     fun `a line that opens with bold is a paragraph, not a bullet`() {
-        assertEquals(listOf(MdBlock.Para("**bold** text")), parseMdBlocks("**bold** text"))
+        assertEquals(listOf(para("**bold** text")), parseMdBlocks("**bold** text"))
     }
 
     @Test
     fun `a table needs its separator row and ends at the first non-table line`() {
         assertEquals(
-            listOf(MdBlock.Table(listOf(listOf("a", "b"), listOf("1", "2")), hasHeader = true)),
+            listOf(MdBlock.Table(listOf(listOf(t("a"), t("b")), listOf(t("1"), t("2"))), hasHeader = true)),
             parseMdBlocks("| a | b |\n|---|---|\n| 1 | 2 |"),
         )
         // Without the separator it is just text.
-        assertEquals(listOf(MdBlock.Para("| a | b |")), parseMdBlocks("| a | b |"))
+        assertEquals(listOf(para("| a | b |")), parseMdBlocks("| a | b |"))
     }
 
     @Test
     fun `a thematic break is its own block`() {
         assertEquals(
-            listOf(MdBlock.Para("text"), MdBlock.Rule, MdBlock.Para("more")),
+            listOf(para("text"), MdBlock.Rule, para("more")),
             parseMdBlocks("text\n\n---\n\nmore"),
         )
     }
@@ -107,13 +130,15 @@ class HermesMarkdownParserTest {
 
     @Test
     fun `quotes carry their depth`() {
-        assertEquals(listOf(MdBlock.Quote(2, "deep")), parseMdBlocks("> > deep"))
+        assertEquals(listOf(MdBlock.Quote(2, t("deep"))), parseMdBlocks("> > deep"))
+        // Lines of one quote are one block.
+        assertEquals(listOf(MdBlock.Quote(1, t("a\nb"))), parseMdBlocks("> a\n> b"))
     }
 
     @Test
     fun `windows line endings parse like unix ones`() {
         assertEquals(
-            listOf(MdBlock.Heading(1, "T"), MdBlock.Para("body")),
+            listOf(MdBlock.Heading(1, t("T")), para("body")),
             parseMdBlocks("# T\r\n\r\nbody"),
         )
     }
@@ -128,7 +153,9 @@ class HermesMarkdownParserTest {
 
     private val document = "# Title\n\nFirst para\nline two\n\n- a\n- b\n\n" +
         "```kotlin\nval x = 1\n\nval y = 2\n```\n\n" +
-        "| a | b |\n|---|---|\n| 1 | 2 |\n\nend"
+        "| a | b |\n|---|---|\n| 1 | 2 |\n\n" +
+        "1. one\n\n1. two\n\n   - nested\n\n   more of two\n\n" +
+        "> quote\n\n> another\n\n~~~\ncode\n\n~~~\n\nend"
 
     @Test
     fun `parsing a reply as it grows gives what parsing it whole gives, at every length`() {
@@ -182,6 +209,33 @@ class HermesMarkdownParserTest {
     }
 
     @Test
+    fun `a code span can hold a backtick`() {
+        val out = inline("type `` a`b `` here", style)
+        assertEquals("type a`b here", out.text)
+        assertEquals(1, out.spanStyles.size)
+    }
+
+    @Test
+    fun `markdown inside a code span stays literal`() {
+        val out = inline("`**not bold**` and `[x](y)`", style)
+        assertEquals("**not bold** and [x](y)", out.text)
+        assertTrue(out.getLinkAnnotations(0, out.text.length).isEmpty())
+    }
+
+    @Test
+    fun `inline text that looks like a block is still inline`() {
+        assertEquals("1. not a list", inline("1. not a list", style).text)
+        assertEquals("# not a heading", inline("# not a heading", style).text)
+    }
+
+    @Test
+    fun `a single tilde is not strikethrough`() {
+        val out = inline("cd ~/a and ~/b", style)
+        assertEquals("cd ~/a and ~/b", out.text)
+        assertTrue(out.spanStyles.isEmpty())
+    }
+
+    @Test
     fun `a markdown link becomes a link over its label`() {
         val out = inline("[docs](https://x.dev/a) ok", style)
         assertEquals("docs ok", out.text)
@@ -193,6 +247,14 @@ class HermesMarkdownParserTest {
     fun `a bare url becomes a link without the punctuation that follows it`() {
         val out = inline("see https://a.io/x, ok", style)
         assertEquals("see https://a.io/x, ok", out.text)
+        val link = out.getLinkAnnotations(0, out.text.length).single().item as LinkAnnotation.Url
+        assertEquals("https://a.io/x", link.url)
+    }
+
+    @Test
+    fun `a bare url stops before a persian comma`() {
+        val out = inline("ببین https://a.io/x، خوب", style)
+        assertEquals("ببین https://a.io/x، خوب", out.text)
         val link = out.getLinkAnnotations(0, out.text.length).single().item as LinkAnnotation.Url
         assertEquals("https://a.io/x", link.url)
     }

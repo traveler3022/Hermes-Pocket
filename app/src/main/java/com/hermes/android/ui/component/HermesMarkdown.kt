@@ -61,12 +61,11 @@ import com.hermes.android.ui.i18n.t
  * 3. **Streaming cost.** [IncrementalMdParser] keeps the blocks before the last
  *    blank line and re-parses only the growing tail, so callers can render real
  *    markdown while streaming.
- * 4. **Inline correctness.** `snake_case_name` and `*.kt` are not emphasis;
- *    `\*` escapes work; `__bold__`, `***both***`, `~~strike~~` and bare URLs
- *    are supported.
- * 5. **Block coverage.** Nested lists (by indent), task lists, tables and
- *    thematic breaks render instead of leaking their raw syntax.
- * 6. **Type scale.** Heading sizes derive from the caller's `style.fontSize`.
+ * 4. **Syntax.** CommonMark + GFM by commonmark-java (see
+ *    [parseMdBlocks]): code spans with backticks inside, escapes, emphasis
+ *    rules, nested lists, task lists, tables, strikethrough and bare URLs
+ *    read as they do in Telegram and on the desktop.
+ * 5. **Type scale.** Heading sizes derive from the caller's `style.fontSize`.
  *
  * Code/images/mermaid/html are already split out upstream by
  * `parseContentBlocks`, so this only renders the text segments. The signature
@@ -113,7 +112,7 @@ fun HermesMarkdown(
                         else -> 1.04f
                     }
                     MdText(
-                        raw = block.text,
+                        text = block.text,
                         style = body.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = base * scale,
@@ -139,7 +138,7 @@ fun HermesMarkdown(
                         .background(rule),
                 )
 
-                is MdBlock.Quote -> BlockRow(block.text) {
+                is MdBlock.Quote -> BlockRow(block.text.directionText()) {
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -157,7 +156,7 @@ fun HermesMarkdown(
                             Spacer(Modifier.width(8.dp))
                         }
                         MdText(
-                            raw = block.text,
+                            text = block.text,
                             style = body.copy(color = muted, fontStyle = FontStyle.Italic),
                             inlineStyle = inlineStyle,
                             modifier = Modifier.weight(1f),
@@ -165,7 +164,7 @@ fun HermesMarkdown(
                     }
                 }
 
-                is MdBlock.ListItem -> BlockRow(block.text) {
+                is MdBlock.ListItem -> BlockRow(block.text.directionText()) {
                     val checked = block.checked
                     val ordinal = block.ordinal
                     Row(
@@ -189,7 +188,7 @@ fun HermesMarkdown(
                         )
                         Spacer(Modifier.width(7.dp))
                         MdText(
-                            raw = block.text,
+                            text = block.text,
                             style = if (checked == true) {
                                 body.copy(color = muted, textDecoration = TextDecoration.LineThrough)
                             } else {
@@ -203,9 +202,9 @@ fun HermesMarkdown(
 
                 is MdBlock.Table -> MdTable(block, body, inlineStyle, rule, muted)
 
-                is MdBlock.Para -> BlockRow(block.text) {
+                is MdBlock.Para -> BlockRow(block.text.directionText()) {
                     MdText(
-                        raw = block.text,
+                        text = block.text,
                         style = body,
                         inlineStyle = inlineStyle,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
@@ -308,7 +307,7 @@ private fun MdTable(
                 ) {
                     row.forEach { cell ->
                         MdText(
-                            raw = cell,
+                            text = cell,
                             style = if (header) {
                                 style.copy(fontWeight = FontWeight.Bold)
                             } else {
@@ -340,21 +339,21 @@ private fun MdTable(
  */
 @Composable
 private fun MdText(
-    raw: String,
+    text: List<MdSpan>,
     style: TextStyle,
     inlineStyle: InlineStyle,
     modifier: Modifier = Modifier,
 ) {
-    val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
-    val direction = remember(raw) {
-        when (isRtlText(raw)) {
+    val annotated = remember(text, inlineStyle) { inline(text, inlineStyle) }
+    val direction = remember(text) {
+        when (isRtlText(text.directionText())) {
             true -> TextDirection.Rtl
             false -> TextDirection.Ltr
             null -> TextDirection.Content
         }
     }
     Text(
-        text = text,
+        text = annotated,
         style = style.copy(
             textDirection = direction,
             textAlign = TextAlign.Start,
