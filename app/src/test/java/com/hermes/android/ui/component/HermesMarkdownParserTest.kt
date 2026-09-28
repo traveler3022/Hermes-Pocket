@@ -98,7 +98,10 @@ class HermesMarkdownParserTest {
 
     @Test
     fun `a line that opens with bold is a paragraph, not a bullet`() {
-        assertEquals(listOf(para("**bold** text")), parseMdBlocks("**bold** text"))
+        assertEquals(
+            listOf(MdBlock.Para(listOf(MdSpan.Styled(MdStyle.Bold, t("bold")), MdSpan.Text(" text")))),
+            parseMdBlocks("**bold** text"),
+        )
     }
 
     @Test
