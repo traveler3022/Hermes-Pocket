@@ -655,21 +655,16 @@ class OkHttpGatewayClient @Inject constructor(
      */
     private suspend fun resumeSession(sessionId: String) {
         try {
-            val params = buildJsonObject {
-                put("session_id", sessionId)
-                // Resumed as "tui" otherwise; see SessionRepository.attach.
-                put("source", com.hermes.android.data.SessionRepository.CHAT_SOURCE)
-            }
             // lastSessionId is a LIVE id (that's what responses/events carry),
             // but session.resume resolves STORED db ids and 4007s on live ones
             // — so this auto-resume was silently failing every time. Attach to
             // the still-live session via session.activate first; fall back to
             // resume for the (stored-id / reaped-session) cases.
             val result = try {
-                request(GatewayMethods.SESSION_ACTIVATE, jsonToElementMap(params))
+                request(GatewayMethods.SESSION_ACTIVATE, com.hermes.android.data.SessionRepository.attachParams(GatewayMethods.SESSION_ACTIVATE, sessionId))
             } catch (activateError: Exception) {
                 Timber.w("[Gateway] activate failed (${activateError.message}); trying session.resume")
-                request(GatewayMethods.SESSION_RESUME, jsonToElementMap(params))
+                request(GatewayMethods.SESSION_RESUME, com.hermes.android.data.SessionRepository.attachParams(GatewayMethods.SESSION_RESUME, sessionId))
             }
             val liveId = (result as? JsonObject)?.get("session_id").sessionIdOrNull() ?: sessionId
             lastSessionId = liveId

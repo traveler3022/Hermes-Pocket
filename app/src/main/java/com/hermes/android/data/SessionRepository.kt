@@ -80,21 +80,15 @@ class SessionRepository @Inject constructor(
         preferLive: Boolean = false,
         trackSession: Boolean = true,
     ): AttachedSession {
-        // session.resume takes the source from the request, not the stored chat: without it a
-        // reopened chat came back as "tui" and the model said it could not send files.
-        val params = buildJsonObject {
-            put("session_id", sessionId)
-            put("source", CHAT_SOURCE)
-        }.toElementMap()
         val first = if (preferLive) GatewayMethods.SESSION_ACTIVATE else GatewayMethods.SESSION_RESUME
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
         val result = try {
-            gatewayClient.request(first, params, trackSession = trackSession)
+            gatewayClient.request(first, attachParams(first, sessionId), trackSession = trackSession)
         } catch (firstError: Exception) {
             // Superseded (a newer chat was picked): not a refusal worth a second call.
             if (firstError is kotlinx.coroutines.CancellationException) throw firstError
             Timber.w("[Repo] $first failed (${firstError.message}); trying $second for $sessionId")
-            gatewayClient.request(second, params, trackSession = trackSession)
+            gatewayClient.request(second, attachParams(second, sessionId), trackSession = trackSession)
         }
         val obj = result as? JsonObject
             ?: throw IllegalStateException("attach($sessionId): non-object payload")
@@ -596,6 +590,17 @@ class SessionRepository @Inject constructor(
         entries.associate { (k, v) -> k to v }
 
     companion object {
+        /**
+         * session.resume takes the source from the request, not the stored chat: without it a
+         * reopened chat came back as "tui" and the model said it could not send files.
+         * session.activate has no `source` and rejects the request if it is sent
+         * (tui_gateway/contracts/sessions.py: SessionActivateParams, extra inputs forbidden).
+         */
+        fun attachParams(method: String, sessionId: String) = buildJsonObject {
+            put("session_id", sessionId)
+            if (method == GatewayMethods.SESSION_RESUME) put("source", CHAT_SOURCE)
+        }.toMap()
+
         const val TASK_SOURCE = "pocket_task"
 
         /**

@@ -479,4 +479,12 @@ class SessionRepositoryTest {
         assertTrue(error is GatewayException)
         assertTrue(gateway.calls.isEmpty())
     }
+
+    @Test
+    fun `source goes with session resume only, since session activate rejects it`() {
+        val resume = SessionRepository.attachParams(GatewayMethods.SESSION_RESUME, "s1")
+        assertEquals(JsonPrimitive(SessionRepository.CHAT_SOURCE), resume["source"])
+        val activate = SessionRepository.attachParams(GatewayMethods.SESSION_ACTIVATE, "s1")
+        assertEquals(setOf("session_id"), activate.keys)
+    }
 }
