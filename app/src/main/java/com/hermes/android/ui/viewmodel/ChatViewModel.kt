@@ -797,8 +797,8 @@ class ChatViewModel @Inject constructor(
         text: String,
         sessionId: String,
         truncateBeforeRowIds: List<Long> = emptyList(),
-        onRefused: (() -> Unit)? = null,
         hidden: Boolean = false,
+        onRefused: (() -> Unit)? = null,
     ) {
         viewModelScope.launch {
             try {
