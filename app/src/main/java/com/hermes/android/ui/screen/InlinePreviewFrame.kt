@@ -70,7 +70,7 @@ import kotlin.math.roundToInt
  *  - `window.hermes.send(prompt)` / `data-hermes-send` send a prompt as a hidden user turn,
  *    one per second, at most 500 characters;
  *  - a page that can't be read is the ordinary file card.
- * Unlike the desktop, a button under the frame opens the page in the full-screen viewer, where
+ * Unlike the desktop, a button above the frame opens the page in the full-screen viewer, where
  * its links and the files beside it work.
  * The desktop's sandboxed iframe talks through postMessage; here the page talks through a
  * JavaScript interface, trusted only with the token this mount injected. The page gets no
@@ -88,6 +88,11 @@ internal fun previewScripts(token: String): String =
     "<script>(function(){var t=\"$token\";var b=window.$PREVIEW_BRIDGE;if(!b)return;" +
         // Height is the document's scrollHeight; width the union of the body children's boxes
         // (the document itself always fills the viewport).
+        // A page laid out wider than the frame (fixed widths made for a desktop column) is
+        // shrunk once to fit; otherwise its right side ran off the chat.
+        "var fitted=false;function fit(){var d=document.documentElement;var y=document.body;" +
+        "if(fitted||!d||!y)return;var sw=d.scrollWidth,vw=d.clientWidth;" +
+        "if(vw>0&&sw>vw+1){y.style.zoom=String(vw/sw);fitted=true}}" +
         "var lastH=0,lastW=0;function post(){var d=document.documentElement;var y=document.body;" +
         "var h=Math.max(d?d.scrollHeight:0,y?y.scrollHeight:0);" +
         "var w=0;if(y){var kids=y.children;var L=Infinity,R=0;for(var i=0;i<kids.length;i++){" +
@@ -96,7 +101,7 @@ internal fun previewScripts(token: String): String =
         "if(Math.abs(h-lastH)>1||Math.abs(w-lastW)>1){lastH=h;lastW=w;b.size(t,h,w)}}" +
         "if(typeof ResizeObserver===\"function\"){var ro=new ResizeObserver(post);" +
         "ro.observe(document.documentElement);if(document.body)ro.observe(document.body)}" +
-        "addEventListener(\"load\",post);post();" +
+        "addEventListener(\"load\",function(){fit();post()});fit();post();" +
         "function send(p){if(typeof p!==\"string\"||!p.trim())return false;" +
         "b.send(t,p.slice(0,$PREVIEW_MAX_INTENT_LENGTH));return true}" +
         "window.hermes={send:send};" +
@@ -214,6 +219,53 @@ internal fun InlinePreviewFrame(
     }
 
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        // Name, share and full screen sit above the frame. The frame is for a single-file
+        // widget; a page with links or files beside it works in the full-screen viewer,
+        // where it loads from its own folder.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = file.substringAfterLast('/'),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        val uri = shareUri()
+                        if (uri == null) {
+                            Toast.makeText(context, shareFailed, Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/html"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            clipData = ClipData.newRawUri(file.substringAfterLast('/'), uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(send, null))
+                    }
+                },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = t("Share", "اشتراک\u200Cگذاری"),
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primary,
+                )
+            }
+            IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    HxIcons.ExternalLink,
+                    contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primary,
+                )
+            }
+        }
         if (framed == null) {
             val pulse by rememberInfiniteTransition(label = "previewPulse").animateFloat(
                 initialValue = 0.5f, targetValue = 1f,
@@ -262,52 +314,6 @@ internal fun InlinePreviewFrame(
                     .fillMaxWidth()
                     .height(height),
             )
-        }
-        // The frame is for a single-file widget; a page with links or files beside it
-        // works in the full-screen viewer, where it loads from its own folder.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = file.substringAfterLast('/'),
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            IconButton(
-                onClick = {
-                    scope.launch {
-                        val uri = shareUri()
-                        if (uri == null) {
-                            Toast.makeText(context, shareFailed, Toast.LENGTH_SHORT).show()
-                            return@launch
-                        }
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/html"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            clipData = ClipData.newRawUri(file.substringAfterLast('/'), uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(send, null))
-                    }
-                },
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    Icons.Default.Share,
-                    contentDescription = t("Share", "اشتراک\u200Cگذاری"),
-                    modifier = Modifier.size(16.dp),
-                    tint = colors.primary,
-                )
-            }
-            IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    HxIcons.ExternalLink,
-                    contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
-                    modifier = Modifier.size(16.dp),
-                    tint = colors.primary,
-                )
-            }
         }
     }
 }
