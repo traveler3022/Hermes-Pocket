@@ -166,6 +166,10 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val filesUnavailable = t(
+        "No Files app found. Open your file manager and pick “Hermes”.",
+        "برنامهٔ Files پیدا نشد. فایل‌منیجر گوشی را باز کنید و «Hermes» را انتخاب کنید.",
+    )
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
@@ -446,7 +450,13 @@ fun ChatScreen(
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
-                        onServer = { closeDrawerThen(onNavigateToRuntime) },
+                        onFiles = {
+                            closeDrawerThen {
+                                if (!openLinuxFiles(context)) {
+                                    Toast.makeText(context, filesUnavailable, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
                     ),
                     onSearch = { closeDrawerThen(onNavigateToSessions) },
                     onNewChat = { closeDrawerThen { viewModel.newConversation() } },
