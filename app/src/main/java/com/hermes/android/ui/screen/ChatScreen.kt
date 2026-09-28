@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import com.hermes.android.ui.component.ZoomableImage
+import com.hermes.android.ui.component.ContentBlock
+import com.hermes.android.ui.component.ImageGallery
+import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -1022,44 +1024,23 @@ fun ChatScreen(
 
     // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
     fullscreenImageUrl?.let { imageUrl ->
+        // Every image the replies show, in order, so the viewer can page through them.
+        val images = remember(imageUrl) {
+            uiState.messages.filterIsInstance<ChatMessage.Assistant>().flatMap { message ->
+                parseContentBlocks(message.text).filterIsInstance<ContentBlock.Image>()
+                    .map { viewModel.resolveMediaUrl(it.url) }
+            }.distinct().let { if (imageUrl in it) it else listOf(imageUrl) }
+        }
         Dialog(
             onDismissRequest = { fullscreenImageUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                ZoomableImage(model = imageUrl, onTap = { fullscreenImageUrl = null })
-                IconButton(
-                    onClick = { fullscreenImageUrl = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = t("Close", "بستن"),
-                        tint = androidx.compose.ui.graphics.Color.White,
-                    )
-                }
-                IconButton(
-                    onClick = { viewModel.downloadFile(imageUrl, "") },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), CircleShape),
-                ) {
-                    Icon(
-                        Icons.Default.Download,
-                        contentDescription = t("Save image", "ذخیره تصویر"),
-                        tint = androidx.compose.ui.graphics.Color.White,
-                    )
-                }
-            }
+            ImageGallery(
+                images = images,
+                initialPage = images.indexOf(imageUrl),
+                onDismiss = { fullscreenImageUrl = null },
+                onSave = { viewModel.downloadFile(it, "") },
+            )
         }
     }
 
