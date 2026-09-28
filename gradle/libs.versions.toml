@@ -5,6 +5,7 @@ kotlin = "2.2.21"
 ksp = "2.2.21-2.0.5"
 coil = "2.7.0"
 commonmark = "0.30.0"
+jlatexmath = "0.2.0"
 
 # AndroidX
 coreKtx = "1.18.0"
@@ -103,6 +104,8 @@ commonmark-ext-gfm-tables = { group = "org.commonmark", name = "commonmark-ext-g
 commonmark-ext-gfm-strikethrough = { group = "org.commonmark", name = "commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
 commonmark-ext-autolink = { group = "org.commonmark", name = "commonmark-ext-autolink", version.ref = "commonmark" }
 commonmark-ext-task-list-items = { group = "org.commonmark", name = "commonmark-ext-task-list-items", version.ref = "commonmark" }
+# LaTeX formulas drawn to a bitmap, as Telegram does (GPL-2.0 with the classpath linking exception)
+jlatexmath-android = { group = "ru.noties", name = "jlatexmath-android", version.ref = "jlatexmath" }
 
 # Coil (image loading for markdown)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

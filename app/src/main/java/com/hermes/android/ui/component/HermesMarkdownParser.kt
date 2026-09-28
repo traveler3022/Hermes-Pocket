@@ -5,6 +5,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.appendInlineContent
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -49,7 +50,7 @@ import org.commonmark.parser.Parser
  * Block model + parser behind [HermesMarkdown].
  *
  * Parsing is CommonMark + GFM (tables, strikethrough, task items, bare links)
- * by commonmark-java, the same parser Telegram's markdown messages go through
+ * plus `$`/`$$` math ([MathExtension]) by commonmark-java, the same parser Telegram's markdown messages go through
  * (`MarkdownParser.java`) and the same spec the desktop app's remark follows,
  * so a reply reads here the way it reads there. This file only flattens the
  * syntax tree into the few block kinds the renderer draws.
@@ -71,6 +72,9 @@ internal sealed class MdBlock {
     ) : MdBlock()
     data class Table(val rows: List<List<List<MdSpan>>>, val hasHeader: Boolean) : MdBlock()
     data class Para(val text: List<MdSpan>) : MdBlock()
+
+    /** A `$$` formula block; [closed] is false while a streaming reply is still writing it. */
+    data class Math(val latex: String, val closed: Boolean) : MdBlock()
     data object Rule : MdBlock()
 }
 
@@ -80,6 +84,7 @@ internal sealed class MdSpan {
     data class Code(val code: String) : MdSpan()
     data class Styled(val style: MdStyle, val children: List<MdSpan>) : MdSpan()
     data class Link(val url: String, val children: List<MdSpan>) : MdSpan()
+    data class Math(val latex: String) : MdSpan()
 }
 
 internal enum class MdStyle { Bold, Italic, Strike }
@@ -134,7 +139,7 @@ internal class IncrementalMdParser {
      * The start of the last line that opens a fresh top-level block: a complete
      * line that follows a blank line, starts in column 0, is not a list item
      * (which could continue the list before it) and is not inside a fenced code
-     * block.
+     * block or a `$$` formula.
      */
     private fun lastStableBoundary(source: String, from: Int): Int {
         var boundary = from
@@ -153,7 +158,13 @@ internal class IncrementalMdParser {
             }
             val run = fenceRe.find(trimmed)?.value
             if (fence == null) {
-                if (run != null) fence = run
+                if (run != null) {
+                    fence = run
+                } else if (trimmed.startsWith("$$") && !trimmed.substring(2).trimEnd().endsWith("$$")) {
+                    fence = "$$"
+                }
+            } else if (fence == "$$") {
+                if (trimmed.endsWith("$$")) fence = null
             } else if (run != null && run[0] == fence[0] && run.length >= fence.length &&
                 trimmed.substring(run.length).isBlank()
             ) {
@@ -184,6 +195,7 @@ private val blockParser: Parser by lazy {
                 StrikethroughExtension.builder().requireTwoTildes(true).build(),
                 AutolinkExtension.builder().linkTypes(AutolinkType.URL).build(),
                 TaskListItemsExtension.create(),
+                MathExtension,
             ),
         )
         .build()
@@ -197,6 +209,7 @@ private val inlineParser: Parser by lazy {
             listOf(
                 StrikethroughExtension.builder().requireTwoTildes(true).build(),
                 AutolinkExtension.builder().linkTypes(AutolinkType.URL).build(),
+                MathExtension,
             ),
         )
         .build()
@@ -250,6 +263,7 @@ private fun emitBlock(node: Node, out: MutableList<MdBlock>, listDepth: Int, quo
         is BlockQuote -> emitChildren(node, out, listDepth, quoteDepth + 1)
         is ListBlock -> emitList(node, out, listDepth, quoteDepth)
         is TableBlock -> out.add(table(node))
+        is MathBlock -> if (node.latex.isNotEmpty()) out.add(MdBlock.Math(node.latex, node.closed))
         // Raw HTML is shown as written, as before.
         is HtmlBlock -> node.literal.orEmpty().trimEnd('\n').takeIf { it.isNotBlank() }?.let {
             out.add(MdBlock.Para(listOf(MdSpan.Text(it))))
@@ -339,6 +353,7 @@ private fun addInline(node: Node, out: MutableList<MdSpan>) {
         is Strikethrough -> out.add(MdSpan.Styled(MdStyle.Strike, inlines(node)))
         is Link -> addLink(node, out)
         is HtmlInline -> out.add(MdSpan.Text(node.literal))
+        is MathInline -> out.add(MdSpan.Math(node.latex))
         // Images are lifted out upstream (parseContentBlocks); one that is left
         // reads as its alt text, as in Telegram.
         else -> out.addAll(inlines(node))
@@ -382,11 +397,19 @@ private fun mergeText(spans: List<MdSpan>): List<MdSpan> {
  * resolved by a tap handler, so opening them is the platform's job and the text
  * stays an ordinary `Text` that can be selected across a link.
  */
-internal fun inline(spans: List<MdSpan>, s: InlineStyle): AnnotatedString = buildAnnotatedString {
-    appendSpans(spans, s)
+internal fun inline(
+    spans: List<MdSpan>,
+    s: InlineStyle,
+    mathDrawn: (latex: String) -> Boolean = { true },
+): AnnotatedString = buildAnnotatedString {
+    appendSpans(spans, s, mathDrawn)
 }
 
-private fun AnnotatedString.Builder.appendSpans(spans: List<MdSpan>, s: InlineStyle) {
+private fun AnnotatedString.Builder.appendSpans(
+    spans: List<MdSpan>,
+    s: InlineStyle,
+    mathDrawn: (String) -> Boolean,
+) {
     for (span in spans) {
         when (span) {
             is MdSpan.Text -> append(span.text)
@@ -399,7 +422,7 @@ private fun AnnotatedString.Builder.appendSpans(spans: List<MdSpan>, s: InlineSt
                     MdStyle.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
                     MdStyle.Strike -> SpanStyle(textDecoration = TextDecoration.LineThrough)
                 },
-            ) { appendSpans(span.children, s) }
+            ) { appendSpans(span.children, s, mathDrawn) }
             is MdSpan.Link -> withLink(
                 LinkAnnotation.Url(
                     url = span.url,
@@ -407,9 +430,37 @@ private fun AnnotatedString.Builder.appendSpans(spans: List<MdSpan>, s: InlineSt
                         style = SpanStyle(color = s.linkColor, textDecoration = TextDecoration.Underline),
                     ),
                 ),
-            ) { appendSpans(span.children, s) }
+            ) { appendSpans(span.children, s, mathDrawn) }
+            // Drawn by the renderer in the placeholder; copying the text gives the source.
+            // A formula JLatexMath cannot draw reads as its source, like code.
+            is MdSpan.Math -> if (mathDrawn(span.latex)) {
+                appendInlineContent(mathContentId(span.latex), span.latex)
+            } else {
+                withStyle(
+                    SpanStyle(fontFamily = FontFamily.Monospace, background = s.codeBg, color = s.onCodeBg),
+                ) { append(span.latex) }
+            }
         }
     }
+}
+
+internal fun mathContentId(latex: String) = "math:$latex"
+
+/** Every inline formula in [this], once each. */
+internal fun List<MdSpan>.mathSources(): List<String> {
+    val out = LinkedHashSet<String>()
+    fun walk(spans: List<MdSpan>) {
+        for (span in spans) {
+            when (span) {
+                is MdSpan.Math -> out.add(span.latex)
+                is MdSpan.Styled -> walk(span.children)
+                is MdSpan.Link -> walk(span.children)
+                else -> Unit
+            }
+        }
+    }
+    walk(this)
+    return out.toList()
 }
 
 /**
@@ -425,6 +476,7 @@ private fun StringBuilder.appendDirection(spans: List<MdSpan>) {
             is MdSpan.Code -> append('`').append(span.code.replace("`", "")).append('`')
             is MdSpan.Styled -> appendDirection(span.children)
             is MdSpan.Link -> appendDirection(span.children)
+            is MdSpan.Math -> append('`').append(span.latex.replace("`", "")).append('`')
         }
     }
 }

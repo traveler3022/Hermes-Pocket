@@ -149,13 +149,62 @@ class HermesMarkdownParserTest {
         assertTrue(parseMdBlocks("  \n \n").isEmpty())
     }
 
+    // ── Math ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a dollar-dollar block is a formula, on one line or several`() {
+        assertEquals(listOf(MdBlock.Math("x^2", closed = true)), parseMdBlocks("\$\$x^2\$\$"))
+        assertEquals(
+            listOf(MdBlock.Math("\\frac{a}{b}\n+ c", closed = true), para("after")),
+            parseMdBlocks("\$\$\n\\frac{a}{b}\n+ c\n\$\$\nafter"),
+        )
+    }
+
+    @Test
+    fun `a formula block still being streamed says so`() {
+        assertEquals(listOf(MdBlock.Math("x +", closed = false)), parseMdBlocks("\$\$\nx +"))
+    }
+
+    @Test
+    fun `dollars inside a sentence are inline formulas`() {
+        assertEquals(
+            listOf(MdBlock.Para(listOf(MdSpan.Text("area "), MdSpan.Math("\\pi r^2"), MdSpan.Text(" ok")))),
+            parseMdBlocks("area \$\\pi r^2\$ ok"),
+        )
+        assertEquals(
+            listOf(MdBlock.Para(listOf(MdSpan.Math("E=mc^2"), MdSpan.Text(" holds")))),
+            parseMdBlocks("\$\$E=mc^2\$\$ holds"),
+        )
+    }
+
+    @Test
+    fun `prices, shell variables, escapes and code are not formulas`() {
+        for (text in listOf("costs \$5 and \$10", "\$HOME and \$PATH", "\\\$x\\\$", "`\$x\$`")) {
+            assertTrue(text, parseInline(text).none { it is MdSpan.Math })
+        }
+    }
+
+    @Test
+    fun `an inline formula copies as its source`() {
+        val out = inline("so \$x^2\$ is", style)
+        assertEquals("so x^2 is", out.text)
+    }
+
+    @Test
+    fun `a formula JLatexMath cannot draw reads as code`() {
+        val out = inline(parseInline("so \$\\bad{\$ is"), style) { false }
+        assertEquals("so \\bad{ is", out.text)
+        assertEquals(1, out.spanStyles.size)
+    }
+
     // ── Streaming ────────────────────────────────────────────────────────
 
     private val document = "# Title\n\nFirst para\nline two\n\n- a\n- b\n\n" +
         "```kotlin\nval x = 1\n\nval y = 2\n```\n\n" +
         "| a | b |\n|---|---|\n| 1 | 2 |\n\n" +
         "1. one\n\n1. two\n\n   - nested\n\n   more of two\n\n" +
-        "> quote\n\n> another\n\n~~~\ncode\n\n~~~\n\nend"
+        "> quote\n\n> another\n\n~~~\ncode\n\n~~~\n\n" +
+        "\$\$\n\\frac{1}{2}\n\n+ x\n\$\$\n\nso \$y\$ too\n\nend"
 
     @Test
     fun `parsing a reply as it grows gives what parsing it whole gives, at every length`() {
