@@ -13,7 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import com.hermes.android.ui.icons.filled.DesktopWindows
 import com.hermes.android.ui.icons.filled.Folder
-import androidx.compose.material.icons.filled.Inventory2
+import com.hermes.android.ui.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
 import com.hermes.android.ui.icons.filled.Terminal
 import androidx.compose.material3.CircularProgressIndicator

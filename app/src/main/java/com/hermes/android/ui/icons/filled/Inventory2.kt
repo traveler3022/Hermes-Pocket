@@ -21,42 +21,42 @@ import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.materialPath
 import androidx.compose.ui.graphics.vector.ImageVector
 
-public val Icons.Filled.Inventory: ImageVector
+public val Icons.Filled.Inventory2: ImageVector
     get() {
-        if (_inventory != null) {
-            return _inventory!!
+        if (_inventory2 != null) {
+            return _inventory2!!
         }
-        _inventory = materialIcon(name = "Filled.Inventory") {
+        _inventory2 = materialIcon(name = "Filled.Inventory2") {
             materialPath {
                 moveTo(20.0f, 2.0f)
-                lineTo(4.0f, 2.0f)
-                curveToRelative(-1.0f, 0.0f, -2.0f, 0.9f, -2.0f, 2.0f)
+                horizontalLineTo(4.0f)
+                curveTo(3.0f, 2.0f, 2.0f, 2.9f, 2.0f, 4.0f)
                 verticalLineToRelative(3.01f)
-                curveToRelative(0.0f, 0.72f, 0.43f, 1.34f, 1.0f, 1.69f)
-                lineTo(3.0f, 20.0f)
+                curveTo(2.0f, 7.73f, 2.43f, 8.35f, 3.0f, 8.7f)
+                verticalLineTo(20.0f)
                 curveToRelative(0.0f, 1.1f, 1.1f, 2.0f, 2.0f, 2.0f)
                 horizontalLineToRelative(14.0f)
                 curveToRelative(0.9f, 0.0f, 2.0f, -0.9f, 2.0f, -2.0f)
-                lineTo(21.0f, 8.7f)
+                verticalLineTo(8.7f)
                 curveToRelative(0.57f, -0.35f, 1.0f, -0.97f, 1.0f, -1.69f)
-                lineTo(22.0f, 4.0f)
-                curveToRelative(0.0f, -1.1f, -1.0f, -2.0f, -2.0f, -2.0f)
+                verticalLineTo(4.0f)
+                curveTo(22.0f, 2.9f, 21.0f, 2.0f, 20.0f, 2.0f)
                 close()
                 moveTo(15.0f, 14.0f)
-                lineTo(9.0f, 14.0f)
+                horizontalLineTo(9.0f)
                 verticalLineToRelative(-2.0f)
                 horizontalLineToRelative(6.0f)
-                verticalLineToRelative(2.0f)
+                verticalLineTo(14.0f)
                 close()
                 moveTo(20.0f, 7.0f)
-                lineTo(4.0f, 7.0f)
-                lineTo(4.0f, 4.0f)
-                lineToRelative(16.0f, -0.02f)
-                lineTo(20.0f, 7.0f)
+                horizontalLineTo(4.0f)
+                verticalLineTo(4.0f)
+                horizontalLineToRelative(16.0f)
+                verticalLineTo(7.0f)
                 close()
             }
         }
-        return _inventory!!
+        return _inventory2!!
     }
 
-private var _inventory: ImageVector? = null
+private var _inventory2: ImageVector? = null
