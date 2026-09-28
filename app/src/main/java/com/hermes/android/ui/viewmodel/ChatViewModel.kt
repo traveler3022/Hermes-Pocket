@@ -428,7 +428,6 @@ class ChatViewModel @Inject constructor(
             streamingDelegate.reset()
             _uiState.update { it.copy(
                 messages = emptyList(),
-                showSessionDrawer = false,
                 activeSessionId = null,
                 activeSessionKey = null,
                 activeTodos = emptyList(),
@@ -1018,10 +1017,6 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Drawer (delegated) ───────────────────────────────────────────────
-
-    fun toggleSessionDrawer() {
-        _uiState.update { it.copy(showSessionDrawer = !it.showSessionDrawer) }
-    }
 
     /** However the drawer opened (hamburger or swipe), it shows a current chat list. */
     fun onSessionDrawerOpened() {

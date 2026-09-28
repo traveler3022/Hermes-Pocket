@@ -96,7 +96,6 @@ internal class ChatSessionDelegate(
                 // (notification tap) resolves to itself and names no key.
                 activeSessionKey = attached.storedId ?: sessionId.takeIf { it != liveSessionId },
                 messages = watchDrop("resume", it.messages, history),
-                showSessionDrawer = false,
                 errorEvent = null,
                 sessionLoadedAt = System.currentTimeMillis(),
                 activeTodos = emptyList(),

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -281,32 +282,21 @@ fun ChatScreen(
     // Removed: agent activity text was distracting - ConnectionIndicator handles it
     val agentActivity: String? = null
 
-    // Keep drawer state in sync with ViewModel state.
-    LaunchedEffect(uiState.showSessionDrawer) {
-        if (uiState.showSessionDrawer) {
-            drawerState.open()
-        } else {
-            drawerState.close()
-        }
-    }
-
-    // ...and the ViewModel in sync with the drawer. The sheet closes by paths the
-    // ViewModel never hears about — the scrim, a swipe, the back gesture, Settings
-    // and Tasks — after which showSessionDrawer was still true, so the next tap on
-    // the hamburger toggled it to false and the drawer simply did not open. Every
-    // second tap did nothing.
+    // The drawer's own state is the only source of truth (as in Aether): nothing
+    // drives it from the ViewModel any more. The old two-way sync let a late
+    // showSessionDrawer write (e.g. a chat finishing loading) call open()/close()
+    // on the sheet while the user was handling it.
     //
-    // Hiding the keyboard lives here rather than in the effect above so it also
-    // covers the drawer being swiped open: otherwise the keyboard stays up and
-    // covers the buttons at the foot of the sheet.
+    // The ViewModel only mirrors it, to refresh the chat list while it is open.
+    // Hiding the keyboard lives here so it also covers the drawer being swiped
+    // open: otherwise the keyboard stays up and covers the foot of the sheet.
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {
             keyboardController?.hide()
             focusManager.clearFocus()
-            // A swipe opens the drawer without the hamburger's toggle, which was the only
-            // thing that fetched the chat list; a fresh screen then showed an empty drawer.
+            // However it opened (hamburger or swipe), fetch a current chat list.
             viewModel.onSessionDrawerOpened()
-        } else if (uiState.showSessionDrawer) {
+        } else {
             viewModel.closeSessionDrawer()
         }
     }
@@ -569,7 +559,24 @@ fun ChatScreen(
                 // consume the status bar inset the way the Material TopAppBar
                 // this replaced did — without this the chrome draws under the
                 // status bar and off the top of the screen.
-                Column(modifier = Modifier.statusBarsPadding()) {
+                //
+                // The messages scroll on under the bar (as in Aether): the bar's
+                // background fades from near-solid to clear, so text passing
+                // beneath it stays faintly visible instead of being cut off.
+                val barColor = MaterialTheme.colorScheme.background
+                Column(
+                    modifier = Modifier
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to barColor.copy(alpha = 0.98f),
+                                0.28f to barColor.copy(alpha = 0.92f),
+                                0.58f to barColor.copy(alpha = 0.52f),
+                                0.82f to barColor.copy(alpha = 0.18f),
+                                1.0f to barColor.copy(alpha = 0f),
+                            )
+                        )
+                        .statusBarsPadding(),
+                ) {
                     // Floating chrome instead of a flat Material app bar: two
                     // shadowed circles either side of the status pill, same
                     // language as the composer's own floating controls, so
@@ -584,7 +591,7 @@ fun ChatScreen(
                         HxHeaderCircleButton(
                             icon = HxIcons.MenuShort,
                             contentDescription = t("Sessions", "گفتگوها"),
-                            onClick = { viewModel.toggleSessionDrawer() },
+                            onClick = { scope.launch { drawerState.open() } },
                         )
                         Box(
                             modifier = Modifier
@@ -714,14 +721,23 @@ fun ChatScreen(
                 }
             },
         ) { padding ->
+            // Only the message list runs under the top bar; anything shown above
+            // it (banners, the loading skeleton) keeps the bar's space clear.
+            val topBarHeight = padding.calculateTopPadding()
+            val showsBanner = uiState.connectionState == ChatConnectionState.Failed ||
+                uiState.connectionState == ChatConnectionState.Disconnected ||
+                uiState.connectionState == ChatConnectionState.Connecting && uiState.messages.isEmpty() ||
+                notification != null
             Column(
                 modifier = Modifier
-                    .padding(padding)
+                    // The top padding goes to the message list instead, so it runs under the bar.
+                    .padding(bottom = padding.calculateBottomPadding())
                     // The navigation bar is in [padding]; without consuming it the
                     // composer's imePadding() added it again on top of the keyboard.
                     .consumeWindowInsets(padding)
                     .fillMaxSize()
             ) {
+                if (showsBanner) Spacer(Modifier.height(topBarHeight))
                 // Feature #7: Connection error retry banner
                 if (uiState.connectionState == ChatConnectionState.Failed ||
                     uiState.connectionState == ChatConnectionState.Disconnected
@@ -780,7 +796,7 @@ fun ChatScreen(
                         // from it, while the composer already brings its own
                         // padding to the bottom edge.
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            top = HxSpace.xl,
+                            top = HxSpace.xl + if (showsBanner) 0.dp else topBarHeight,
                             bottom = HxSpace.md,
                         ),
                     ) {
