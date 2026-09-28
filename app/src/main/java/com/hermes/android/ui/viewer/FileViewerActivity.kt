@@ -80,6 +80,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import android.content.ComponentName
+import androidx.core.content.ContextCompat
+import com.hermes.android.service.AudioPlaybackService
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -208,13 +214,14 @@ class FileViewerActivity : ComponentActivity() {
 
         /** Opens [url] (as resolved for the chat: file://, http(s)://, content://) in its viewer. */
         fun open(context: Context, url: String, name: String) {
-            // The URL travels as an extra: a file:// data URI in an intent trips StrictMode.
-            context.startActivity(
-                Intent(context, FileViewerActivity::class.java)
-                    .putExtra(EXTRA_URL, url)
-                    .putExtra(EXTRA_NAME, name),
-            )
+            context.startActivity(intent(context, url, name))
         }
+
+        /** The URL travels as an extra: a file:// data URI in an intent trips StrictMode. */
+        fun intent(context: Context, url: String, name: String): Intent =
+            Intent(context, FileViewerActivity::class.java)
+                .putExtra(EXTRA_URL, url)
+                .putExtra(EXTRA_NAME, name)
     }
 }
 
@@ -248,7 +255,7 @@ private fun FileViewerScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
-                FileKind.AUDIO -> MediaViewer(uri) { player -> AudioControls(player, name) }
+                FileKind.AUDIO -> BackgroundAudio(uri, name) { player -> AudioControls(player, name) }
                 FileKind.VIDEO -> MediaViewer(uri) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
                 FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes)
                 FileKind.HTML -> HtmlViewer(uri, readBytes)
@@ -284,6 +291,47 @@ private fun MediaViewer(uri: Uri, content: @Composable (ExoPlayer) -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     // Time runs left to right in any language: the slider, the times and back/forward.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { content(player) }
+}
+
+/**
+ * Audio plays in [AudioPlaybackService], reached through a MediaController, so it goes on in
+ * the background with its notification; leaving the viewer does not stop it. Opening the file
+ * that is already playing picks it up where it is instead of starting over.
+ */
+@Composable
+private fun BackgroundAudio(uri: Uri, name: String, content: @Composable (Player) -> Unit) {
+    val context = LocalContext.current
+    var controller by remember { mutableStateOf<MediaController?>(null) }
+    DisposableEffect(uri) {
+        val token = SessionToken(context, ComponentName(context, AudioPlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener({
+            val built = runCatching { future.get() }.getOrNull() ?: return@addListener
+            val url = uri.toString()
+            if (built.currentMediaItem?.mediaId != url) {
+                built.setMediaItem(
+                    MediaItem.Builder()
+                        .setMediaId(url)
+                        .setUri(uri)
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(name).build())
+                        .build(),
+                )
+                built.prepare()
+            }
+            built.play()
+            controller = built
+        }, ContextCompat.getMainExecutor(context))
+        onDispose {
+            controller = null
+            MediaController.releaseFuture(future)
+        }
+    }
+    val player = controller
+    if (player == null) {
+        Loading()
+        return
+    }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { content(player) }
 }
 

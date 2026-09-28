@@ -12,6 +12,7 @@
     <!-- Foreground Service — keeps Hermes gateway alive (ADR-004) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- Notifications — tool approval, gateway status (ADR-003) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -86,6 +87,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Runs the user's on-device AI agent (Hermes in its built-in Linux) while it works in the background" />
+        </service>
+
+        <!-- The audio viewer's player: plays on in the background with its media notification. -->
+        <service
+            android:name=".service.AudioPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
         </service>
 
         <!-- Boot Receiver (ADR-004, temporary during migration) -->
