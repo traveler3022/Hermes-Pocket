@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -17,7 +18,26 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.OptIn
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -60,11 +80,20 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import androidx.media3.common.util.ExperimentalApi
+import androidx.media3.ui.compose.material3.Player as Media3Player
+import androidx.media3.ui.compose.material3.PlayerDefaults
+import androidx.media3.ui.compose.material3.buttons.PlayPauseButton
+import androidx.media3.ui.compose.material3.buttons.SeekBackButton
+import androidx.media3.ui.compose.material3.buttons.SeekForwardButton
+import androidx.media3.ui.compose.material3.indicator.DurationText
+import androidx.media3.ui.compose.material3.indicator.PositionText
+import androidx.media3.ui.compose.material3.indicator.ProgressSlider
+import androidx.media3.ui.compose.material3.text.ErrorText
+import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import coil.compose.AsyncImage
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.linux.GuestFiles
@@ -91,7 +120,7 @@ import javax.inject.Inject
 /**
  * The in-app viewer for a file: from a chat card, or from the Files app for a file of the
  * built-in Linux. [fileKindOf] picks the viewer; each one is a stock component —
- * Media3 ExoPlayer + PlayerView for audio and video, the chat's own [HermesMarkdown] for
+ * Media3 ExoPlayer with its Compose Material 3 player for audio and video, the chat's own [HermesMarkdown] for
  * Markdown, WebView for HTML, Coil for images. Anything else goes to another app.
  */
 @AndroidEntryPoint
@@ -199,9 +228,10 @@ private fun FileViewerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    var fullscreen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!fullscreen) TopAppBar(
                 title = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -218,7 +248,8 @@ private fun FileViewerScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
-                FileKind.AUDIO, FileKind.VIDEO -> MediaViewer(uri, isVideo = kind == FileKind.VIDEO)
+                FileKind.AUDIO -> MediaViewer(uri) { player -> AudioControls(player, name) }
+                FileKind.VIDEO -> MediaViewer(uri) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
                 FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes)
                 FileKind.HTML -> HtmlViewer(uri, readBytes)
                 FileKind.IMAGE -> ImageViewer(uri)
@@ -229,15 +260,13 @@ private fun FileViewerScreen(
 }
 
 /**
- * ExoPlayer with PlayerView's stock controls: play/pause, seek bar, position and duration.
- * Paused when the screen leaves the foreground and released with it, so nothing keeps playing
- * after back. Audio keeps its controls on screen; video's full-screen button turns to landscape.
+ * One ExoPlayer for the file, shown through Media3's Compose Material 3 components by
+ * [content]. Paused when the screen leaves the foreground and released with it, so nothing
+ * keeps playing after back.
  */
-@OptIn(UnstableApi::class)
 @Composable
-private fun MediaViewer(uri: Uri, isVideo: Boolean) {
+private fun MediaViewer(uri: Uri, content: @Composable (ExoPlayer) -> Unit) {
     val context = LocalContext.current
-    var error by remember { mutableStateOf<String?>(null) }
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
@@ -245,19 +274,7 @@ private fun MediaViewer(uri: Uri, isVideo: Boolean) {
             playWhenReady = true
         }
     }
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onPlayerError(e: PlaybackException) {
-                error = e.errorCodeName
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            player.release()
-            (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
+    DisposableEffect(player) { onDispose { player.release() } }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -266,32 +283,168 @@ private fun MediaViewer(uri: Uri, isVideo: Boolean) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    content(player)
+}
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    setShowNextButton(false)
-                    setShowPreviousButton(false)
-                    if (isVideo) {
-                        setFullscreenButtonClickListener { full ->
-                            (ctx as? Activity)?.requestedOrientation =
-                                if (full) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                        }
-                    } else {
-                        controllerShowTimeoutMs = 0
-                        controllerHideOnTouch = false
-                        showController()
-                    }
-                }
-            },
+/** Playback state the stock components don't expose: buffering and playing. */
+private class PlaybackFlags(player: Player) {
+    var buffering by mutableStateOf(player.playbackState == Player.STATE_BUFFERING)
+    var playing by mutableStateOf(player.isPlaying)
+}
+
+@Composable
+private fun rememberPlaybackFlags(player: Player): PlaybackFlags {
+    val flags = remember(player) { PlaybackFlags(player) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                flags.buffering = state == Player.STATE_BUFFERING
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                flags.playing = isPlaying
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    return flags
+}
+
+/**
+ * Media3's Material 3 [Media3Player]: a tap shows the controls, which fade out after a few
+ * seconds of playback. Full screen hides the top bar and the system bars and turns landscape;
+ * back leaves full screen first.
+ */
+@kotlin.OptIn(ExperimentalApi::class)
+@OptIn(UnstableApi::class)
+@Composable
+private fun VideoPlayer(player: Player, fullscreen: Boolean, onFullscreen: (Boolean) -> Unit) {
+    val activity = LocalContext.current as? Activity
+    val flags = rememberPlaybackFlags(player)
+    var controlsVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(controlsVisible, flags.playing) {
+        if (controlsVisible && flags.playing) {
+            delay(ControlsHideDelayMs)
+            controlsVisible = false
+        }
+    }
+    BackHandler(enabled = fullscreen) { onFullscreen(false) }
+    DisposableEffect(fullscreen) {
+        val window = activity?.window
+        if (activity != null && window != null) {
+            val bars = WindowCompat.getInsetsController(window, window.decorView)
+            if (fullscreen) {
+                bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                bars.hide(WindowInsetsCompat.Type.systemBars())
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                bars.show(WindowInsetsCompat.Type.systemBars())
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+        onDispose {
+            if (fullscreen && activity != null) {
+                activity.window?.let { WindowCompat.getInsetsController(it, it.decorView).show(WindowInsetsCompat.Type.systemBars()) }
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(interactionSource = null, indication = null) { controlsVisible = !controlsVisible },
+    ) {
+        Media3Player(
+            player = player,
             modifier = Modifier.fillMaxSize(),
+            showControls = controlsVisible,
+            topControls = null,
+            bottomControls = { p, visible ->
+                PlayerDefaults.BottomControls(
+                    p, visible,
+                    right = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            DurationText(it, Modifier.padding(start = 8.dp))
+                            IconButton(onClick = { onFullscreen(!fullscreen) }) {
+                                Icon(
+                                    if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                    contentDescription = if (fullscreen) t("Exit full screen", "خروج از تمام‌صفحه")
+                                    else t("Full screen", "تمام‌صفحه"),
+                                )
+                            }
+                        }
+                    },
+                )
+            },
         )
-        error?.let { code -> ViewerError(t("Can't play this file", "این فایل پخش نمی‌شود") + "\n" + code, uri) }
+        if (flags.buffering) CircularProgressIndicator(Modifier.align(Alignment.Center))
     }
 }
+
+/**
+ * Audio: the file's embedded artwork (or a note icon), its title and artist when tagged,
+ * then Media3's Material 3 slider, times and buttons.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+private fun AudioControls(player: Player, name: String) {
+    val flags = rememberPlaybackFlags(player)
+    val metadata = rememberCurrentMediaItemState(player).mediaMetadata
+    val artwork = remember(metadata.artworkData) {
+        metadata.artworkData?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+    }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (artwork != null) {
+                Image(artwork, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Icon(
+                    Icons.Filled.MusicNote, contentDescription = null,
+                    modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (flags.buffering) CircularProgressIndicator()
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            metadata.title?.toString()?.takeIf { it.isNotBlank() } ?: name,
+            style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        metadata.artist?.toString()?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+        Spacer(Modifier.height(24.dp))
+        ProgressSlider(player, Modifier.fillMaxWidth())
+        Row(modifier = Modifier.fillMaxWidth()) {
+            PositionText(player)
+            Spacer(Modifier.weight(1f))
+            DurationText(player)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            SeekBackButton(player)
+            PlayPauseButton(
+                player, modifier = Modifier.size(72.dp), iconSize = 40.dp,
+                colors = IconButtonDefaults.filledIconButtonColors(),
+            )
+            SeekForwardButton(player)
+        }
+        ErrorText(player, modifier = Modifier.padding(top = 16.dp), color = MaterialTheme.colorScheme.error)
+    }
+}
+
+private const val ControlsHideDelayMs = 3_000L
 
 /** Markdown through the chat's own renderer. */
 @Composable

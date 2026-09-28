@@ -152,7 +152,7 @@ dependencies {
 
     // Media3 — the in-app audio/video player
     implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.ui.compose.material3)
 
     // Networking — WebSocket client to tui_gateway
     implementation(libs.okhttp)
