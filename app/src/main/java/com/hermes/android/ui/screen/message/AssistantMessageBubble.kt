@@ -131,66 +131,68 @@ internal fun AssistantMessageBubble(
                                 }
                             }
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            blocks.forEach { block ->
-                                when (block) {
-                                    // Rendered as markdown while streaming too.
-                                    // The plain-Text fallback here dated from
-                                    // when this renderer was a TextView behind
-                                    // AndroidView and re-laid out the whole view
-                                    // per token; it is pure Compose now, and the
-                                    // fallback's only remaining effect was
-                                    // showing raw ** and ## until the turn ended.
-                                    is ContentBlock.Text -> SelectionContainer {
-                                        HermesMarkdown(
+                        // One selection over the whole reply, so a selection runs from prose
+                        // into code and on past it (each text run used to have its own).
+                        SelectionContainer {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                blocks.forEach { block ->
+                                    when (block) {
+                                        // Rendered as markdown while streaming too.
+                                        // The plain-Text fallback here dated from
+                                        // when this renderer was a TextView behind
+                                        // AndroidView and re-laid out the whole view
+                                        // per token; it is pure Compose now, and the
+                                        // fallback's only remaining effect was
+                                        // showing raw ** and ## until the turn ended.
+                                        is ContentBlock.Text -> HermesMarkdown(
                                             markdown = block.markdown,
                                             style = MaterialTheme.typography.bodyLarge.copy(
                                                 color = MaterialTheme.colorScheme.onSurface,
                                             ),
                                         )
-                                    }
-                                    is ContentBlock.Image -> InlineImageBlock(
-                                        alt = block.alt, url = block.url,
-                                        onImageClick = onImageClick,
-                                        onSave = { onDownloadFile(block.url, block.alt) },
-                                    )
-                                    is ContentBlock.Code -> CodeBlockCard(
-                                        language = block.language, code = block.code,
-                                        onCopyCode = onCopyCode,
-                                    )
-                                    is ContentBlock.Mermaid -> MermaidBlockCard(
-                                        code = block.code, onCopyCode = onCopyCode,
-                                    )
-                                    is ContentBlock.Html -> HtmlBlockCard(
-                                        url = block.url, name = block.name,
-                                        onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
-                                    )
-                                    is ContentBlock.Video -> ArtifactCard(
-                                        emoji = "\uD83C\uDFAC", name = block.name,
-                                        actionLabel = t("Play", "پخش"),
-                                        onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
-                                        onDownload = { onDownloadFile(block.url, block.name) },
-                                    )
-                                    is ContentBlock.Audio -> ArtifactCard(
-                                        emoji = "\uD83C\uDFB5", name = block.name,
-                                        actionLabel = t("Play", "پخش"),
-                                        onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
-                                        onDownload = { onDownloadFile(block.url, block.name) },
-                                    )
-                                    is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
-                                        ArtifactCard(
-                                            emoji = "\uD83D\uDCC4", name = block.name,
-                                            actionLabel = t("Download", "دانلود"),
-                                            onAction = { onDownloadFile(block.url, block.name) },
-                                            onDownload = null,
+                                        is ContentBlock.Image -> InlineImageBlock(
+                                            alt = block.alt, url = block.url,
+                                            onImageClick = onImageClick,
+                                            onSave = { onDownloadFile(block.url, block.alt) },
                                         )
-                                    } else {
-                                        ArtifactCard(
-                                            emoji = "\uD83D\uDCC4", name = block.name,
-                                            actionLabel = t("Open", "باز کردن"),
+                                        is ContentBlock.Code -> CodeBlockCard(
+                                            language = block.language, code = block.code,
+                                            onCopyCode = onCopyCode,
+                                        )
+                                        is ContentBlock.Mermaid -> MermaidBlockCard(
+                                            code = block.code, onCopyCode = onCopyCode,
+                                        )
+                                        is ContentBlock.Html -> HtmlBlockCard(
+                                            url = block.url, name = block.name,
+                                            onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                        )
+                                        is ContentBlock.Video -> ArtifactCard(
+                                            emoji = "\uD83C\uDFAC", name = block.name,
+                                            actionLabel = t("Play", "پخش"),
                                             onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                             onDownload = { onDownloadFile(block.url, block.name) },
                                         )
+                                        is ContentBlock.Audio -> ArtifactCard(
+                                            emoji = "\uD83C\uDFB5", name = block.name,
+                                            actionLabel = t("Play", "پخش"),
+                                            onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                            onDownload = { onDownloadFile(block.url, block.name) },
+                                        )
+                                        is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
+                                            ArtifactCard(
+                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                actionLabel = t("Download", "دانلود"),
+                                                onAction = { onDownloadFile(block.url, block.name) },
+                                                onDownload = null,
+                                            )
+                                        } else {
+                                            ArtifactCard(
+                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                actionLabel = t("Open", "باز کردن"),
+                                                onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                                onDownload = { onDownloadFile(block.url, block.name) },
+                                            )
+                                        }
                                     }
                                 }
                             }
