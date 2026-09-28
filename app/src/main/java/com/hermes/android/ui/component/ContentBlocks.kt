@@ -149,6 +149,8 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
 
     val candidates = mutableListOf<Pair<IntRange, ContentBlock>>()
     for (match in images) {
+        // Inside a code span it is an example of the syntax ("use `![alt](url)`"), not an image.
+        if (codeSpans.any { inside(match.range, it) }) continue
         // Markdown image syntax is ALWAYS an image, even when the URL has
         // no file extension (common for web images, e.g. picsum.photos/200
         // or a query-only CDN link). Only bare paths are classified by ext.
@@ -157,6 +159,7 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
         candidates += match.range to ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url)
     }
     for (match in links) {
+        if (codeSpans.any { inside(match.range, it) }) continue
         val target = match.groupValues[2]
         if (isLocalArtifact(target)) candidates += match.range to classifyUrl(target, alt = match.groupValues[1])
     }

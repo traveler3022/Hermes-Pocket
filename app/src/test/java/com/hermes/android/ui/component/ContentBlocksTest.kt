@@ -224,4 +224,10 @@ class ContentBlocksTest {
         assertEquals(FileKind.MARKDOWN, blocks.filterIsInstance<ContentBlock.FileRef>().single().kind)
         assertEquals("/root/v.opus", blocks.filterIsInstance<ContentBlock.Audio>().single().url)
     }
+
+    @Test
+    fun `image syntax shown as an example in inline code is not an image`() {
+        val text = "you can use `![alt](https://example.com/cat.png)` for web images"
+        assertEquals(listOf(ContentBlock.Text(text)), parseContentBlocks(text))
+    }
 }
