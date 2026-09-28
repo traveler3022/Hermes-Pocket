@@ -2,6 +2,7 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,11 +113,12 @@ internal fun ApprovalSheet(
             Spacer(Modifier.height(14.dp))
 
             // The command itself — always monospace + LTR, whatever the app
-            // language, because it's shell text.
+            // language, because it's shell text. A long script takes only the
+            // space left and scrolls, so the answer buttons stay on screen.
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
             ) {
                 androidx.compose.runtime.CompositionLocalProvider(
                     androidx.compose.ui.platform.LocalLayoutDirection provides LayoutDirection.Ltr,
@@ -131,6 +133,7 @@ internal fun ApprovalSheet(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
                                 .horizontalScroll(rememberScrollState())
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                         )
