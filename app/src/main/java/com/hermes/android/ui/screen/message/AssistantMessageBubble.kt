@@ -76,6 +76,10 @@ internal fun AssistantMessageBubble(
     val hasTrace = traceItems.isNotEmpty()
 
     val assistantContext = LocalContext.current
+    // A streaming reply is typed out rather than dropped in per flush; see TypingPace.
+    val typedLength = rememberTypedLength(message.text, message.isStreaming)
+    val shownText = if (typedLength < message.text.length) message.text.substring(0, typedLength) else message.text
+    val typing = message.isStreaming || shownText.length < message.text.length
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.widthIn(max = hxAssistantMaxWidth())) {
@@ -87,11 +91,11 @@ internal fun AssistantMessageBubble(
                             onLongClick = { showContextMenu = true },
                         )
                         // Only a finished reply animates its size (Show more /
-                        // Collapse). While streaming the text grows every 80ms
-                        // flush, and each growth restarted a size animation:
+                        // Collapse). While streaming or typing out the text grows
+                        // every frame, and each growth restarted a size animation:
                         // the bubble never stopped animating and relaid out
                         // the list under it on every frame.
-                        .then(if (message.isStreaming) Modifier else Modifier.animateContentSize())
+                        .then(if (typing) Modifier else Modifier.animateContentSize())
                         .padding(vertical = 2.dp),
                 ) {
                     if (hasTrace) {
@@ -111,9 +115,9 @@ internal fun AssistantMessageBubble(
                         }
                     } else {
                         val displayMd = if (!isResponseExpanded && isLongResponse) {
-                            message.text.take(800) + "\n\n\u2026"
+                            shownText.take(800) + "\n\n\u2026"
                         } else {
-                            message.text
+                            shownText
                         }
                         val blocks = remember(displayMd) {
                             parseContentBlocks(displayMd).map { block ->
