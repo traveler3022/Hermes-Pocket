@@ -17,7 +17,7 @@
   <br>
   <a href="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml/badge.svg"></a>
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/License-MIT-00BCD4?style=flat-square"></a>
+  <a href="LICENSE"><img alt="GPLv3" src="https://img.shields.io/badge/License-GPLv3-00BCD4?style=flat-square"></a>
 </p>
 
 <p align="center">
@@ -97,7 +97,7 @@ JDK 17 و Android SDK 35 لازمه. Kotlin · Jetpack Compose · Material 3 · 
 
 ## 📄 مجوز
 
-**MIT** — فایل [LICENSE](LICENSE) رو ببین.
+**GPLv3** با چند شرط اضافه (نام سازنده باید بمونه) — فایل‌های [LICENSE](LICENSE) و [ADDITIONAL_TERMS.md](ADDITIONAL_TERMS.md) رو ببین.
 
 </div>
 
