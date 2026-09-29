@@ -629,6 +629,7 @@ class LinuxDesktop @Inject constructor(
         private const val StateDir = "/root/.hermes/android"
         private const val ProfileDir = "/root/.hermes/chrome-profile"
         private const val LogPath = "/root/.hermes/logs/desktop.log"
+        private const val LogMaxBytes = 20_000_000
         private const val FontDir = "/usr/share/fonts/hermes"
         private const val FontConfigPath = "/etc/fonts/conf.d/65-hermes-persian.conf"
 
@@ -745,7 +746,32 @@ class LinuxDesktop @Inject constructor(
             fi
             stop_desktop
             mkdir -p "${'$'}STATE" "${'$'}(dirname "${'$'}LOG")" $ProfileDir /tmp/.X11-unix
-            exec >>"${'$'}LOG" 2>&1
+            # Chromium can repeat one error hundreds of times a second: a 12-hour session left an
+            # 870 MB log of a single zygote line. Output goes through a filter that folds repeats
+            # (ignoring Chromium's [pid:tid:time] prefix) and stops writing at LOG_MAX bytes; an
+            # oversized log from an earlier run is kept once as desktop.log.1.
+            LOG_MAX=$LogMaxBytes
+            [ "${'$'}( (wc -c < "${'$'}LOG") 2>/dev/null || echo 0)" -lt "${'$'}LOG_MAX" ] || mv -f "${'$'}LOG" "${'$'}LOG.1"
+            FIFO="${'$'}STATE/desktop.log.fifo"
+            rm -f "${'$'}FIFO"
+            if mkfifo "${'$'}FIFO" 2>/dev/null; then
+                awk -v max="${'$'}LOG_MAX" -v size="${'$'}( (wc -c < "${'$'}LOG") 2>/dev/null || echo 0)" '
+                    function out(s) {
+                        if (size >= max) return
+                        size += length(s) + 1; print s
+                        if (size >= max) print "=== desktop.log reached its size limit; the rest of this run is not logged"
+                        fflush()
+                    }
+                    { key = ${'$'}0; sub(/^\[[^]]*\]/, "", key) }
+                    key == last { n++; next }
+                    { if (n) out("    (last line repeated " n " more times)"); n = 0; last = key; out(${'$'}0) }
+                    END { if (n) out("    (last line repeated " n " more times)") }
+                ' < "${'$'}FIFO" >> "${'$'}LOG" 2>&1 &
+                exec > "${'$'}FIFO" 2>&1
+                rm -f "${'$'}FIFO"
+            else
+                exec >>"${'$'}LOG" 2>&1
+            fi
             # Persian font (see writeFonts()). Its scan rule only reaches fonts that are already
             # cached through a full rebuild, so that runs once per change of the rule.
             if [ ! -f "${'$'}STATE/fonts.stamp" ] || [ $FontConfigPath -nt "${'$'}STATE/fonts.stamp" ]; then
