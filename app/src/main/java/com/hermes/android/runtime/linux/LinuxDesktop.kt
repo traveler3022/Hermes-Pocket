@@ -563,8 +563,15 @@ class LinuxDesktop @Inject constructor(
             "libdrm", "libxshmfence", "eudev-libs",
         )
 
-        // 154 exits at start under proot (SIGTRAP, any flags); 153 runs. Checked 2026-09-27.
-        private const val ChromeVersion = "153.0.8010.52"
+        /**
+         * Prints the Chromium Hermes installs for its browser tools (`hermes pm`, recorded in
+         * tools/facts.json as AGENT_BROWSER_EXECUTABLE_PATH). The desktop shows that browser
+         * rather than installing one of its own.
+         */
+        private const val HermesChromium =
+            "t=/root/.hermes/tools; c=\$(sed -n 's/.*\"AGENT_BROWSER_EXECUTABLE_PATH\": *\"{{store}}\\([^\"]*\\)\".*/\\1/p' \$t/facts.json 2>/dev/null); " +
+                "[ -n \"\$c\" ] && [ -x \"\$t\$c\" ] || c=\$(ls -d \$t/chromium-*/chrome-linux*/chrome 2>/dev/null | sort | tail -n 1 | sed \"s#^\$t##\"); " +
+                "[ -n \"\$c\" ] && [ -x \"\$t\$c\" ] && echo \"\$t\$c\""
         /** Installs [DebianPackages]; copied from the APK into the Linux before [PostInstall] runs. */
         const val DebianFetchAsset = "desktop/debian_fetch.py"
         const val DebianFetchPath = "/usr/local/lib/hermes/debian_fetch.py"
@@ -583,8 +590,8 @@ class LinuxDesktop @Inject constructor(
         /**
          * After apk: the X programs from Debian (see [DebianPackages]), noVNC 1.6.0 (the viewer
          * loads its vnc_lite.html),
-         * websockify, Google's Chrome for Testing (it has arm64 Linux builds; the repo has no
-         * Chromium), and the CLI Hermes' browser tools talk to Chromium through.
+         * websockify, and the CLI Hermes' browser tools talk to Chromium through. The browser
+         * itself is Hermes' own ([HermesChromium]).
          */
         const val PostInstall = "set -e; a=\$(uname -m); cd /tmp; " +
             "python3 $DebianFetchPath trixie $DebianPackages; " +
@@ -597,17 +604,14 @@ class LinuxDesktop @Inject constructor(
             "[ -x /opt/websockify/bin/pip ] || python3 -m venv /opt/websockify; " +
             "/opt/websockify/bin/pip install -q websockify==0.13.0; " +
             "ln -sf /opt/websockify/bin/websockify /usr/local/bin/websockify; " +
-            "case \$a in aarch64) p=linux-arm64 ;; *) p=linux64 ;; esac; " +
-            "if [ \"\$(cat /opt/chrome/.version 2>/dev/null)\" != $ChromeVersion ]; then " +
-            "curl -fL --retry 3 -o /tmp/chrome.zip " +
-            "https://storage.googleapis.com/chrome-for-testing-public/$ChromeVersion/\$p/chrome-\$p.zip; " +
-            "rm -rf /opt/chrome /tmp/chrome-\$p; unzip -q /tmp/chrome.zip -d /tmp; " +
-            "mv /tmp/chrome-\$p /opt/chrome; echo $ChromeVersion > /opt/chrome/.version; rm -f /tmp/chrome.zip; fi; " +
-            "ln -sf /opt/chrome/chrome /usr/local/bin/chromium; " +
+            // No browser of its own: the desktop shows Hermes' Chromium (see [HermesChromium]).
+            // The Chrome for Testing that older builds put here was a second 400 MB browser.
+            "[ \"\$(readlink /usr/local/bin/chromium)\" != /opt/chrome/chrome ] || rm -f /usr/local/bin/chromium; " +
+            "rm -rf /opt/chrome; " +
             "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
-            "(chromium-browser --version || chromium --version) && command -v Xvnc && command -v openbox && " +
+            "[ -n \"\$($HermesChromium)\" ] && command -v Xvnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
                 "command -v xdotool && command -v agent-browser && command -v python3"
 
@@ -788,8 +792,8 @@ class LinuxDesktop @Inject constructor(
             set -eu
             rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 $ProfileDir/SingletonLock \
                 $ProfileDir/SingletonSocket $ProfileDir/SingletonCookie
-            CHROME_BIN="${'$'}(command -v chromium-browser || command -v chromium || true)"
-            if [ -z "${'$'}CHROME_BIN" ]; then echo "Chromium is not installed"; exit 1; fi
+            CHROME_BIN="${'$'}($HermesChromium || true)"
+            if [ -z "${'$'}CHROME_BIN" ]; then echo "Hermes' Chromium is not installed yet (it comes with hermes update)"; exit 1; fi
             # Without a secret the browser would be anybody's; the app writes one into desktop.env.
             if [ -z "${'$'}CDP_SECRET" ]; then echo "No CDP secret in desktop.env; start the desktop from the app"; exit 1; fi
 
