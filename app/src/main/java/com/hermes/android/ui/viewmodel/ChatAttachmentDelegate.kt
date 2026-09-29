@@ -1,6 +1,8 @@
 package com.hermes.android.ui.viewmodel
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
@@ -43,20 +45,28 @@ internal class ChatAttachmentDelegate(
         if (state.value.isAttaching) return
         state.update { it.copy(isAttaching = true) }
         scope.launch(Dispatchers.IO) {
+            var jpeg: java.io.File? = null
             try {
                 val resolver = context.contentResolver
-                val name = resolver.query(uri, null, null, null, null)?.use { c ->
+                val pickedName = resolver.query(uri, null, null, null, null)?.use { c ->
                     val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                     if (i >= 0 && c.moveToFirst()) c.getString(i) else null
                 } ?: uri.lastPathSegment ?: "attachment"
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val pickedMime = resolver.getType(uri) ?: "application/octet-stream"
+
+                // Hermes takes only the image types a model reads (cli._IMAGE_EXTENSIONS), and
+                // HEIC isn't one: a phone camera's HEIC photo goes as a JPEG instead.
+                jpeg = if (isHeic(pickedMime, pickedName)) heicToJpeg(uri) else null
+                val source = jpeg?.let { Uri.fromFile(it) } ?: uri
+                val name = if (jpeg != null) pickedName.substringBeforeLast('.') + ".jpg" else pickedName
+                val mime = if (jpeg != null) "image/jpeg" else pickedMime
 
                 // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
                 // Termux and remote gateways can't see the file, so they get the bytes.
                 val guestPath = if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
-                    linuxUploads.guestPath(uri, name)
+                    linuxUploads.guestPath(source, name)
                 } else null
-                val b64 = if (guestPath == null) readBase64(uri) else ""
+                val b64 = if (guestPath == null) readBase64(source) else ""
 
                 val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
                     val params = buildJsonObject {
@@ -117,9 +127,46 @@ internal class ChatAttachmentDelegate(
                     errorEvent = ErrorEvent.Error("Attach failed: ${e.message}"),
                     isAttaching = false,
                 ) }
+            } finally {
+                jpeg?.delete()
             }
         }
     }
+
+    private fun isHeic(mime: String, name: String): Boolean =
+        mime.startsWith("image/heic") || mime.startsWith("image/heif") ||
+            name.substringAfterLast('.', "").lowercase() in setOf("heic", "heif")
+
+    /** The HEIC image as a JPEG in the cache, at most [maxImageSide] px on its long side. */
+    private fun heicToJpeg(uri: Uri): java.io.File {
+        val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            val longest = maxOf(info.size.width, info.size.height)
+            if (longest > maxImageSide) {
+                val scale = maxImageSide.toFloat() / longest
+                decoder.setTargetSize(
+                    (info.size.width * scale).toInt().coerceAtLeast(1),
+                    (info.size.height * scale).toInt().coerceAtLeast(1),
+                )
+            }
+        }
+        val file = java.io.File.createTempFile("attach", ".jpg", context.cacheDir)
+        try {
+            file.outputStream().use {
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)) {
+                    throw IllegalStateException("Could not convert HEIC image")
+                }
+            }
+        } catch (e: Exception) {
+            file.delete()
+            throw e
+        } finally {
+            bitmap.recycle()
+        }
+        return file
+    }
+
+    private val maxImageSide = 4096
 
     /** The file's bytes as base64, for a gateway that can't open it by path. */
     private fun readBase64(uri: Uri): String {
