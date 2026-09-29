@@ -38,6 +38,7 @@ FAST_FAIL_SECONDS = 15
 MAX_CLIENT_MESSAGE = 64 * 1024 * 1024
 MAX_CLIENT_BACKLOG = 256 * 1024 * 1024
 READY_TIMEOUT = 90
+ACTIVITY_FILE = os.environ.get("HERMES_DESKTOP_ACTIVITY", "")
 
 
 def log(message):
@@ -110,6 +111,7 @@ class Proxy:
         self.reader_task = None
         self.ready = asyncio.Event()
         self.process = None
+        self.last_active = 0.0
 
     # ── Chromium over the pipe ──────────────────────────────────────────────────────────
 
@@ -249,12 +251,23 @@ class Proxy:
         message = json.loads(text)
         if not isinstance(message, dict) or "method" not in message:
             return
+        self.mark_active()
         proxy_id = self.take_id()
         self.pending[proxy_id] = (client, message.get("id"))
         message["id"] = proxy_id
         if not message.get("sessionId"):
             message["sessionId"] = client.main_session
         self.write_chromium(message)
+
+    def mark_active(self):
+        """Tells hermes-desktop the browser is in use (it stops the desktop when idle)."""
+        now = time.monotonic()
+        if ACTIVITY_FILE and now - self.last_active > 30:
+            self.last_active = now
+            try:
+                os.utime(ACTIVITY_FILE)
+            except OSError:
+                pass
 
     def forget(self, client):
         self.clients.discard(client)

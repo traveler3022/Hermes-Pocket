@@ -630,6 +630,7 @@ class LinuxDesktop @Inject constructor(
         private const val ProfileDir = "/root/.hermes/chrome-profile"
         private const val LogPath = "/root/.hermes/logs/desktop.log"
         private const val LogMaxBytes = 20_000_000
+        private const val IdleMinutes = 15
         private const val FontDir = "/usr/share/fonts/hermes"
         private const val FontConfigPath = "/etc/fonts/conf.d/65-hermes-persian.conf"
 
@@ -699,6 +700,9 @@ class LinuxDesktop @Inject constructor(
             # Usage: hermes-desktop [start|stop|status|wait|view PORT]
             STATE=$StateDir
             PIDS="${'$'}STATE/desktop.pids"
+            # Touched by cdp_pipe.py on browser-tool traffic and by `start` on a running desktop.
+            ACTIVITY="${'$'}STATE/desktop.activity"
+            IDLE_MINUTES=$IdleMinutes
             LOG=$LogPath
             CDP_PORT=$CdpPort VNC_PORT=$VncPort NOVNC_PORT=$NoVncPort
             CDP_PROXY=$CdpProxyPath
@@ -740,6 +744,7 @@ class LinuxDesktop @Inject constructor(
             esac
 
             if running || alive; then
+                touch "${'$'}ACTIVITY" 2>/dev/null || true
                 # Never restart a live desktop: that would throw away the user's browser.
                 echo "Desktop already running: DISPLAY=:99, CDP http://127.0.0.1:${'$'}CDP_PORT"
                 exit 0
@@ -837,8 +842,12 @@ class LinuxDesktop @Inject constructor(
             # Chromium opens no debugging port: it speaks CDP over a pipe to cdp_pipe.py, which
             # serves it on CDP_PORT under CDP_SECRET only, and restarts Chromium if it exits
             # (up to five quick failures), as the agent's endpoint must stay up.
-            python3 "${'$'}CDP_PROXY" serve --port "${'$'}CDP_PORT" -- \
-                "${'$'}CHROME_BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu \
+            # --no-zygote: on the phone Chromium's zygote got ENOSYS reading from the browser and
+            # retried forever (6.3 million log lines in 12 hours, a core busy all along). Without
+            # a zygote the browser starts each renderer itself and that loop does not exist.
+            touch "${'$'}ACTIVITY"
+            HERMES_DESKTOP_ACTIVITY="${'$'}ACTIVITY" python3 "${'$'}CDP_PROXY" serve --port "${'$'}CDP_PORT" -- \
+                "${'$'}CHROME_BIN" --no-sandbox --no-zygote --disable-dev-shm-usage --disable-gpu \
                 --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
                 --no-default-browser-check --password-store=basic \
                 --user-data-dir=$ProfileDir \
@@ -854,7 +863,18 @@ class LinuxDesktop @Inject constructor(
             done
             echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
-            wait "${'$'}VNC_PID" || echo "Xvnc exited with ${'$'}?"
+            # Chromium and the X server hold several hundred MB, so the desktop stops itself after
+            # IDLE_MINUTES with no browser-tool traffic and nobody watching in the viewer.
+            while kill -0 "${'$'}VNC_PID" 2>/dev/null; do
+                sleep 30
+                pgrep -f "websockify --web=/usr/share/novnc" >/dev/null 2>&1 && touch "${'$'}ACTIVITY"
+                idle=${'$'}(( ${'$'}(date +%s) - ${'$'}(stat -c %Y "${'$'}ACTIVITY" 2>/dev/null || date +%s) ))
+                if [ "${'$'}idle" -ge ${'$'}(( IDLE_MINUTES * 60 )) ]; then
+                    echo "=== unused for ${'$'}IDLE_MINUTES minutes; stopping the desktop"
+                    exit 0
+                fi
+            done
+            echo "Xvnc exited"
         """.trimIndent() + "\n"
 
         private val DesktopSkill = """
@@ -893,7 +913,8 @@ class LinuxDesktop @Inject constructor(
             - A browser tool that fails to connect means the desktop is down — start it as
               above and retry.
             - `hermes-desktop stop` when a long job no longer needs a browser; it gives the
-              phone its memory back.
+              phone its memory back. It also stops by itself after 15 minutes with no browser
+              calls and nobody watching; `hermes-desktop start` brings it back.
             - Logins and cookies persist in `/root/.hermes/chrome-profile`.
 
             ## Whole desktop (VNC)
