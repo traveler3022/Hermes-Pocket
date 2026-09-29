@@ -71,8 +71,9 @@ class ProotEnvironment @Inject constructor(
         command: String,
         extraEnv: Map<String, String> = emptyMap(),
         mergeStderr: Boolean = true,
+        forApk: Boolean = false,
     ): ProcessBuilder =
-        ProcessBuilder(prootArgs(listOf("/bin/sh", "-lc", command), extraEnv)).apply {
+        ProcessBuilder(prootArgs(listOf("/bin/sh", "-lc", command), extraEnv, forApk)).apply {
             directory(baseDir)
             redirectErrorStream(mergeStderr)
             environment().apply {
@@ -102,15 +103,16 @@ class ProotEnvironment @Inject constructor(
         )
     }
 
-    private fun prootArgs(guestCommand: List<String>, extraEnv: Map<String, String>): List<String> {
+    private fun prootArgs(guestCommand: List<String>, extraEnv: Map<String, String>, forApk: Boolean = false): List<String> {
         prepareHost()
-        val args = mutableListOf(
-            prootBinary.absolutePath,
-            "--kill-on-exit",
-            // apk-tools 3 commits its db with O_TMPFILE + linkat() on /proc/self/fd, which
-            // Android denies in app-private storage ("failed to write database: Permission
-            // denied"). proot's handler copies such an fd into a real file instead.
-            "--link2symlink",
+        val args = mutableListOf(prootBinary.absolutePath, "--kill-on-exit")
+        // apk-tools 3 commits its db with O_TMPFILE + linkat() on /proc/self/fd, which
+        // Android denies in app-private storage ("failed to write database: Permission
+        // denied"). proot's handler copies such an fd into a real file instead. Only apk gets
+        // it: git and uv read back their own objects wrong through it, so `hermes update`
+        // failed on the phone. Links it made earlier still read fine without it.
+        if (forApk) args += "--link2symlink"
+        args += listOf(
             "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev",
@@ -144,9 +146,10 @@ class ProotEnvironment @Inject constructor(
     suspend fun run(
         command: String,
         extraEnv: Map<String, String> = emptyMap(),
+        forApk: Boolean = false,
         onLine: (String) -> Unit = {},
     ): CommandResult = withContext(Dispatchers.IO) {
-        val process = processBuilder(command, extraEnv).start()
+        val process = processBuilder(command, extraEnv, forApk = forApk).start()
         process.outputStream.close()
         val tail = ArrayDeque<String>()
         try {

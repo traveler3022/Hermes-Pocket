@@ -76,7 +76,7 @@ class LinuxToolsViewModel @Inject constructor(
             val command = "apk add --no-cache --no-chown ${profile.packages.joinToString(" ")}"
             _state.update { it.copy(installing = profile.id, log = listOf("$ $command"), error = null) }
             try {
-                var result = environment.run(command) { line -> appendLog(line) }
+                var result = environment.run(command, forApk = true) { line -> appendLog(line) }
                 if (profile.id == DesktopProfileId) {
                     // The post-install fetches the X programs the Linux's repo lacks from Debian.
                     val staged = withContext(Dispatchers.IO) {
