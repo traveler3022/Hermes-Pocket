@@ -229,7 +229,7 @@ internal enum class SettingsSection(
     val parent: SettingsSection? = null,
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
-    APPEARANCE("Appearance", "ظاهر", GENERAL_SETTINGS),
+    APPEARANCE("Appearance", "ظاهر"),
     APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
     PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),

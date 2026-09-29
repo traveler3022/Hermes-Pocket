@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
+import com.hermes.android.ui.icons.filled.Palette
 import androidx.compose.material.icons.filled.Info
 import com.hermes.android.ui.icons.filled.Schedule
 import com.hermes.android.ui.icons.filled.Security
@@ -128,11 +129,17 @@ internal fun SettingsMenu(
             DomainSpec(
                 title = t("General Settings", "تنظیمات عمومی"),
                 subtitle = t(
-                    "Appearance, approval, personality, platforms, advanced",
-                    "ظاهر، تأیید، شخصیت، پلتفرم\u200Cها، پیشرفته",
+                    "Approval, personality, platforms, advanced",
+                    "تأیید، شخصیت، پلتفرم\u200Cها، پیشرفته",
                 ),
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
+            ),
+            DomainSpec(
+                title = t("Appearance", "ظاهر"),
+                subtitle = t("Language, theme, font", "زبان، تم، فونت"),
+                icon = Icons.Default.Palette,
+                onClick = { onOpen(SettingsSection.APPEARANCE) },
             ),
             DomainSpec(
                 title = t("Models", "مدل\u200Cها"),

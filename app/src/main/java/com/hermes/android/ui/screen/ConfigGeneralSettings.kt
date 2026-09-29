@@ -23,7 +23,6 @@ import com.hermes.android.ui.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.Link
-import com.hermes.android.ui.icons.filled.Palette
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Terminal
 import androidx.compose.material3.Card
@@ -69,13 +68,6 @@ internal fun GeneralSettingsSection(
 ) {
     SettingsFolder {
         SettingsCardGroup {
-            SettingsNavRow(
-                title = t("Appearance", "ظاهر"),
-                subtitle = t("Language, theme, font", "زبان، تم، فونت"),
-                icon = Icons.Default.Palette,
-                onClick = { onOpen(SettingsSection.APPEARANCE) },
-            )
-            com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
                 title = t("Command Approval", "تأیید فرمان‌ها"),
                 subtitle = t(state.approvalMode, approvalModeFa(state.approvalMode)),
