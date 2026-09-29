@@ -661,10 +661,10 @@ class OkHttpGatewayClient @Inject constructor(
             // the still-live session via session.activate first; fall back to
             // resume for the (stored-id / reaped-session) cases.
             val result = try {
-                request(GatewayMethods.SESSION_ACTIVATE, com.hermes.android.data.SessionRepository.attachParams(GatewayMethods.SESSION_ACTIVATE, sessionId))
+                request(GatewayMethods.SESSION_ACTIVATE, sessionAttachParams(GatewayMethods.SESSION_ACTIVATE, sessionId))
             } catch (activateError: Exception) {
                 Timber.w("[Gateway] activate failed (${activateError.message}); trying session.resume")
-                request(GatewayMethods.SESSION_RESUME, com.hermes.android.data.SessionRepository.attachParams(GatewayMethods.SESSION_RESUME, sessionId))
+                request(GatewayMethods.SESSION_RESUME, sessionAttachParams(GatewayMethods.SESSION_RESUME, sessionId))
             }
             val liveId = (result as? JsonObject)?.get("session_id").sessionIdOrNull() ?: sessionId
             lastSessionId = liveId
@@ -679,11 +679,6 @@ class OkHttpGatewayClient @Inject constructor(
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, JsonElement> =
         obj.toMap()
-
-    /** A usable session id, or null when the field is absent, JSON null, or
-     *  the empty string that session-less broadcasts carry. */
-    private fun JsonElement?.sessionIdOrNull(): String? =
-        (this as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     // ── WebSocket listener ─────────────────────────────────────────────────
 
@@ -1093,3 +1088,13 @@ internal fun JsonElement?.asText(): String? = when (this) {
     is JsonPrimitive -> contentOrNull
     else -> toString()
 }
+
+/**
+ * A session id the gateway actually gave us, or null: the field absent, JSON null, blank
+ * (session-less broadcasts carry ""), or the text "null". `JsonNull` is a `JsonPrimitive`
+ * whose `.content` is the four-character string "null", which once sailed into
+ * activeSessionId and produced `session.activate session_id='null'` calls against a
+ * session that never existed.
+ */
+internal fun JsonElement?.sessionIdOrNull(): String? =
+    (this as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() && it != "null" }

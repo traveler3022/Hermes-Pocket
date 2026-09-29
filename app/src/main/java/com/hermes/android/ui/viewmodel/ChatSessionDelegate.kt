@@ -3,8 +3,10 @@ package com.hermes.android.ui.viewmodel
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.SessionSource
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.asText
+import com.hermes.android.gateway.sessionIdOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,7 +58,7 @@ internal class ChatSessionDelegate(
         try {
             val result = gatewayClient.request(
                 GatewayMethods.SESSION_CREATE,
-                mapOf("source" to JsonPrimitive(SessionRepository.CHAT_SOURCE)),
+                mapOf("source" to JsonPrimitive(SessionSource.CHAT)),
             )
             val sessionId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
             val storedId = ((result as? JsonObject)?.get("stored_session_id") as? JsonPrimitive)
@@ -462,17 +464,6 @@ internal fun List<ChatMessage>.withReplyLanded(
     )
 }
 
-/**
- * A session id the gateway actually gave us, or null.
- *
- * `JsonNull` is a `JsonPrimitive`, and its `.content` is the four-character string
- * "null" — which sailed straight into activeSessionId and produced a stream of
- * `session.activate session_id='null'` calls against a session that never existed.
- * `contentOrNull` handles JsonNull; the literal check covers a server that sends the
- * string "null" in a JSON string.
- */
-private fun JsonElement?.sessionIdOrNull(): String? =
-    (this as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
 
 /** Journals a transcript replacement that removes the reply still streaming on screen. */
 internal fun watchDrop(site: String, before: List<ChatMessage>, after: List<ChatMessage>): List<ChatMessage> {
