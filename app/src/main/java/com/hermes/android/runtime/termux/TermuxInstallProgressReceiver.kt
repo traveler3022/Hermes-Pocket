@@ -17,15 +17,15 @@ import timber.log.Timber
  * Registered dynamically (not in manifest) because the receiver should only
  * be active during installation.
  *
- * Note: NOT using @AndroidEntryPoint because the receiver is registered
- * dynamically via Context.registerReceiver(), which creates the instance
- * via no-arg constructor — Hilt cannot inject into dynamically-registered
- * receivers. Instead, the shared StateFlows are accessed via a companion
- * object that the TermuxBridge sets before registering.
+ * Note: NOT using @AndroidEntryPoint. [TermuxBridge] creates the receiver
+ * itself when it registers it and hands over the shared flows it has injected.
  *
  * Reference: ADR-007 (reuse install.sh — migration only)
  */
-class TermuxInstallProgressReceiver : BroadcastReceiver() {
+class TermuxInstallProgressReceiver(
+    private val progressFlow: MutableStateFlow<InstallProgress?>,
+    private val completionFlow: MutableStateFlow<InstallCompletion>,
+) : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
@@ -40,18 +40,18 @@ class TermuxInstallProgressReceiver : BroadcastReceiver() {
                     timestamp = System.currentTimeMillis(),
                 )
                 Timber.i("[Runtime] Install progress: $progress")
-                sharedProgressFlow?.value = progress
+                progressFlow.value = progress
             }
 
             TermuxInstaller.BroadcastAction.COMPLETE.action -> {
                 Timber.i("[Runtime] Install complete broadcast received")
-                sharedCompletionFlow?.value = InstallCompletion.Completed
+                completionFlow.value = InstallCompletion.Completed
             }
 
             TermuxInstaller.BroadcastAction.ERROR.action -> {
                 val message = intent.getStringExtra("message") ?: "Unknown error"
                 Timber.e("[Runtime] Install error broadcast received: $message")
-                sharedCompletionFlow?.value = InstallCompletion.Failed(message)
+                completionFlow.value = InstallCompletion.Failed(message)
             }
         }
     }
@@ -61,17 +61,5 @@ class TermuxInstallProgressReceiver : BroadcastReceiver() {
         object Pending : InstallCompletion()
         object Completed : InstallCompletion()
         data class Failed(val message: String) : InstallCompletion()
-    }
-
-    companion object {
-        /**
-         * Shared flows — set by [TermuxBridge] before registering this receiver.
-         * This avoids Hilt injection issues with dynamically-registered receivers.
-         */
-        @Volatile
-        var sharedProgressFlow: MutableStateFlow<InstallProgress?>? = null
-
-        @Volatile
-        var sharedCompletionFlow: MutableStateFlow<InstallCompletion>? = null
     }
 }

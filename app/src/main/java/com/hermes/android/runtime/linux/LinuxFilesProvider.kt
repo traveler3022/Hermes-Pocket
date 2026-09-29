@@ -16,15 +16,29 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import com.hermes.android.ui.viewer.FileGateActivity
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import timber.log.Timber
 import java.io.File
 import java.io.FileNotFoundException
 
 /** Shows the built-in Linux in Android's Files app and in every file picker. */
 class LinuxFilesProvider : DocumentsProvider() {
+    /** A provider can't be injected into; it reaches the app's [FileGate] through this. */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface FileGateEntryPoint {
+        fun fileGate(): FileGate
+    }
+
     private lateinit var files: GuestFiles
     private lateinit var authority: String
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val fileGate by lazy {
+        EntryPointAccessors.fromApplication(checkNotNull(context), FileGateEntryPoint::class.java).fileGate()
+    }
 
     override fun onCreate(): Boolean {
         val context = context ?: return false
@@ -90,8 +104,8 @@ class LinuxFilesProvider : DocumentsProvider() {
      * confirmed it in Hermes; the notification leads there. See [FileGate].
      */
     private fun holdBackProgram(file: File) {
-        val risk = FileGate.riskOf(file)
-        if (risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && FileGate.isApproved(file))) return
+        val risk = fileGate.riskOf(file)
+        if (risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && fileGate.isApproved(file))) return
         context?.let { FileGateActivity.notifyHeldBack(it, file, risk) }
         throw FileNotFoundException("Held back until confirmed in Hermes: ${file.name}")
     }

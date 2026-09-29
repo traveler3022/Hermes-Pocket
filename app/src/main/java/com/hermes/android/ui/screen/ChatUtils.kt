@@ -226,8 +226,8 @@ internal fun rememberReduceMotion(): Boolean {
 }
 
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
-internal fun openUrlExternally(context: Context, url: String) {
-    heldBackProgram(context, url)?.let { file ->
+internal fun openUrlExternally(context: Context, url: String, fileGate: FileGate) {
+    heldBackProgram(context, url, fileGate)?.let { file ->
         context.startActivity(FileGateActivity.intent(context, file, open = true))
         return
     }
@@ -259,13 +259,13 @@ internal fun externalViewIntent(context: Context, url: String): Intent {
 }
 
 /** A program of the built-in Linux at [url] the user hasn't confirmed yet ([FileGate]), else null. */
-private fun heldBackProgram(context: Context, url: String): File? {
+private fun heldBackProgram(context: Context, url: String, fileGate: FileGate): File? {
     val rootfs = ProotEnvironment.rootfsDir(context)
     val guestPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path
         ?.let { guestPathIn(rootfs.absolutePath, it) } ?: return null
     val file = runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile } ?: return null
-    val risk = FileGate.riskOf(file)
-    return file.takeUnless { risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && FileGate.isApproved(file)) }
+    val risk = fileGate.riskOf(file)
+    return file.takeUnless { risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && fileGate.isApproved(file)) }
 }
 
 /** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */

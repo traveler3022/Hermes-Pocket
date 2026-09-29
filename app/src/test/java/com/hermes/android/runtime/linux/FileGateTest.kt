@@ -12,6 +12,7 @@ import java.util.zip.ZipOutputStream
 
 class FileGateTest {
     @get:Rule val tmp = TemporaryFolder()
+    private val gate = FileGate()
 
     private fun file(name: String, bytes: ByteArray): File = tmp.newFile(name).apply { writeBytes(bytes) }
 
@@ -33,38 +34,38 @@ class FileGateTest {
 
     @Test
     fun `photos, text and office documents pass`() {
-        assertEquals(FileGate.Risk.SAFE, FileGate.riskOf(file("a.jpg", byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()))))
-        assertEquals(FileGate.Risk.SAFE, FileGate.riskOf(file("notes.txt", "MZ is just text here".toByteArray())))
-        assertEquals(FileGate.Risk.SAFE, FileGate.riskOf(zip("report.docx", "[Content_Types].xml", "word/document.xml")))
-        assertEquals(FileGate.Risk.SAFE, FileGate.riskOf(file("empty.bin", ByteArray(0))))
+        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("a.jpg", byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()))))
+        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("notes.txt", "MZ is just text here".toByteArray())))
+        assertEquals(FileGate.Risk.SAFE, gate.riskOf(zip("report.docx", "[Content_Types].xml", "word/document.xml")))
+        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("empty.bin", ByteArray(0))))
     }
 
     @Test
     fun `programs under their own names ask first`() {
-        assertEquals(FileGate.Risk.PROGRAM, FileGate.riskOf(zip("app.apk", "AndroidManifest.xml", "classes.dex")))
-        assertEquals(FileGate.Risk.PROGRAM, FileGate.riskOf(zip("bundle.xapk", "base.apk", "manifest.json")))
-        assertEquals(FileGate.Risk.PROGRAM, FileGate.riskOf(zip("stuff.zip", "inside/game.apk")))
-        assertEquals(FileGate.Risk.PROGRAM, FileGate.riskOf(file("tool", elf)))
-        assertEquals(FileGate.Risk.PROGRAM, FileGate.riskOf(file("setup.exe", windowsProgram())))
+        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("app.apk", "AndroidManifest.xml", "classes.dex")))
+        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("bundle.xapk", "base.apk", "manifest.json")))
+        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("stuff.zip", "inside/game.apk")))
+        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(file("tool", elf)))
+        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(file("setup.exe", windowsProgram())))
     }
 
     @Test
     fun `a program named like a photo or video is disguised`() {
-        assertEquals(FileGate.Risk.DISGUISED, FileGate.riskOf(zip("photo.jpg", "AndroidManifest.xml")))
-        assertEquals(FileGate.Risk.DISGUISED, FileGate.riskOf(file("movie.MP4", elf)))
-        assertEquals(FileGate.Risk.DISGUISED, FileGate.riskOf(file("invoice.pdf", windowsProgram())))
+        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(zip("photo.jpg", "AndroidManifest.xml")))
+        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(file("movie.MP4", elf)))
+        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(file("invoice.pdf", windowsProgram())))
     }
 
     @Test
     fun `an approval lasts ten minutes and ends when the file changes`() {
         val apk = zip("app.apk", "AndroidManifest.xml")
-        assertFalse(FileGate.isApproved(apk))
-        FileGate.approve(apk, now = 1_000L)
-        assertTrue(FileGate.isApproved(apk, now = 1_000L + 9 * 60 * 1000L))
-        assertFalse(FileGate.isApproved(apk, now = 1_000L + 11 * 60 * 1000L))
+        assertFalse(gate.isApproved(apk))
+        gate.approve(apk, now = 1_000L)
+        assertTrue(gate.isApproved(apk, now = 1_000L + 9 * 60 * 1000L))
+        assertFalse(gate.isApproved(apk, now = 1_000L + 11 * 60 * 1000L))
 
-        FileGate.approve(apk, now = 0L)
+        gate.approve(apk, now = 0L)
         apk.appendBytes(byteArrayOf(1, 2, 3))
-        assertFalse(FileGate.isApproved(apk, now = 1L))
+        assertFalse(gate.isApproved(apk, now = 1L))
     }
 }

@@ -740,11 +740,7 @@ class TermuxBridge @Inject constructor(
 
     private fun registerProgressReceiver() {
         if (receiverRegistered) return
-        // Set the shared flows so the receiver (which is created by Android,
-        // not Hilt) can access them via companion object
-        TermuxInstallProgressReceiver.sharedProgressFlow = progressFlow
-        TermuxInstallProgressReceiver.sharedCompletionFlow = completionFlow
-        receiver = TermuxInstallProgressReceiver()
+        receiver = TermuxInstallProgressReceiver(progressFlow, completionFlow)
         val filter = IntentFilter().apply {
             addAction(TermuxInstaller.BroadcastAction.PROGRESS.action)
             addAction(TermuxInstaller.BroadcastAction.COMPLETE.action)
@@ -761,8 +757,6 @@ class TermuxBridge @Inject constructor(
         if (!receiverRegistered) return
         receiver?.let { context.unregisterReceiver(it) }
         receiver = null
-        TermuxInstallProgressReceiver.sharedProgressFlow = null
-        TermuxInstallProgressReceiver.sharedCompletionFlow = null
         receiverRegistered = false
     }
 

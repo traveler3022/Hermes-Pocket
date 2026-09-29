@@ -4,6 +4,8 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The check a file of the built-in Linux passes on its way out to the phone (the Files app,
@@ -12,12 +14,10 @@ import java.util.zip.ZipFile
  * after the user confirms it, and a program named like a photo or a document never leaves.
  * Decided by the file's bytes, not its name.
  */
-object FileGate {
+@Singleton
+class FileGate @Inject constructor() {
 
     enum class Risk { SAFE, PROGRAM, DISGUISED }
-
-    /** How long a confirmed program may be read by other apps (a copy, an install). */
-    private const val APPROVAL_MILLIS = 10 * 60 * 1000L
 
     private val approvals = ConcurrentHashMap<String, Long>()
 
@@ -83,12 +83,17 @@ object FileGate {
     private fun ByteArray.startsWith(vararg bytes: Int): Boolean =
         bytes.indices.all { this[it] == bytes[it].toByte() }
 
-    /** Names of files that are only data: a program under one of these is hiding. */
-    private val PassiveExtensions = setOf(
-        "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "svg",
-        "mp4", "mkv", "webm", "mov", "avi", "3gp", "m4v",
-        "mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac", "amr",
-        "pdf", "txt", "md", "csv", "json", "html", "htm", "xml", "log",
-        "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
-    )
+    private companion object {
+        /** How long a confirmed program may be read by other apps (a copy, an install). */
+        const val APPROVAL_MILLIS = 10 * 60 * 1000L
+
+        /** Names of files that are only data: a program under one of these is hiding. */
+        val PassiveExtensions = setOf(
+            "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "svg",
+            "mp4", "mkv", "webm", "mov", "avi", "3gp", "m4v",
+            "mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac", "amr",
+            "pdf", "txt", "md", "csv", "json", "html", "htm", "xml", "log",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
+        )
+    }
 }
