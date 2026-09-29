@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
-import com.hermes.android.ui.i18n.tForContext
+import com.hermes.android.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException

@@ -100,7 +100,7 @@ import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
-import com.hermes.android.ui.i18n.AppLanguage
+import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.AppFont
