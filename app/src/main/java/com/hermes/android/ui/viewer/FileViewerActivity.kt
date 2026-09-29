@@ -317,11 +317,11 @@ private fun BackgroundAudio(uri: Uri, name: String, content: @Composable (Player
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
             val built = runCatching { future.get() }.getOrNull() ?: return@addListener
-            val url = uri.toString()
-            if (built.currentMediaItem?.mediaId != url) {
+            val id = AudioPlaybackService.itemId(uri.toString())
+            if (built.currentMediaItem?.mediaId != id) {
                 built.setMediaItem(
                     MediaItem.Builder()
-                        .setMediaId(url)
+                        .setMediaId(id)
                         .setUri(uri)
                         .setMediaMetadata(MediaMetadata.Builder().setTitle(name).build())
                         .build(),

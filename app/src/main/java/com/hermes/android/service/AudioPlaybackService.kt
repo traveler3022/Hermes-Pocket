@@ -37,8 +37,8 @@ class AudioPlaybackService : MediaSessionService() {
             .build()
         val mediaSession = MediaSession.Builder(this, player)
             .setCallback(object : MediaSession.Callback {
-                // A controller may send an item without its URI; the viewer puts it in mediaId.
-                // Only the viewer adds items: the service is exported (media buttons, the system's
+                // Only the viewer adds items, and each carries its URI (a controller sends it along;
+                // the id is [itemId]). The service is exported (media buttons, the system's
                 // controls), and a file:// another app named here would be opened with this app's
                 // rights and become the notification's link into the viewer.
                 override fun onAddMediaItems(
@@ -46,27 +46,23 @@ class AudioPlaybackService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>,
                 ): ListenableFuture<MutableList<MediaItem>> =
-                    if (controller.packageName != packageName) {
+                    if (controller.packageName != packageName || mediaItems.any { it.localConfiguration == null }) {
                         Futures.immediateFailedFuture(UnsupportedOperationException("Only Hermes adds files to its player"))
                     } else {
-                        Futures.immediateFuture(
-                            mediaItems.map { item ->
-                                if (item.localConfiguration != null) item else item.buildUpon().setUri(item.mediaId).build()
-                            }.toMutableList(),
-                        )
+                        Futures.immediateFuture(mediaItems)
                     }
             })
             .build()
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                mediaItem?.let { mediaSession.setSessionActivity(viewerIntent(it)) }
+                mediaItem?.let { viewerIntent(it) }?.let { mediaSession.setSessionActivity(it) }
             }
         })
         session = mediaSession
     }
 
-    private fun viewerIntent(item: MediaItem): PendingIntent {
-        val url = item.localConfiguration?.uri?.toString() ?: item.mediaId
+    private fun viewerIntent(item: MediaItem): PendingIntent? {
+        val url = item.localConfiguration?.uri?.toString() ?: return null
         val name = item.mediaMetadata.title?.toString().orEmpty()
         val intent = FileViewerActivity.intent(this, url, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return PendingIntent.getActivity(
@@ -75,6 +71,17 @@ class AudioPlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    companion object {
+        /**
+         * The player item's id for [url]. Any app may connect to this session with read access,
+         * and that includes the current item's id (not its URI); a remote gateway's URL carries
+         * its token, so the id is a digest of the URL, not the URL.
+         */
+        fun itemId(url: String): String =
+            java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+    }
 
     /** Swiped away from recents: keep playing if it is, otherwise go. */
     override fun onTaskRemoved(rootIntent: Intent?) {
