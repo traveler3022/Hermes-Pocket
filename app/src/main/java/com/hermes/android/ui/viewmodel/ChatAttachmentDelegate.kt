@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import android.util.Base64
 import com.hermes.android.data.DownloadStorage
+import com.hermes.android.di.redactCredentials
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub
@@ -253,10 +254,11 @@ internal class ChatAttachmentDelegate(
         scope.launch {
             try {
                 val savedAs = downloadStorage.save(url, filename) { gatewayClient.downloadFile(it) }
-                Timber.i("[Chat] Downloaded $url -> $savedAs")
+                Timber.i("[Chat] Downloaded ${redactCredentials(url)} -> $savedAs")
                 state.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to $savedAs")) }
             } catch (e: Exception) {
-                Timber.e(e, "[Chat] Download failed: $url")
+                // A remote gateway's link carries its token, and errors are kept in the connection journal.
+                Timber.e(e, "[Chat] Download failed: ${redactCredentials(url)}")
                 state.update { it.copy(errorEvent = ErrorEvent.Error("Download failed: ${e.message}")) }
             }
         }
