@@ -136,7 +136,16 @@ class FileViewerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val source = intent.getStringExtra(EXTRA_URL)?.let(Uri::parse) ?: intent.data
+        // Another app (the Files app) gets here only through the exported LinuxFileViewer alias,
+        // and any app can send that one extras: a file:// URL into the rootfs, which the
+        // OTHER branch below would hand on with a read grant (~/.hermes/.env and its API keys).
+        // From there only a document of the Linux Files root is taken, typed by that provider.
+        val external = intent.component?.className != FileViewerActivity::class.java.name
+        val source = if (external) {
+            intent.data?.takeIf { it.scheme == "content" && it.authority == LinuxFilesProvider.authority(this) }
+        } else {
+            intent.getStringExtra(EXTRA_URL)?.let(Uri::parse) ?: intent.data
+        }
         if (source == null) {
             finish()
             return
@@ -144,11 +153,11 @@ class FileViewerActivity : ComponentActivity() {
         // A document of the Linux Files root is read as the file it is, so a page's
         // relative CSS/JS/images resolve next to it.
         val uri = linuxFileUri(source) ?: source
-        val name = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: displayName(source)
-        val mime = intent.type ?: if (source.scheme == "content") contentResolver.getType(source) else null
+        val name = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() && !external } ?: displayName(source)
+        val mime = intent.type?.takeUnless { external } ?: if (source.scheme == "content") contentResolver.getType(source) else null
         val kind = fileKindOf(name, mime).takeIf { it != FileKind.OTHER } ?: fileKindOf(uri.toString())
         if (kind == FileKind.OTHER) {
-            openUrlExternally(this, uri.toString())
+            if (!external) openUrlExternally(this, uri.toString())
             finish()
             return
         }

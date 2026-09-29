@@ -120,15 +120,23 @@
 
         <!-- Built-in Linux files in the Files app and file pickers. MANAGE_DOCUMENTS
              means only the system DocumentsUI can bind to it. -->
-        <!-- In-app viewer (audio/video/Markdown/HTML/image). Offered by the Files app only for
-             files of Hermes' own Linux root; the chat opens it directly. Not recreated on
-             rotation, so playback doesn't restart. -->
+        <!-- In-app viewer (audio/video/Markdown/HTML/image). The chat opens it directly; no
+             other app can, since it takes any URL. Not recreated on rotation, so playback
+             doesn't restart. -->
         <activity
             android:name=".ui.viewer.FileViewerActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.Hermes2"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- The same viewer for the Files app, offered only for files of Hermes' own Linux
+             root. Launched through here it takes nothing but such a document. -->
+        <activity-alias
+            android:name=".ui.viewer.LinuxFileViewer"
+            android:targetActivity=".ui.viewer.FileViewerActivity"
+            android:exported="true"
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -141,7 +149,7 @@
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/x-markdown" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <!-- Asks before a program of the built-in Linux leaves for the phone (FileGate). -->
         <activity
