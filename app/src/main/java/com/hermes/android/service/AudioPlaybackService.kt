@@ -38,15 +38,23 @@ class AudioPlaybackService : MediaSessionService() {
         val mediaSession = MediaSession.Builder(this, player)
             .setCallback(object : MediaSession.Callback {
                 // A controller may send an item without its URI; the viewer puts it in mediaId.
+                // Only the viewer adds items: the service is exported (media buttons, the system's
+                // controls), and a file:// another app named here would be opened with this app's
+                // rights and become the notification's link into the viewer.
                 override fun onAddMediaItems(
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>,
-                ): ListenableFuture<MutableList<MediaItem>> = Futures.immediateFuture(
-                    mediaItems.map { item ->
-                        if (item.localConfiguration != null) item else item.buildUpon().setUri(item.mediaId).build()
-                    }.toMutableList(),
-                )
+                ): ListenableFuture<MutableList<MediaItem>> =
+                    if (controller.packageName != packageName) {
+                        Futures.immediateFailedFuture(UnsupportedOperationException("Only Hermes adds files to its player"))
+                    } else {
+                        Futures.immediateFuture(
+                            mediaItems.map { item ->
+                                if (item.localConfiguration != null) item else item.buildUpon().setUri(item.mediaId).build()
+                            }.toMutableList(),
+                        )
+                    }
             })
             .build()
         player.addListener(object : Player.Listener {
