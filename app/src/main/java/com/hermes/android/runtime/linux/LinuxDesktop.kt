@@ -585,7 +585,9 @@ class LinuxDesktop @Inject constructor(
                 "libsystemd0 libunwind8 libxcvt0 " +
                 "xdotool libxdo3 " +
                 "openbox libobrender32v5 libobt2v5 libstartup-notification0 libxcb-util1 libimlib2t64 " +
-                "x11-utils xclip xterm libutempter0 libtinfo6"
+                "x11-utils xclip xterm libutempter0 libtinfo6 " +
+                // The skill's screenshot tool; its libraries are all above or in this Linux.
+                "scrot"
 
         /**
          * After apk: the X programs from Debian (see [DebianPackages]), noVNC 1.6.0 (the viewer
@@ -613,7 +615,7 @@ class LinuxDesktop @Inject constructor(
         const val VerifyCommand =
             "[ -n \"\$($HermesChromium)\" ] && command -v Xvnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
-                "command -v xdotool && command -v agent-browser && command -v python3"
+                "command -v xdotool && command -v scrot && command -v agent-browser && command -v python3"
 
         private const val PREFS_NAME = "hermes_linux_desktop"
         private const val KEY_AGENT_BROWSER = "agent_browser"
