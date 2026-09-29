@@ -430,6 +430,8 @@ class ChatViewModel @Inject constructor(
                 messages = emptyList(),
                 activeSessionId = null,
                 activeSessionKey = null,
+                // The new chat's folder comes with its session.info, not the last chat's.
+                sessionCwd = null,
                 activeTodos = emptyList(),
                 pendingApproval = null,
                 // Starting a new chat mid-turn dropped the session id while isSending

@@ -90,8 +90,14 @@ internal class ChatSessionDelegate(
             val liveSessionId = attached.liveId
             val history = parseSessionHistory(attached.raw)
             val running = (attached.raw["running"] as? JsonPrimitive)?.contentOrNull == "true"
+            // The reply's info has the chat's folder. Set with the history, whose relative
+            // `::preview` pages are read from it as soon as they show; until the next
+            // session.info they were read from the folder of the chat open before.
+            val cwd = ((attached.raw["info"] as? JsonObject)?.get("cwd") as? JsonPrimitive)
+                ?.contentOrNull?.takeIf { it.isNotBlank() }
             state.update { it.copy(
                 activeSessionId = liveSessionId,
+                sessionCwd = cwd,
                 // A drawer row hands over the stored id itself; a live id
                 // (notification tap) resolves to itself and names no key.
                 activeSessionKey = attached.storedId ?: sessionId.takeIf { it != liveSessionId },
