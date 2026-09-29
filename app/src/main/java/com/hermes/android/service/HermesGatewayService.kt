@@ -16,7 +16,7 @@ import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.RuntimeState
-import com.hermes.android.ui.i18n.tForContext
+import com.hermes.android.i18n.tForContext
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

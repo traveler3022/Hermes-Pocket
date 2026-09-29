@@ -76,7 +76,8 @@ class LinuxToolsViewModel @Inject constructor(
             val command = "apk add --no-cache --no-chown ${profile.packages.joinToString(" ")}"
             _state.update { it.copy(installing = profile.id, log = listOf("$ $command"), error = null) }
             try {
-                var result = environment.run(command) { line -> appendLog(line) }
+                val apk = environment.run(command, forApk = true) { line -> appendLog(line) }
+                var result = apk
                 if (profile.id == DesktopProfileId) {
                     // The post-install fetches the X programs the Linux's repo lacks from Debian.
                     val staged = withContext(Dispatchers.IO) {
@@ -89,11 +90,13 @@ class LinuxToolsViewModel @Inject constructor(
                     result = environment.run(post) { line -> appendLog(line) }
                 }
                 // apk can exit 1 on Android ("failed to write database") after installing everything.
-                val ok = result.ok || environment.run(profile.verify).ok
+                // A post-install that succeeds says nothing about apk's packages, so both count.
+                val ok = (apk.ok && result.ok) || environment.run(profile.verify).ok
+                val failed = if (apk.ok) result else apk
                 _state.update {
                     it.copy(
                         installed = it.installed + (profile.id to ok),
-                        error = if (ok) null else result.output.lines().takeLast(3).joinToString("\n"),
+                        error = if (ok) null else failed.output.lines().takeLast(3).joinToString("\n"),
                     )
                 }
             } catch (e: CancellationException) {

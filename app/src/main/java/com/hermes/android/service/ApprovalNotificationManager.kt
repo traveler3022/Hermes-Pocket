@@ -9,7 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.hermes.android.R
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.hermes.android.ui.i18n.tForContext
+import com.hermes.android.i18n.tForContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton

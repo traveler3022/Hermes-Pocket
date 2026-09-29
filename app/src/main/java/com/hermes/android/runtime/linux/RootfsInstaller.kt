@@ -29,6 +29,7 @@ class RootfsInstaller @Inject constructor(
         environment.baseDir.mkdirs()
         onProgress("Preparing the built-in Linux…")
         val staging = File(environment.baseDir, "rootfs.staging")
+        rescueHome(staging)
         deleteTree(staging)
         staging.mkdirs()
         // The APK build un-gzips *.gz assets and drops the extension, so the rootfs may be
@@ -67,6 +68,19 @@ class RootfsInstaller @Inject constructor(
         deleteTree(newHome)
         if (!oldHome.renameTo(newHome)) throw IOException("Could not keep the Linux home folder; nothing was changed")
         for (built in BuiltForOldSystem) deleteTree(File(newHome, built))
+    }
+
+    /**
+     * An install that stopped after [keepHome] and before staging became the rootfs (the app
+     * killed, or a delete that failed) left /root inside staging, where the next install's first
+     * step would delete it. It goes back to the rootfs first; [keepHome] moves it again.
+     */
+    private fun rescueHome(staging: File) {
+        val stagedHome = File(staging, "root")
+        val home = File(environment.rootfsDir, "root")
+        if (!stagedHome.isDirectory || home.exists()) return
+        environment.rootfsDir.mkdirs()
+        if (!stagedHome.renameTo(home)) throw IOException("Could not recover the Linux home folder from the last install")
     }
 
     private fun assetExists(path: String): Boolean =

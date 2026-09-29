@@ -5,6 +5,8 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.SessionSource
+import com.hermes.android.gateway.sessionAttachParams
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -159,7 +161,7 @@ class SessionRepositoryTest {
 
         val create = gateway.calls.first { it.method == GatewayMethods.SESSION_CREATE }
         assertFalse("task session must not hijack chat auto-resume", create.trackSession)
-        assertEquals(SessionRepository.TASK_SOURCE, create.params.str("source"))
+        assertEquals(SessionSource.TASK, create.params.str("source"))
 
         val submit = gateway.calls.first { it.method == GatewayMethods.PROMPT_SUBMIT }
         assertEquals("liveT", submit.params.str("session_id"))
@@ -222,7 +224,7 @@ class SessionRepositoryTest {
                     put("sessions", buildJsonArray {
                         for (id in listOf("storedT", "storedDone")) {
                             add(buildJsonObject {
-                                put("id", id); put("source", SessionRepository.TASK_SOURCE); put("message_count", 2)
+                                put("id", id); put("source", SessionSource.TASK); put("message_count", 2)
                             })
                         }
                     })
@@ -331,14 +333,14 @@ class SessionRepositoryTest {
                             buildJsonObject {
                                 put("id", "mine"); put("title", "my task")
                                 put("preview", "done"); put("message_count", 4)
-                                put("source", SessionRepository.TASK_SOURCE)
+                                put("source", SessionSource.TASK)
                             }
                         )
                         // right source, but this device never launched it
                         add(
                             buildJsonObject {
                                 put("id", "someone-else"); put("title", "x")
-                                put("source", SessionRepository.TASK_SOURCE)
+                                put("source", SessionSource.TASK)
                             }
                         )
                         // our registry but a normal chat source → not a task
@@ -482,9 +484,9 @@ class SessionRepositoryTest {
 
     @Test
     fun `source goes with session resume only, since session activate rejects it`() {
-        val resume = SessionRepository.attachParams(GatewayMethods.SESSION_RESUME, "s1")
-        assertEquals(JsonPrimitive(SessionRepository.CHAT_SOURCE), resume["source"])
-        val activate = SessionRepository.attachParams(GatewayMethods.SESSION_ACTIVATE, "s1")
+        val resume = sessionAttachParams(GatewayMethods.SESSION_RESUME, "s1")
+        assertEquals(JsonPrimitive(SessionSource.CHAT), resume["source"])
+        val activate = sessionAttachParams(GatewayMethods.SESSION_ACTIVATE, "s1")
         assertEquals(setOf("session_id"), activate.keys)
     }
 }

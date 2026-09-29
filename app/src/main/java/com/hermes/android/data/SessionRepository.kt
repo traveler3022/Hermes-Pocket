@@ -3,6 +3,8 @@ package com.hermes.android.data
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.SessionSource
+import com.hermes.android.gateway.sessionAttachParams
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -83,12 +85,12 @@ class SessionRepository @Inject constructor(
         val first = if (preferLive) GatewayMethods.SESSION_ACTIVATE else GatewayMethods.SESSION_RESUME
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
         val result = try {
-            gatewayClient.request(first, attachParams(first, sessionId), trackSession = trackSession)
+            gatewayClient.request(first, sessionAttachParams(first, sessionId), trackSession = trackSession)
         } catch (firstError: Exception) {
             // Superseded (a newer chat was picked): not a refusal worth a second call.
             if (firstError is kotlinx.coroutines.CancellationException) throw firstError
             Timber.w("[Repo] $first failed (${firstError.message}); trying $second for $sessionId")
-            gatewayClient.request(second, attachParams(second, sessionId), trackSession = trackSession)
+            gatewayClient.request(second, sessionAttachParams(second, sessionId), trackSession = trackSession)
         }
         val obj = result as? JsonObject
             ?: throw IllegalStateException("attach($sessionId): non-object payload")
@@ -193,7 +195,7 @@ class SessionRepository @Inject constructor(
         val createParams = buildJsonObject {
             val cleanTitle = title.trim()
             if (cleanTitle.isNotEmpty()) put("title", cleanTitle)
-            put("source", TASK_SOURCE)
+            put("source", SessionSource.TASK)
             reasoningEffort?.trim()?.takeIf { it.isNotEmpty() }?.let { put("reasoning_effort", it) }
             model?.let {
                 put("model", it.modelId)
@@ -255,7 +257,7 @@ class SessionRepository @Inject constructor(
         return rows.mapNotNull { row ->
             val id = row.str("id")
             if (id.isEmpty()) return@mapNotNull null
-            val isOurs = row.str("source") == TASK_SOURCE && taskRegistry.isTask(id, id)
+            val isOurs = row.str("source") == SessionSource.TASK && taskRegistry.isTask(id, id)
             if (!isOurs) return@mapNotNull null
             TaskHistoryRow(
                 id = id,
@@ -588,26 +590,4 @@ class SessionRepository @Inject constructor(
 
     private fun JsonObject.toElementMap(): Map<String, JsonElement> =
         entries.associate { (k, v) -> k to v }
-
-    companion object {
-        /**
-         * session.resume takes the source from the request, not the stored chat: without it a
-         * reopened chat came back as "tui" and the model said it could not send files.
-         * session.activate has no `source` and rejects the request if it is sent
-         * (tui_gateway/contracts/sessions.py: SessionActivateParams, extra inputs forbidden).
-         */
-        fun attachParams(method: String, sessionId: String) = buildJsonObject {
-            put("session_id", sessionId)
-            if (method == GatewayMethods.SESSION_RESUME) put("source", CHAT_SOURCE)
-        }.toMap()
-
-        const val TASK_SOURCE = "pocket_task"
-
-        /**
-         * Source for the user's chats. Without one Hermes files the session as "tui" and tells
-         * the model there is no attachment channel ("this is a TUI, I can't send files");
-         * "desktop" is its graphical chat, where files arrive as MEDIA:/path and render.
-         */
-        const val CHAT_SOURCE = "desktop"
-    }
 }

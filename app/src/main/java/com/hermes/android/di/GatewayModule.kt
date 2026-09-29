@@ -2,6 +2,7 @@ package com.hermes.android.di
 
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.OkHttpGatewayClient
+import com.hermes.android.gateway.redactCredentials
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -59,11 +60,3 @@ object GatewayModule {
         encodeDefaults = false
     }
 }
-
-private val CREDENTIAL_PARAM = Regex("(token|key)=[^&\\s]+", RegexOption.IGNORE_CASE)
-
-/**
- * A log line without credentials: the gateway token, and API keys sent as a query
- * parameter (the Gemini key check puts the key in the URL as `?key=`).
- */
-internal fun redactCredentials(message: String): String = message.replace(CREDENTIAL_PARAM, "$1=REDACTED")

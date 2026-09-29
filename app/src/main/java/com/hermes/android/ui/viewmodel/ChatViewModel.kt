@@ -430,6 +430,8 @@ class ChatViewModel @Inject constructor(
                 messages = emptyList(),
                 activeSessionId = null,
                 activeSessionKey = null,
+                // The new chat's folder comes with its session.info, not the last chat's.
+                sessionCwd = null,
                 activeTodos = emptyList(),
                 pendingApproval = null,
                 // Starting a new chat mid-turn dropped the session id while isSending
@@ -833,9 +835,10 @@ class ChatViewModel @Inject constructor(
                 // A message sent mid-turn is folded into the running turn, which
                 // keeps streaming without a new message.start. Its bubble sat above
                 // the message, so the rest of the turn landed there and its tools
-                // below it with no bubble to fold into.
+                // below it with no bubble to fold into. A hidden prompt (a preview page's) has
+                // no bubble, so the reply stays whole.
                 val status = ((reply as? JsonObject)?.get("status") as? JsonPrimitive)?.contentOrNull
-                if (status == "redirected" || status == "steered") {
+                if (!hidden && (status == "redirected" || status == "steered")) {
                     streamingDelegate.continueBelow()?.let { openAssistantBubble(it) }
                 }
             } catch (e: Exception) {

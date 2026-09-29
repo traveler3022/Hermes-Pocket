@@ -23,19 +23,24 @@ import com.hermes.android.service.HermesNotifications
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
 import com.hermes.android.ui.i18n.t
-import com.hermes.android.ui.i18n.tForContext
+import com.hermes.android.i18n.tForContext
 import com.hermes.android.ui.screen.openUrlExternally
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
+import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import java.io.File
+import javax.inject.Inject
 
 /**
  * Asks before a program of the built-in Linux leaves for the phone ([FileGate]); a program
  * named like a photo or document is only reported. Opened by "Open with another app" (then
  * opens the file) and by the notification the Files provider posts when it held a file back.
  */
+@AndroidEntryPoint
 class FileGateActivity : ComponentActivity() {
+
+    @Inject lateinit var fileGate: FileGate
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,9 +50,9 @@ class FileGateActivity : ComponentActivity() {
             return
         }
         val open = intent.getBooleanExtra(EXTRA_OPEN, false)
-        val risk = FileGate.riskOf(file)
+        val risk = fileGate.riskOf(file)
         if (risk == FileGate.Risk.SAFE) {
-            if (open) openUrlExternally(this, Uri.fromFile(file).toString())
+            if (open) openUrlExternally(this, Uri.fromFile(file).toString(), fileGate)
             finish()
             return
         }
@@ -109,9 +114,9 @@ class FileGateActivity : ComponentActivity() {
     }
 
     private fun allow(file: File, open: Boolean) {
-        FileGate.approve(file)
+        fileGate.approve(file)
         if (open) {
-            openUrlExternally(this, Uri.fromFile(file).toString())
+            openUrlExternally(this, Uri.fromFile(file).toString(), fileGate)
         } else {
             Toast.makeText(
                 this,

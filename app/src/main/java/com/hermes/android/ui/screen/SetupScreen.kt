@@ -56,10 +56,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.service.HermesGatewayService
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
-import com.hermes.android.ui.viewmodel.RuntimeEffect
 import com.hermes.android.ui.viewmodel.RuntimeUiState
 import com.hermes.android.ui.viewmodel.RuntimeViewModel
 import com.hermes.android.ui.viewmodel.SetupStep
@@ -74,16 +72,8 @@ fun SetupScreen(
     runtimeViewModel: RuntimeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     LaunchedEffect(state.finished) { if (state.finished) onFinished() }
-    LaunchedEffect(runtimeViewModel.effects) {
-        runtimeViewModel.effects.collect { effect ->
-            when (effect) {
-                RuntimeEffect.StartForegroundService -> HermesGatewayService.start(context)
-            }
-        }
-    }
     BackHandler(enabled = state.step != SetupStep.Welcome) { viewModel.back() }
 
     Scaffold { padding ->

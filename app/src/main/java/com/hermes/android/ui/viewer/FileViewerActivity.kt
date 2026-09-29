@@ -101,6 +101,7 @@ import androidx.media3.ui.compose.material3.indicator.ProgressSlider
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.runtime.linux.FileGate
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.ProotEnvironment
@@ -133,10 +134,20 @@ import javax.inject.Inject
 class FileViewerActivity : ComponentActivity() {
 
     @Inject lateinit var gatewayClient: GatewayClient
+    @Inject lateinit var fileGate: FileGate
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val source = intent.getStringExtra(EXTRA_URL)?.let(Uri::parse) ?: intent.data
+        // Another app (the Files app) gets here only through the exported LinuxFileViewer alias,
+        // and any app can send that one extras: a file:// URL into the rootfs, which the
+        // OTHER branch below would hand on with a read grant (~/.hermes/.env and its API keys).
+        // From there only a document of the Linux Files root is taken, typed by that provider.
+        val external = intent.component?.className != FileViewerActivity::class.java.name
+        val source = if (external) {
+            intent.data?.takeIf { it.scheme == "content" && it.authority == LinuxFilesProvider.authority(this) }
+        } else {
+            intent.getStringExtra(EXTRA_URL)?.let(Uri::parse) ?: intent.data
+        }
         if (source == null) {
             finish()
             return
@@ -144,11 +155,11 @@ class FileViewerActivity : ComponentActivity() {
         // A document of the Linux Files root is read as the file it is, so a page's
         // relative CSS/JS/images resolve next to it.
         val uri = linuxFileUri(source) ?: source
-        val name = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: displayName(source)
-        val mime = intent.type ?: if (source.scheme == "content") contentResolver.getType(source) else null
+        val name = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() && !external } ?: displayName(source)
+        val mime = intent.type?.takeUnless { external } ?: if (source.scheme == "content") contentResolver.getType(source) else null
         val kind = fileKindOf(name, mime).takeIf { it != FileKind.OTHER } ?: fileKindOf(uri.toString())
         if (kind == FileKind.OTHER) {
-            openUrlExternally(this, uri.toString())
+            if (!external) openUrlExternally(this, uri.toString(), fileGate)
             finish()
             return
         }
@@ -168,6 +179,7 @@ class FileViewerActivity : ComponentActivity() {
                     FileViewerScreen(
                         uri = uri, name = name, kind = kind,
                         readBytes = ::readBytes,
+                        openExternally = { openUrlExternally(this, uri.toString(), fileGate) },
                         onBack = ::finish,
                     )
                 }
@@ -232,9 +244,9 @@ private fun FileViewerScreen(
     name: String,
     kind: FileKind,
     readBytes: suspend (Uri) -> ByteArray,
+    openExternally: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val context = LocalContext.current
     var fullscreen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
@@ -246,7 +258,7 @@ private fun FileViewerScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { openUrlExternally(context, uri.toString()) }) {
+                    IconButton(onClick = openExternally) {
                         Icon(HxIcons.ExternalLink, contentDescription = t("Open with another app", "باز کردن با برنامهٔ دیگر"))
                     }
                 },
@@ -257,8 +269,8 @@ private fun FileViewerScreen(
             when (kind) {
                 FileKind.AUDIO -> BackgroundAudio(uri, name) { player -> AudioControls(player, name) }
                 FileKind.VIDEO -> MediaViewer(uri) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
-                FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes)
-                FileKind.HTML -> HtmlViewer(uri, readBytes)
+                FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes, openExternally)
+                FileKind.HTML -> HtmlViewer(uri, readBytes, openExternally)
                 FileKind.IMAGE -> ImageViewer(uri)
                 FileKind.OTHER -> Unit
             }
@@ -308,11 +320,11 @@ private fun BackgroundAudio(uri: Uri, name: String, content: @Composable (Player
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
             val built = runCatching { future.get() }.getOrNull() ?: return@addListener
-            val url = uri.toString()
-            if (built.currentMediaItem?.mediaId != url) {
+            val id = AudioPlaybackService.itemId(uri.toString())
+            if (built.currentMediaItem?.mediaId != id) {
                 built.setMediaItem(
                     MediaItem.Builder()
-                        .setMediaId(url)
+                        .setMediaId(id)
                         .setUri(uri)
                         .setMediaMetadata(MediaMetadata.Builder().setTitle(name).build())
                         .build(),
@@ -511,7 +523,7 @@ private const val ControlsHideDelayMs = 3_000L
 
 /** Markdown through the chat's own renderer. */
 @Composable
-private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
+private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray, openExternally: () -> Unit) {
     var text by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(uri) {
@@ -520,7 +532,7 @@ private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
             .onFailure { error = it.message ?: it.toString() }
     }
     when {
-        error != null -> ViewerError(error!!, uri)
+        error != null -> ViewerError(error!!, openExternally)
         text == null -> Loading()
         else -> SelectionContainer {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -540,7 +552,7 @@ private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun HtmlViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
+private fun HtmlViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray, openExternally: () -> Unit) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var inline by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -559,7 +571,7 @@ private fun HtmlViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray) {
         if (view != null && view.canGoBack()) view.goBack() else (context as? Activity)?.finish()
     }
     if (error != null) {
-        ViewerError(error!!, uri)
+        ViewerError(error!!, openExternally)
         return
     }
     AndroidView(
@@ -604,15 +616,14 @@ private fun Loading() {
 }
 
 @Composable
-private fun ViewerError(message: String, uri: Uri) {
-    val context = LocalContext.current
+private fun ViewerError(message: String, openExternally: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(message, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { openUrlExternally(context, uri.toString()) }) {
+        TextButton(onClick = openExternally) {
             Text(t("Open with another app", "باز کردن با برنامهٔ دیگر"))
         }
     }

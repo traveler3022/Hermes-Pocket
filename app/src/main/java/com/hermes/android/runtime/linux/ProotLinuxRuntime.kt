@@ -142,10 +142,10 @@ class ProotLinuxRuntime @Inject constructor(
             }
 
             report("packages", "Installing Python and git (apk)…", 10)
-            runStage("packages", PACKAGES_SCRIPT, 10, 25, installLog, ::report, verify = PACKAGES_VERIFY)
+            runStage("packages", PACKAGES_SCRIPT, 10, 25, installLog, ::report, verify = PACKAGES_VERIFY, forApk = true)
 
             report("node", "Installing Node.js and npm (apk)…", 26)
-            runStage("node", NODE_SCRIPT, 26, 30, installLog, ::report, verify = NODE_VERIFY)
+            runStage("node", NODE_SCRIPT, 26, 30, installLog, ::report, verify = NODE_VERIFY, forApk = true)
 
             report("hermes", "Downloading Hermes Agent and its Python packages…", 31)
             runStage("hermes", HERMES_INSTALL_SCRIPT, 31, 95, installLog, ::report)
@@ -254,11 +254,12 @@ class ProotLinuxRuntime @Inject constructor(
         log: StringBuilder,
         report: (String, String, Int?) -> Unit,
         verify: String? = null,
+        forApk: Boolean = false,
     ) {
         var lines = 0
         val stageLog = StringBuilder()
         val startedAt = System.currentTimeMillis()
-        val result = environment.run(script) { line ->
+        val result = environment.run(script, forApk = forApk) { line ->
             stageLog.appendLine(line)
             val clean = line.replace(AnsiEscape, "").trim()
             if (clean.isNotEmpty()) {

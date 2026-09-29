@@ -563,8 +563,15 @@ class LinuxDesktop @Inject constructor(
             "libdrm", "libxshmfence", "eudev-libs",
         )
 
-        // 154 exits at start under proot (SIGTRAP, any flags); 153 runs. Checked 2026-09-27.
-        private const val ChromeVersion = "153.0.8010.52"
+        /**
+         * Prints the Chromium Hermes installs for its browser tools (`hermes pm`, recorded in
+         * tools/facts.json as AGENT_BROWSER_EXECUTABLE_PATH). The desktop shows that browser
+         * rather than installing one of its own.
+         */
+        private const val HermesChromium =
+            "t=/root/.hermes/tools; c=\$(sed -n 's/.*\"AGENT_BROWSER_EXECUTABLE_PATH\": *\"{{store}}\\([^\"]*\\)\".*/\\1/p' \$t/facts.json 2>/dev/null); " +
+                "[ -n \"\$c\" ] && [ -x \"\$t\$c\" ] || c=\$(ls -d \$t/chromium-*/chrome-linux*/chrome 2>/dev/null | sort | tail -n 1 | sed \"s#^\$t##\"); " +
+                "[ -n \"\$c\" ] && [ -x \"\$t\$c\" ] && echo \"\$t\$c\""
         /** Installs [DebianPackages]; copied from the APK into the Linux before [PostInstall] runs. */
         const val DebianFetchAsset = "desktop/debian_fetch.py"
         const val DebianFetchPath = "/usr/local/lib/hermes/debian_fetch.py"
@@ -578,13 +585,15 @@ class LinuxDesktop @Inject constructor(
                 "libsystemd0 libunwind8 libxcvt0 " +
                 "xdotool libxdo3 " +
                 "openbox libobrender32v5 libobt2v5 libstartup-notification0 libxcb-util1 libimlib2t64 " +
-                "x11-utils xclip xterm libutempter0 libtinfo6"
+                "x11-utils xclip xterm libutempter0 libtinfo6 " +
+                // The skill's screenshot tool; its libraries are all above or in this Linux.
+                "scrot"
 
         /**
          * After apk: the X programs from Debian (see [DebianPackages]), noVNC 1.6.0 (the viewer
          * loads its vnc_lite.html),
-         * websockify, Google's Chrome for Testing (it has arm64 Linux builds; the repo has no
-         * Chromium), and the CLI Hermes' browser tools talk to Chromium through.
+         * websockify, and the CLI Hermes' browser tools talk to Chromium through. The browser
+         * itself is Hermes' own ([HermesChromium]).
          */
         const val PostInstall = "set -e; a=\$(uname -m); cd /tmp; " +
             "python3 $DebianFetchPath trixie $DebianPackages; " +
@@ -597,19 +606,16 @@ class LinuxDesktop @Inject constructor(
             "[ -x /opt/websockify/bin/pip ] || python3 -m venv /opt/websockify; " +
             "/opt/websockify/bin/pip install -q websockify==0.13.0; " +
             "ln -sf /opt/websockify/bin/websockify /usr/local/bin/websockify; " +
-            "case \$a in aarch64) p=linux-arm64 ;; *) p=linux64 ;; esac; " +
-            "if [ \"\$(cat /opt/chrome/.version 2>/dev/null)\" != $ChromeVersion ]; then " +
-            "curl -fL --retry 3 -o /tmp/chrome.zip " +
-            "https://storage.googleapis.com/chrome-for-testing-public/$ChromeVersion/\$p/chrome-\$p.zip; " +
-            "rm -rf /opt/chrome /tmp/chrome-\$p; unzip -q /tmp/chrome.zip -d /tmp; " +
-            "mv /tmp/chrome-\$p /opt/chrome; echo $ChromeVersion > /opt/chrome/.version; rm -f /tmp/chrome.zip; fi; " +
-            "ln -sf /opt/chrome/chrome /usr/local/bin/chromium; " +
+            // No browser of its own: the desktop shows Hermes' Chromium (see [HermesChromium]).
+            // The Chrome for Testing that older builds put here was a second 400 MB browser.
+            "[ \"\$(readlink /usr/local/bin/chromium)\" != /opt/chrome/chrome ] || rm -f /usr/local/bin/chromium; " +
+            "rm -rf /opt/chrome; " +
             "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
-            "(chromium-browser --version || chromium --version) && command -v Xvnc && command -v openbox && " +
+            "[ -n \"\$($HermesChromium)\" ] && command -v Xvnc && command -v openbox && " +
                 "command -v xprop && command -v websockify && test -d /usr/share/novnc && " +
-                "command -v xdotool && command -v agent-browser && command -v python3"
+                "command -v xdotool && command -v scrot && command -v agent-browser && command -v python3"
 
         private const val PREFS_NAME = "hermes_linux_desktop"
         private const val KEY_AGENT_BROWSER = "agent_browser"
@@ -629,6 +635,8 @@ class LinuxDesktop @Inject constructor(
         private const val StateDir = "/root/.hermes/android"
         private const val ProfileDir = "/root/.hermes/chrome-profile"
         private const val LogPath = "/root/.hermes/logs/desktop.log"
+        private const val LogMaxBytes = 20_000_000
+        private const val IdleMinutes = 15
         private const val FontDir = "/usr/share/fonts/hermes"
         private const val FontConfigPath = "/etc/fonts/conf.d/65-hermes-persian.conf"
 
@@ -698,6 +706,9 @@ class LinuxDesktop @Inject constructor(
             # Usage: hermes-desktop [start|stop|status|wait|view PORT]
             STATE=$StateDir
             PIDS="${'$'}STATE/desktop.pids"
+            # Touched by cdp_pipe.py on browser-tool traffic and by `start` on a running desktop.
+            ACTIVITY="${'$'}STATE/desktop.activity"
+            IDLE_MINUTES=$IdleMinutes
             LOG=$LogPath
             CDP_PORT=$CdpPort VNC_PORT=$VncPort NOVNC_PORT=$NoVncPort
             CDP_PROXY=$CdpProxyPath
@@ -739,13 +750,39 @@ class LinuxDesktop @Inject constructor(
             esac
 
             if running || alive; then
+                touch "${'$'}ACTIVITY" 2>/dev/null || true
                 # Never restart a live desktop: that would throw away the user's browser.
                 echo "Desktop already running: DISPLAY=:99, CDP http://127.0.0.1:${'$'}CDP_PORT"
                 exit 0
             fi
             stop_desktop
             mkdir -p "${'$'}STATE" "${'$'}(dirname "${'$'}LOG")" $ProfileDir /tmp/.X11-unix
-            exec >>"${'$'}LOG" 2>&1
+            # Chromium can repeat one error hundreds of times a second: a 12-hour session left an
+            # 870 MB log of a single zygote line. Output goes through a filter that folds repeats
+            # (ignoring Chromium's [pid:tid:time] prefix) and stops writing at LOG_MAX bytes; an
+            # oversized log from an earlier run is kept once as desktop.log.1.
+            LOG_MAX=$LogMaxBytes
+            [ "${'$'}( (wc -c < "${'$'}LOG") 2>/dev/null || echo 0)" -lt "${'$'}LOG_MAX" ] || mv -f "${'$'}LOG" "${'$'}LOG.1"
+            FIFO="${'$'}STATE/desktop.log.fifo"
+            rm -f "${'$'}FIFO"
+            if mkfifo "${'$'}FIFO" 2>/dev/null; then
+                awk -v max="${'$'}LOG_MAX" -v size="${'$'}( (wc -c < "${'$'}LOG") 2>/dev/null || echo 0)" '
+                    function out(s) {
+                        if (size >= max) return
+                        size += length(s) + 1; print s
+                        if (size >= max) print "=== desktop.log reached its size limit; the rest of this run is not logged"
+                        fflush()
+                    }
+                    { key = ${'$'}0; sub(/^\[[^]]*\]/, "", key) }
+                    key == last { n++; next }
+                    { if (n) out("    (last line repeated " n " more times)"); n = 0; last = key; out(${'$'}0) }
+                    END { if (n) out("    (last line repeated " n " more times)") }
+                ' < "${'$'}FIFO" >> "${'$'}LOG" 2>&1 &
+                exec > "${'$'}FIFO" 2>&1
+                rm -f "${'$'}FIFO"
+            else
+                exec >>"${'$'}LOG" 2>&1
+            fi
             # Persian font (see writeFonts()). Its scan rule only reaches fonts that are already
             # cached through a full rebuild, so that runs once per change of the rule.
             if [ ! -f "${'$'}STATE/fonts.stamp" ] || [ $FontConfigPath -nt "${'$'}STATE/fonts.stamp" ]; then
@@ -757,8 +794,8 @@ class LinuxDesktop @Inject constructor(
             set -eu
             rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 $ProfileDir/SingletonLock \
                 $ProfileDir/SingletonSocket $ProfileDir/SingletonCookie
-            CHROME_BIN="${'$'}(command -v chromium-browser || command -v chromium || true)"
-            if [ -z "${'$'}CHROME_BIN" ]; then echo "Chromium is not installed"; exit 1; fi
+            CHROME_BIN="${'$'}($HermesChromium || true)"
+            if [ -z "${'$'}CHROME_BIN" ]; then echo "Hermes' Chromium is not installed yet (it comes with hermes update)"; exit 1; fi
             # Without a secret the browser would be anybody's; the app writes one into desktop.env.
             if [ -z "${'$'}CDP_SECRET" ]; then echo "No CDP secret in desktop.env; start the desktop from the app"; exit 1; fi
 
@@ -811,8 +848,12 @@ class LinuxDesktop @Inject constructor(
             # Chromium opens no debugging port: it speaks CDP over a pipe to cdp_pipe.py, which
             # serves it on CDP_PORT under CDP_SECRET only, and restarts Chromium if it exits
             # (up to five quick failures), as the agent's endpoint must stay up.
-            python3 "${'$'}CDP_PROXY" serve --port "${'$'}CDP_PORT" -- \
-                "${'$'}CHROME_BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu \
+            # --no-zygote: on the phone Chromium's zygote got ENOSYS reading from the browser and
+            # retried forever (6.3 million log lines in 12 hours, a core busy all along). Without
+            # a zygote the browser starts each renderer itself and that loop does not exist.
+            touch "${'$'}ACTIVITY"
+            HERMES_DESKTOP_ACTIVITY="${'$'}ACTIVITY" python3 "${'$'}CDP_PROXY" serve --port "${'$'}CDP_PORT" -- \
+                "${'$'}CHROME_BIN" --no-sandbox --no-zygote --disable-dev-shm-usage --disable-gpu \
                 --disable-gpu-compositing --disable-gpu-rasterization --no-first-run \
                 --no-default-browser-check --password-store=basic \
                 --user-data-dir=$ProfileDir \
@@ -828,7 +869,18 @@ class LinuxDesktop @Inject constructor(
             done
             echo ${'$'}${'$'} ${'$'}VNC_PID ${'$'}OPENBOX_PID ${'$'}CHROME_LOOP > "${'$'}PIDS"
             echo "desktop up: DISPLAY=:99 CDP=${'$'}CDP_PORT VNC=${'$'}VNC_PORT (run 'view on' to watch)"
-            wait "${'$'}VNC_PID" || echo "Xvnc exited with ${'$'}?"
+            # Chromium and the X server hold several hundred MB, so the desktop stops itself after
+            # IDLE_MINUTES with no browser-tool traffic and nobody watching in the viewer.
+            while kill -0 "${'$'}VNC_PID" 2>/dev/null; do
+                sleep 30
+                pgrep -f "websockify --web=/usr/share/novnc" >/dev/null 2>&1 && touch "${'$'}ACTIVITY"
+                idle=${'$'}(( ${'$'}(date +%s) - ${'$'}(stat -c %Y "${'$'}ACTIVITY" 2>/dev/null || date +%s) ))
+                if [ "${'$'}idle" -ge ${'$'}(( IDLE_MINUTES * 60 )) ]; then
+                    echo "=== unused for ${'$'}IDLE_MINUTES minutes; stopping the desktop"
+                    exit 0
+                fi
+            done
+            echo "Xvnc exited"
         """.trimIndent() + "\n"
 
         private val DesktopSkill = """
@@ -867,7 +919,8 @@ class LinuxDesktop @Inject constructor(
             - A browser tool that fails to connect means the desktop is down — start it as
               above and retry.
             - `hermes-desktop stop` when a long job no longer needs a browser; it gives the
-              phone its memory back.
+              phone its memory back. It also stops by itself after 15 minutes with no browser
+              calls and nobody watching; `hermes-desktop start` brings it back.
             - Logins and cookies persist in `/root/.hermes/chrome-profile`.
 
             ## Whole desktop (VNC)

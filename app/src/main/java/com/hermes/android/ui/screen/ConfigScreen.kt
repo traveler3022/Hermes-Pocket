@@ -100,7 +100,7 @@ import com.hermes.android.ui.viewmodel.CredentialEntry
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
-import com.hermes.android.ui.i18n.AppLanguage
+import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.AppFont
@@ -229,7 +229,7 @@ internal enum class SettingsSection(
     val parent: SettingsSection? = null,
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
-    APPEARANCE("Appearance", "ظاهر", GENERAL_SETTINGS),
+    APPEARANCE("Appearance", "ظاهر"),
     APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
     PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),

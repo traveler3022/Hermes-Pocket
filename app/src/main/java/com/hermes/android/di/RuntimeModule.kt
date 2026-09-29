@@ -1,6 +1,5 @@
 package com.hermes.android.di
 
-import android.content.Context
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
 import com.hermes.android.runtime.SwitchableHermesRuntime
@@ -10,7 +9,6 @@ import com.hermes.android.runtime.termux.TermuxInstallProgressReceiver
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Singleton
@@ -54,13 +52,3 @@ object RuntimeModule {
         MutableStateFlow<TermuxInstallProgressReceiver.InstallCompletion> =
         MutableStateFlow(TermuxInstallProgressReceiver.InstallCompletion.Pending)
 }
-
-/**
- * Provides the [Context] needed by Termux components.
- * Already provided by Hilt's built-in [ApplicationContext] — this is just
- * a placeholder module for any additional context-related bindings we
- * may need later.
- */
-@Module
-@InstallIn(SingletonComponent::class)
-object AppModule

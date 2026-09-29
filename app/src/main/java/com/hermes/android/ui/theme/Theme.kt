@@ -38,15 +38,14 @@ enum class AppFont(val key: String, val displayEn: String, val displayFa: String
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
     HERMES("hermes", "Hermes", "هرمس"),
     BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
-    CLAUDE("claude", "Mocha", "موکا"),
+    // The key stays "claude" so a saved choice survives.
+    MOCHA("claude", "Mocha", "موکا"),
     MIDNIGHT("midnight", "Midnight", "میدنایت"),
     INDIGO_PRO("indigo_pro", "Indigo", "ایندیگو"),
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
-        // Carbon (near-black + neutral grey, no purple) is the default —
-        // the original "Hermes" palette's primary is a vivid indigo/violet
-        // that bled into buttons, icons, and accents across the whole app.
+        // Carbon (near-black + neutral grey) is the default.
         fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
     }
 }
@@ -242,7 +241,7 @@ private val BlueDarkColors = darkColorScheme(
     outlineVariant = blue_dark_outlineVariant,
 )
 
-// ── Midnight — ChatGPT-inspired: dark gray + emerald ──
+// ── Midnight palette ──
 
 private val MidnightLightColors = lightColorScheme(
     primary = midnight_light_primary,
@@ -298,7 +297,7 @@ private val MidnightDarkColors = darkColorScheme(
     outlineVariant = midnight_dark_outlineVariant,
 )
 
-// ── Indigo Pro — Linear-inspired: dark + indigo ──
+// ── Indigo palette ──
 
 private val IndigoLightColors = lightColorScheme(
     primary = indigo_light_primary,
@@ -410,60 +409,60 @@ private val CarbonDarkColors = darkColorScheme(
     outlineVariant = carbon_dark_outlineVariant,
 )
 
-// ── Claude-style warm palette ──
+// ── Mocha palette ──
 
-private val ClaudeLightColors = lightColorScheme(
-    primary = claude_light_primary,
-    onPrimary = claude_light_onPrimary,
-    primaryContainer = claude_light_primaryContainer,
-    onPrimaryContainer = claude_light_onPrimaryContainer,
-    secondary = claude_light_secondary,
-    onSecondary = claude_light_onSecondary,
-    secondaryContainer = claude_light_secondaryContainer,
-    onSecondaryContainer = claude_light_onSecondaryContainer,
-    tertiary = claude_light_tertiary,
-    onTertiary = claude_light_onTertiary,
-    tertiaryContainer = claude_light_tertiaryContainer,
-    onTertiaryContainer = claude_light_onTertiaryContainer,
-    error = claude_light_error,
-    onError = claude_light_onError,
-    errorContainer = claude_light_errorContainer,
-    onErrorContainer = claude_light_onErrorContainer,
-    background = claude_light_background,
-    onBackground = claude_light_onBackground,
-    surface = claude_light_surface,
-    onSurface = claude_light_onSurface,
-    surfaceVariant = claude_light_surfaceVariant,
-    onSurfaceVariant = claude_light_onSurfaceVariant,
-    outline = claude_light_outline,
-    outlineVariant = claude_light_outlineVariant,
+private val MochaLightColors = lightColorScheme(
+    primary = mocha_light_primary,
+    onPrimary = mocha_light_onPrimary,
+    primaryContainer = mocha_light_primaryContainer,
+    onPrimaryContainer = mocha_light_onPrimaryContainer,
+    secondary = mocha_light_secondary,
+    onSecondary = mocha_light_onSecondary,
+    secondaryContainer = mocha_light_secondaryContainer,
+    onSecondaryContainer = mocha_light_onSecondaryContainer,
+    tertiary = mocha_light_tertiary,
+    onTertiary = mocha_light_onTertiary,
+    tertiaryContainer = mocha_light_tertiaryContainer,
+    onTertiaryContainer = mocha_light_onTertiaryContainer,
+    error = mocha_light_error,
+    onError = mocha_light_onError,
+    errorContainer = mocha_light_errorContainer,
+    onErrorContainer = mocha_light_onErrorContainer,
+    background = mocha_light_background,
+    onBackground = mocha_light_onBackground,
+    surface = mocha_light_surface,
+    onSurface = mocha_light_onSurface,
+    surfaceVariant = mocha_light_surfaceVariant,
+    onSurfaceVariant = mocha_light_onSurfaceVariant,
+    outline = mocha_light_outline,
+    outlineVariant = mocha_light_outlineVariant,
 )
 
-private val ClaudeDarkColors = darkColorScheme(
-    primary = claude_dark_primary,
-    onPrimary = claude_dark_onPrimary,
-    primaryContainer = claude_dark_primaryContainer,
-    onPrimaryContainer = claude_dark_onPrimaryContainer,
-    secondary = claude_dark_secondary,
-    onSecondary = claude_dark_onSecondary,
-    secondaryContainer = claude_dark_secondaryContainer,
-    onSecondaryContainer = claude_dark_onSecondaryContainer,
-    tertiary = claude_dark_tertiary,
-    onTertiary = claude_dark_onTertiary,
-    tertiaryContainer = claude_dark_tertiaryContainer,
-    onTertiaryContainer = claude_dark_onTertiaryContainer,
-    error = claude_dark_error,
-    onError = claude_dark_onError,
-    errorContainer = claude_dark_errorContainer,
-    onErrorContainer = claude_dark_onErrorContainer,
-    background = claude_dark_background,
-    onBackground = claude_dark_onBackground,
-    surface = claude_dark_surface,
-    onSurface = claude_dark_onSurface,
-    surfaceVariant = claude_dark_surfaceVariant,
-    onSurfaceVariant = claude_dark_onSurfaceVariant,
-    outline = claude_dark_outline,
-    outlineVariant = claude_dark_outlineVariant,
+private val MochaDarkColors = darkColorScheme(
+    primary = mocha_dark_primary,
+    onPrimary = mocha_dark_onPrimary,
+    primaryContainer = mocha_dark_primaryContainer,
+    onPrimaryContainer = mocha_dark_onPrimaryContainer,
+    secondary = mocha_dark_secondary,
+    onSecondary = mocha_dark_onSecondary,
+    secondaryContainer = mocha_dark_secondaryContainer,
+    onSecondaryContainer = mocha_dark_onSecondaryContainer,
+    tertiary = mocha_dark_tertiary,
+    onTertiary = mocha_dark_onTertiary,
+    tertiaryContainer = mocha_dark_tertiaryContainer,
+    onTertiaryContainer = mocha_dark_onTertiaryContainer,
+    error = mocha_dark_error,
+    onError = mocha_dark_onError,
+    errorContainer = mocha_dark_errorContainer,
+    onErrorContainer = mocha_dark_onErrorContainer,
+    background = mocha_dark_background,
+    onBackground = mocha_dark_onBackground,
+    surface = mocha_dark_surface,
+    onSurface = mocha_dark_onSurface,
+    surfaceVariant = mocha_dark_surfaceVariant,
+    onSurfaceVariant = mocha_dark_onSurfaceVariant,
+    outline = mocha_dark_outline,
+    outlineVariant = mocha_dark_outlineVariant,
 )
 
 @Composable
@@ -493,7 +492,7 @@ fun Hermes2Theme(
         else -> when (colorTheme) {
             ColorTheme.HERMES -> if (useDark) DarkColors else LightColors
             ColorTheme.BLUE_EYE -> if (useDark) BlueDarkColors else BlueLightColors
-            ColorTheme.CLAUDE -> if (useDark) ClaudeDarkColors else ClaudeLightColors
+            ColorTheme.MOCHA -> if (useDark) MochaDarkColors else MochaLightColors
             ColorTheme.MIDNIGHT -> if (useDark) MidnightDarkColors else MidnightLightColors
             ColorTheme.INDIGO_PRO -> if (useDark) IndigoDarkColors else IndigoLightColors
             ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
