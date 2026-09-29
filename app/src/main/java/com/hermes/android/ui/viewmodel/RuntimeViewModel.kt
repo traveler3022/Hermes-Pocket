@@ -14,14 +14,12 @@ import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import com.hermes.android.service.HermesGatewayService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -32,11 +30,6 @@ import javax.inject.Inject
 /** Which on-device runtime hosts Hermes. */
 enum class RuntimeChoiceUi { BuiltInLinux, Termux }
 
-/** One-shot side-effects emitted by [RuntimeViewModel] for the UI to handle. */
-sealed interface RuntimeEffect {
-    /** Start the foreground gateway service. */
-    data object StartForegroundService : RuntimeEffect
-}
 
 /**
  * ViewModel for the Runtime Setup screen.
@@ -127,7 +120,7 @@ class RuntimeViewModel @Inject constructor(
                 if (result is DetectionResult.Available) {
                     val handle = runtimeManager.runtime.startGateway()
                     Timber.i("[Runtime] Connected to remote server: ${handle.webSocketUrl.substringBefore("?token=")}")
-                    _effects.emit(RuntimeEffect.StartForegroundService)
+                    HermesGatewayService.start(context)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -159,9 +152,6 @@ class RuntimeViewModel @Inject constructor(
 
     private val _logs = MutableStateFlow<String?>(null)
     val logs: StateFlow<String?> = _logs.asStateFlow()
-
-    private val _effects = MutableSharedFlow<RuntimeEffect>(extraBufferCapacity = 1)
-    val effects: SharedFlow<RuntimeEffect> = _effects.asSharedFlow()
 
     private val logReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
@@ -284,7 +274,7 @@ class RuntimeViewModel @Inject constructor(
             try {
                 val handle = runtimeManager.runtime.startGateway()
                 Timber.i("[Runtime] Gateway started: ${handle.webSocketUrl.substringBefore("?token=")}")
-                _effects.emit(RuntimeEffect.StartForegroundService)
+                HermesGatewayService.start(context)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

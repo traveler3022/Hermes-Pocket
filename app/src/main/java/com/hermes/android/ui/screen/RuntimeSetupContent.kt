@@ -64,14 +64,12 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.service.HermesGatewayService
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
 import com.hermes.android.ui.viewmodel.InstallProgressUi
-import com.hermes.android.ui.viewmodel.RuntimeEffect
 import com.hermes.android.ui.viewmodel.RuntimeUiState
 import com.hermes.android.ui.viewmodel.RuntimeViewModel
 import kotlinx.coroutines.launch
