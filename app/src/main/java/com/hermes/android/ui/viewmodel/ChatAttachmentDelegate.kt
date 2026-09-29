@@ -7,7 +7,7 @@ import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import android.util.Base64
 import com.hermes.android.data.DownloadStorage
-import com.hermes.android.di.redactCredentials
+import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub

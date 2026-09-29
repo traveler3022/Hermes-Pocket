@@ -1,4 +1,4 @@
-package com.hermes.android.di
+package com.hermes.android.gateway
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
