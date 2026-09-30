@@ -6,7 +6,10 @@ import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -27,6 +30,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 
 /** A provider offered in first-run setup; [envVar] is where Hermes reads its key. */
 data class SetupProvider(
@@ -59,6 +63,12 @@ data class OAuthProvider(
     val disconnectable: Boolean,
     val disconnectHint: String?,
 )
+
+/** A device-code sign-in waiting for the user: confirm [userCode] at [url] (some links carry it already). */
+data class DeviceCode(val userCode: String, val url: String)
+
+/** A device-code sign-in that ended without approval; [status] is Hermes' session status (expired, denied, error…). */
+class DeviceSignInException(val status: String, message: String) : IOException(message)
 
 /** Parses GET /api/providers/oauth (or the setup script's `oauth_list`, which prints the same shape). */
 internal fun parseOAuthProviders(result: JsonObject): List<OAuthProvider> =
@@ -176,6 +186,46 @@ class ProviderSetupRepository @Inject constructor(
         call("DELETE", "/api/providers/oauth/" + URLEncoder.encode(id, "UTF-8"), null)
     }
 
+    /**
+     * Signs in to [id] with the device-code flow (the desktop's Connect): [onCode] gets the code and
+     * the page to confirm it on, then this returns once the sign-in is approved, or throws
+     * [DeviceSignInException]. Cancelling the caller abandons the sign-in.
+     */
+    suspend fun deviceSignIn(id: String, onCode: (DeviceCode) -> Unit) {
+        fun code(event: JsonObject) = DeviceCode(event.text("user_code").orEmpty(), event.text("verification_url").orEmpty())
+        if (viaStdio) {
+            // One process runs the whole sign-in; killing it (on cancel) abandons the code.
+            val outcome = runSetupScript("oauth_sign_in", buildJsonObject { put("provider", id) }) { event ->
+                if (event.text("event") == "code") onCode(code(event))
+            }
+            if (!outcome.bool("ok")) {
+                throw DeviceSignInException(outcome.text("status") ?: "error", outcome.text("detail") ?: "Sign-in failed")
+            }
+            return
+        }
+        val provider = URLEncoder.encode(id, "UTF-8")
+        val started = call("POST", "/api/providers/oauth/$provider/start", buildJsonObject {})
+        val session = started.text("session_id") ?: throw IOException("Hermes did not start the sign-in")
+        onCode(code(started))
+        val interval = ((started["poll_interval"] as? JsonPrimitive)?.intOrNull ?: 5).coerceIn(1, 30)
+        try {
+            while (true) {
+                delay(interval * 1000L)
+                val poll = call("GET", "/api/providers/oauth/$provider/poll/" + URLEncoder.encode(session, "UTF-8"), null)
+                when (val status = poll.text("status")) {
+                    "pending" -> continue
+                    "approved" -> return
+                    else -> throw DeviceSignInException(status ?: "error", poll.text("error_message") ?: "Sign-in failed")
+                }
+            }
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                runCatching { call("DELETE", "/api/providers/oauth/sessions/" + URLEncoder.encode(session, "UTF-8"), null) }
+            }
+            throw e
+        }
+    }
+
     suspend fun models(provider: SetupProvider): List<String> {
         val result = if (viaStdio) rpc("model.options", buildJsonObject {}) else call("GET", "/api/model/options", null)
         val row = (result["providers"] as? JsonArray)
@@ -256,17 +306,29 @@ class ProviderSetupRepository @Inject constructor(
     }
 
     /** Runs [SETUP_SCRIPT] in the rootfs; arguments travel in the environment, not the command line. */
-    private suspend fun runSetupScript(command: String, args: JsonObject): JsonObject = withContext(Dispatchers.IO) {
+    private suspend fun runSetupScript(
+        command: String,
+        args: JsonObject,
+        // Each result line as it's printed; the last one is also the return value.
+        onResult: (JsonObject) -> Unit = {},
+    ): JsonObject = withContext(Dispatchers.IO) {
         val script = linux.guestFile(SETUP_SCRIPT_PATH)
         script.parentFile?.mkdirs()
         script.writeText(SETUP_SCRIPT)
+        var last: JsonObject? = null
         val result = linux.run(
             command = "cd \"\$HERMES_HOME/hermes-agent\" && \"\$HERMES_HOME/hermes-agent/venv/bin/python\" -u $SETUP_SCRIPT_PATH $command",
             extraEnv = mapOf("HERMES_HOME" to "/root/.hermes", "PYTHONPATH" to "/root/.hermes/hermes-agent", "HERMES2_ARGS" to args.toString()),
+            onLine = { line ->
+                if (line.startsWith(RESULT_MARKER)) {
+                    runCatching { json.parseToJsonElement(line.removePrefix(RESULT_MARKER)).jsonObject }.getOrNull()?.let {
+                        last = it
+                        onResult(it)
+                    }
+                }
+            },
         )
-        val line = result.output.lineSequence().lastOrNull { it.startsWith(RESULT_MARKER) }
-            ?: throw IOException("Setup helper failed: ${result.output.takeLast(300)}")
-        json.parseToJsonElement(line.removePrefix(RESULT_MARKER)).jsonObject
+        last ?: throw IOException("Setup helper failed: ${result.output.takeLast(300)}")
     }
 
     /** Probes a key (or custom endpoint) directly, mirroring the dashboard's /api/providers/validate. */
@@ -389,6 +451,26 @@ class ProviderSetupRepository @Inject constructor(
                         hauth.invalidate_nous_auth_status_cache()
                 emit({"ok": bool(cleared), "detail": "" if cleared else "No stored credentials were removed for " + provider["name"] + "."})
 
+            # POST /start then GET /poll of the same routes in one process, since its poller thread lives
+            # here: one line with the code and link, a heartbeat a second while it waits, then the outcome.
+            def oauth_sign_in(args):
+                import asyncio, time
+                from hermes_cli.web_routers import oauth as o
+                started = asyncio.run(o._start_device_code_flow(args["provider"]))
+                emit(dict(started, ok=True, event="code"))
+                sid = started["session_id"]
+                deadline = time.time() + int(started.get("expires_in") or 900) + 60
+                while True:
+                    with o._oauth_sessions_lock:
+                        sess = dict(o._oauth_sessions.get(sid) or {"status": "expired"})
+                    if sess.get("status") != "pending" or time.time() > deadline:
+                        break
+                    print("HERMES2_WAIT", flush=True)
+                    time.sleep(1)
+                status = sess.get("status") if sess.get("status") != "pending" else "expired"
+                emit({"ok": status == "approved", "event": "done", "status": status,
+                      "detail": sess.get("error_message") or ""})
+
             def has_model(args):
                 from hermes_cli.config import load_config
                 cfg = load_config().get("model", "")
@@ -414,7 +496,7 @@ class ProviderSetupRepository @Inject constructor(
 
             try:
                 {"has_model": has_model, "save_key": save_key, "remove_key": remove_key, "set_model": set_model,
-                 "oauth_list": oauth_list, "oauth_disconnect": oauth_disconnect}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
+                 "oauth_list": oauth_list, "oauth_disconnect": oauth_disconnect, "oauth_sign_in": oauth_sign_in}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
             except Exception as e:
                 emit({"ok": False, "detail": str(getattr(e, "detail", None) or e)})
         """.trimIndent()

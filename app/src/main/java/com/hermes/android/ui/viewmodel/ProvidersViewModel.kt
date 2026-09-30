@@ -2,6 +2,8 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.data.DeviceCode
+import com.hermes.android.data.DeviceSignInException
 import com.hermes.android.data.OAuthProvider
 import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.SetupProvider
@@ -9,6 +11,8 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +38,14 @@ data class ProviderRow(
 
 data class ProviderNotice(val en: String, val fa: String)
 
+/** The device-code sign-in on screen: [code] arrives once Hermes has one; [error] ends it unapproved. */
+data class SignInFlow(
+    val accountId: String,
+    val name: String,
+    val code: DeviceCode? = null,
+    val error: ProviderNotice? = null,
+)
+
 /** The skeleton row `model.options` adds for "Custom endpoint"; the custom server dialog covers it. */
 private const val CUSTOM_SLUG = "custom"
 
@@ -49,6 +61,9 @@ data class ProvidersUiState(
     /** Slug or account id with a save, disconnect or recheck in flight. */
     val busy: String? = null,
     val notice: ProviderNotice? = null,
+    val signIn: SignInFlow? = null,
+    /** A sign-in page for the phone's browser, opened once. */
+    val openUrl: String? = null,
 ) {
     /** Hermes' own providers that are set up; custom endpoints are listed from config.yaml. */
     val connected: List<ProviderRow>
@@ -75,6 +90,8 @@ class ProvidersViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ProvidersUiState())
     val uiState: StateFlow<ProvidersUiState> = _uiState.asStateFlow()
+
+    private var signInJob: Job? = null
 
     fun load() {
         viewModelScope.launch {
@@ -204,6 +221,42 @@ class ProvidersViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Connect for a device-code account, as on the desktop: Hermes gets a code, the page to confirm
+     * it opens in the phone's browser, and Hermes connects once it's approved there.
+     */
+    fun startSignIn(account: OAuthProvider, onConnected: () -> Unit = {}) {
+        signInJob?.cancel()
+        _uiState.update { it.copy(signIn = SignInFlow(account.id, account.name)) }
+        signInJob = viewModelScope.launch {
+            try {
+                setup.deviceSignIn(account.id) { code ->
+                    _uiState.update { state -> state.copy(signIn = state.signIn?.copy(code = code), openUrl = code.url) }
+                }
+                _uiState.update { it.copy(signIn = null, notice = ProviderNotice("${account.name} connected", "${account.name} وصل شد")) }
+                onConnected()
+                load()
+                refreshAccounts()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Providers] signing in to ${account.id} failed")
+                _uiState.update { state -> state.copy(signIn = state.signIn?.copy(error = signInFailed(e))) }
+            }
+        }
+    }
+
+    /** Cancel or close the sign-in; a running one is abandoned (its code simply expires). */
+    fun cancelSignIn() {
+        signInJob?.cancel()
+        signInJob = null
+        _uiState.update { it.copy(signIn = null, openUrl = null) }
+    }
+
+    fun consumeOpenUrl() {
+        _uiState.update { it.copy(openUrl = null) }
+    }
+
     fun clearNotice() {
         _uiState.update { it.copy(notice = null) }
     }
@@ -234,6 +287,12 @@ class ProvidersViewModel @Inject constructor(
     }
 
     private fun envVarOf(row: ProviderRow): String? = row.keyEnv ?: KEY_ENV_FALLBACK[row.slug]
+
+    private fun signInFailed(e: Exception): ProviderNotice = when ((e as? DeviceSignInException)?.status) {
+        "expired" -> ProviderNotice("The code expired before it was confirmed. Try again.", "کد پیش از تأیید منقضی شد. دوباره امتحان کن.")
+        "denied" -> ProviderNotice("The sign-in was declined.", "ورود رد شد.")
+        else -> failed(e)
+    }
 
     private fun failed(e: Exception) = reasonOf(e).let { ProviderNotice("Failed: $it", "انجام نشد: $it") }
 

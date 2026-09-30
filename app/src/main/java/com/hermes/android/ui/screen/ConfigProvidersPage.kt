@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,6 +64,7 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ProviderRow
 import com.hermes.android.ui.viewmodel.ProvidersUiState
 import com.hermes.android.ui.viewmodel.ProvidersViewModel
+import com.hermes.android.ui.viewmodel.SignInFlow
 
 /**
  * Models → Providers: the two ways to add a provider (API key, account sign-in) above everything
@@ -311,9 +313,9 @@ internal fun ProviderKeysSection(
 }
 
 /**
- * Providers → Sign in with account: the desktop's Accounts list. Signing in runs the provider's
- * command in a terminal, as the desktop does for its terminal-only providers; "I've signed in"
- * re-reads the status.
+ * Providers → Sign in with account: the desktop's Accounts list. Device-code accounts connect in the
+ * phone's browser: Hermes opens the page and connects by itself once the code is confirmed there.
+ * The rest sign in with their command in a terminal, then "I've signed in" re-reads the status.
  */
 @Composable
 internal fun ProviderAccountsSection(
@@ -324,9 +326,25 @@ internal fun ProviderAccountsSection(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ProviderNotices(state, viewModel, snackbarHostState)
     LaunchedEffect(Unit) { viewModel.loadAccounts() }
+    val uriHandler = LocalUriHandler.current
+    val clipboard = LocalClipboardManager.current
+    // Once the code is in, its page opens in the phone's browser, as on the desktop. The code goes on
+    // the clipboard too: with the browser in front, the dialog showing it is out of sight.
+    LaunchedEffect(state.openUrl) {
+        val url = state.openUrl ?: return@LaunchedEffect
+        state.signIn?.code?.userCode?.takeIf { it.isNotBlank() }?.let { clipboard.setText(AnnotatedString(it)) }
+        runCatching { uriHandler.openUri(url) }
+        viewModel.consumeOpenUrl()
+    }
     var selectedId by remember { mutableStateOf<String?>(null) }
     val connected = state.accounts.filter { it.loggedIn }
     val others = state.accounts.filterNot { it.loggedIn }
+
+    fun connect(account: OAuthProvider) = viewModel.startSignIn(account) {
+        // Once connected it lives in the Providers list, so go back there.
+        selectedId = null
+        onOpen(SettingsSection.PROVIDERS)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -338,8 +356,8 @@ internal fun ProviderAccountsSection(
         item {
             Text(
                 text = t(
-                    "Sign in with a subscription instead of an API key. The sign-in runs in a terminal: copy the command, run it in the Linux terminal (or Termux), then come back and tap “I've signed in”.",
-                    "به‌جای کلید API با اشتراکت وارد شو. ورود در ترمینال انجام می‌شود: فرمان را کپی کن، در ترمینال لینوکس (یا ترموکس) اجرا کن، بعد برگرد و «وارد شدم» را بزن.",
+                    "Sign in with a subscription instead of an API key. Most accounts open a sign-in page in your browser; the rest need one command in a terminal (Linux or Termux).",
+                    "به‌جای کلید API با اشتراکت وارد شو. بیشتر حساب‌ها صفحهٔ ورود را در مرورگرت باز می‌کنند؛ بقیه یک فرمان در ترمینال (لینوکس یا ترموکس) لازم دارند.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -372,21 +390,36 @@ internal fun ProviderAccountsSection(
 
     // By id, so a recheck's fresh status shows in the open dialog.
     state.accounts.firstOrNull { it.id == selectedId }?.let { account ->
-        AccountDialog(
-            account = account,
-            busy = state.busy == account.id,
-            onRecheck = {
-                viewModel.recheck(account) {
+        val signIn = state.signIn?.takeIf { it.accountId == account.id }
+        if (signIn != null) {
+            DeviceSignInDialog(
+                name = account.name,
+                signIn = signIn,
+                onRetry = { connect(account) },
+                onReopen = { url -> runCatching { uriHandler.openUri(url) } },
+                onCancel = {
+                    viewModel.cancelSignIn()
                     selectedId = null
-                    onOpen(SettingsSection.PROVIDERS)
-                }
-            },
-            onSignOut = {
-                viewModel.signOut(account)
-                selectedId = null
-            },
-            onDismiss = { selectedId = null },
-        )
+                },
+            )
+        } else {
+            AccountDialog(
+                account = account,
+                busy = state.busy == account.id,
+                onConnect = { connect(account) },
+                onRecheck = {
+                    viewModel.recheck(account) {
+                        selectedId = null
+                        onOpen(SettingsSection.PROVIDERS)
+                    }
+                },
+                onSignOut = {
+                    viewModel.signOut(account)
+                    selectedId = null
+                },
+                onDismiss = { selectedId = null },
+            )
+        }
     }
 }
 
@@ -398,7 +431,7 @@ private fun AccountGroup(accounts: List<OAuthProvider>, onSelect: (OAuthProvider
             SettingRow(
                 title = account.name,
                 subtitle = if (account.flow == "device_code") {
-                    t("The command shows a link and a code for your browser", "فرمان یک لینک و یک کد برای مرورگر نشان می‌دهد")
+                    t("Opens a sign-in page in your browser; Hermes connects by itself", "صفحهٔ ورود را در مرورگرت باز می‌کند؛ هرمس خودش وصل می‌شود")
                 } else {
                     t("Sign in once in your terminal, then come back", "یک بار در ترمینال وارد شو و برگرد")
                 },
@@ -415,17 +448,22 @@ private fun AccountGroup(accounts: List<OAuthProvider>, onSelect: (OAuthProvider
     }
 }
 
-/** A signed-out account: its command to copy and "I've signed in"; a signed-in one: sign out. */
+/**
+ * A signed-out account: Connect in the browser for device-code ones (the terminal stays a fallback),
+ * otherwise its command to copy and "I've signed in". A signed-in one: sign out.
+ */
 @Composable
 private fun AccountDialog(
     account: OAuthProvider,
     busy: Boolean,
+    onConnect: () -> Unit,
     onRecheck: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
     var confirmingSignOut by remember { mutableStateOf(false) }
+    var useTerminal by remember { mutableStateOf(false) }
+    val inBrowser = !account.loggedIn && account.flow == "device_code" && !useTerminal
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -440,28 +478,20 @@ private fun AccountDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                 when {
+                    inBrowser -> {
+                        Text(
+                            t(
+                                "Hermes opens the ${account.name} sign-in page in your browser and connects by itself once you confirm there.",
+                                "هرمس صفحهٔ ورود ${account.name} را در مرورگرت باز می‌کند و وقتی آنجا تأیید کنی، خودش وصل می‌شود.",
+                            ),
+                        )
+                        TextButton(onClick = { useTerminal = true }) {
+                            Text(t("Use the terminal instead", "به‌جایش با ترمینال"))
+                        }
+                    }
                     !account.loggedIn -> {
                         Text(t("Run this in a terminal, then tap “I've signed in”:", "این را در ترمینال اجرا کن، بعد «وارد شدم» را بزن:"))
-                        Surface(
-                            shape = RoundedCornerShape(HxRadius.sm),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = HxSpace.md),
-                            ) {
-                                SelectionContainer(Modifier.weight(1f)) {
-                                    Text(
-                                        text = account.cliCommand,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = FontFamily.Monospace,
-                                    )
-                                }
-                                IconButton(onClick = { clipboard.setText(AnnotatedString(account.cliCommand)) }) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = t("Copy", "کپی"))
-                                }
-                            }
-                        }
+                        CopyableText(account.cliCommand)
                     }
                     confirmingSignOut -> Text(t("Hermes forgets this sign-in.", "هرمس این ورود را فراموش می‌کند."))
                     else -> {
@@ -477,6 +507,7 @@ private fun AccountDialog(
         },
         confirmButton = {
             when {
+                inBrowser -> TextButton(onClick = onConnect) { Text(t("Connect", "اتصال")) }
                 !account.loggedIn -> TextButton(onClick = onRecheck, enabled = !busy) {
                     if (busy) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -502,6 +533,88 @@ private fun AccountDialog(
             }
         },
     )
+}
+
+/** A device-code sign-in in progress: the code to confirm in the browser while Hermes waits for it. */
+@Composable
+private fun DeviceSignInDialog(
+    name: String,
+    signIn: SignInFlow,
+    onRetry: () -> Unit,
+    onReopen: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val code = signIn.code
+    val error = signIn.error
+    AlertDialog(
+        // Only Cancel ends a sign-in that's still waiting on the browser.
+        onDismissRequest = { if (error != null) onCancel() },
+        title = { Text(t("Sign in with $name", "ورود با $name")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(HxSpace.md)) {
+                when {
+                    error != null -> Text(t(error.en, error.fa), color = MaterialTheme.colorScheme.error)
+                    code == null -> WaitingRow(t("Starting sign-in…", "در حال شروع ورود…"))
+                    else -> {
+                        if (code.userCode.isNotBlank()) {
+                            Text(
+                                t(
+                                    "We opened $name in your browser. Enter this code there (it's copied, so you can paste it):",
+                                    "صفحهٔ $name را در مرورگرت باز کردیم. این کد را آنجا وارد کن (کپی شده، می‌توانی بچسبانی):",
+                                ),
+                            )
+                            CopyableText(code.userCode, MaterialTheme.typography.titleLarge)
+                        } else {
+                            Text(t("We opened $name in your browser. Confirm the sign-in there.", "صفحهٔ $name را در مرورگرت باز کردیم. ورود را آنجا تأیید کن."))
+                        }
+                        WaitingRow(t("Waiting for you to confirm…", "در انتظار تأیید تو…"))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                error != null -> TextButton(onClick = onRetry) { Text(t("Try again", "دوباره")) }
+                code != null -> TextButton(onClick = { onReopen(code.url) }) { Text(t("Open the page again", "باز کردن دوبارهٔ صفحه")) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(if (error != null) t("Close", "بستن") else t("Cancel", "لغو")) }
+        },
+    )
+}
+
+/** Monospace text to select, or copy with one tap: a command, a sign-in code. */
+@Composable
+private fun CopyableText(text: String, style: TextStyle = MaterialTheme.typography.bodyMedium) {
+    val clipboard = LocalClipboardManager.current
+    Surface(
+        shape = RoundedCornerShape(HxRadius.sm),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = HxSpace.md),
+        ) {
+            SelectionContainer(Modifier.weight(1f)) {
+                Text(text = text, style = style, fontFamily = FontFamily.Monospace)
+            }
+            IconButton(onClick = { clipboard.setText(AnnotatedString(text)) }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = t("Copy", "کپی"))
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitingRow(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
+    ) {
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 /** A connected Hermes provider: its details, a new key, or disconnect (after a confirm). */
