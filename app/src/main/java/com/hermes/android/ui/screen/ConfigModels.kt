@@ -114,18 +114,10 @@ internal fun ModelsTab(
         ModelSwitchConfirmDialog(confirm, viewModel::confirmModelSwitch, viewModel::dismissModelSwitchConfirm)
     }
 
-    // Load providers on first composition
-    val providersLoaded = remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!providersLoaded.value) {
-            viewModel.loadProviders()
-            providersLoaded.value = true
-        }
-    }
+    // Every visit, so providers connected under Providers show their models on the way back.
+    LaunchedEffect(Unit) { viewModel.loadModels() }
 
-    var showAddProviderDialog by remember { mutableStateOf(false) }
-
-    if (state.isLoadingModels && state.isLoadingProviders) {
+    if (state.isLoadingModels && state.availableModels.isEmpty()) {
         LoadingIndicator(t("Loading models...", "در حال بارگذاری مدلها..."))
         return
     }
@@ -158,6 +150,13 @@ internal fun ModelsTab(
                 model.name.contains(modelSearch, ignoreCase = true) ||
                 model.provider.contains(modelSearch, ignoreCase = true)
         }.take(30)
+    }
+
+    // The Providers row's summary: every provider with models to pick from.
+    val connectedNames = remember(state.availableModels) {
+        state.availableModels.filterNot { it.requiresApiKey }
+            .map { it.providerName.ifBlank { it.provider } }
+            .distinct()
     }
 
     LazyColumn(
@@ -200,170 +199,6 @@ internal fun ModelsTab(
             }
         }
 
-        // ── Cross-provider model search ──
-        item(key = "__reasoning") {
-            SettingsCardGroup {
-                SettingsNavRow(
-                    title = t("Reasoning depth", "عمق تفکر"),
-                    subtitle = state.reasoning,
-                    icon = Icons.Default.Lightbulb,
-                    onClick = { onOpen(SettingsSection.REASONING) },
-                )
-            }
-        }
-
-        item(key = "__model_search") {
-            OutlinedTextField(
-                value = modelSearch,
-                onValueChange = { modelSearch = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(t("Search all models…", "جستجو در همهٔ مدل‌ها…"))
-                },
-                singleLine = true,
-                trailingIcon = {
-                    if (modelSearch.isNotEmpty()) {
-                        TextButton(onClick = { modelSearch = "" }) {
-                            Text(t("Clear", "پاک کردن"))
-                        }
-                    }
-                },
-            )
-        }
-
-        if (modelSearch.isNotBlank()) {
-            if (searchResults.isEmpty()) {
-                item(key = "__search_empty") {
-                    Text(
-                        text = t("No matching models", "مدلی پیدا نشد"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(8.dp),
-                    )
-                }
-            } else {
-                items(
-                    items = searchResults,
-                    key = { "search:${it.provider}/${it.modelId}" },
-                ) { model ->
-                    val isActive = model.provider == state.activeProvider &&
-                        model.modelId == state.activeModel
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.selectModel(model)
-                                modelSearch = ""
-                            },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isActive) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                        ),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = model.modelId,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                    ),
-                                )
-                                Text(
-                                    text = model.provider,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (isActive) {
-                                Text(
-                                    text = "✓",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // ── Provider Management Section ──
-        // ══════════════════════════════════════════════════════════════
-        item(key = "__provider_header") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = t("API Providers", "پرووایدرهای API"),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { viewModel.loadProviders() }) {
-                        Text(t("Refresh", "بارگذاری مجدد"))
-                    }
-                    FilledTonalButton(onClick = { showAddProviderDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(t("Add", "افزودن"))
-                    }
-                }
-            }
-        }
-
-        if (state.isLoadingProviders) {
-            item(key = "__providers_loading") {
-                CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-            }
-        } else if (state.providers.isEmpty()) {
-            item(key = "__providers_empty") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        modifier = Modifier.padding(16.dp),
-                        text = t(
-                            "No providers configured yet.",
-                            "هنوز پرووایدری تنظیم نشده.",
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        } else {
-            // ── Provider cards ──
-            items(
-                items = state.providers,
-                key = { it.slug },
-            ) { provider ->
-                ProviderCard(
-                    provider = provider,
-                    credentials = state.credentialPool[provider.slug].orEmpty(),
-                    isExpanded = state.expandedProviderSlug == provider.slug,
-                    onToggleExpand = { viewModel.toggleProviderExpanded(provider.slug) },
-                    onRemove = { viewModel.removeProvider(provider.slug) },
-                    onSetCredential = { key -> viewModel.setCredential(provider.slug, key) },
-                    onAddCredential = { key -> viewModel.addCredential(provider.slug, key) },
-                    onRemoveCredential = { credentialId -> viewModel.removeCredentialEntry(provider.slug, credentialId) },
-                    onSetPrimary = { viewModel.setPrimaryProvider(provider) },
-                )
-            }
-        }
-
         // ══════════════════════════════════════════════════════════════
         // ── Model Selection Section ──
         // ══════════════════════════════════════════════════════════════
@@ -394,70 +229,151 @@ internal fun ModelsTab(
                     Text(
                         modifier = Modifier.padding(16.dp),
                         text = t(
-                            "No models loaded. Make sure Hermes gateway is running, then tap Refresh.",
-                            "مدلی بارگذاری نشد. مطمئن شو gateway هرمس روشنه، بعد بزن بارگذاری مجدد.",
+                            "No models yet. Connect a provider under Providers below, or tap Refresh if Hermes was still starting.",
+                            "هنوز مدلی نیست. از «پرووایدرها» در پایین یک پرووایدر وصل کن، یا اگر هرمس داشت بالا می‌آمد بزن بارگذاری مجدد.",
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            return@LazyColumn
-        }
+        } else {
+            // ── Cross-provider model search ──
+            item(key = "__model_search") {
+                OutlinedTextField(
+                    value = modelSearch,
+                    onValueChange = { modelSearch = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(t("Search all models…", "جستجو در همهٔ مدل‌ها…"))
+                    },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (modelSearch.isNotEmpty()) {
+                            TextButton(onClick = { modelSearch = "" }) {
+                                Text(t("Clear", "پاک کردن"))
+                            }
+                        }
+                    },
+                )
+            }
 
-        // ── API Provider dropdown ──
-        item(key = "__provider_dropdown") {
-            ProviderDropdown(
-                providers = modelProviders,
-                selected = selectedProvider,
-                onSelect = { selectedProvider = it },
-            )
-        }
+            if (modelSearch.isNotBlank()) {
+                if (searchResults.isEmpty()) {
+                    item(key = "__search_empty") {
+                        Text(
+                            text = t("No matching models", "مدلی پیدا نشد"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                } else {
+                    items(
+                        items = searchResults,
+                        key = { "search:${it.provider}/${it.modelId}" },
+                    ) { model ->
+                        val isActive = model.provider == state.activeProvider &&
+                            model.modelId == state.activeModel
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectModel(model)
+                                    modelSearch = ""
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isActive) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            ),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = model.modelId,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                        ),
+                                    )
+                                    Text(
+                                        text = model.provider,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (isActive) {
+                                    Text(
+                                        text = "✓",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
-        // ── Model dropdown (filtered by provider) ──
-        item(key = "__model_dropdown") {
-            ModelDropdown(
-                models = filteredModels,
-                selected = filteredModels.firstOrNull {
-                    it.provider == state.activeProvider && it.modelId == state.activeModel
-                },
-                onSelect = { viewModel.selectModel(it) },
-                showProviderLabel = selectedProvider == null,
-            )
-        }
+            // ── API Provider dropdown ──
+            item(key = "__provider_dropdown") {
+                ProviderDropdown(
+                    providers = modelProviders,
+                    selected = selectedProvider,
+                    onSelect = { selectedProvider = it },
+                )
+            }
 
-        // ── Endpoint info ──
-        selectedProvider?.let { provider ->
-            item(key = "__endpoint") {
-                EndpointCard(provider = provider)
+            // ── Model dropdown (filtered by provider) ──
+            item(key = "__model_dropdown") {
+                ModelDropdown(
+                    models = filteredModels,
+                    selected = filteredModels.firstOrNull {
+                        it.provider == state.activeProvider && it.modelId == state.activeModel
+                    },
+                    onSelect = { viewModel.selectModel(it) },
+                    showProviderLabel = selectedProvider == null,
+                )
             }
         }
 
-        // ── API Key for this provider ──
-        selectedProvider?.let { provider ->
-            val needsKey = filteredModels.any { it.requiresApiKey }
-            if (needsKey) {
-                item(key = "__apikey") {
-                    ApiKeyRow(
-                        provider = provider,
-                        onSaveKey = { slug, key -> viewModel.saveApiKey(slug, key) },
+        item(key = "__reasoning") {
+            SettingsCardGroup {
+                SettingsNavRow(
+                    title = t("Reasoning depth", "عمق تفکر"),
+                    subtitle = state.reasoning,
+                    icon = Icons.Default.Lightbulb,
+                    onClick = { onOpen(SettingsSection.REASONING) },
+                )
+            }
+        }
+
+        // ── Providers folder: add (API key / account) and manage what's connected ──
+        item(key = "__providers") {
+            Box(modifier = Modifier.padding(top = 8.dp)) {
+                SettingsCardGroup {
+                    SettingsNavRow(
+                        title = t("Providers", "پرووایدرها"),
+                        subtitle = if (connectedNames.isEmpty()) {
+                            t("None connected yet", "هنوز وصل نشده")
+                        } else {
+                            t(
+                                "${connectedNames.size} connected: ${connectedNames.joinToString(" · ")}",
+                                "${connectedNames.size} وصل: ${connectedNames.joinToString(" · ")}",
+                            )
+                        },
+                        icon = Icons.Default.Dns,
+                        onClick = { onOpen(SettingsSection.PROVIDERS) },
                     )
                 }
             }
         }
     }
-
-    // ── Add Provider Dialog ──
-    if (showAddProviderDialog) {
-        AddProviderDialog(
-            onDismiss = { showAddProviderDialog = false },
-            onFetchModels = { url, key -> viewModel.probeProviderModels(url, key) },
-            onAdd = { slug, baseUrl, model, key ->
-                viewModel.addProvider(slug, baseUrl, model, key)
-                showAddProviderDialog = false
-            },
-        )
-    }
-
 }
-

@@ -5,7 +5,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 
 fun parseModelOptions(result: JsonElement): List<ModelOption> {
     return try {
@@ -39,6 +41,33 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
         Timber.w(e, "[Config] Failed to parse model options")
         emptyList()
     }
+}
+
+/**
+ * Provider rows of `model.options` asked with `include_unconfigured` (inventory.py): configured
+ * providers plus a skeleton row for every other one. Picker hints mark each row `authenticated`;
+ * only the skeletons carry `auth_type` and `key_env`. A server without hints lists only configured
+ * providers, so a row missing `authenticated` counts as connected.
+ */
+fun parseProviderRows(result: JsonElement): List<ProviderRow> {
+    val rows = (result as? JsonObject)?.get("providers") as? JsonArray ?: return emptyList()
+    return rows.mapNotNull { element ->
+        val row = element as? JsonObject ?: return@mapNotNull null
+        fun text(key: String) = (row[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+        fun flag(key: String) = (row[key] as? JsonPrimitive)?.booleanOrNull
+        val slug = text("slug") ?: return@mapNotNull null
+        ProviderRow(
+            slug = slug,
+            name = text("name") ?: slug,
+            connected = flag("authenticated") ?: true,
+            authType = text("auth_type"),
+            keyEnv = text("key_env"),
+            modelCount = (row["total_models"] as? JsonPrimitive)?.intOrNull
+                ?: (row["models"] as? JsonArray)?.size ?: 0,
+            isCurrent = flag("is_current") == true,
+            isUserDefined = flag("is_user_defined") == true,
+        )
+    }.distinctBy { it.slug }
 }
 
 fun parseToolList(result: JsonElement): List<ToolOption> {

@@ -93,28 +93,6 @@ import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
-
-// Fix: lost during the ChatScreen/ConfigScreen file-split extraction —
-// EndpointCard uses this but it was never carried over to any of the
-// new files. Restored from the pre-split ConfigScreen.kt.
-private val knownEndpoints = mapOf(
-    "openrouter" to "https://openrouter.ai/api/v1",
-    "anthropic" to "https://api.anthropic.com",
-    "openai" to "https://api.openai.com/v1",
-    "google" to "https://generativelanguage.googleapis.com",
-    "mistral" to "https://api.mistral.ai/v1",
-    "groq" to "https://api.groq.com/openai/v1",
-    "deepseek" to "https://api.deepseek.com",
-    "together" to "https://api.together.xyz/v1",
-    "fireworks" to "https://api.fireworks.ai/inference/v1",
-    "cohere" to "https://api.cohere.ai/v1",
-    "replicate" to "https://api.replicate.com/v1",
-    "perplexity" to "https://api.perplexity.ai",
-    "xai" to "https://api.x.ai/v1",
-    "ollama" to "http://localhost:11434",
-    "lmstudio" to "http://localhost:1234/v1",
-)
-
 @Composable
 internal fun ProviderDropdown(
     providers: List<String>,
@@ -401,83 +379,6 @@ internal fun ModelDropdown(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun EndpointCard(provider: String) {
-    val endpoint = remember(provider) {
-        knownEndpoints[provider.lowercase()] ?: provider
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = endpoint,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ApiKeyRow(
-    provider: String,
-    onSaveKey: (String, String) -> Unit,
-) {
-    var apiKey by remember { mutableStateOf("") }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text(t("API Key", "کلید API")) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                // Was plain text on a normal keyboard: the key sat readable on screen and the
-                // keyboard could learn it.
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            )
-            TextButton(
-                onClick = {
-                    onSaveKey(provider, apiKey)
-                    apiKey = ""
-                },
-                enabled = apiKey.isNotBlank(),
-            ) {
-                Text(t("Save", "ذخیره"))
             }
         }
     }

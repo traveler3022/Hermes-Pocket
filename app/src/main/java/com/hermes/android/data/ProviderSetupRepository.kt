@@ -21,9 +21,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /** A provider offered in first-run setup; [envVar] is where Hermes reads its key. */
@@ -41,6 +43,43 @@ sealed interface DefaultModelResult {
     data object Applied : DefaultModelResult
     data class NeedsConfirm(val message: String) : DefaultModelResult
 }
+
+/**
+ * A sign-in (OAuth) provider, one row of the dashboard's GET /api/providers/oauth — the list the
+ * desktop's Accounts page shows. [flow] is `device_code` (code + link, Hermes polls) or `external`
+ * (the provider's own CLI signs in); [cliCommand] is the terminal command that signs in either way.
+ */
+data class OAuthProvider(
+    val id: String,
+    val name: String,
+    val flow: String,
+    val cliCommand: String,
+    val docsUrl: String,
+    val loggedIn: Boolean,
+    val disconnectable: Boolean,
+    val disconnectHint: String?,
+)
+
+/** Parses GET /api/providers/oauth (or the setup script's `oauth_list`, which prints the same shape). */
+internal fun parseOAuthProviders(result: JsonObject): List<OAuthProvider> =
+    (result["providers"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val row = element as? JsonObject ?: return@mapNotNull null
+        fun text(key: String) = (row[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+        val id = text("id") ?: return@mapNotNull null
+        val status = row["status"] as? JsonObject
+        fun flag(key: String) = (status?.get(key) as? JsonPrimitive)?.booleanOrNull == true
+        OAuthProvider(
+            id = id,
+            name = text("name") ?: id,
+            flow = text("flow").orEmpty(),
+            cliCommand = text("cli_command").orEmpty(),
+            docsUrl = text("docs_url").orEmpty(),
+            // Like the desktop: a free-tier token holds no account, so it never counts as signed in.
+            loggedIn = flag("logged_in") && !flag("free_tier"),
+            disconnectable = (row["disconnectable"] as? JsonPrimitive)?.booleanOrNull != false,
+            disconnectHint = text("disconnect_hint"),
+        )
+    }
 
 /**
  * First-run provider setup. Termux and remote runtimes use the `hermes dashboard` REST API
@@ -104,6 +143,37 @@ class ProviderSetupRepository @Inject constructor(
             return
         }
         call("PUT", "/api/env", buildJsonObject { put("key", provider.envVar); put("value", apiKey) })
+    }
+
+    /** Removes an env-var key everywhere Hermes keeps it, as the dashboard's DELETE /api/env. */
+    suspend fun removeKey(envVar: String) {
+        if (viaStdio) {
+            val removed = runSetupScript("remove_key", buildJsonObject { put("env_var", envVar) })
+            if (!removed.bool("ok")) throw IOException(removed.text("detail") ?: "Could not remove the key")
+            rpc("reload.env", buildJsonObject {})
+            return
+        }
+        call("DELETE", "/api/env", buildJsonObject { put("key", envVar) })
+    }
+
+    /**
+     * Sign-in providers and their status, as the dashboard's GET /api/providers/oauth. The gateway has
+     * no RPC for these, and the built-in Linux has no web server, so there the same functions run in a script.
+     */
+    suspend fun oauthProviders(): List<OAuthProvider> {
+        val result = if (viaStdio) runSetupScript("oauth_list", buildJsonObject {}) else call("GET", "/api/providers/oauth", null)
+        if (viaStdio && !result.bool("ok")) throw IOException(result.text("detail") ?: "Could not list sign-in providers")
+        return parseOAuthProviders(result)
+    }
+
+    /** Signs out of provider [id], as the dashboard's DELETE /api/providers/oauth/{id}. */
+    suspend fun disconnectOAuth(id: String) {
+        if (viaStdio) {
+            val result = runSetupScript("oauth_disconnect", buildJsonObject { put("provider", id) })
+            if (!result.bool("ok")) throw IOException(result.text("detail") ?: "Could not sign out")
+            return
+        }
+        call("DELETE", "/api/providers/oauth/" + URLEncoder.encode(id, "UTF-8"), null)
     }
 
     suspend fun models(provider: SetupProvider): List<String> {
@@ -275,12 +345,49 @@ class ProviderSetupRepository @Inject constructor(
             import json, os, sys
 
             def emit(obj):
-                print("$RESULT_MARKER" + json.dumps(obj), flush=True)
+                print("$RESULT_MARKER" + json.dumps(obj, default=str), flush=True)
 
             def save_key(args):
                 from hermes_cli.credential_lifecycle import save_provider_env_credential
                 save_provider_env_credential(args["env_var"], args["value"])
                 emit({"ok": True})
+
+            def remove_key(args):
+                from hermes_cli.credential_lifecycle import remove_provider_env_credential
+                found = bool(remove_provider_env_credential(args["env_var"]).get("found"))
+                emit({"ok": found, "detail": "" if found else "No key was stored."})
+
+            # GET and DELETE /api/providers/oauth (hermes_cli/web_routers/oauth.py) without the web server.
+            def oauth_list(args):
+                from hermes_cli.web_routers import oauth as o
+                rows = []
+                for p in o._build_oauth_catalog():
+                    status = o._resolve_provider_status(p["id"], p.get("status_fn"))
+                    hint = o._oauth_provider_disconnect_hint(p, status)
+                    rows.append({
+                        "id": p["id"], "name": p["name"], "flow": p["flow"],
+                        "cli_command": o._external_process_cli_command(p["id"], p["cli_command"]),
+                        "docs_url": p["docs_url"], "disconnect_hint": hint,
+                        "disconnectable": hint is None, "status": status,
+                    })
+                emit({"ok": True, "providers": rows})
+
+            def oauth_disconnect(args):
+                from hermes_cli.web_routers import oauth as o
+                pid = args["provider"]
+                provider = {p["id"]: p for p in o._build_oauth_catalog()}.get(pid)
+                if provider is None:
+                    return emit({"ok": False, "detail": "Unknown provider: " + pid})
+                o._reject_if_not_disconnectable(provider, {})
+                o._reject_if_not_disconnectable(provider, o._resolve_provider_status(pid, provider.get("status_fn")))
+                if pid == "anthropic":
+                    cleared = o._clear_anthropic_auth()
+                else:
+                    from hermes_cli import auth as hauth
+                    cleared = hauth.clear_provider_auth(pid)
+                    if pid == "nous" and hasattr(hauth, "invalidate_nous_auth_status_cache"):
+                        hauth.invalidate_nous_auth_status_cache()
+                emit({"ok": bool(cleared), "detail": "" if cleared else "No stored credentials were removed for " + provider["name"] + "."})
 
             def has_model(args):
                 from hermes_cli.config import load_config
@@ -306,7 +413,8 @@ class ProviderSetupRepository @Inject constructor(
                 emit({"ok": True})
 
             try:
-                {"has_model": has_model, "save_key": save_key, "set_model": set_model}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
+                {"has_model": has_model, "save_key": save_key, "remove_key": remove_key, "set_model": set_model,
+                 "oauth_list": oauth_list, "oauth_disconnect": oauth_disconnect}[sys.argv[1]](json.loads(os.environ.get("HERMES2_ARGS") or "{}"))
             except Exception as e:
                 emit({"ok": False, "detail": str(getattr(e, "detail", None) or e)})
         """.trimIndent()

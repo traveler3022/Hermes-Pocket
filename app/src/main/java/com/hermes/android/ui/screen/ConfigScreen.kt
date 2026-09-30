@@ -201,6 +201,21 @@ fun ConfigScreen(
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
                 SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
+                SettingsSection.PROVIDERS -> ProvidersSection(
+                    configState = uiState,
+                    configViewModel = viewModel,
+                    snackbarHostState = snackbarHostState,
+                    onOpen = { section = it },
+                )
+                SettingsSection.PROVIDER_KEYS -> ProviderKeysSection(
+                    configViewModel = viewModel,
+                    snackbarHostState = snackbarHostState,
+                    onOpen = { section = it },
+                )
+                SettingsSection.PROVIDER_ACCOUNTS -> ProviderAccountsSection(
+                    snackbarHostState = snackbarHostState,
+                    onOpen = { section = it },
+                )
                 SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel) }
                 SettingsSection.PERSONALITY -> PersonalitySection(
                     state = uiState,
@@ -241,6 +256,9 @@ internal enum class SettingsSection(
     ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
+    PROVIDERS("Providers", "پرووایدرها", MODELS),
+    PROVIDER_KEYS("API key", "کلید API", PROVIDERS),
+    PROVIDER_ACCOUNTS("Sign in with account", "ورود با حساب", PROVIDERS),
     TOOLS("Tools", "ابزارها"),
     TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
     ABOUT("Updates", "به\u200Cروزرسانی"),
