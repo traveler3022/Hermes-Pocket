@@ -84,4 +84,18 @@ class FileGateTest {
         gate.approve(disguised, now = 1_000L)
         assertEquals(FileGate.Risk.DISGUISED, gate.heldBack(disguised, now = 2_000L))
     }
+
+    @Test
+    fun `file gate notifier dispatches file and risk`() {
+        var notifiedFile: File? = null
+        var notifiedRisk: FileGate.Risk? = null
+        val notifier = FileGateNotifier { f, r ->
+            notifiedFile = f
+            notifiedRisk = r
+        }
+        val testFile = file("test.apk", "test".toByteArray())
+        notifier.notifyHeldBack(testFile, FileGate.Risk.PROGRAM)
+        assertEquals(testFile, notifiedFile)
+        assertEquals(FileGate.Risk.PROGRAM, notifiedRisk)
+    }
 }

@@ -15,7 +15,6 @@ import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
-import com.hermes.android.ui.viewer.FileGateActivity
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -26,19 +25,22 @@ import java.io.FileNotFoundException
 
 /** Shows the built-in Linux in Android's Files app and in every file picker. */
 class LinuxFilesProvider : DocumentsProvider() {
-    /** A provider can't be injected into; it reaches the app's [FileGate] through this. */
+    /** A provider can't be injected into; it reaches Hilt singletons through this. */
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface FileGateEntryPoint {
         fun fileGate(): FileGate
+        fun fileGateNotifier(): FileGateNotifier
     }
 
     private lateinit var files: GuestFiles
     private lateinit var authority: String
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
-    private val fileGate by lazy {
-        EntryPointAccessors.fromApplication(checkNotNull(context), FileGateEntryPoint::class.java).fileGate()
+    private val entryPoint by lazy {
+        EntryPointAccessors.fromApplication(checkNotNull(context), FileGateEntryPoint::class.java)
     }
+    private val fileGate by lazy { entryPoint.fileGate() }
+    private val fileGateNotifier by lazy { entryPoint.fileGateNotifier() }
 
     override fun onCreate(): Boolean {
         val context = context ?: return false
@@ -105,7 +107,8 @@ class LinuxFilesProvider : DocumentsProvider() {
      */
     private fun holdBackProgram(file: File) {
         val risk = fileGate.heldBack(file) ?: return
-        context?.let { FileGateActivity.notifyHeldBack(it, file, risk) }
+        runCatching { fileGateNotifier.notifyHeldBack(file, risk) }
+            .onFailure { Timber.w(it, "[Files] failed to notify held-back program %s", file.name) }
         throw FileNotFoundException("Held back until confirmed in Hermes: ${file.name}")
     }
 
