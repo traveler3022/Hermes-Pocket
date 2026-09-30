@@ -3,26 +3,19 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.ProjectsRepository
-import com.hermes.android.gateway.SessionSource
-import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.data.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import timber.log.Timber
 import javax.inject.Inject
-import kotlinx.serialization.json.contentOrNull
 
 /** Project browser with session creation support. */
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
     private val repository: ProjectsRepository,
-    private val gatewayClient: GatewayClient,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     data class ProjectsUiState(
@@ -89,18 +82,8 @@ class ProjectsViewModel @Inject constructor(
     fun createProjectSession(path: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject {
-                    put("cwd", path)
-                    put("source", SessionSource.CHAT)
-                }
-                val result = gatewayClient.request(
-                    GatewayMethods.SESSION_CREATE,
-                    params.toMap(),
-                )
-                val sessionId = (result as? JsonObject)
-                    ?.get("session_id")
-                    ?.let { (it as? JsonPrimitive)?.contentOrNull }
-                if (!sessionId.isNullOrBlank()) {
+                val sessionId = sessionRepository.createChat(cwd = path)?.liveId
+                if (sessionId != null) {
                     _uiState.value = _uiState.value.copy(createdSessionId = sessionId)
                     Timber.i("[Projects] Created session $sessionId for project path $path")
                 }

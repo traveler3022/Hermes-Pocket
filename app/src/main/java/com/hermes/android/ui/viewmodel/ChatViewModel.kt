@@ -787,23 +787,13 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             try {
-                val params = buildJsonObject {
-                    put("session_id", sessionId)
-                    put("text", text)
-                }
-                val result = gatewayClient.request(
-                    method = GatewayMethods.SESSION_STEER,
-                    params = jsonToElementMap(params),
-                )
-                val obj = result as? JsonObject
-                val status = (obj?.get("status") as? JsonPrimitive)?.contentOrNull
-                if (status == "rejected") {
-                    val note = (obj?.get("text") as? JsonPrimitive)?.contentOrNull
+                val steered = sessionRepository.steer(sessionId, text)
+                if (!steered.accepted) {
                     _uiState.update { it.copy(
                         messages = _uiState.value.messages + ChatMessage.Status(
                             id = UUID.randomUUID().toString(),
                             timestamp = System.currentTimeMillis(),
-                            text = note ?: "Steer rejected — the agent isn't at a steerable point right now.",
+                            text = steered.note ?: "Steer rejected — the agent isn't at a steerable point right now.",
                             isError = true,
                         ),
                     ) }
@@ -832,47 +822,7 @@ class ChatViewModel @Inject constructor(
             thinkingStatus = "",
         ) }
         if (sessionId == null) return
-        viewModelScope.launch {
-            try {
-                val params = buildJsonObject { put("session_id", sessionId) }
-                gatewayClient.request(
-                    method = GatewayMethods.SESSION_INTERRUPT,
-                    params = jsonToElementMap(params),
-                    timeoutMs = 5_000,
-                )
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] session.interrupt did not complete quickly")
-            }
-            // process.stop is process_registry.kill_all() — it reaps every
-            // session's background work, so stopping one chat killed the
-            // others. process.list/process.kill are session-scoped.
-            try {
-                val listed = gatewayClient.request(
-                    method = GatewayMethods.PROCESS_LIST,
-                    params = jsonToElementMap(buildJsonObject { put("session_id", sessionId) }),
-                    timeoutMs = 5_000,
-                )
-                val processes = (listed as? JsonObject)?.get("processes") as? JsonArray ?: JsonArray(emptyList())
-                for (entry in processes) {
-                    val row = entry as? JsonObject ?: continue
-                    // The registry names a process id "session_id" (a "proc_…"
-                    // handle), which is not the chat session id.
-                    val procId = (row["session_id"] as? JsonPrimitive)?.contentOrNull
-                    if (procId.isNullOrBlank()) continue
-                    if ((row["status"] as? JsonPrimitive)?.contentOrNull == "exited") continue
-                    gatewayClient.request(
-                        method = GatewayMethods.PROCESS_KILL,
-                        params = jsonToElementMap(buildJsonObject {
-                            put("session_id", sessionId)
-                            put("process_id", procId)
-                        }),
-                        timeoutMs = 5_000,
-                    )
-                }
-            } catch (e: Exception) {
-                Timber.d(e, "[Chat] session-scoped process cleanup skipped/failed")
-            }
-        }
+        viewModelScope.launch { sessionRepository.stopTurn(sessionId) }
     }
 
     /**

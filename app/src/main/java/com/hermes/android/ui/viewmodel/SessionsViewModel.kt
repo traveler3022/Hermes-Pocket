@@ -71,8 +71,7 @@ class SessionsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingSessions = true)
             try {
-                val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
-                val sessions = parseSessionList(result)
+                val sessions = parseSessionList(sessionRepository.storedChats())
                 _uiState.value = _uiState.value.copy(
                     sessions = sessions,
                     isLoadingSessions = false,
@@ -463,11 +462,7 @@ class SessionsViewModel @Inject constructor(
     private fun loadUsage(sessionId: String, liveId: String) {
         viewModelScope.launch {
             try {
-                val params = buildJsonObject { put("session_id", liveId) }
-                val result = gatewayClient.request(
-                    GatewayMethods.SESSION_USAGE, params.toMap(), trackSession = false,
-                )
-                val obj = result as? JsonObject
+                val obj = sessionRepository.usage(liveId)
                 fun longOf(k: String) = (obj?.get(k) as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
                 val credits = (obj?.get("credits_lines") as? JsonArray)
                     ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()

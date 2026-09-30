@@ -5,6 +5,7 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.SessionSource
 import com.hermes.android.gateway.sessionAttachParams
+import com.hermes.android.gateway.sessionIdOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -126,6 +127,136 @@ class SessionRepository @Inject constructor(
 
     private fun GatewayException.isSessionGone(): Boolean =
         message.orEmpty().let { it.startsWith("RPC error 4001:") || it.startsWith("RPC error 4007:") }
+
+    // ── Chats ──────────────────────────────────────────────────────────────
+
+    /** The STORED id of the chat the server used last, or null when it has none. */
+    suspend fun mostRecentId(): String? =
+        (gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT) as? JsonObject)?.get("session_id").sessionIdOrNull()
+
+    /**
+     * A new chat, working in [cwd] when given. Filed under [SessionSource.CHAT], so the model
+     * knows it can hand over files. Null when the server named no session.
+     */
+    suspend fun createChat(cwd: String? = null): AttachedSession? {
+        val params = buildJsonObject {
+            cwd?.let { put("cwd", it) }
+            put("source", SessionSource.CHAT)
+        }.toElementMap()
+        val created = gatewayClient.request(GatewayMethods.SESSION_CREATE, params) as? JsonObject ?: return null
+        val liveId = created["session_id"].sessionIdOrNull() ?: return null
+        return AttachedSession(liveId = liveId, raw = created)
+    }
+
+    /**
+     * Lend [block] a throwaway session, closed after: some writes need a session, and a fresh
+     * install has none (a sessionless model set answers 4001).
+     */
+    suspend fun <T> withScratchSession(block: suspend (liveId: String) -> T): T {
+        val created = gatewayClient.request(GatewayMethods.SESSION_CREATE) as? JsonObject
+        val liveId = created?.get("session_id").sessionIdOrNull()
+            ?: throw GatewayException("session.create returned no session_id")
+        return try {
+            block(liveId)
+        } finally {
+            runCatching {
+                gatewayClient.request(
+                    GatewayMethods.SESSION_CLOSE,
+                    buildJsonObject { put("session_id", liveId) }.toElementMap(),
+                    timeoutMs = 5_000,
+                )
+            }
+        }
+    }
+
+    /** The server's stored chats, as session.list sends them. */
+    suspend fun storedChats(): JsonElement = gatewayClient.request(GatewayMethods.SESSION_LIST)
+
+    /** The transcript of a LIVE session as the server stores it, row ids included. */
+    suspend fun history(liveId: String): JsonElement =
+        gatewayClient.request(
+            GatewayMethods.SESSION_HISTORY,
+            buildJsonObject { put("session_id", liveId) }.toElementMap(),
+        )
+
+    /** A new chat that goes on from a copy of [liveId]'s; its id, or null when none came back. */
+    suspend fun branch(liveId: String): String? =
+        (gatewayClient.request(
+            GatewayMethods.SESSION_BRANCH,
+            buildJsonObject { put("session_id", liveId) }.toElementMap(),
+        ) as? JsonObject)?.get("session_id").sessionIdOrNull()
+
+    /**
+     * Token use of a LIVE session ({calls, input, output, total, credits_lines}); the counters
+     * are the live agent's, so a chat resumed just now has none.
+     */
+    suspend fun usage(liveId: String): JsonObject? =
+        gatewayClient.request(
+            GatewayMethods.SESSION_USAGE,
+            buildJsonObject { put("session_id", liveId) }.toElementMap(),
+            trackSession = false,
+        ) as? JsonObject
+
+    /** What session.steer made of a message sent mid-turn: taken, or refused with the server's [note]. */
+    data class SteerResult(val accepted: Boolean, val note: String?)
+
+    /** Hands [text] to the turn running in [liveId]. A live-only method: a stored id answers 4001. */
+    suspend fun steer(liveId: String, text: String): SteerResult {
+        val result = gatewayClient.request(
+            GatewayMethods.SESSION_STEER,
+            buildJsonObject {
+                put("session_id", liveId)
+                put("text", text)
+            }.toElementMap(),
+        ) as? JsonObject
+        return SteerResult(
+            accepted = result?.str("status") != "rejected",
+            note = (result?.get("text") as? JsonPrimitive)?.contentOrNull,
+        )
+    }
+
+    /**
+     * Stops the turn running in [liveId], then the background processes it started. Not
+     * process.stop: that is the registry's kill_all, and stopping one chat killed the others'
+     * work. process.list/process.kill are scoped to the session.
+     */
+    suspend fun stopTurn(liveId: String) {
+        try {
+            gatewayClient.request(
+                GatewayMethods.SESSION_INTERRUPT,
+                buildJsonObject { put("session_id", liveId) }.toElementMap(),
+                timeoutMs = 5_000,
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "[Repo] session.interrupt did not complete quickly")
+        }
+        try {
+            val listed = gatewayClient.request(
+                GatewayMethods.PROCESS_LIST,
+                buildJsonObject { put("session_id", liveId) }.toElementMap(),
+                timeoutMs = 5_000,
+            )
+            val processes = (listed as? JsonObject)?.get("processes") as? JsonArray ?: JsonArray(emptyList())
+            for (entry in processes) {
+                val row = entry as? JsonObject ?: continue
+                // The registry names a process id "session_id" (a "proc_…" handle), which is
+                // not the chat session id.
+                val procId = (row["session_id"] as? JsonPrimitive)?.contentOrNull
+                if (procId.isNullOrBlank()) continue
+                if ((row["status"] as? JsonPrimitive)?.contentOrNull == "exited") continue
+                gatewayClient.request(
+                    GatewayMethods.PROCESS_KILL,
+                    buildJsonObject {
+                        put("session_id", liveId)
+                        put("process_id", procId)
+                    }.toElementMap(),
+                    timeoutMs = 5_000,
+                )
+            }
+        } catch (e: Exception) {
+            Timber.d(e, "[Repo] session-scoped process cleanup skipped/failed")
+        }
+    }
 
     // ── Tasks (delegation) ─────────────────────────────────────────────────
 

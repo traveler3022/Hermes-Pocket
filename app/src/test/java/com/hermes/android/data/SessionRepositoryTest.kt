@@ -482,6 +482,81 @@ class SessionRepositoryTest {
         assertTrue(gateway.calls.isEmpty())
     }
 
+    // ── chats ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a new chat is filed as desktop, in the project's folder when given`() = runTest {
+        gateway.handler = { method, _ ->
+            assertEquals(GatewayMethods.SESSION_CREATE, method)
+            buildJsonObject { put("session_id", "liveC"); put("stored_session_id", "storedC") }
+        }
+        val created = repo.createChat(cwd = "/root/project")
+        assertEquals("liveC", created?.liveId)
+        assertEquals("storedC", created?.storedId)
+        assertEquals(SessionSource.CHAT, gateway.calls.single().params.str("source"))
+        assertEquals("/root/project", gateway.calls.single().params.str("cwd"))
+
+        repo.createChat()
+        assertFalse("cwd" in gateway.calls.last().params)
+    }
+
+    @Test
+    fun `mostRecentId takes no null for an id`() = runTest {
+        var id: JsonElement = JsonPrimitive("stored1")
+        gateway.handler = { _, _ -> buildJsonObject { put("session_id", id) } }
+        assertEquals("stored1", repo.mostRecentId())
+        id = JsonPrimitive("null")
+        assertEquals(null, repo.mostRecentId())
+        id = kotlinx.serialization.json.JsonNull
+        assertEquals(null, repo.mostRecentId())
+    }
+
+    @Test
+    fun `stopTurn interrupts, then ends only the chat's running processes`() = runTest {
+        gateway.handler = { method, _ ->
+            when (method) {
+                GatewayMethods.PROCESS_LIST -> buildJsonObject {
+                    put("processes", buildJsonArray {
+                        add(buildJsonObject { put("session_id", "proc_1"); put("status", "running") })
+                        add(buildJsonObject { put("session_id", "proc_2"); put("status", "exited") })
+                    })
+                }
+                else -> JsonObject(emptyMap())
+            }
+        }
+        repo.stopTurn("live1")
+        assertEquals(
+            listOf(GatewayMethods.SESSION_INTERRUPT, GatewayMethods.PROCESS_LIST, GatewayMethods.PROCESS_KILL),
+            gateway.calls.map { it.method },
+        )
+        assertTrue(gateway.calls.all { it.params.str("session_id") == "live1" })
+        assertEquals("proc_1", gateway.calls.last().params.str("process_id"))
+    }
+
+    @Test
+    fun `steer reports a refusal with the server's note`() = runTest {
+        gateway.handler = { _, _ -> buildJsonObject { put("status", "rejected"); put("text", "not now") } }
+        assertEquals(SessionRepository.SteerResult(accepted = false, note = "not now"), repo.steer("live1", "go left"))
+        assertEquals("go left", gateway.calls.single().params.str("text"))
+
+        gateway.handler = { _, _ -> buildJsonObject { put("status", "queued") } }
+        assertTrue(repo.steer("live1", "go right").accepted)
+    }
+
+    @Test
+    fun `a scratch session is closed even when the write in it fails`() = runTest {
+        gateway.handler = { method, _ ->
+            if (method == GatewayMethods.SESSION_CREATE) buildJsonObject { put("session_id", "scratch") } else JsonObject(emptyMap())
+        }
+        val error = runCatching {
+            repo.withScratchSession<Unit> { throw GatewayException("RPC error 4002: bad model") }
+        }.exceptionOrNull()
+        assertTrue(error is GatewayException)
+        val close = gateway.calls.last()
+        assertEquals(GatewayMethods.SESSION_CLOSE, close.method)
+        assertEquals("scratch", close.params.str("session_id"))
+    }
+
     @Test
     fun `source goes with session resume only, since session activate rejects it`() {
         val resume = sessionAttachParams(GatewayMethods.SESSION_RESUME, "s1")

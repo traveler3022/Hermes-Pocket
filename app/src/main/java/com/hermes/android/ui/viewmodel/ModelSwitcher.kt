@@ -120,7 +120,7 @@ class ModelSwitcher @Inject constructor(
                 } else {
                     // No chat yet (fresh install): the server refuses a sessionless model
                     // set with 4001, so lend it a scratch session for the --global write.
-                    withScratchSession { sid -> gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid)) }
+                    sessionRepository.withScratchSession { sid -> gatewayClient.request(GatewayMethods.CONFIG_SET, params(sid)) }
                 }
             }
             val obj = result as? JsonObject
@@ -148,27 +148,9 @@ class ModelSwitcher @Inject constructor(
         }
     }
 
-    private suspend fun <T> withScratchSession(block: suspend (String) -> T): T {
-        val created = gatewayClient.request(GatewayMethods.SESSION_CREATE) as? JsonObject
-        val sid = (created?.get("session_id") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-            ?: throw GatewayException("session.create returned no session_id")
-        return try {
-            block(sid)
-        } finally {
-            runCatching {
-                gatewayClient.request(GatewayMethods.SESSION_CLOSE, mapOf("session_id" to JsonPrimitive(sid)), timeoutMs = 5_000)
-            }
-        }
-    }
-
     /** Live id for `session.most_recent`'s stored id; null when there is none (JsonNull ≠ "null"). */
     private suspend fun mostRecentLiveId(): String? = try {
-        val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-        ((mr as? JsonObject)?.get("session_id") as? JsonPrimitive)
-            ?.takeIf { it.isString }
-            ?.content
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sessionRepository.attach(it).liveId }
+        sessionRepository.mostRecentId()?.let { sessionRepository.attach(it).liveId }
     } catch (e: Exception) {
         Timber.w(e, "[Models] could not attach most recent session for model switch")
         null

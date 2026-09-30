@@ -2,11 +2,8 @@ package com.hermes.android.ui.viewmodel
 
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayMethods
-import com.hermes.android.gateway.SessionSource
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.asText
-import com.hermes.android.gateway.sessionIdOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,8 +14,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.UUID
 
@@ -38,8 +33,7 @@ internal class ChatSessionDelegate(
 
     suspend fun createOrResume(state: MutableStateFlow<ChatUiState>) {
         val mostRecentId = try {
-            val mr = gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT)
-            (mr as? JsonObject)?.get("session_id").sessionIdOrNull()
+            sessionRepository.mostRecentId()
         } catch (e: Exception) {
             // Cancelled because the user asked for a specific chat meanwhile:
             // opening a new one here would bury it.
@@ -56,18 +50,10 @@ internal class ChatSessionDelegate(
 
     suspend fun create(state: MutableStateFlow<ChatUiState>) {
         try {
-            val result = gatewayClient.request(
-                GatewayMethods.SESSION_CREATE,
-                mapOf("source" to JsonPrimitive(SessionSource.CHAT)),
-            )
-            val sessionId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
-            val storedId = ((result as? JsonObject)?.get("stored_session_id") as? JsonPrimitive)
-                ?.takeIf { it.isString }
-                ?.content
-                ?.takeIf { it.isNotBlank() }
-            if (sessionId != null) {
-                state.update { it.copy(activeSessionId = sessionId, activeSessionKey = storedId, isSending = false) }
-                Timber.i("[Chat] Session created: $sessionId")
+            val created = sessionRepository.createChat()
+            if (created != null) {
+                state.update { it.copy(activeSessionId = created.liveId, activeSessionKey = created.storedId, isSending = false) }
+                Timber.i("[Chat] Session created: ${created.liveId}")
             }
         } catch (e: GatewayException) {
             Timber.e(e, "[Chat] Failed to create session")
@@ -136,8 +122,7 @@ internal class ChatSessionDelegate(
 
     suspend fun loadList(state: MutableStateFlow<ChatUiState>) {
         try {
-            val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
-            val sessions = parseList(result)
+            val sessions = parseList(sessionRepository.storedChats())
             state.update { it.copy(sessions = sessions) }
             Timber.d("[Chat] Session list loaded: ${sessions.size}")
         } catch (e: Exception) {
@@ -265,9 +250,7 @@ internal class ChatSessionDelegate(
 
     suspend fun loadHistory(state: MutableStateFlow<ChatUiState>, sessionId: String, allowEmpty: Boolean = false) {
         try {
-            val params = buildJsonObject { put("session_id", sessionId) }
-            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            val messages = parseSessionHistory(result)
+            val messages = parseSessionHistory(sessionRepository.history(sessionId))
             if (messages.isNotEmpty() || allowEmpty) {
                 state.update {
                     // Another chat was opened while this history was in flight.
@@ -298,9 +281,7 @@ internal class ChatSessionDelegate(
     /** The chat as the server stores it, row ids included, or null when the history could not be read. */
     suspend fun serverTurns(sessionId: String): List<ChatMessage>? {
         return try {
-            val params = buildJsonObject { put("session_id", sessionId) }
-            val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            parseSessionHistory(result)
+            parseSessionHistory(sessionRepository.history(sessionId))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Timber.w(e, "[Chat] Could not read the stored turns of session $sessionId")
@@ -315,11 +296,7 @@ internal class ChatSessionDelegate(
                 state.update { it.copy(errorEvent = ErrorEvent.Warning("No active conversation to branch")) }
                 return
             }
-            val result = gatewayClient.request(
-                GatewayMethods.SESSION_BRANCH,
-                jsonToElementMap(buildJsonObject { put("session_id", sid) }),
-            )
-            val newId = (result as? JsonObject)?.get("session_id").sessionIdOrNull()
+            val newId = sessionRepository.branch(sid)
             loadList(state)
             if (newId != null) {
                 resume(state, newId)
@@ -408,8 +385,6 @@ internal class ChatSessionDelegate(
             emptyList()
         }
     }
-
-    private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 
     private companion object {
         val REASONING_KEYS = listOf("reasoning", "reasoning_content")
