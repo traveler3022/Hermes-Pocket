@@ -37,6 +37,16 @@ class FileGate @Inject constructor() {
         return now < until
     }
 
+    /**
+     * Why another app may not have [file] now, or null when it may: data always leaves, a
+     * program only while the user's confirmation lasts, a disguised program never. The one
+     * rule every way out of the Linux (the Files app, "Open with another app") applies.
+     */
+    fun heldBack(file: File, now: Long = System.currentTimeMillis()): Risk? {
+        val risk = riskOf(file)
+        return risk.takeUnless { it == Risk.SAFE || (it == Risk.PROGRAM && isApproved(file, now)) }
+    }
+
     /** Path, size and time: a file swapped after the user confirmed it needs a new confirmation. */
     private fun key(file: File): String {
         val real = runCatching { file.canonicalFile }.getOrDefault(file)

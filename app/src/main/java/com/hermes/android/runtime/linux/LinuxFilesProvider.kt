@@ -104,8 +104,7 @@ class LinuxFilesProvider : DocumentsProvider() {
      * confirmed it in Hermes; the notification leads there. See [FileGate].
      */
     private fun holdBackProgram(file: File) {
-        val risk = fileGate.riskOf(file)
-        if (risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && fileGate.isApproved(file))) return
+        val risk = fileGate.heldBack(file) ?: return
         context?.let { FileGateActivity.notifyHeldBack(it, file, risk) }
         throw FileNotFoundException("Held back until confirmed in Hermes: ${file.name}")
     }

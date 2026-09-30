@@ -46,10 +46,10 @@ class AudioPlaybackService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>,
                 ): ListenableFuture<MutableList<MediaItem>> =
-                    if (controller.packageName != packageName || mediaItems.any { it.localConfiguration == null }) {
-                        Futures.immediateFailedFuture(UnsupportedOperationException("Only Hermes adds files to its player"))
-                    } else {
+                    if (mayAddItems(controller.packageName, packageName, mediaItems)) {
                         Futures.immediateFuture(mediaItems)
+                    } else {
+                        Futures.immediateFailedFuture(UnsupportedOperationException("Only Hermes adds files to its player"))
                     }
             })
             .build()
@@ -81,6 +81,10 @@ class AudioPlaybackService : MediaSessionService() {
         fun itemId(url: String): String =
             java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
                 .joinToString("") { "%02x".format(it) }
+
+        /** Whether [controllerPackage] may add [items]: only Hermes itself, each item with its URI. */
+        fun mayAddItems(controllerPackage: String, ownPackage: String, items: List<MediaItem>): Boolean =
+            controllerPackage == ownPackage && items.all { it.localConfiguration != null }
     }
 
     /** Swiped away from recents: keep playing if it is, otherwise go. */

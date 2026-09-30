@@ -2,6 +2,7 @@ package com.hermes.android.runtime.linux
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -67,5 +68,20 @@ class FileGateTest {
         gate.approve(apk, now = 0L)
         apk.appendBytes(byteArrayOf(1, 2, 3))
         assertFalse(gate.isApproved(apk, now = 1L))
+    }
+
+    @Test
+    fun `data leaves, a program only while confirmed, a disguised one never`() {
+        assertNull(gate.heldBack(file("notes.txt", "hello".toByteArray())))
+
+        val apk = zip("app.apk", "AndroidManifest.xml")
+        assertEquals(FileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L))
+        gate.approve(apk, now = 1_000L)
+        assertNull(gate.heldBack(apk, now = 2_000L))
+        assertEquals(FileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L + 11 * 60 * 1000L))
+
+        val disguised = zip("photo.jpg", "AndroidManifest.xml")
+        gate.approve(disguised, now = 1_000L)
+        assertEquals(FileGate.Risk.DISGUISED, gate.heldBack(disguised, now = 2_000L))
     }
 }

@@ -264,8 +264,7 @@ private fun heldBackProgram(context: Context, url: String, fileGate: FileGate): 
     val guestPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path
         ?.let { guestPathIn(rootfs.absolutePath, it) } ?: return null
     val file = runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile } ?: return null
-    val risk = fileGate.riskOf(file)
-    return file.takeUnless { risk == FileGate.Risk.SAFE || (risk == FileGate.Risk.PROGRAM && fileGate.isApproved(file)) }
+    return file.takeIf { fileGate.heldBack(it) != null }
 }
 
 /** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */

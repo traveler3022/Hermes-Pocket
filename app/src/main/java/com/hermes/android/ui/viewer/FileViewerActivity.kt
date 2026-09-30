@@ -138,16 +138,9 @@ class FileViewerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Another app (the Files app) gets here only through the exported LinuxFileViewer alias,
-        // and any app can send that one extras: a file:// URL into the rootfs, which the
-        // OTHER branch below would hand on with a read grant (~/.hermes/.env and its API keys).
-        // From there only a document of the Linux Files root is taken, typed by that provider.
+        // Another app (the Files app) gets here only through the exported LinuxFileViewer alias.
         val external = intent.component?.className != FileViewerActivity::class.java.name
-        val source = if (external) {
-            intent.data?.takeIf { it.scheme == "content" && it.authority == LinuxFilesProvider.authority(this) }
-        } else {
-            intent.getStringExtra(EXTRA_URL)?.let(Uri::parse) ?: intent.data
-        }
+        val source = viewerSource(external, intent.data, intent.getStringExtra(EXTRA_URL), LinuxFilesProvider.authority(this))
         if (source == null) {
             finish()
             return
@@ -236,6 +229,19 @@ class FileViewerActivity : ComponentActivity() {
                 .putExtra(EXTRA_NAME, name)
     }
 }
+
+/**
+ * The file the viewer shows. Hermes' own launches name it in an extra; a launch by another app
+ * ([external]) takes only a document of the Linux Files root ([linuxAuthority]), typed by that
+ * provider. Any app can send the exported alias extras, and a file:// URL into the rootfs would
+ * go on to yet another app with a read grant (~/.hermes/.env and its API keys).
+ */
+internal fun viewerSource(external: Boolean, data: Uri?, extraUrl: String?, linuxAuthority: String): Uri? =
+    if (external) {
+        data?.takeIf { it.scheme == "content" && it.authority == linuxAuthority }
+    } else {
+        extraUrl?.let(Uri::parse) ?: data
+    }
 
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
