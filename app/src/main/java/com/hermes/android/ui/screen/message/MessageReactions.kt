@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,33 +29,40 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.MessageReaction
 import com.hermes.android.ui.viewmodel.QUICK_REACTIONS
 
+/** Six to a row, so every row fits the width of a phone's menu. */
+private val REACTION_ROWS = QUICK_REACTIONS.chunked(6)
+
 /**
- * The six quick reactions (the desktop's picker), on top of a message's touch-and-hold
- * menu where iOS puts its Tapbacks. The one already picked is marked; picking it again
- * takes it back.
+ * The reactions to pick from (the desktop's picker), on top of a message's
+ * touch-and-hold menu where iOS puts its Tapbacks. The one already picked is marked;
+ * picking it again takes it back.
  */
 @Composable
-internal fun ReactionQuickRow(selected: String?, onSelect: (String) -> Unit) {
-    Row(
+internal fun ReactionPicker(selected: String?, onSelect: (String) -> Unit) {
+    Column(
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        QUICK_REACTIONS.forEach { emoji ->
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .then(
-                        if (emoji == selected) {
-                            Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .clickable(role = Role.Button) { onSelect(emoji) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = emoji, fontSize = 22.sp)
+        REACTION_ROWS.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                row.forEach { emoji ->
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (emoji == selected) {
+                                    Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable(role = Role.Button) { onSelect(emoji) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(text = emoji, fontSize = 22.sp)
+                    }
+                }
             }
         }
     }
@@ -97,7 +105,7 @@ internal fun ReactionBadge(
 /**
  * A reply's one reaction slot at the end of its action row, as on the desktop: the
  * add-reaction glyph while it has none, the reactions themselves once it does. Either
- * way a tap opens the quick row, to pick, switch or take back.
+ * way a tap opens the picker, to pick, switch or take back.
  */
 @Composable
 internal fun ReactionSlot(
@@ -123,7 +131,7 @@ internal fun ReactionSlot(
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            ReactionQuickRow(
+            ReactionPicker(
                 selected = reactions.firstOrNull { it.isMine }?.emoji,
                 onSelect = { open = false; onReact(it) },
             )

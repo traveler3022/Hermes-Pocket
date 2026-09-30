@@ -244,7 +244,7 @@ internal fun AssistantMessageBubble(
                     onDismissRequest = { showContextMenu = false },
                 ) {
                     if (reactionsEnabled && onReact != null) {
-                        ReactionQuickRow(
+                        ReactionPicker(
                             selected = message.reactions.firstOrNull { it.isMine }?.emoji,
                             onSelect = { showContextMenu = false; onReact(it) },
                         )

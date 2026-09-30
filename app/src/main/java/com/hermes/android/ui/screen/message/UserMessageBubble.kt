@@ -204,7 +204,7 @@ internal fun UserMessageBubble(
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     if (reactionsEnabled && onReact != null) {
-                        ReactionQuickRow(
+                        ReactionPicker(
                             selected = message.reactions.firstOrNull { it.isMine }?.emoji,
                             onSelect = { showMenu = false; onReact(it) },
                         )

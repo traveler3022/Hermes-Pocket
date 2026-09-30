@@ -17,8 +17,15 @@ internal const val AUTHOR_USER = "user"
 /** Settings → Appearance → Message reactions (ThemeModeState): off unless the user turns it on, as on the desktop. */
 const val MESSAGE_REACTIONS_PREF = "message_reactions"
 
-/** The six iOS Tapback defaults in Apple's order, as the desktop offers them. */
-val QUICK_REACTIONS = listOf("\u2764\uFE0F", "\uD83D\uDC4D", "\uD83D\uDC4E", "\uD83D\uDE02", "\u203C\uFE0F", "\u2753")
+/**
+ * The reactions offered, six to a row: the desktop's six (the iOS Tapbacks in Apple's
+ * order), then more positive ones, then more negative ones. The server takes any emoji.
+ */
+val QUICK_REACTIONS = listOf(
+    "\u2764\uFE0F", "\uD83D\uDC4D", "\uD83D\uDC4E", "\uD83D\uDE02", "\u203C\uFE0F", "\u2753",
+    "\uD83D\uDD25", "\uD83D\uDC4F", "\uD83D\uDE4F", "\uD83C\uDF89", "\uD83D\uDE0D", "\uD83D\uDCAF",
+    "\uD83D\uDE22", "\uD83D\uDE21", "\uD83E\uDD2E", "\uD83D\uDC94", "\uD83E\uDD26", "\uD83D\uDE10",
+)
 
 /** Tapback semantics, the server's too: one reaction per author, the same emoji again retracts, null clears. */
 internal fun applyReaction(
