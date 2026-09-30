@@ -287,6 +287,7 @@ private fun HermesNavHost(
                 onNavigateToPlatforms = { navController.navigate("platforms") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
+                onNavigateToMcp = { navController.navigate("mcp") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToLinux = { navController.navigate("linux") },
@@ -316,6 +317,12 @@ private fun HermesNavHost(
 
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("mcp") {
+            com.hermes.android.ui.screen.McpScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }

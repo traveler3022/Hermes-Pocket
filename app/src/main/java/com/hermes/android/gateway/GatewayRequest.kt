@@ -69,6 +69,18 @@ object GatewayMethods {
     const val RELOAD_MCP = "reload.mcp"
     const val RELOAD_ENV = "reload.env"
 
+    // MCP servers (the gateway's mirror of the desktop MCP page)
+    const val MCP_CATALOG = "mcp.catalog"
+    const val MCP_SERVERS_LIST = "mcp.servers.list"
+    const val MCP_SERVERS_STATUS = "mcp.servers.status"
+    const val MCP_SERVERS_ADD = "mcp.servers.add"
+    const val MCP_SERVERS_SET_API_KEY = "mcp.servers.set_api_key"
+    const val MCP_SERVERS_TEST = "mcp.servers.test"
+    const val MCP_SERVERS_REMOVE = "mcp.servers.remove"
+    const val MCP_OAUTH_START = "mcp.servers.oauth.start"
+    const val MCP_OAUTH_POLL = "mcp.servers.oauth.poll"
+    const val MCP_OAUTH_CANCEL = "mcp.servers.oauth.cancel"
+
     const val APPROVAL_RESPOND = "approval.respond"
 
     const val INSIGHTS_GET = "insights.get"

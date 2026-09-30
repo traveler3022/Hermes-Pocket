@@ -122,6 +122,7 @@ fun ConfigScreen(
     onNavigateToPlatforms: () -> Unit = {},
     onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
+    onNavigateToMcp: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToLinux: () -> Unit = {},
@@ -213,6 +214,7 @@ fun ConfigScreen(
                     onOpen = { section = it },
                     onNavigateToPlugins = onNavigateToPlugins,
                     onNavigateToSkills = onNavigateToSkills,
+                    onNavigateToMcp = onNavigateToMcp,
                 )
                 SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
                 SettingsSection.ABOUT -> AboutSection()

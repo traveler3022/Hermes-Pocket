@@ -93,13 +93,14 @@ import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ToolOption
 
-/** Tools folder: Toolsets, Plugins and Skills, one row each. */
+/** Tools folder: Toolsets, Plugins, Skills and MCP servers, one row each. */
 @Composable
 internal fun ToolsTab(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSkills: () -> Unit,
+    onNavigateToMcp: () -> Unit,
 ) {
     SettingsFolder {
         SettingsCardGroup {
@@ -130,6 +131,13 @@ internal fun ToolsTab(
                 subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToSkills,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = t("MCP Servers", "سرورهای MCP"),
+                subtitle = t("Catalog, sign-in and connection tests", "کاتالوگ، ورود و تست اتصال"),
+                icon = Icons.Default.Dns,
+                onClick = onNavigateToMcp,
             )
         }
     }
