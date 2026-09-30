@@ -8,10 +8,10 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import android.util.Base64
+import android.webkit.MimeTypeMap
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.linux.LinuxFilesProvider
@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -58,8 +57,13 @@ internal class ChatAttachmentDelegate(
                 // HEIC isn't one: a phone camera's HEIC photo goes as a JPEG instead.
                 jpeg = if (isHeic(pickedMime, pickedName)) heicToJpeg(uri) else null
                 val source = jpeg?.let { Uri.fromFile(it) } ?: uri
-                val name = if (jpeg != null) pickedName.substringBeforeLast('.') + ".jpg" else pickedName
+                val name = if (jpeg != null) pickedName.substringBeforeLast('.') + ".jpg" else withImageExtension(pickedName, pickedMime)
                 val mime = if (jpeg != null) "image/jpeg" else pickedMime
+                // Hermes queues as images only its own image types and rejects the rest (4016).
+                // Everything else, PDFs included, goes through file.attach as on the desktop, and
+                // the agent opens it with its tools: pdf.attach needs poppler's pdftoppm, which the
+                // built-in Linux doesn't have.
+                val isImage = name.substringAfterLast('.', "").lowercase() in hermesImageExtensions
 
                 // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
                 // Termux and remote gateways can't see the file, so they get the bytes.
@@ -68,27 +72,7 @@ internal class ChatAttachmentDelegate(
                 } else null
                 val b64 = if (guestPath == null) readBase64(source) else ""
 
-                val newAttachments: List<PendingAttachment> = if (mime == "application/pdf") {
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        if (guestPath != null) put("path", guestPath) else put("content_base64", b64)
-                        put("filename", name)
-                    }
-                    val result = gatewayClient.request(GatewayMethods.PDF_ATTACH, jsonToElementMap(params))
-                        as? JsonObject ?: throw IllegalStateException("Gateway returned no result")
-                    val pages = result["pages"] as? JsonArray
-                        ?: throw IllegalStateException("PDF attach returned no pages")
-                    pages.mapIndexedNotNull { idx, pageEl ->
-                        val page = pageEl as? JsonObject ?: return@mapIndexedNotNull null
-                        val path = (page["path"] as? JsonPrimitive)?.contentOrNull
-                        PendingAttachment(
-                            name = "$name (p.${idx + 1})",
-                            isImage = true,
-                            gatewayPath = path,
-                            localUri = uri.toString(),
-                        )
-                    }
-                } else if (mime.startsWith("image/")) {
+                val attachment = if (isImage) {
                     // image.attach takes only session_id and path, and rejects anything else
                     // (tui_gateway/contracts/prompt_voice.py: ImageAttachParams); the filename
                     // hint belongs to image.attach_bytes alone.
@@ -104,7 +88,7 @@ internal class ChatAttachmentDelegate(
                     val method = if (guestPath != null) "image.attach" else "image.attach_bytes"
                     val result = gatewayClient.request(method, jsonToElementMap(params))
                     val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.contentOrNull
-                    listOf(PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString()))
+                    PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
                 } else {
                     val params = buildJsonObject {
                         put("session_id", sessionId)
@@ -114,13 +98,13 @@ internal class ChatAttachmentDelegate(
                     val result = gatewayClient.request("file.attach", jsonToElementMap(params))
                     val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.contentOrNull
                         ?: throw IllegalStateException("Gateway returned no file reference")
-                    listOf(PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString()))
+                    PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
                 }
                 state.update { it.copy(
-                    pendingAttachments = state.value.pendingAttachments + newAttachments,
+                    pendingAttachments = state.value.pendingAttachments + attachment,
                     isAttaching = false,
                 ) }
-                Timber.i("[Chat] Attached ${newAttachments.size} item(s) from $name (${guestPath ?: "uploaded"})")
+                Timber.i("[Chat] Attached $name (${guestPath ?: "uploaded"})")
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Attach failed")
                 state.update { it.copy(
@@ -132,6 +116,16 @@ internal class ChatAttachmentDelegate(
             }
         }
     }
+
+    /** [name] with the extension its image [mime] implies when it has none Hermes knows, e.g. a gallery item "IMG_0042". */
+    private fun withImageExtension(name: String, mime: String): String {
+        if (!mime.startsWith("image/") || name.substringAfterLast('.', "").lowercase() in hermesImageExtensions) return name
+        val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)?.lowercase()
+        return if (ext != null && ext in hermesImageExtensions) "$name.$ext" else name
+    }
+
+    /** Hermes' image types (hermes_cli/cli_terminal_input.py `_IMAGE_EXTENSIONS`). */
+    private val hermesImageExtensions = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "svg", "ico")
 
     private fun isHeic(mime: String, name: String): Boolean =
         mime.startsWith("image/heic") || mime.startsWith("image/heif") ||

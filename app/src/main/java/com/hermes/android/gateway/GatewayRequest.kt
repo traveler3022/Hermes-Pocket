@@ -113,7 +113,6 @@ object GatewayMethods {
     // Chat completion. session.save (server-side JSON dump) and toolsets.list/
     // tools.show (near-duplicates of the already-wired tools.list) evaluated
     // and deliberately not wired — see commit history for why.
-    const val PDF_ATTACH = "pdf.attach"
     const val LLM_ONESHOT = "llm.oneshot"
 
 }
