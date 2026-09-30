@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.hermes.android.ui.viewmodel.MESSAGE_REACTIONS_PREF
 
 enum class ThemeMode(val key: String) {
     SYSTEM("system"),
@@ -96,6 +97,13 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // Tapback reactions on messages. Off by default, as on the desktop: turning it on
+    // also gives the agent its react_to_message tool (ChatViewModel tells the gateway).
+    var messageReactions: Boolean by mutableStateOf(
+        prefs.getBoolean(MESSAGE_REACTIONS_PREF, false)
+    )
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -114,6 +122,11 @@ class ThemeModeState(context: Context) {
     fun updateShowInlineNarration(enabled: Boolean) {
         showInlineNarration = enabled
         prefs.edit().putBoolean("show_inline_narration", enabled).apply()
+    }
+
+    fun updateMessageReactions(enabled: Boolean) {
+        messageReactions = enabled
+        prefs.edit().putBoolean(MESSAGE_REACTIONS_PREF, enabled).apply()
     }
 
     fun updateAppFont(newFont: AppFont) {

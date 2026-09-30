@@ -126,6 +126,8 @@ internal fun MessageBubble(
     thinkingStatus: String = "",
     onEditMessage: ((messageId: String) -> Unit)? = null,
     onDeleteMessage: ((messageId: String) -> Unit)? = null,
+    reactionsEnabled: Boolean = false,
+    onReact: ((messageId: String, emoji: String?) -> Unit)? = null,
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -145,6 +147,11 @@ internal fun MessageBubble(
                 onDelete = onDeleteMessage
                     ?.takeIf { canRewind }
                     ?.let { delete -> { delete(message.id) } },
+                reactionsEnabled = reactionsEnabled,
+                // Nothing is stored yet for a message still waiting for Hermes to boot.
+                onReact = onReact
+                    ?.takeIf { !message.queued }
+                    ?.let { react -> { emoji: String? -> react(message.id, emoji) } },
             )
         }
 
@@ -167,6 +174,10 @@ internal fun MessageBubble(
                 onPreviewSend = onPreviewSend,
                 traceItems = traceItems,
                 thinkingStatus = thinkingStatus,
+                reactionsEnabled = reactionsEnabled,
+                onReact = onReact
+                    ?.takeIf { !message.isStreaming }
+                    ?.let { react -> { emoji: String? -> react(message.id, emoji) } },
             )
         }
 

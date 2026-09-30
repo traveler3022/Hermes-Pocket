@@ -292,14 +292,18 @@ internal class ChatSessionDelegate(
      * the history could not be read. A rewind is aimed with these, never with the
      * bubbles on screen alone (see [findUserRow]).
      */
-    suspend fun serverUserTurns(sessionId: String): List<ChatMessage.User>? {
+    suspend fun serverUserTurns(sessionId: String): List<ChatMessage.User>? =
+        serverTurns(sessionId)?.filterIsInstance<ChatMessage.User>()
+
+    /** The chat as the server stores it, row ids included, or null when the history could not be read. */
+    suspend fun serverTurns(sessionId: String): List<ChatMessage>? {
         return try {
             val params = buildJsonObject { put("session_id", sessionId) }
             val result = gatewayClient.request(GatewayMethods.SESSION_HISTORY, jsonToElementMap(params))
-            parseSessionHistory(result).filterIsInstance<ChatMessage.User>()
+            parseSessionHistory(result)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Timber.w(e, "[Chat] Could not read the user turns of session $sessionId")
+            Timber.w(e, "[Chat] Could not read the stored turns of session $sessionId")
             null
         }
     }
@@ -372,8 +376,9 @@ internal class ChatSessionDelegate(
                     ?: System.currentTimeMillis()
                 val id = msg["id"].asText() ?: UUID.randomUUID().toString()
                 val rowId = msg["row_id"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toLongOrNull() }
+                val reactions = reactionsOf(msg["display_metadata"])
                 when (role) {
-                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content, rowId = rowId)
+                    "user" -> ChatMessage.User(id = id, timestamp = ts, text = content, rowId = rowId, reactions = reactions)
                     "assistant" -> ChatMessage.Assistant(
                         id = id, timestamp = ts, text = content,
                         isStreaming = false,
@@ -381,6 +386,8 @@ internal class ChatSessionDelegate(
                         reasoning = REASONING_KEYS.firstNotNullOfOrNull { key ->
                             (msg[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
                         },
+                        rowId = rowId,
+                        reactions = reactions,
                     )
                     "tool" -> ChatMessage.ToolCall(
                         id = id, timestamp = ts,

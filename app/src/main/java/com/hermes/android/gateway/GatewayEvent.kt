@@ -74,6 +74,17 @@ sealed class GatewayEvent {
     /** The session list moved (any surface). Session-less: refetch, don't map. */
     data class SessionsChanged(override val sessionId: String?) : GatewayEvent()
 
+    /**
+     * The agent reacted to a message (react_to_message, message.reaction). Already
+     * stored; [reactions] is the row's whole list, [role] whose message it is.
+     */
+    data class AgentReaction(
+        override val sessionId: String?,
+        val rowId: Long,
+        val role: String,
+        val reactions: kotlinx.serialization.json.JsonElement?,
+    ) : GatewayEvent()
+
     /** Frames for [sessionId] were lost on this socket (client-side, from the seq stamp). */
     data class EventGap(override val sessionId: String) : GatewayEvent()
 

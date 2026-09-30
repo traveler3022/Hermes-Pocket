@@ -38,6 +38,19 @@ object HxIcons {
         )
     }
 
+    /** lucide `smile-plus` */
+    val SmilePlus: ImageVector by lazy {
+        lucideIcon(
+            name = "SmilePlus",
+            "M13.267 2.08a10 10 0 1 0 8.653 8.653",
+            "M15 10V9",
+            "M16 5h6",
+            "M16.472 15a6 6 0 0 1-8.943 0",
+            "M19 2v6",
+            "M9 10V9",
+        )
+    }
+
     /** lucide `external-link` */
     val ExternalLink: ImageVector by lazy {
         lucideIcon(

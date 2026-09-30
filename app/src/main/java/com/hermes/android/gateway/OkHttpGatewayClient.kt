@@ -926,6 +926,9 @@ class OkHttpGatewayClient @Inject constructor(
                 p["title"].asText() ?: "",
             )
             "sessions.changed" -> GatewayEvent.SessionsChanged(sid)
+            "message.reaction" -> p["row_id"].asText()?.toLongOrNull()
+                ?.let { GatewayEvent.AgentReaction(sid, it, p["role"].asText() ?: "user", p["reactions"]) }
+                ?: GatewayEvent.Unknown(sid, eventType, p.toMap())
             "message.start" -> GatewayEvent.MessageStart(sid)
             "message.delta" -> GatewayEvent.MessageDelta(
                 sid,

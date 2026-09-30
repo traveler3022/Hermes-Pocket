@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,6 +73,9 @@ internal fun AssistantMessageBubble(
     traceItems: List<HxTraceItem> = emptyList(),
     /** The agent's live status line; only the streaming reply is given one. */
     thinkingStatus: String = "",
+    reactionsEnabled: Boolean = false,
+    /** Null: the reply cannot take a reaction yet (still streaming). */
+    onReact: ((String?) -> Unit)? = null,
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -239,6 +243,13 @@ internal fun AssistantMessageBubble(
                     expanded = showContextMenu,
                     onDismissRequest = { showContextMenu = false },
                 ) {
+                    if (reactionsEnabled && onReact != null) {
+                        ReactionQuickRow(
+                            selected = message.reactions.firstOrNull { it.isMine }?.emoji,
+                            onSelect = { showContextMenu = false; onReact(it) },
+                        )
+                        HorizontalDivider()
+                    }
                     DropdownMenuItem(
                         text = { Text(t("Copy text", "کپی متن")) },
                         onClick = { onCopyMessage(message.text); showContextMenu = false },
@@ -302,6 +313,9 @@ internal fun AssistantMessageBubble(
                             contentDescription = t("Retry", "تلاش دوباره"),
                             onClick = onRetry,
                         )
+                    }
+                    if (onReact != null && (reactionsEnabled || message.reactions.isNotEmpty())) {
+                        ReactionSlot(reactions = message.reactions, enabled = reactionsEnabled, onReact = onReact)
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.hermes.android.ui.viewmodel
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +15,7 @@ import com.hermes.android.gateway.asText
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.UUID
@@ -69,6 +73,15 @@ class ChatViewModel @Inject constructor(
     private var connectionWatchJob: Job? = null
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // Settings → Appearance → Message reactions. The switch also decides whether the agent
+    // gets react_to_message and hears about the user's reactions, and that is decided where
+    // the agent runs, so the gateway is told: when it moves, and on every connect once the
+    // user has set it (the desktop's display-toggles.ts).
+    private val appearancePrefs = context.getSharedPreferences(APPEARANCE_PREFS, Context.MODE_PRIVATE)
+    private val reactionsSwitchMirror = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == MESSAGE_REACTIONS_PREF) pushReactionsSwitch()
+    }
 
     // ── Delegates ───────────────────────────────────────────────────────
 
@@ -125,8 +138,14 @@ class ChatViewModel @Inject constructor(
             gatewayClient.connectionState
                 .map { it is ConnectionState.Connected }
                 .distinctUntilChanged()
-                .collect { connected -> if (connected) loadCommandCatalog() }
+                .collect { connected ->
+                    if (connected) {
+                        loadCommandCatalog()
+                        if (appearancePrefs.contains(MESSAGE_REACTIONS_PREF)) pushReactionsSwitch()
+                    }
+                }
         }
+        appearancePrefs.registerOnSharedPreferenceChangeListener(reactionsSwitchMirror)
     }
 
     /**
@@ -644,6 +663,101 @@ class ChatViewModel @Inject constructor(
         }
         // The target first; the hidden rows are only tried if the server refuses it.
         return listOf(rowId) + hiddenRowsBefore(server, rowId)
+    }
+
+    // ── Reactions ────────────────────────────────────────────────────────
+
+    /**
+     * Sets, switches or retracts the user's reaction on a message (message.react: the
+     * same emoji again retracts, null clears). Painted at once, then replaced by the list
+     * the server stored, or put back if the write fails (the desktop's reactions.ts).
+     */
+    fun reactToMessage(messageId: String, emoji: String?) {
+        val sessionId = _uiState.value.activeSessionId ?: return
+        val target = _uiState.value.messages.firstOrNull { it.id == messageId } ?: return
+        val before = target.reactionsOrNull ?: return
+        paintReactions(messageId, applyReaction(before, emoji))
+        viewModelScope.launch {
+            try {
+                val address = reactionAddress(sessionId, target)
+                if (address == null) {
+                    paintReactions(messageId, before)
+                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(REACTION_NOT_LOCATED)) }
+                    return@launch
+                }
+                val result = gatewayClient.request(
+                    GatewayMethods.MESSAGE_REACT,
+                    mapOf(
+                        "session_id" to JsonPrimitive(sessionId),
+                        address,
+                        "emoji" to (emoji?.let { JsonPrimitive(it) } ?: JsonNull),
+                        "author" to JsonPrimitive(AUTHOR_USER),
+                    ),
+                ) as? JsonObject
+                paintReactions(
+                    messageId,
+                    parseReactions(result?.get("reactions")),
+                    result?.get("row_id").asText()?.toLongOrNull(),
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Timber.w(e, "[Chat] message.react failed")
+                paintReactions(messageId, before)
+                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Could not react: ${e.message}")) }
+            }
+        }
+    }
+
+    /**
+     * How message.react names [target]: by its row id, which a bubble drawn live only has
+     * once it is found in the stored chat (see [findUserRow]). A reply whose text does not
+     * match is still the newest stored reply once nothing is running, and the server finds
+     * that one itself (newest_role, what the desktop sends for a live message). Null when
+     * the message cannot be told apart for certain.
+     */
+    private suspend fun reactionAddress(sessionId: String, target: ChatMessage): Pair<String, JsonElement>? {
+        target.rowIdOrNull?.let { return "row_id" to JsonPrimitive(it) }
+        val local = _uiState.value.messages
+        val rowId = sessionDelegate.serverTurns(sessionId)?.let { server ->
+            when (target) {
+                is ChatMessage.User -> findUserRow(local, target, server.filterIsInstance<ChatMessage.User>())
+                is ChatMessage.Assistant -> findAssistantRow(local, target, server.filterIsInstance<ChatMessage.Assistant>())
+                else -> null
+            }
+        }
+        if (rowId != null) return "row_id" to JsonPrimitive(rowId)
+        val newestReply = local.lastOrNull { it is ChatMessage.Assistant }
+        return if (target is ChatMessage.Assistant && newestReply?.id == target.id && !_uiState.value.isSending) {
+            "newest_role" to JsonPrimitive("assistant")
+        } else {
+            null
+        }
+    }
+
+    private fun paintReactions(messageId: String, reactions: List<MessageReaction>, rowId: Long? = null) {
+        _uiState.update { state ->
+            state.copy(messages = state.messages.updateFirst({ it.id == messageId }) { it.withReactions(reactions, rowId) })
+        }
+    }
+
+    private fun pushReactionsSwitch() {
+        val enabled = appearancePrefs.getBoolean(MESSAGE_REACTIONS_PREF, false)
+        viewModelScope.launch {
+            try {
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    mapOf(
+                        "key" to JsonPrimitive("display.message_reactions"),
+                        "value" to JsonPrimitive(enabled.toString()),
+                    ),
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // Not connected, or a Hermes too old to know the key: the next change
+                // and the next connect both send it again.
+                Timber.w(e, "[Chat] display.message_reactions not sent")
+            }
+        }
     }
 
     private fun rewindFailure(e: Exception): String =
@@ -1359,6 +1473,25 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            is GatewayEvent.AgentReaction -> {
+                // Already stored; this only paints it now rather than at the next reload.
+                // A message drawn live has no row id yet, and the agent reacts to the newest
+                // message of that role unless told otherwise, so it lands there
+                // (desktop-bridge.ts). The id is not stamped on it: a guess must not become
+                // the address the user's own reactions are sent to.
+                val reactions = parseReactions(event.reactions)
+                _uiState.update { state ->
+                    val messages = state.messages
+                    val byRow = messages.indexOfFirst { it.rowIdOrNull == event.rowId }
+                    val index = if (byRow >= 0) byRow else messages.indexOfLast { msg ->
+                        msg.rowIdOrNull == null &&
+                            if (event.role == "assistant") msg is ChatMessage.Assistant else msg is ChatMessage.User
+                    }
+                    if (index < 0) state
+                    else state.copy(messages = messages.toMutableList().also { it[index] = it[index].withReactions(reactions) })
+                }
+            }
+
             is GatewayEvent.SessionsChanged -> {
                 // Fires on every message append of every session, floored to
                 // one per 2s server-side. Only worth a refetch while the list
@@ -1836,10 +1969,15 @@ class ChatViewModel @Inject constructor(
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
         private const val MESSAGE_NOT_LOCATED =
             "Could not find this message in the stored chat, so nothing was changed. Reopen the chat and try again."
+        private const val REACTION_NOT_LOCATED =
+            "Could not find this message in the stored chat. Reopen the chat and try again."
+        /** ThemeModeState's file, where the Appearance switches live. */
+        private const val APPEARANCE_PREFS = "hermes_prefs"
     }
 
     override fun onCleared() {
         super.onCleared()
+        appearancePrefs.unregisterOnSharedPreferenceChangeListener(reactionsSwitchMirror)
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()
         streamingDelegate.reset()

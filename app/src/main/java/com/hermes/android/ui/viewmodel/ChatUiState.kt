@@ -31,6 +31,7 @@ sealed class ChatMessage {
          *  ordinal-only truncation (retry/regenerate) with RPC 4004 unless this rides
          *  along with the ordinal, so it has to survive from history into a retry. */
         val rowId: Long? = null,
+        val reactions: List<MessageReaction> = emptyList(),
     ) : ChatMessage()
 
     /** Assistant message (streaming or complete). */
@@ -40,6 +41,9 @@ sealed class ChatMessage {
         val text: String,
         val isStreaming: Boolean,
         val reasoning: String?,
+        /** Durable SQLite row id from session.history; a reply streamed live has none. */
+        val rowId: Long? = null,
+        val reactions: List<MessageReaction> = emptyList(),
     ) : ChatMessage()
 
     /** Tool call card. */

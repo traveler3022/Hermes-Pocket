@@ -914,6 +914,8 @@ fun ChatScreen(
                                 onPreviewSend = viewModel::sendHiddenPrompt,
                                 onEditMessage = viewModel::startEditing,
                                 onDeleteMessage = { id -> deleteFromMessageId = id },
+                                reactionsEnabled = themeModeState?.messageReactions == true,
+                                onReact = viewModel::reactToMessage,
                             )
                             }
                         }

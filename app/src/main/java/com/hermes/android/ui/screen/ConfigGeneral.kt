@@ -194,6 +194,30 @@ internal fun GeneralTab(
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = t("Message reactions", "ری‌اکشن روی پیام‌ها"),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = t(
+                                    "Touch and hold a message to react with an emoji. The agent sees your reactions and can react to your messages too.",
+                                    "پیام را نگه دارید تا با یک ایموجی به آن واکنش نشان دهید. ایجنت واکنش‌های شما را می‌بیند و خودش هم می‌تواند به پیام‌هایتان واکنش نشان دهد.",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.messageReactions,
+                            onCheckedChange = { themeModeState.updateMessageReactions(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = t("Font", "فونت"),
                         style = MaterialTheme.typography.titleSmall,

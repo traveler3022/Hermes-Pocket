@@ -100,6 +100,8 @@ object GatewayMethods {
     const val SESSION_BRANCH = "session.branch"
     const val SESSION_STEER = "session.steer"
 
+    const val MESSAGE_REACT = "message.react"
+
     // Delegation v1 (Task Desk)
     const val SESSION_ACTIVE_LIST = "session.active_list"
     const val SESSION_ACTIVATE = "session.activate"
