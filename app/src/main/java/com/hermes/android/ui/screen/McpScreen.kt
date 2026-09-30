@@ -164,7 +164,7 @@ fun McpScreen(
                                 subtitle = listOfNotNull(
                                     statusText(server, status, probe),
                                     server.url ?: server.command,
-                                ).joinToString(" · "),
+                                ).joinToString(" · ").ifEmpty { null },
                                 icon = if (server.url != null) Icons.Default.Link else Icons.Default.Terminal,
                                 iconTint = statusColor(status),
                                 onClick = { selected = server.name },
@@ -549,7 +549,8 @@ private fun ApiKeyDialog(
                     value = envVar,
                     onValueChange = { envVar = it.uppercase().replace(' ', '_') },
                     label = { Text(t("Variable name (optional)", "نام متغیر (اختیاری)")) },
-                    placeholder = { Text("MCP_${name.uppercase()}_API_KEY") },
+                    // Hermes' default name (mcp_config._env_key_for_server).
+                    placeholder = { Text("MCP_${name.uppercase().replace(Regex("[^A-Za-z0-9_]"), "_").trim('_')}_API_KEY") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )

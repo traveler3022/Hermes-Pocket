@@ -41,6 +41,7 @@ class McpViewModel @Inject constructor(
     val uiState: StateFlow<McpUiState> = _uiState.asStateFlow()
 
     private var signInJob: Job? = null
+    private var probeSeq = 0L
 
     init {
         load()
@@ -73,8 +74,10 @@ class McpViewModel @Inject constructor(
                 // Each probe is a real connect (a stdio server gets spawned), so a result is
                 // reused for five minutes, like the desktop's probe cache.
                 servers.filter { it.enabled && it.name !in kept }.forEach { server ->
-                    val cached = probeCache[server.fingerprint]
-                    if (cached != null && System.currentTimeMillis() - cached.first < PROBE_TTL_MS) {
+                    val cached = probeCache[server.name]
+                    if (cached != null && cached.second.fingerprint == server.fingerprint &&
+                        System.currentTimeMillis() - cached.first < PROBE_TTL_MS
+                    ) {
                         setProbe(server.name, cached.second)
                     } else {
                         launch { probe(server) }
@@ -93,7 +96,8 @@ class McpViewModel @Inject constructor(
     }
 
     private suspend fun probe(server: McpServer) {
-        setProbe(server.name, McpProbe(probing = true, fingerprint = server.fingerprint))
+        val pending = McpProbe(probing = true, fingerprint = server.fingerprint, seq = ++probeSeq)
+        setProbe(server.name, pending)
         val result = try {
             val r = rpc(GatewayMethods.MCP_SERVERS_TEST, params("name" to server.name))
             McpProbe(
@@ -109,8 +113,20 @@ class McpViewModel @Inject constructor(
         } catch (e: Exception) {
             McpProbe(error = e.message ?: "Test failed", fingerprint = server.fingerprint)
         }
-        probeCache[server.fingerprint] = System.currentTimeMillis() to result
-        setProbe(server.name, result)
+        // A newer probe, or a change to this server, replaced this one while it ran: its result
+        // describes a config that's gone and must not overwrite the current status.
+        var current = false
+        _uiState.update { state ->
+            current = state.probes[server.name] === pending
+            if (current) state.copy(probes = state.probes + (server.name to result)) else state
+        }
+        if (current) probeCache[server.name] = System.currentTimeMillis() to result
+    }
+
+    /** Forgets [name]'s status so the next load probes it afresh: a new key can leave its config looking the same. */
+    private fun invalidate(name: String) {
+        probeCache.remove(name)
+        _uiState.update { it.copy(probes = it.probes - name) }
     }
 
     private fun setProbe(name: String, probe: McpProbe) {
@@ -120,6 +136,7 @@ class McpViewModel @Inject constructor(
     /** A server by URL (http) or by command (stdio); a bearer token goes to .env, not config.yaml. */
     fun addServer(name: String, url: String, command: String, args: String, bearerToken: String) = mutate(
         McpNotice("Added ${name.trim()}", "${name.trim()} اضافه شد"),
+        server = name.trim(),
     ) {
         val config = JsonObject(
             if (url.isNotBlank()) {
@@ -127,7 +144,7 @@ class McpViewModel @Inject constructor(
             } else {
                 mapOf(
                     "command" to JsonPrimitive(command.trim()),
-                    "args" to JsonArray(args.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.map(::JsonPrimitive)),
+                    "args" to JsonArray(splitArgs(args).map { JsonPrimitive(it) }),
                 )
             },
         )
@@ -144,6 +161,7 @@ class McpViewModel @Inject constructor(
     /** A catalog preset, then each key it needs, as Hermes desktop's setup card does. */
     fun addFromCatalog(entry: McpCatalogEntry, keys: Map<String, String>) = mutate(
         McpNotice("Added ${entry.name}", "${entry.name} اضافه شد"),
+        server = entry.name,
     ) {
         rpc(GatewayMethods.MCP_SERVERS_ADD, params("name" to entry.name, "preset" to entry.name))
         keys.filterValues { it.isNotBlank() }.forEach { (envVar, value) ->
@@ -157,6 +175,7 @@ class McpViewModel @Inject constructor(
     /** Stores [value] in .env; a blank [envVar] lets Hermes pick MCP_<NAME>_API_KEY. */
     fun setApiKey(name: String, value: String, envVar: String) = mutate(
         McpNotice("Key saved for $name", "کلید $name ذخیره شد"),
+        server = name,
     ) {
         rpc(
             GatewayMethods.MCP_SERVERS_SET_API_KEY,
@@ -164,23 +183,38 @@ class McpViewModel @Inject constructor(
         )
     }
 
-    fun remove(name: String) = mutate(McpNotice("Removed $name", "$name حذف شد")) {
+    fun remove(name: String) = mutate(McpNotice("Removed $name", "$name حذف شد"), server = name) {
         rpc(GatewayMethods.MCP_SERVERS_REMOVE, params("name" to name))
-        _uiState.update { it.copy(probes = it.probes - name) }
     }
 
-    /** Runs a config change, then reloads MCP so live chats get the new tools, and re-reads the list. */
-    private fun mutate(done: McpNotice, block: suspend () -> Unit) {
+    /**
+     * Runs a config change to [server], then reloads MCP so live chats get the new tools, and
+     * re-reads the list. A failed reload doesn't undo the change, so it isn't reported as one.
+     */
+    private fun mutate(done: McpNotice, server: String, block: suspend () -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true) }
             try {
                 block()
-                reloadMcp()
-                _uiState.update { it.copy(notice = done) }
+                val notice = try {
+                    reloadMcp()
+                    done
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "[MCP] reload.mcp failed")
+                    val reason = reasonOf(e)
+                    McpNotice(
+                        "${done.en}, but reloading MCP failed: $reason",
+                        "${done.fa}، ولی بارگذاری دوبارهٔ MCP انجام نشد: $reason",
+                    )
+                }
+                _uiState.update { it.copy(notice = notice) }
             } catch (e: Exception) {
                 Timber.e(e, "[MCP] Change failed")
                 _uiState.update { it.copy(notice = failed(e)) }
             } finally {
+                invalidate(server)
                 _uiState.update { it.copy(isBusy = false) }
                 load()
             }
@@ -283,7 +317,9 @@ class McpViewModel @Inject constructor(
         _uiState.update { it.copy(notice = null) }
     }
 
-    private fun failed(e: Exception) = McpNotice("Failed: ${e.message}", "انجام نشد: ${e.message}")
+    private fun failed(e: Exception) = reasonOf(e).let { McpNotice("Failed: $it", "انجام نشد: $it") }
+
+    private fun reasonOf(e: Exception) = e.message ?: e.javaClass.simpleName
 
     // ── RPC and parsing ──────────────────────────────────────────────────
 
@@ -351,7 +387,7 @@ class McpViewModel @Inject constructor(
         const val PROBE_TTL_MS = 5 * 60_000L
         const val SIGN_IN_TIMEOUT_MS = 6 * 60_000L
 
-        /** Probe results outlive the screen, keyed by config fingerprint (desktop mcp-probe-cache.ts). */
+        /** Probe results outlive the screen, per server and valid for its config fingerprint (desktop mcp-probe-cache.ts). */
         val probeCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, McpProbe>>()
     }
 }
@@ -400,6 +436,8 @@ data class McpProbe(
     val resources: Int = 0,
     val error: String? = null,
     val fingerprint: String = "",
+    /** Tells two runs apart, so a stale result can't pass for the current one. */
+    val seq: Long = 0,
 )
 
 enum class McpStatus { OK, ERROR, NEEDS_AUTH, PROBING, OFF, UNKNOWN }
@@ -423,3 +461,21 @@ fun McpServer.canSignIn(status: McpStatus): Boolean =
     } else {
         auth == null && status == McpStatus.NEEDS_AUTH
     }
+
+/** Shell-style words for a command's arguments: whitespace splits, "…" or '…' keeps spaces. */
+internal fun splitArgs(line: String): List<String> {
+    val args = mutableListOf<String>()
+    val word = StringBuilder()
+    var quote: Char? = null
+    var inWord = false
+    for (c in line) {
+        when {
+            quote != null -> if (c == quote) quote = null else word.append(c)
+            c == '"' || c == '\'' -> { quote = c; inWord = true }
+            c.isWhitespace() -> if (inWord) { args += word.toString(); word.clear(); inWord = false }
+            else -> { word.append(c); inWord = true }
+        }
+    }
+    if (inWord) args += word.toString()
+    return args
+}
