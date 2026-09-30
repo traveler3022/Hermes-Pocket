@@ -120,6 +120,11 @@ sealed class GatewayEvent {
         val usage: Map<String, Long>?,
         /** [text] is a rerun of text already sealed by [MessageInterim]. */
         val responsePreviewed: Boolean = false,
+        /**
+         * The stored row of the reply that ended the turn (`persisted_turn`), sent only
+         * when that row holds exactly [text]; null when Hermes cannot vouch for it.
+         */
+        val finalAssistantRowId: Long? = null,
     ) : GatewayEvent()
 
     /** Thinking text chunk (reasoning models). */

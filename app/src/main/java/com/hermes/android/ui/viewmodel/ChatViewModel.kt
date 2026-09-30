@@ -520,7 +520,7 @@ class ChatViewModel @Inject constructor(
         if (isSlashCommand(text)) {
             handleSlashCommand(text, sessionId)
         } else {
-            sendPrompt(outgoing, sessionId)
+            sendPrompt(outgoing, sessionId, bubbleId = userMsg.id)
         }
     }
 
@@ -542,7 +542,7 @@ class ChatViewModel @Inject constructor(
         if (pending.isSlashCommand) {
             handleSlashCommand(pending.outgoing, sessionId)
         } else {
-            sendPrompt(pending.outgoing, sessionId)
+            sendPrompt(pending.outgoing, sessionId, bubbleId = pending.bubbleId)
         }
     }
 
@@ -568,7 +568,7 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { it.copy(messages = before, isSending = false) }
                 return@launch
             }
-            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows, onRefused = {
+            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows, bubbleId = lastUserMsg.id, onRefused = {
                 _uiState.update { it.copy(messages = before) }
             })
         }
@@ -614,7 +614,7 @@ class ChatViewModel @Inject constructor(
                 return@launch
             }
             // Refused (busy, stale): the server kept everything, so the screen must too.
-            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows, onRefused = {
+            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows, bubbleId = edited.id, onRefused = {
                 _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
             })
         }
@@ -921,6 +921,8 @@ class ChatViewModel @Inject constructor(
         sessionId: String,
         truncateBeforeRowIds: List<Long> = emptyList(),
         hidden: Boolean = false,
+        /** The user bubble this send is, to take the row the server stored it as. */
+        bubbleId: String? = null,
         onRefused: (() -> Unit)? = null,
     ) {
         viewModelScope.launch {
@@ -954,6 +956,18 @@ class ChatViewModel @Inject constructor(
                 val status = ((reply as? JsonObject)?.get("status") as? JsonPrimitive)?.contentOrNull
                 if (!hidden && (status == "redirected" || status == "steered")) {
                     streamingDelegate.continueBelow()?.let { openAssistantBubble(it) }
+                }
+                // The row written for this very send, which Hermes names once it is stored
+                // (never for a steered, queued or redirected message). It goes on this send's
+                // own bubble only, never on whichever user message is newest (the desktop's
+                // submit.ts): reactions, edit and delete address the message by it.
+                val userRowId = (reply as? JsonObject)?.get("user_row_id").asText()?.toLongOrNull()
+                if (bubbleId != null && userRowId != null) {
+                    _uiState.update { state ->
+                        state.copy(messages = state.messages.updateFirst({ it.id == bubbleId && it is ChatMessage.User }) {
+                            (it as ChatMessage.User).copy(rowId = userRowId)
+                        })
+                    }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to send prompt")
@@ -1395,6 +1409,23 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Stop every reply still marked streaming; one with nothing in it is dropped. */
+    /**
+     * Gives the reply that just ended the turn the row Hermes stored it as. Only the
+     * newest reply, only when it shows exactly the stored text, and only when it has no
+     * row yet: a reply split over sealed commentary, or already reloaded, keeps what it has.
+     */
+    private fun bindFinalReplyRow(rowId: Long, storedText: String) {
+        _uiState.update { state ->
+            val index = state.messages.indexOfLast { it is ChatMessage.Assistant }
+            val reply = state.messages.getOrNull(index) as? ChatMessage.Assistant
+            if (reply == null || reply.rowId != null || reply.text.trim() != storedText.trim()) {
+                state
+            } else {
+                state.copy(messages = state.messages.toMutableList().also { it[index] = reply.copy(rowId = rowId) })
+            }
+        }
+    }
+
     private fun List<ChatMessage>.closeStrayReplies(): List<ChatMessage> = mapNotNull { msg ->
         when {
             msg !is ChatMessage.Assistant || !msg.isStreaming -> msg
@@ -1538,6 +1569,7 @@ class ChatViewModel @Inject constructor(
                     activeTodos = emptyList(),
                     thinkingStatus = "",
                 ) }
+                event.finalAssistantRowId?.let { rowId -> bindFinalReplyRow(rowId, event.text) }
                 streamingDelegate.reset()
                 if (recoverOnTurnEnd || replyOnlyInHistory) {
                     recoverOnTurnEnd = false
