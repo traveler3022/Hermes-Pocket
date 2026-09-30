@@ -70,6 +70,22 @@ fun parseProviderRows(result: JsonElement): List<ProviderRow> {
     }.distinctBy { it.slug }
 }
 
+/**
+ * tools.list returns every toolset, but tools.configure only switches CONFIGURABLE_TOOLSETS
+ * and plugin toolsets (hermes_cli/tools_config.py). The rest are presets: one per messaging
+ * platform (hermes-*) and the bundles below, which filled this list with the same platforms
+ * the Plugins page shows. The last five are the ones Hermes desktop hides on top
+ * (lib/desktop-toolsets.ts: platform-coupled or internal plumbing).
+ */
+private val UNLISTED_TOOLSETS = setOf(
+    "bot_room", "coding", "debugging", "desktop_ui", "feishu_doc", "feishu_drive",
+    "project", "safe", "search", "setup",
+    "discord", "discord_admin", "yuanbao", "context_engine", "moa",
+)
+
+internal fun isListedToolset(name: String): Boolean =
+    !name.startsWith("hermes-") && name !in UNLISTED_TOOLSETS
+
 fun parseToolList(result: JsonElement): List<ToolOption> {
     return try {
         // Fix S5F02: tools.list returns {toolsets: [{name, description, tool_count, enabled, tools}]}
@@ -89,7 +105,7 @@ fun parseToolList(result: JsonElement): List<ToolOption> {
                     ?: tools.size,
                 tools = tools,
             )
-        }
+        }.filter { isListedToolset(it.name) }
     } catch (e: Exception) {
         emptyList()
     }

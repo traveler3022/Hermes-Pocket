@@ -67,9 +67,15 @@ class PluginsViewModel @Inject constructor(
      * {name, version, description, source, status} — there is no `enabled`
      * field at all. Reading plugin["enabled"] always fell through to the
      * `?: false` default, so every plugin showed "Disabled" regardless of
-     * its real state. Verified against tui_gateway/server.py's docstring for
-     * plugins.manage. Derive enabled from status instead (only an explicit
-     * "disabled" status counts as off — bundled/enabled/etc. are on).
+     * its real state. Derive enabled from status instead: it is "enabled",
+     * "disabled" or "not enabled" (hermes_cli/plugins_cmd.py _plugin_status),
+     * and only "enabled" is on, as on Hermes desktop's switch.
+     *
+     * Only the rows Hermes desktop's Plugins page lists are kept
+     * (store/agent-plugins.ts isDesktopRelevantPlugin): the user's own
+     * plugins, plus the two bundled ones with a plain on/off switch. Every
+     * other bundled plugin (messaging platforms, web/browser/image/video
+     * backends, dashboard sign-in) is on by default and set up elsewhere.
      */
     private fun parsePlugins(result: kotlinx.serialization.json.JsonElement): List<PluginItem> {
         return try {
@@ -87,9 +93,9 @@ class PluginsViewModel @Inject constructor(
                     description = (plugin["description"] as? JsonPrimitive)?.contentOrNull ?: "",
                     source = (plugin["source"] as? JsonPrimitive)?.contentOrNull ?: "",
                     status = status,
-                    enabled = status.lowercase() != "disabled",
+                    enabled = status.lowercase() == "enabled",
                 )
-            }
+            }.filter { isListedPlugin(it) }
         } catch (e: Exception) {
             Timber.e(e, "[Plugins] Parse error")
             emptyList()
@@ -129,6 +135,16 @@ class PluginsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 }
+
+private val HIDDEN_PLUGIN_KEY_PREFIXES = listOf("dashboard_auth/", "model-providers/", "platforms/")
+private val MANAGEABLE_BUNDLED_PLUGINS = setOf("disk-cleanup", "security-guidance")
+
+internal fun isListedPlugin(plugin: PluginItem): Boolean =
+    if (plugin.source == "bundled") {
+        plugin.key in MANAGEABLE_BUNDLED_PLUGINS
+    } else {
+        HIDDEN_PLUGIN_KEY_PREFIXES.none { plugin.key.startsWith(it) }
+    }
 
 data class PluginsUiState(
     val plugins: List<PluginItem> = emptyList(),

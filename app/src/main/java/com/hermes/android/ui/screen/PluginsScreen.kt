@@ -123,10 +123,10 @@ fun PluginsScreen(
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                                 trailing = {
+                                    // Every listed row switches, bundled ones too, as on desktop.
                                     Switch(
                                         checked = plugin.enabled,
                                         onCheckedChange = { viewModel.togglePlugin(plugin, it) },
-                                        enabled = plugin.source != "bundled",
                                     )
                                 },
                             )
