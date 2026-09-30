@@ -290,6 +290,7 @@ private fun HermesNavHost(
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToLinux = { navController.navigate("linux") },
+                onNavigateToStorage = { navController.navigate("storage") },
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToSetup = { navController.navigate("setup") },
                 themeModeState = themeModeState,
@@ -353,6 +354,12 @@ private fun HermesNavHost(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onOpenTerminal = { navController.navigate("linux/terminal") },
                 onOpenDesktop = { navController.navigate("linux/desktop") },
+            )
+        }
+
+        composable("storage") {
+            com.hermes.android.ui.screen.StorageScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 

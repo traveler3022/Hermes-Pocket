@@ -25,4 +25,8 @@ Hermes's own source code in this repository.
    attribution required by term 1.
 
 Hermes also ships third-party components (for example proot, talloc and a
-Linux root file system) that remain under their own licenses.
+Linux root file system) that remain under their own licenses. The Storage
+screen (`StorageScreen.kt`, `CacheChart.kt`) is ported from Telegram for
+Android, licensed under the GNU GPL version 2 or later; those files keep
+Telegram's copyright notice, and the terms above cover only the changes made
+for Hermes.

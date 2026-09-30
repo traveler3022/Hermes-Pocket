@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import com.hermes.android.ui.icons.filled.DataUsage
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Palette
@@ -49,6 +50,7 @@ internal fun SettingsMenu(
     onNavigateToProjects: () -> Unit,
     onNavigateToSetup: () -> Unit = {},
     onNavigateToLinux: () -> Unit = {},
+    onNavigateToStorage: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -186,6 +188,12 @@ internal fun SettingsMenu(
                 subtitle = t("App and Hermes core versions", "نسخهٔ برنامه و هستهٔ هرمس"),
                 icon = Icons.Default.Info,
                 onClick = { onOpen(SettingsSection.ABOUT) },
+            ),
+            DomainSpec(
+                title = t("Storage", "فضای ذخیره\u200Cسازی"),
+                subtitle = t("Find and clear leftover files", "پیدا و پاک کردن فایل\u200Cهای اضافه"),
+                icon = Icons.Default.DataUsage,
+                onClick = onNavigateToStorage,
             ),
         )
         Column(
