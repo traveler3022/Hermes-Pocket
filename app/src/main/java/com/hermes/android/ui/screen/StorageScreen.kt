@@ -13,6 +13,7 @@
 
 package com.hermes.android.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -211,7 +212,16 @@ fun StorageScreen(
     val listState = rememberLazyListState()
     val chart = remember { CacheChartState() }
     var confirmClear by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     var pressedSlot by remember { mutableStateOf(-1) }
+    val thumbs = remember { VideoThumbs() }
+    val fileActions = remember(viewModel) {
+        FileTabActions(onTab = viewModel::selectTab, onFolder = viewModel::toggleFolder, onPick = viewModel::togglePick)
+    }
+    // Telegram's action mode: with files picked the bar counts them, back drops the picks.
+    val picking = state.picked.isNotEmpty()
+    BackHandler(enabled = picking) { viewModel.clearPicks() }
 
     val freed = t("%s freed on your phone!", "%s از فضای گوشی آزاد شد!")
     val busy = t(
@@ -249,8 +259,14 @@ fun StorageScreen(
     val showTitle by remember { derivedStateOf { listState.firstVisibleItemIndex > 1 } }
 
     HermesScaffold(
-        title = if (showTitle) t("Storage Usage", "مصرف فضای ذخیره‌سازی") else "",
-        onBack = onNavigateBack,
+        title = when {
+            picking -> t("${state.picked.size} selected", "${state.picked.size} مورد انتخاب شد")
+            showTitle -> t("Storage Usage", "مصرف فضای ذخیره‌سازی")
+            else -> ""
+        },
+        subtitle = if (picking) formatFileSize(state.pickedBytes) else null,
+        onBack = if (picking) viewModel::clearPicks else onNavigateBack,
+        actions = { if (picking) DeletePickedButton(onClick = { confirmDelete = true }) },
         snackbarHostState = snackbarHostState,
     ) { padding ->
         LazyColumn(
@@ -330,6 +346,7 @@ fun StorageScreen(
                 }
                 item(key = "info") { InfoText(storageInfo()) }
             }
+            storageFileTabs(state, fileActions, thumbs)
         }
     }
 
@@ -342,6 +359,7 @@ fun StorageScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
+                    deleting = false
                     viewModel.clear()
                 }) { Text(buttonText, color = MaterialTheme.colorScheme.error) }
             },
@@ -351,7 +369,50 @@ fun StorageScreen(
         )
     }
 
-    state.clearing?.let { progress -> ClearingSheet(progress) }
+    if (confirmDelete) {
+        val count = state.picked.size
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(t("Delete files", "حذف فایل‌ها")) },
+            text = {
+                Text(
+                    t(
+                        "Delete $count files (${formatFileSize(state.pickedBytes)})? They can't be brought back.",
+                        "$count فایل (${formatFileSize(state.pickedBytes)}) برای همیشه پاک شوند؟ دیگر برنمی‌گردند.",
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    deleting = true
+                    viewModel.deletePicked()
+                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
+    }
+
+    state.clearing?.let { progress -> ClearingSheet(progress, deleting) }
+}
+
+/** actionModeClearButton: a small filled button in the action bar. */
+@Composable
+private fun DeletePickedButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .padding(end = 14.dp)
+            .height(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(t("Delete", "حذف"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+    }
 }
 
 @Composable
@@ -640,7 +701,7 @@ private fun InfoText(text: String) {
  * the clearing is done.
  */
 @Composable
-private fun ClearingSheet(progress: Float) {
+private fun ClearingSheet(progress: Float, deleting: Boolean) {
     val animated by animateFloatAsState(progress, tween(350, easing = androidx.compose.animation.core.EaseOut), label = "clearing")
     val track = MaterialTheme.colorScheme.primary
     Dialog(
@@ -686,7 +747,7 @@ private fun ClearingSheet(progress: Float) {
                     }
                     Spacer(Modifier.height(30.dp))
                     Text(
-                        text = t("Clearing cache…", "در حال پاک کردن…"),
+                        text = if (deleting) t("Deleting files…", "در حال حذف فایل‌ها…") else t("Clearing cache…", "در حال پاک کردن…"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,

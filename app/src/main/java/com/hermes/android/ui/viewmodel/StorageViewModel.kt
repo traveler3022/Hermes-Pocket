@@ -2,8 +2,12 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.data.FileScan
+import com.hermes.android.data.FoundFile
+import com.hermes.android.data.FoundFolder
 import com.hermes.android.data.JunkKind
 import com.hermes.android.data.StorageCleaner
+import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.StorageScan
 import com.hermes.android.runtime.HermesRuntime
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,10 +32,30 @@ data class StorageUiState(
     val collapsed: Boolean = true,
     /** 0..1 while clearing, null otherwise. */
     val clearing: Float? = null,
+    /** The file tabs under the chart, loaded after it like Telegram's cache model. */
+    val files: FileScan? = null,
+    val loadingFiles: Boolean = true,
+    val tab: StorageTab = StorageTab.Folders,
+    /** Files picked in the tabs (host paths); nothing is picked for the user. */
+    val picked: Set<String> = emptySet(),
+    /** Folders whose every file is picked. */
+    val pickedFolders: Set<String> = emptySet(),
+    val pickedBytes: Long = 0,
 ) {
     fun size(kind: JunkKind): Long = scan?.sizes?.get(kind) ?: 0L
 
     val selectedBytes: Long get() = selected.sumOf { size(it) }
+}
+
+/** Telegram's CachedMediaLayout pages, with folders where it has chats. */
+enum class StorageTab { Folders, Media, Files, Music }
+
+/** The pages that have something in them, in Telegram's order. */
+fun FileScan.tabs(): List<StorageTab> = buildList {
+    if (folders.isNotEmpty()) add(StorageTab.Folders)
+    if (media.isNotEmpty()) add(StorageTab.Media)
+    if (documents.isNotEmpty()) add(StorageTab.Files)
+    if (music.isNotEmpty()) add(StorageTab.Music)
 }
 
 sealed interface StorageEvent {
@@ -44,6 +68,7 @@ sealed interface StorageEvent {
 @HiltViewModel
 class StorageViewModel @Inject constructor(
     private val cleaner: StorageCleaner,
+    private val storageFiles: StorageFiles,
     private val runtime: HermesRuntime,
 ) : ViewModel() {
 
@@ -52,6 +77,9 @@ class StorageViewModel @Inject constructor(
 
     private val _events = MutableSharedFlow<StorageEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<StorageEvent> = _events.asSharedFlow()
+
+    /** Sizes of every scanned file, for the picked total. */
+    private var sizes: Map<String, Long> = emptyMap()
 
     init {
         refresh()
@@ -63,6 +91,81 @@ class StorageViewModel @Inject constructor(
         viewModelScope.launch {
             val scan = scanOrNull()
             _state.update { it.copy(calculating = false, scan = scan, selected = JunkKind.entries.toSet()) }
+            loadFiles()
+        }
+    }
+
+    /** CacheControlActivity.loadDialogEntities: the file lists come after the sizes. */
+    private suspend fun loadFiles() {
+        _state.update { it.copy(loadingFiles = true) }
+        val files = try {
+            storageFiles.scan()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "[Storage] File scan failed")
+            null
+        }
+        sizes = files?.filesByFolder?.values?.flatten()?.associate { it.path to it.size }.orEmpty()
+        _state.update { state ->
+            val tabs = files?.tabs().orEmpty()
+            state.copy(
+                files = files,
+                loadingFiles = false,
+                tab = if (state.tab in tabs) state.tab else tabs.firstOrNull() ?: StorageTab.Folders,
+                picked = emptySet(),
+                pickedFolders = emptySet(),
+                pickedBytes = 0,
+            )
+        }
+    }
+
+    fun selectTab(tab: StorageTab) = _state.update { it.copy(tab = tab) }
+
+    fun togglePick(file: FoundFile) = setPicked(listOf(file.path), file.path !in _state.value.picked)
+
+    fun toggleFolder(folder: FoundFolder) {
+        val paths = _state.value.files?.filesByFolder?.get(folder.path).orEmpty().map { it.path }
+        setPicked(paths, folder.path !in _state.value.pickedFolders)
+    }
+
+    fun clearPicks() = _state.update { it.copy(picked = emptySet(), pickedFolders = emptySet(), pickedBytes = 0) }
+
+    private fun setPicked(paths: List<String>, pick: Boolean) = _state.update { state ->
+        val picked = if (pick) state.picked + paths else state.picked - paths.toSet()
+        val byFolder = state.files?.filesByFolder.orEmpty()
+        state.copy(
+            picked = picked,
+            pickedFolders = byFolder.filterValues { files -> files.all { it.path in picked } }.keys,
+            pickedBytes = picked.sumOf { sizes[it] ?: 0L },
+        )
+    }
+
+    /** Deletes the picked files, then counts everything again. */
+    fun deletePicked() {
+        val state = _state.value
+        if (state.clearing != null || state.picked.isEmpty()) return
+        if (runtime.installProgress.value != null) {
+            _events.tryEmit(StorageEvent.Busy)
+            return
+        }
+        val paths = state.picked.toList()
+        _state.update { it.copy(clearing = 0f) }
+        viewModelScope.launch {
+            val started = System.currentTimeMillis()
+            val freed = try {
+                storageFiles.delete(paths) { progress -> _state.update { it.copy(clearing = progress) } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Storage] Deleting files failed")
+                0L
+            }
+            val scan = scanOrNull()
+            delay((MIN_CLEARING_MS - (System.currentTimeMillis() - started)).coerceAtLeast(0))
+            _state.update { it.copy(clearing = null, scan = scan ?: it.scan, selected = JunkKind.entries.toSet()) }
+            _events.emit(StorageEvent.Cleared(freed))
+            loadFiles()
         }
     }
 
@@ -103,6 +206,7 @@ class StorageViewModel @Inject constructor(
             delay((MIN_CLEARING_MS - (System.currentTimeMillis() - started)).coerceAtLeast(0))
             _state.update { it.copy(clearing = null, scan = scan ?: it.scan, selected = JunkKind.entries.toSet()) }
             _events.emit(StorageEvent.Cleared(freed))
+            loadFiles()
         }
     }
 
