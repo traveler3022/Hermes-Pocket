@@ -101,7 +101,6 @@ import androidx.media3.ui.compose.material3.indicator.ProgressSlider
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.runtime.linux.FileGate
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.ProotEnvironment
@@ -134,7 +133,6 @@ import javax.inject.Inject
 class FileViewerActivity : ComponentActivity() {
 
     @Inject lateinit var gatewayClient: GatewayClient
-    @Inject lateinit var fileGate: FileGate
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -152,7 +150,7 @@ class FileViewerActivity : ComponentActivity() {
         val mime = intent.type?.takeUnless { external } ?: if (source.scheme == "content") contentResolver.getType(source) else null
         val kind = fileKindOf(name, mime).takeIf { it != FileKind.OTHER } ?: fileKindOf(uri.toString())
         if (kind == FileKind.OTHER) {
-            if (!external) openUrlExternally(this, uri.toString(), fileGate)
+            if (!external) openUrlExternally(this, uri.toString())
             finish()
             return
         }
@@ -172,7 +170,7 @@ class FileViewerActivity : ComponentActivity() {
                     FileViewerScreen(
                         uri = uri, name = name, kind = kind,
                         readBytes = ::readBytes,
-                        openExternally = { openUrlExternally(this, uri.toString(), fileGate) },
+                        openExternally = { openUrlExternally(this, uri.toString()) },
                         onBack = ::finish,
                     )
                 }

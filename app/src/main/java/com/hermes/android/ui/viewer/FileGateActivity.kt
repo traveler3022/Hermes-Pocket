@@ -17,17 +17,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.lifecycleScope
 import com.hermes.android.runtime.linux.FileGate
+import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.ProotEnvironment
 import com.hermes.android.service.HermesNotifications
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.i18n.tForContext
-import com.hermes.android.ui.screen.openUrlExternally
+import com.hermes.android.ui.screen.guestPathIn
+import com.hermes.android.ui.screen.startExternalView
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
@@ -44,18 +50,33 @@ class FileGateActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val file = intent.getStringExtra(EXTRA_PATH)?.let(::File)?.takeIf { insideLinux(it) && it.isFile }
-        if (file == null) {
+        val path = intent.getStringExtra(EXTRA_PATH)
+        if (path == null) {
             finish()
             return
         }
         val open = intent.getBooleanExtra(EXTRA_OPEN, false)
-        val risk = fileGate.riskOf(file)
-        if (risk == FileGate.Risk.SAFE) {
-            if (open) openUrlExternally(this, Uri.fromFile(file).toString(), fileGate)
+        // FileGate reads the file (a zip's whole index), so not on the main thread; the window
+        // stays see-through until a dialog shows.
+        lifecycleScope.launch {
+            val (file, risk) = withContext(Dispatchers.IO) {
+                val file = linuxFile(path)
+                file to file?.let { fileGate.heldBack(it) }
+            }
+            when {
+                // Gone or not a file: handed on all the same, and the other app says so.
+                file == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(File(path)).toString())
+                risk == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(file).toString())
+                else -> {
+                    ask(file, risk, open)
+                    return@launch
+                }
+            }
             finish()
-            return
         }
+    }
+
+    private fun ask(file: File, risk: FileGate.Risk, open: Boolean) {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
@@ -114,23 +135,26 @@ class FileGateActivity : ComponentActivity() {
     }
 
     private fun allow(file: File, open: Boolean) {
-        fileGate.approve(file)
-        if (open) {
-            openUrlExternally(this, Uri.fromFile(file).toString(), fileGate)
-        } else {
-            Toast.makeText(
-                this,
-                tForContext(this, "Allowed for 10 minutes. Copy it again.", "۱۰ دقیقه اجازه دارد. دوباره کپی کنید."),
-                Toast.LENGTH_LONG,
-            ).show()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { fileGate.approve(file) }
+            if (open) {
+                startExternalView(this@FileGateActivity, Uri.fromFile(file).toString())
+            } else {
+                Toast.makeText(
+                    this@FileGateActivity,
+                    tForContext(this@FileGateActivity, "Allowed for 10 minutes. Copy it again.", "۱۰ دقیقه اجازه دارد. دوباره کپی کنید."),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            finish()
         }
-        finish()
     }
 
-    private fun insideLinux(file: File): Boolean {
-        val root = runCatching { ProotEnvironment.rootfsDir(this).canonicalPath }.getOrNull() ?: return false
-        val path = runCatching { file.canonicalPath }.getOrNull() ?: return false
-        return path.startsWith(root + File.separator)
+    /** The regular file at [path] in the rootfs, its symlinks followed as the Linux sees them; else null. */
+    private fun linuxFile(path: String): File? {
+        val rootfs = ProotEnvironment.rootfsDir(this)
+        val guestPath = guestPathIn(rootfs.absolutePath, path) ?: return null
+        return runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile }
     }
 
     companion object {

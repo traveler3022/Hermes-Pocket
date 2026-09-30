@@ -134,8 +134,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.hermes.android.runtime.linux.FileGate
-import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.ui.viewer.FileGateActivity
 import com.hermes.android.ui.component.ContentBlock
@@ -226,11 +224,23 @@ internal fun rememberReduceMotion(): Boolean {
 }
 
 internal val codeBlockRegex = Regex("```[\\s\\S]*?```", RegexOption.MULTILINE)
-internal fun openUrlExternally(context: Context, url: String, fileGate: FileGate) {
-    heldBackProgram(context, url, fileGate)?.let { file ->
-        context.startActivity(FileGateActivity.intent(context, file, open = true))
-        return
+
+/**
+ * Opens [url] in another app. A file of the built-in Linux goes by [FileGateActivity], which
+ * reads it off the main thread and opens it, or asks first when it is a program.
+ */
+internal fun openUrlExternally(context: Context, url: String) {
+    val rootfs = ProotEnvironment.rootfsDir(context).absolutePath
+    val linuxPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path?.takeIf { guestPathIn(rootfs, it) != null }
+    if (linuxPath != null) {
+        context.startActivity(FileGateActivity.intent(context, File(linuxPath), open = true))
+    } else {
+        startExternalView(context, url)
     }
+}
+
+/** [externalViewIntent] for [url], or a toast when no app takes it. */
+internal fun startExternalView(context: Context, url: String) {
     try {
         context.startActivity(externalViewIntent(context, url))
     } catch (e: Exception) {
@@ -256,15 +266,6 @@ internal fun externalViewIntent(context: Context, url: String): Intent {
     return Intent(Intent.ACTION_VIEW)
         .setDataAndType(document, type)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-}
-
-/** A program of the built-in Linux at [url] the user hasn't confirmed yet ([FileGate]), else null. */
-private fun heldBackProgram(context: Context, url: String, fileGate: FileGate): File? {
-    val rootfs = ProotEnvironment.rootfsDir(context)
-    val guestPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path
-        ?.let { guestPathIn(rootfs.absolutePath, it) } ?: return null
-    val file = runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile } ?: return null
-    return file.takeIf { fileGate.heldBack(it) != null }
 }
 
 /** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */

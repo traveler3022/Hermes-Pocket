@@ -34,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -55,8 +56,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.runtime.linux.LinuxDesktop
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.LinuxDesktopViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** The agent's desktop, streamed through noVNC, driven with touch gestures and the phone keyboard. */
 @Composable
@@ -196,7 +199,10 @@ private fun DesktopPage(
     onCreated: (WebView) -> Unit,
 ) {
     val context = LocalContext.current
-    val touchScript = remember { context.assets.open("desktop/touch.js").bufferedReader().use { it.readText() } }
+    // Read off the main thread; the page waits for it, since it runs at every page load.
+    val touchScript by produceState<String?>(null) {
+        value = withContext(Dispatchers.IO) { context.assets.open("desktop/touch.js").bufferedReader().use { it.readText() } }
+    }
     val currentTouchMode by rememberUpdatedState(touchMode)
     val currentOnTap by rememberUpdatedState(onTap)
 
@@ -223,7 +229,7 @@ private fun DesktopPage(
                 )
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, pageUrl: String?) {
-                        view.evaluateJavascript(touchScript, null)
+                        touchScript?.let { view.evaluateJavascript(it, null) }
                         DesktopRemote(view).setTouchMode(currentTouchMode)
                     }
                 }
@@ -232,7 +238,7 @@ private fun DesktopPage(
             }
         },
         update = { view ->
-            if (page != null && view.tag != page) {
+            if (page != null && touchScript != null && view.tag != page) {
                 view.tag = page
                 view.loadUrl(page.url)
             }
