@@ -1,7 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,12 +9,10 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
-import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.asText
 import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,9 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.util.UUID
@@ -38,7 +32,8 @@ import kotlinx.serialization.json.contentOrNull
 
 /**
  * ViewModel for the Chat screen — coordinator that delegates to focused
- * sub-handlers for session management, attachments, streaming, and drawer UI.
+ * sub-handlers for session management, attachments, streaming, drawer UI, slash
+ * commands, the agent's requests, reactions and edits of what was sent.
  *
  * Depends ONLY on [GatewayClient] interface — never on OkHttp or any
  * concrete implementation. This is the abstraction boundary.
@@ -62,26 +57,12 @@ class ChatViewModel @Inject constructor(
     private val _notification = MutableStateFlow<NotificationUi?>(null)
     val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
 
-    private val _slashCommands = MutableStateFlow<List<SlashCommandSuggestion>>(emptyList())
-    val slashCommands: StateFlow<List<SlashCommandSuggestion>> = _slashCommands.asStateFlow()
-
-    /** Every command and alias Hermes knows, lowercase with the slash; empty until the catalog lands. */
-    @Volatile
-    private var knownCommands: Set<String> = emptySet()
+    val slashCommands: StateFlow<List<SlashCommandSuggestion>> get() = slashDelegate.suggestions
 
     private var eventCollectionJob: Job? = null
     private var connectionWatchJob: Job? = null
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    // Settings → Appearance → Message reactions. The switch also decides whether the agent
-    // gets react_to_message and hears about the user's reactions, and that is decided where
-    // the agent runs, so the gateway is told: when it moves, and on every connect once the
-    // user has set it (the desktop's display-toggles.ts).
-    private val appearancePrefs = context.getSharedPreferences(APPEARANCE_PREFS, Context.MODE_PRIVATE)
-    private val reactionsSwitchMirror = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == MESSAGE_REACTIONS_PREF) pushReactionsSwitch()
-    }
 
     // ── Delegates ───────────────────────────────────────────────────────
 
@@ -128,6 +109,26 @@ class ChatViewModel @Inject constructor(
         },
     )
 
+    private val slashDelegate = ChatSlashDelegate(gatewayClient, viewModelScope, _uiState) { text, sessionId ->
+        sendPrompt(text, sessionId)
+    }
+
+    private val requestsDelegate = ChatRequestsDelegate(
+        gatewayClient, approvalNotificationManager, foregroundState, viewModelScope, _uiState,
+    )
+
+    private val reactionsDelegate = ChatReactionsDelegate(
+        gatewayClient, sessionDelegate,
+        context.getSharedPreferences(APPEARANCE_PREFS, Context.MODE_PRIVATE),
+        viewModelScope, _uiState,
+    )
+
+    private val rewindDelegate = ChatRewindDelegate(
+        sessionRepository, sessionDelegate, viewModelScope, _uiState, clearDraft = ::clearDraft,
+    ) { text, sessionId, rows, bubbleId, onRefused ->
+        sendPrompt(text, sessionId, truncateBeforeRowIds = rows, bubbleId = bubbleId, onRefused = onRefused)
+    }
+
     init {
         loadDraft()
         watchForQueuedPromptFlush()
@@ -140,12 +141,11 @@ class ChatViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .collect { connected ->
                     if (connected) {
-                        loadCommandCatalog()
-                        if (appearancePrefs.contains(MESSAGE_REACTIONS_PREF)) pushReactionsSwitch()
+                        slashDelegate.loadCatalog()
+                        reactionsDelegate.onConnected()
                     }
                 }
         }
-        appearancePrefs.registerOnSharedPreferenceChangeListener(reactionsSwitchMirror)
     }
 
     /**
@@ -195,40 +195,6 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
-
-    // ── Command catalog ──────────────────────────────────────────────────
-
-    private fun loadCommandCatalog() {
-        viewModelScope.launch {
-            try {
-                val result = gatewayClient.request(GatewayMethods.COMMANDS_CATALOG) as? JsonObject
-                val pairs = (result?.get("pairs") as? JsonArray)?.mapNotNull { row ->
-                    val arr = row as? JsonArray ?: return@mapNotNull null
-                    val name = (arr.getOrNull(0) as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-                    val desc = (arr.getOrNull(1) as? JsonPrimitive)?.contentOrNull ?: ""
-                    SlashCommandSuggestion(command = name, description = desc)
-                } ?: emptyList()
-                if (pairs.isEmpty()) return@launch
-                // `canon` holds every name and alias; skills are only in `pairs`.
-                val canon = (result?.get("canon") as? JsonObject)?.keys.orEmpty()
-                knownCommands = (canon + pairs.map { it.command }).map { it.lowercase() }.toSet()
-                _slashCommands.value = pairs
-                    .filterNot { it.command.lowercase() in HIDDEN_SLASH_COMMANDS }
-                    // Stable: everything after the useful ones keeps the catalog's order.
-                    .sortedBy { FIRST_SLASH_COMMANDS.indexOf(it.command.lowercase()).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
-                Timber.i("[Chat] Loaded ${pairs.size} slash commands from catalog")
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] commands.catalog failed — slash command autocomplete will be empty until next retry")
-            }
-        }
-    }
-
-    /**
-     * Only a name Hermes knows makes a slash command: `/sdcard/x.txt رو بخون` is a message.
-     * Before the catalog arrives every `/…` is still a command, as it always was.
-     */
-    private fun isSlashCommand(text: String): Boolean =
-        isSlashCommandText(text, knownCommands)
 
     // ── Connection ───────────────────────────────────────────────────────
 
@@ -475,7 +441,7 @@ class ChatViewModel @Inject constructor(
         if (text.isEmpty() && attachments.isEmpty()) return
         val sessionId = _uiState.value.activeSessionId
         _uiState.value.editingMessageId?.let { editing ->
-            if (text.isNotEmpty()) submitEdit(editing, text)
+            if (text.isNotEmpty()) rewindDelegate.submitEdit(editing, text)
             return
         }
 
@@ -509,7 +475,7 @@ class ChatViewModel @Inject constructor(
                 QueuedPrompt(
                     bubbleId = userMsg.id,
                     outgoing = outgoing,
-                    isSlashCommand = isSlashCommand(text),
+                    isSlashCommand = slashDelegate.isCommand(text),
                 )
             } else {
                 it.queuedPrompt
@@ -517,8 +483,8 @@ class ChatViewModel @Inject constructor(
         ) }
         if (sessionId == null) return
 
-        if (isSlashCommand(text)) {
-            handleSlashCommand(text, sessionId)
+        if (slashDelegate.isCommand(text)) {
+            slashDelegate.run(text, sessionId)
         } else {
             sendPrompt(outgoing, sessionId, bubbleId = userMsg.id)
         }
@@ -540,232 +506,19 @@ class ChatViewModel @Inject constructor(
             )
         }
         if (pending.isSlashCommand) {
-            handleSlashCommand(pending.outgoing, sessionId)
+            slashDelegate.run(pending.outgoing, sessionId)
         } else {
             sendPrompt(pending.outgoing, sessionId, bubbleId = pending.bubbleId)
         }
     }
 
-    fun retryLastMessage() {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (_uiState.value.isSending) return
+    fun retryLastMessage() = rewindDelegate.retryLast()
 
-        val lastUserMsg = _uiState.value.messages.filterIsInstance<ChatMessage.User>().lastOrNull() ?: return
-        val refs = lastUserMsg.attachments.mapNotNull { it.refText }
-        val lastUserText = if (refs.isEmpty()) {
-            sentText(lastUserMsg)
-        } else {
-            (sentText(lastUserMsg) + "\n" + refs.joinToString("\n")).trim()
-        }
+    fun startEditing(messageId: String) = rewindDelegate.startEditing(messageId)
 
-        val before = _uiState.value.messages
-        val lastUserIndex = before.indexOfLast { it is ChatMessage.User }
-        _uiState.update { it.copy(messages = before.subList(0, lastUserIndex + 1).toList(), isSending = true) }
+    fun cancelEditing() = rewindDelegate.cancelEditing()
 
-        viewModelScope.launch {
-            val rows = locateOnServer(sessionId, before, lastUserMsg)
-            if (rows == null) {
-                _uiState.update { it.copy(messages = before, isSending = false) }
-                return@launch
-            }
-            sendPrompt(lastUserText, sessionId, truncateBeforeRowIds = rows, bubbleId = lastUserMsg.id, onRefused = {
-                _uiState.update { it.copy(messages = before) }
-            })
-        }
-    }
-
-    /** Puts a sent message back in the composer; sending replaces it and what followed. */
-    fun startEditing(messageId: String) {
-        if (_uiState.value.isSending) return
-        val message = _uiState.value.messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
-        _uiState.update { it.copy(editingMessageId = messageId, inputText = sentText(message)) }
-    }
-
-    fun cancelEditing() {
-        _uiState.update { it.copy(editingMessageId = null, inputText = "") }
-    }
-
-    private fun submitEdit(messageId: String, text: String) {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (_uiState.value.isSending) return
-        val before = _uiState.value.messages
-        val index = before.indexOfFirst { it.id == messageId }
-        val target = before.getOrNull(index) as? ChatMessage.User ?: run { cancelEditing(); return }
-        // File references ride along as they did the first time; the edit is to the words.
-        val refs = target.attachments.mapNotNull { it.refText }
-        val outgoing = if (refs.isEmpty()) text else (text + "\n" + refs.joinToString("\n")).trim()
-        val edited = ChatMessage.User(
-            id = UUID.randomUUID().toString(),
-            timestamp = System.currentTimeMillis(),
-            text = text,
-            attachments = target.attachments,
-        )
-        clearDraft()
-        _uiState.update { it.copy(
-            messages = before.subList(0, index) + edited,
-            editingMessageId = null,
-            inputText = "",
-            isSending = true,
-        ) }
-        viewModelScope.launch {
-            val rows = locateOnServer(sessionId, before, target)
-            if (rows == null) {
-                _uiState.update { it.copy(messages = before, isSending = false, editingMessageId = messageId, inputText = text) }
-                return@launch
-            }
-            // Refused (busy, stale): the server kept everything, so the screen must too.
-            sendPrompt(outgoing, sessionId, truncateBeforeRowIds = rows, bubbleId = edited.id, onRefused = {
-                _uiState.update { it.copy(messages = before, editingMessageId = messageId, inputText = text) }
-            })
-        }
-    }
-
-    /**
-     * Removes a sent message and everything after it. The server has no cut without a
-     * new prompt, only session.undo (the last turn), so the turns from the message to
-     * the end are undone one by one, and the chat then reloads what the server kept.
-     */
-    fun deleteFromMessage(messageId: String) {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        if (_uiState.value.isSending) return
-        val messages = _uiState.value.messages
-        val target = messages.firstOrNull { it.id == messageId } as? ChatMessage.User ?: return
-        viewModelScope.launch {
-            try {
-                val server = sessionDelegate.serverUserTurns(sessionId)
-                val rowId = server?.let { findUserRow(messages, target, it) }
-                if (server == null || rowId == null) {
-                    _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
-                    return@launch
-                }
-                for (turn in 1..turnsFrom(server, rowId)) {
-                    if (sessionRepository.undoLastTurn(sessionId) == 0) break
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "[Chat] delete from message failed")
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Error(rewindFailure(e))) }
-            }
-            sessionDelegate.loadHistory(_uiState, sessionId, allowEmpty = true)
-        }
-    }
-
-    /** [target]'s row on the server, or null after telling the user it could not be found. */
-    private suspend fun locateOnServer(
-        sessionId: String,
-        local: List<ChatMessage>,
-        target: ChatMessage.User,
-    ): List<Long>? {
-        val server = sessionDelegate.serverUserTurns(sessionId)
-        val rowId = server?.let { findUserRow(local, target, it) }
-        if (rowId == null) {
-            _uiState.update { it.copy(errorEvent = ErrorEvent.Error(MESSAGE_NOT_LOCATED)) }
-            return null
-        }
-        // The target first; the hidden rows are only tried if the server refuses it.
-        return listOf(rowId) + hiddenRowsBefore(server, rowId)
-    }
-
-    // ── Reactions ────────────────────────────────────────────────────────
-
-    /**
-     * Sets, switches or retracts the user's reaction on a message (message.react: the
-     * same emoji again retracts, null clears). Painted at once, then replaced by the list
-     * the server stored, or put back if the write fails (the desktop's reactions.ts).
-     */
-    fun reactToMessage(messageId: String, emoji: String?) {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        val target = _uiState.value.messages.firstOrNull { it.id == messageId } ?: return
-        val before = target.reactionsOrNull ?: return
-        paintReactions(messageId, applyReaction(before, emoji))
-        viewModelScope.launch {
-            try {
-                val address = reactionAddress(sessionId, target)
-                if (address == null) {
-                    paintReactions(messageId, before)
-                    _uiState.update { it.copy(errorEvent = ErrorEvent.Warning(REACTION_NOT_LOCATED)) }
-                    return@launch
-                }
-                val result = gatewayClient.request(
-                    GatewayMethods.MESSAGE_REACT,
-                    mapOf(
-                        "session_id" to JsonPrimitive(sessionId),
-                        address,
-                        "emoji" to (emoji?.let { JsonPrimitive(it) } ?: JsonNull),
-                        "author" to JsonPrimitive(AUTHOR_USER),
-                    ),
-                ) as? JsonObject
-                paintReactions(
-                    messageId,
-                    parseReactions(result?.get("reactions")),
-                    result?.get("row_id").asText()?.toLongOrNull(),
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Timber.w(e, "[Chat] message.react failed")
-                paintReactions(messageId, before)
-                _uiState.update { it.copy(errorEvent = ErrorEvent.Warning("Could not react: ${e.message}")) }
-            }
-        }
-    }
-
-    /**
-     * How message.react names [target]: by its row id, which a bubble drawn live only has
-     * once it is found in the stored chat (see [findUserRow]). A reply whose text does not
-     * match is still the newest stored reply once nothing is running, and the server finds
-     * that one itself (newest_role, what the desktop sends for a live message). Null when
-     * the message cannot be told apart for certain.
-     */
-    private suspend fun reactionAddress(sessionId: String, target: ChatMessage): Pair<String, JsonElement>? {
-        target.rowIdOrNull?.let { return "row_id" to JsonPrimitive(it) }
-        val local = _uiState.value.messages
-        val rowId = sessionDelegate.serverTurns(sessionId)?.let { server ->
-            when (target) {
-                is ChatMessage.User -> findUserRow(local, target, server.filterIsInstance<ChatMessage.User>())
-                is ChatMessage.Assistant -> findAssistantRow(local, target, server.filterIsInstance<ChatMessage.Assistant>())
-                else -> null
-            }
-        }
-        if (rowId != null) return "row_id" to JsonPrimitive(rowId)
-        val newestReply = local.lastOrNull { it is ChatMessage.Assistant }
-        return if (target is ChatMessage.Assistant && newestReply?.id == target.id && !_uiState.value.isSending) {
-            "newest_role" to JsonPrimitive("assistant")
-        } else {
-            null
-        }
-    }
-
-    private fun paintReactions(messageId: String, reactions: List<MessageReaction>, rowId: Long? = null) {
-        _uiState.update { state ->
-            state.copy(messages = state.messages.updateFirst({ it.id == messageId }) { it.withReactions(reactions, rowId) })
-        }
-    }
-
-    private fun pushReactionsSwitch() {
-        val enabled = appearancePrefs.getBoolean(MESSAGE_REACTIONS_PREF, false)
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    GatewayMethods.CONFIG_SET,
-                    mapOf(
-                        "key" to JsonPrimitive("display.message_reactions"),
-                        "value" to JsonPrimitive(enabled.toString()),
-                    ),
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                // Not connected, or a Hermes too old to know the key: the next change
-                // and the next connect both send it again.
-                Timber.w(e, "[Chat] display.message_reactions not sent")
-            }
-        }
-    }
-
-    private fun rewindFailure(e: Exception): String =
-        if (e.message.orEmpty().startsWith("RPC error 4009:")) {
-            "Hermes is still finishing the last reply. Try again in a moment."
-        } else {
-            "Could not change the chat: ${e.message}"
-        }
+    fun deleteFromMessage(messageId: String) = rewindDelegate.deleteFrom(messageId)
 
     fun steerAgent() {
         val text = _uiState.value.inputText.trim()
@@ -932,152 +685,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Runs a slash command the way Hermes' own TUI does (`ui-tui/src/app/createSlashHandler.ts`):
-     * `slash.exec` first, because `command.dispatch` alone only knows quick/plugin/skill commands
-     * and a handful of built-ins, so `/help`, `/model`, `/status`… came back as error 4018.
-     * `command.dispatch` is only the fallback for the refusals where `slash.exec` says the
-     * command is not its to run.
-     */
-    private fun handleSlashCommand(text: String, sessionId: String, depth: Int = 0) {
-        if (depth > 5) {
-            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Command alias loop"), isSending = false) }
-            return
-        }
-        viewModelScope.launch {
-            try {
-                val withoutSlash = text.removePrefix("/").trim()
-                val parts = withoutSlash.split(" ", limit = 2)
-                val name = parts[0]
-                val arg = if (parts.size > 1) parts[1] else ""
-                // Hermes' own clients run these two themselves (ui-tui slash/commands/session.ts):
-                // the slash worker has no side agent to hand them to.
-                SIDE_AGENT_COMMANDS[name.lowercase()]?.let { method ->
-                    startSideAgent(method, name, arg, sessionId)
-                    return@launch
-                }
-                val result = try {
-                    gatewayClient.request(
-                        method = GatewayMethods.SLASH_EXEC,
-                        params = jsonToElementMap(buildJsonObject {
-                            put("command", withoutSlash)
-                            put("session_id", sessionId)
-                        }),
-                    )
-                } catch (e: GatewayException) {
-                    if (!slashExecDisowns(e)) throw e
-                    gatewayClient.request(
-                        method = GatewayMethods.COMMAND_DISPATCH,
-                        params = jsonToElementMap(buildJsonObject {
-                            put("name", name)
-                            put("arg", arg)
-                            put("session_id", sessionId)
-                        }),
-                    )
-                }
-                applySlashResult(result, name, arg, sessionId, depth)
-            } catch (e: Exception) {
-                Timber.e(e, "[Chat] Slash command failed")
-                _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Error("Command failed: ${e.message}"),
-                    isSending = false,
-                ) }
-            }
-        }
-    }
-
-    private suspend fun startSideAgent(method: String, name: String, arg: String, sessionId: String) {
-        if (arg.isBlank()) {
-            postSlashStatus(if (method == GatewayMethods.PROMPT_BTW) "/btw <question>" else "/$name <prompt>")
-            return
-        }
-        val result = gatewayClient.request(
-            method = method,
-            params = jsonToElementMap(buildJsonObject {
-                put("session_id", sessionId)
-                put("text", arg)
-            }),
-        ) as? JsonObject
-        val taskId = (result?.get("task_id") as? JsonPrimitive)?.contentOrNull
-        postSlashStatus(
-            when {
-                taskId == null -> "/$name: no task started"
-                method == GatewayMethods.PROMPT_BTW -> "btw $taskId — answering from a snapshot of this chat"
-                else -> "bg $taskId started"
-            },
-        )
-    }
-
-    private fun applySlashResult(
-        result: kotlinx.serialization.json.JsonElement?,
-        name: String,
-        arg: String,
-        sessionId: String,
-        depth: Int,
-    ) {
-        val obj = result as? JsonObject
-        fun str(key: String) = (obj?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
-        val notice = str("notice")?.takeIf { it.isNotBlank() }
-        val message = str("message")
-        when (str("type")) {
-            "alias" -> {
-                val target = str("target")
-                if (!target.isNullOrBlank()) {
-                    handleSlashCommand(if (arg.isNotBlank()) "/$target $arg" else "/$target", sessionId, depth + 1)
-                    return
-                }
-            }
-            "exec", "plugin" -> {
-                postSlashStatus(str("output")?.takeIf { it.isNotBlank() } ?: "(no output)")
-                return
-            }
-            "skill", "send" -> {
-                notice?.let { postSlashStatus(it) }
-                if (!message.isNullOrBlank()) {
-                    sendPrompt(message, sessionId)
-                } else {
-                    postSlashStatus("/$name: empty message", isError = true)
-                }
-                return
-            }
-            "prefill" -> {
-                notice?.let { postSlashStatus(it) }
-                _uiState.update { it.copy(inputText = message ?: it.inputText, isSending = false) }
-                return
-            }
-        }
-        val output = extractCommandOutput(result)?.trim().orEmpty().ifBlank { "/$name: no output" }
-        val warning = str("warning")?.takeIf { it.isNotBlank() }
-        postSlashStatus(if (warning != null) "warning: $warning\n$output" else output)
-    }
-
-    private fun postSlashStatus(text: String, isError: Boolean = false) {
-        _uiState.update { it.copy(
-            messages = it.messages + ChatMessage.Status(
-                id = UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
-                text = text.trim(),
-                isError = isError,
-            ),
-            isSending = false,
-        ) }
-    }
-
-    private fun extractCommandOutput(result: kotlinx.serialization.json.JsonElement?): String? {
-        if (result == null) return null
-        (result as? JsonPrimitive)?.let { if (it.isString) return it.content }
-        val obj = result as? JsonObject ?: return null
-        for (key in listOf("output", "text", "message", "markdown", "result", "detail")) {
-            val v = obj[key]
-            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
-        }
-        (obj["lines"] as? JsonArray)?.let { arr ->
-            val joined = arr.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString("\n")
-            if (joined.isNotBlank()) return joined
-        }
-        return null
-    }
-
     // ── Attachments (delegated) ──────────────────────────────────────────
 
     fun attachFromUri(uri: Uri) = attachmentDelegate.attachFromUri(_uiState, uri)
@@ -1145,136 +752,18 @@ class ChatViewModel @Inject constructor(
     fun drawerHideDelete() = drawerDelegate.hideDelete(_uiState)
     fun drawerConfirmDelete() = drawerDelegate.confirmDelete(_uiState)
 
-    // ── Interactive responds ─────────────────────────────────────────────
+    // ── Reactions (delegated) ────────────────────────────────────────────
 
-    fun respondToApproval(choice: String) {
-        val pending = _uiState.value.pendingApproval ?: return
-        _uiState.update { it.copy(pendingApproval = null) }
-        approvalNotificationManager.cancelApproval(pending.requestId)
-        viewModelScope.launch {
-            try {
-                gatewayClient.request(
-                    method = GatewayMethods.APPROVAL_RESPOND,
-                    params = buildJsonObject {
-                        pending.sessionId?.let { sid -> put("session_id", sid) }
-                        put("request_id", pending.requestId)
-                        put("choice", choice)
-                        put("all", false)
-                    },
-                )
-                Timber.i("[Chat] Approval response sent: $choice")
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                Timber.e(e, "[Chat] Failed to respond to approval")
-                // Never delivered (no socket, timed out): the agent is still blocked on
-                // it and the sheet was already gone, so nothing could answer it again.
-                // A refusal from the server (it carries a code) means the request is gone.
-                val undelivered = (e as? GatewayException)?.code == null
-                _uiState.update { it.copy(
-                    pendingApproval = if (undelivered && it.pendingApproval == null) pending else it.pendingApproval,
-                    errorEvent = ErrorEvent.Error(e.message ?: "Unknown error"),
-                ) }
-            }
-        }
-    }
+    fun reactToMessage(messageId: String, emoji: String?) = reactionsDelegate.react(messageId, emoji)
 
-    // Clarify / sudo / secret are server→client requests: the agent blocks
-    // until a response frame with the request's id comes back. They have no
-    // RPC of their own (the old clarify.respond / sudo.respond / secret.respond
-    // don't exist on the server, so answers never arrived).
+    // ── Interactive responds (delegated) ─────────────────────────────────
 
-    /** [picked]: the typed text, the chosen option, or — multi-select — every chosen option. */
-    fun respondToClarify(requestId: String, picked: List<String>) {
-        val card = findInteractiveRequest(requestId) ?: return
-        answerServerRequest(
-            requestId,
-            kotlinx.serialization.json.JsonObject(
-                mapOf("answer" to JsonPrimitive(clarifyAnswer(picked, card.multiSelect))),
-            ),
-        )
-    }
-
-    /** Batch clarify: every question's answer, keyed by its qid. */
-    fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) {
-        val card = findInteractiveRequest(requestId) ?: return
-        val encoded = card.questions.associate { q ->
-            q.qid to JsonPrimitive(clarifyAnswer(answers[q.qid].orEmpty(), q.multiSelect))
-        }
-        answerServerRequest(
-            requestId,
-            kotlinx.serialization.json.JsonObject(mapOf("answers" to kotlinx.serialization.json.JsonObject(encoded))),
-        )
-    }
-
-    fun respondToSudo(requestId: String, password: String) =
-        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(password))))
-
-    fun respondToSecret(requestId: String, value: String) =
-        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(value))))
-
-    private fun findInteractiveRequest(requestId: String): ChatMessage.InteractiveRequest? =
-        _uiState.value.messages.lastOrNull {
-            it is ChatMessage.InteractiveRequest && it.requestId == requestId
-        } as? ChatMessage.InteractiveRequest
-
-    /** The clarify tool reads a multi-select answer as a JSON list and anything else as the bare string. */
-    private fun clarifyAnswer(picked: List<String>, multiSelect: Boolean): String {
-        val values = picked.filter { it.isNotBlank() }
-        return if (multiSelect) {
-            kotlinx.serialization.json.JsonArray(values.map { JsonPrimitive(it) }).toString()
-        } else {
-            values.firstOrNull().orEmpty()
-        }
-    }
-
-    private fun answerServerRequest(requestId: String, result: kotlinx.serialization.json.JsonObject) {
-        if (gatewayClient.respondToServerRequest(requestId, result)) {
-            markAnswered(requestId)
-        } else {
-            _uiState.update { it.copy(errorEvent = ErrorEvent.Error("Not connected — answer not sent")) }
-        }
-    }
-
-    /**
-     * Show a question the agent is blocked on — only in its own chat (another
-     * chat's comes back through `open_requests` when that chat is opened), and
-     * only once: a reconnect replay re-delivers the same request id.
-     */
-    private fun addInteractiveRequest(sessionId: String?, request: ChatMessage.InteractiveRequest) {
-        _uiState.update { state ->
-            if (sessionId != null && sessionId != state.activeSessionId) return@update state
-            if (state.messages.any { it.id == request.id }) return@update state
-            state.copy(messages = state.messages + request)
-        }
-    }
-
-    /** The server withdrew a request (timeout, interrupt, answered elsewhere): its card stops taking answers. */
-    private fun onRequestCancel(serverRequestId: String) {
-        val pending = _uiState.value.pendingApproval
-        if (pending != null && pending.serverRequestId == serverRequestId) {
-            approvalNotificationManager.cancelApproval(pending.requestId)
-        }
-        _uiState.update { state ->
-            state.copy(
-                pendingApproval = state.pendingApproval?.takeUnless { it.serverRequestId == serverRequestId },
-                messages = state.messages.updateFirst({ msg ->
-                    msg is ChatMessage.InteractiveRequest && msg.requestId == serverRequestId && !msg.answered
-                }) { msg ->
-                    (msg as ChatMessage.InteractiveRequest).copy(expired = true)
-                },
-            )
-        }
-    }
-
-    private fun markAnswered(requestId: String) {
-        _uiState.update { it.copy(
-            messages = _uiState.value.messages.updateFirst({ msg ->
-                msg is ChatMessage.InteractiveRequest && msg.requestId == requestId
-            }) { msg ->
-                (msg as ChatMessage.InteractiveRequest).copy(answered = true)
-            }
-        ) }
-    }
+    fun respondToApproval(choice: String) = requestsDelegate.respondToApproval(choice)
+    fun respondToClarify(requestId: String, picked: List<String>) = requestsDelegate.respondToClarify(requestId, picked)
+    fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) =
+        requestsDelegate.respondToClarifyBatch(requestId, answers)
+    fun respondToSudo(requestId: String, password: String) = requestsDelegate.respondToSudo(requestId, password)
+    fun respondToSecret(requestId: String, value: String) = requestsDelegate.respondToSecret(requestId, value)
 
     // ── Event handling ───────────────────────────────────────────────────
 
@@ -1454,24 +943,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            is GatewayEvent.AgentReaction -> {
-                // Already stored; this only paints it now rather than at the next reload.
-                // A message drawn live has no row id yet, and the agent reacts to the newest
-                // message of that role unless told otherwise, so it lands there
-                // (desktop-bridge.ts). The id is not stamped on it: a guess must not become
-                // the address the user's own reactions are sent to.
-                val reactions = parseReactions(event.reactions)
-                _uiState.update { state ->
-                    val messages = state.messages
-                    val byRow = messages.indexOfFirst { it.rowIdOrNull == event.rowId }
-                    val index = if (byRow >= 0) byRow else messages.indexOfLast { msg ->
-                        msg.rowIdOrNull == null &&
-                            if (event.role == "assistant") msg is ChatMessage.Assistant else msg is ChatMessage.User
-                    }
-                    if (index < 0) state
-                    else state.copy(messages = messages.toMutableList().also { it[index] = it[index].withReactions(reactions) })
-                }
-            }
+            is GatewayEvent.AgentReaction -> reactionsDelegate.onAgentReaction(event)
 
             is GatewayEvent.SessionsChanged -> {
                 // Fires on every message append of every session, floored to
@@ -1551,72 +1023,19 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.ToolStart -> {
-                // Drain buffered reasoning first so the mark below counts
-                // everything that arrived before this tool.
+                // Drain buffered reasoning first so the tool's mark counts
+                // everything that arrived before it.
                 streamingDelegate.flushBuffer()
-                _uiState.update { state ->
-                    val existing = state.messages.firstOrNull { it.id == event.toolId } as? ChatMessage.ToolCall
-                    val exists = state.messages.any { it.id == event.toolId }
-                    val ownerId = existing?.reasoningOwnerId ?: streamingDelegate.currentAssistantMessageId
-                    val mark = existing?.reasoningMark
-                        ?: (state.messages.firstOrNull { it.id == ownerId } as? ChatMessage.Assistant)
-                            ?.reasoning?.length
-                        ?: 0
-                    val toolMsg = ChatMessage.ToolCall(
-                        id = event.toolId,
-                        timestamp = System.currentTimeMillis(),
-                        toolName = event.name ?: "unknown",
-                        argsText = event.argsText,
-                        resultText = null,
-                        error = null,
-                        isRunning = true,
-                        durationS = null,
-                        reasoningOwnerId = ownerId,
-                        reasoningMark = mark,
-                    )
-                    state.copy(
-                        messages = if (exists) {
-                            state.messages.updateFirst({ it.id == event.toolId }) { toolMsg }
-                        } else {
-                            state.messages + toolMsg
-                        },
-                        activeTodos = event.todos?.toUiTodos() ?: state.activeTodos,
-                    )
-                }
+                _uiState.update { it.withToolStarted(event, streamingDelegate.currentAssistantMessageId) }
             }
 
             is GatewayEvent.TodoUpdated -> {
                 _uiState.update { it.copy(activeTodos = event.todos.toUiTodos()) }
             }
 
-            is GatewayEvent.ToolComplete -> {
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.ToolCall && msg.id == event.toolId
-                    }) { msg ->
-                        (msg as ChatMessage.ToolCall).copy(
-                            resultText = event.resultText ?: event.result,
-                            error = event.error,
-                            isRunning = false,
-                            durationS = event.durationS,
-                        )
-                    },
-                    activeTodos = event.todos?.toUiTodos() ?: _uiState.value.activeTodos,
-                ) }
-            }
+            is GatewayEvent.ToolComplete -> _uiState.update { it.withToolCompleted(event) }
 
-            is GatewayEvent.ToolProgress -> {
-                // tool.progress names its tool but carries no id. Matching any running
-                // card put one tool's output on another when two ran at once.
-                _uiState.update { it.copy(
-                    messages = _uiState.value.messages.updateFirst({ msg ->
-                        msg is ChatMessage.ToolCall && msg.isRunning &&
-                            (event.name == null || msg.toolName == event.name)
-                    }) { msg ->
-                        (msg as ChatMessage.ToolCall).copy(resultText = event.preview)
-                    }
-                ) }
-            }
+            is GatewayEvent.ToolProgress -> _uiState.update { it.copy(messages = it.messages.withToolProgress(event)) }
 
             is GatewayEvent.ToolGenerating -> {
                 Timber.d("[Chat] Tool generating: ${event.name}")
@@ -1658,83 +1077,23 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { it.copy(messages = _uiState.value.messages + statusMsg) }
             }
 
-            is GatewayEvent.ApprovalRequest -> {
-                // The server's queue id: approval.respond resolves exactly this
-                // entry (a random id here left the server guessing which one).
-                val requestId = event.requestId.ifBlank { event.serverRequestId }
-                // In the app the approval sheet asks; the notification is for when the user is away.
-                if (!foregroundState.isForeground) {
-                    approvalNotificationManager.showApprovalRequest(
-                        requestId = requestId,
-                        sessionId = event.sessionId,
-                        toolName = "terminal",
-                        command = event.command,
-                        description = event.description,
-                        allowPermanent = event.allowPermanent,
-                    )
-                }
+            is GatewayEvent.ApprovalRequest -> requestsDelegate.onApprovalRequest(
+                event,
                 // The drawer marks the waiting chat by its stored id; the event only has the live one.
-                val approvalKey = event.sessionId?.let { sid ->
+                sessionKey = event.sessionId?.let { sid ->
                     storedIdByLiveId[sid] ?: _uiState.value.activeSessionKey.takeIf { sid == activeSid }
-                }
-                // The approval sheet and the notification show the request. It is not added
-                // to the chat: as plain text it stayed there for good, raw command and all.
-                _uiState.update { it.copy(
-                    pendingApproval = PendingApprovalUi(
-                        requestId = requestId,
-                        sessionId = event.sessionId,
-                        command = event.command,
-                        description = event.description,
-                        patternKeys = event.patternKeys,
-                        allowPermanent = event.allowPermanent,
-                        serverRequestId = event.serverRequestId,
-                        sessionKey = approvalKey,
-                        choices = event.choices,
-                    ),
-                ) }
-            }
-
-            is GatewayEvent.ClarifyRequest -> addInteractiveRequest(
-                event.sessionId,
-                ChatMessage.InteractiveRequest(
-                    id = event.requestId,
-                    timestamp = System.currentTimeMillis(),
-                    requestId = event.requestId,
-                    question = event.question,
-                    choices = event.choices,
-                    kind = InteractiveKind.CLARIFY,
-                    multiSelect = event.multiSelect,
-                    questions = event.questions.map { ClarifyQuestionUi(it.qid, it.question, it.choices, it.multiSelect) },
-                ),
+                },
             )
 
-            is GatewayEvent.SudoRequest -> addInteractiveRequest(
-                event.sessionId,
-                ChatMessage.InteractiveRequest(
-                    id = event.requestId,
-                    timestamp = System.currentTimeMillis(),
-                    requestId = event.requestId,
-                    question = "",
-                    choices = null,
-                    kind = InteractiveKind.SUDO,
-                ),
-            )
+            is GatewayEvent.ClarifyRequest -> requestsDelegate.onClarifyRequest(event)
 
-            is GatewayEvent.SecretRequest -> addInteractiveRequest(
-                event.sessionId,
-                ChatMessage.InteractiveRequest(
-                    id = event.requestId,
-                    timestamp = System.currentTimeMillis(),
-                    requestId = event.requestId,
-                    question = event.prompt,
-                    choices = null,
-                    kind = InteractiveKind.SECRET,
-                ),
-            )
+            is GatewayEvent.SudoRequest -> requestsDelegate.onSudoRequest(event)
 
-            is GatewayEvent.RequestCancel -> onRequestCancel(event.requestId)
+            is GatewayEvent.SecretRequest -> requestsDelegate.onSecretRequest(event)
 
-            is GatewayEvent.SubagentEvent -> onSubagentEvent(event)
+            is GatewayEvent.RequestCancel -> requestsDelegate.onRequestCancel(event.requestId)
+
+            is GatewayEvent.SubagentEvent -> _uiState.update { it.copy(messages = it.messages.withSubagentEvent(event)) }
 
             is GatewayEvent.NotificationShow -> {
                 val notifUi = NotificationUi(
@@ -1826,121 +1185,11 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * A delegated child's progress (tools/delegate_tool.py, relayed by tui_gateway): every
-     * frame names the child by `subagent_id` and carries its `goal`; `text` is its latest
-     * line and `summary` its result. spawn_requested and start name the same child, so a
-     * card is updated in place rather than added twice.
-     */
-    private fun onSubagentEvent(event: GatewayEvent.SubagentEvent) {
-        val p = event.payload
-        val cardId = (p["subagent_id"] ?: p["id"]).asText()?.takeIf { it.isNotBlank() }?.let { "subagent-$it" }
-        fun isOpenCard(msg: ChatMessage) =
-            msg is ChatMessage.SubagentCard && !msg.isComplete && (cardId == null || msg.id == cardId)
-        when (event.subagentType) {
-            "spawn_requested", "start" -> {
-                val goal = (p["goal"] ?: p["description"] ?: p["text"]).asText()
-                    ?.takeIf { it.isNotBlank() } ?: "Sub-agent"
-                _uiState.update { state ->
-                    if (cardId != null && state.messages.any { it.id == cardId }) {
-                        state.copy(messages = state.messages.updateFirst({ it.id == cardId }) { msg ->
-                            (msg as ChatMessage.SubagentCard).copy(subagentType = event.subagentType, text = goal)
-                        })
-                    } else {
-                        state.copy(messages = state.messages + ChatMessage.SubagentCard(
-                            id = cardId ?: "subagent-${UUID.randomUUID()}",
-                            timestamp = System.currentTimeMillis(),
-                            subagentType = event.subagentType,
-                            text = goal,
-                        ))
-                    }
-                }
-            }
-            "complete" -> {
-                val result = (p["summary"] ?: p["text"]).asText().orEmpty()
-                _uiState.update { state ->
-                    state.copy(messages = state.messages.updateFirst(::isOpenCard) { msg ->
-                        (msg as ChatMessage.SubagentCard).copy(isComplete = true, text = result.ifEmpty { msg.text })
-                    })
-                }
-            }
-            "thinking", "progress", "tool" -> {
-                val line = (p["text"] ?: p["tool_preview"]).asText()?.takeIf { it.isNotBlank() } ?: return
-                _uiState.update { state ->
-                    state.copy(messages = state.messages.updateFirst(::isOpenCard) { msg ->
-                        (msg as ChatMessage.SubagentCard).copy(text = line)
-                    })
-                }
-            }
-        }
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 
-    private fun List<GatewayEvent.TodoItem>.toUiTodos(): List<TodoItemUi> =
-        map { todo ->
-            TodoItemUi(
-                id = todo.id,
-                content = todo.content,
-                status = when (todo.status) {
-                    "in_progress" -> TodoStatus.IN_PROGRESS
-                    "completed" -> TodoStatus.COMPLETED
-                    "cancelled" -> TodoStatus.CANCELLED
-                    else -> TodoStatus.PENDING
-                },
-            )
-        }
-
     companion object {
-        /**
-         * `slash.exec` answers 4018 with exactly these texts when the command is not its own.
-         * Every other 4018 comes from a `command.dispatch` handler it already forwarded to
-         * (/retry, /undo, /compress…): dispatching again would run a mutating command twice.
-         */
-        private val SLASH_EXEC_NOT_MINE = Regex(
-            "^skill command: use command\\.dispatch for /|use command\\.dispatch for /snapshot restore",
-        )
-
-        internal fun slashExecDisowns(e: GatewayException): Boolean =
-            e.code == 4018 && SLASH_EXEC_NOT_MINE.containsMatchIn(e.rpcMessage.orEmpty())
-
-        private val SIDE_AGENT_COMMANDS = mapOf(
-            "btw" to GatewayMethods.PROMPT_BTW,
-            "bg" to GatewayMethods.PROMPT_BACKGROUND,
-            "background" to GatewayMethods.PROMPT_BACKGROUND,
-        )
-
-        internal fun isSlashCommandText(text: String, known: Set<String>): Boolean {
-            if (!text.startsWith("/")) return false
-            if (known.isEmpty()) return true
-            val name = "/" + text.removePrefix("/").trimStart().substringBefore(' ').substringBefore('\n').lowercase()
-            return name in known
-        }
-
-        /** Shown first in the `/` list: what the app has no button for and people reach for. */
-        internal val FIRST_SLASH_COMMANDS = listOf(
-            "/plan", "/goal", "/subgoal", "/btw", "/bg", "/loop", "/review", "/learn", "/status", "/help",
-        )
-
-        /**
-         * Left out of the `/` list (typing them in full still runs them): the app has a
-         * button or screen for them, or they only mean something in a terminal.
-         */
-        internal val HIDDEN_SLASH_COMMANDS = setOf(
-            "/new", "/clear", "/retry", "/undo", "/branch", "/model", "/approve", "/deny",
-            "/sessions", "/resume", "/stop", "/image",
-            "/context", "/queue", "/compress", "/title", "/save", "/history",
-            // Settings, Tools, Task Desk, Changes and the composer already do these.
-            "/steer", "/reasoning", "/personality", "/approvals", "/yolo", "/config",
-            "/reload", "/reload-mcp", "/tools", "/toolsets", "/skills", "/reload-skills",
-            "/plugins", "/cron", "/platforms", "/agents", "/insights", "/usage",
-            "/rollback", "/skin",
-            "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
-            "/copy", "/paste", "/quit", "/wake", "/voice",
-        )
-
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
@@ -1949,17 +1198,13 @@ class ChatViewModel @Inject constructor(
         /** Above this, something stalled; averaging it in would poison the estimate. */
         private const val MAX_BOOT_SAMPLE_MS = 180_000L
         private const val ACTIVITY_PUBLISH_INTERVAL_MS = 750L
-        private const val MESSAGE_NOT_LOCATED =
-            "Could not find this message in the stored chat, so nothing was changed. Reopen the chat and try again."
-        private const val REACTION_NOT_LOCATED =
-            "Could not find this message in the stored chat. Reopen the chat and try again."
         /** ThemeModeState's file, where the Appearance switches live. */
         private const val APPEARANCE_PREFS = "hermes_prefs"
     }
 
     override fun onCleared() {
         super.onCleared()
-        appearancePrefs.unregisterOnSharedPreferenceChangeListener(reactionsSwitchMirror)
+        reactionsDelegate.close()
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()
         streamingDelegate.reset()

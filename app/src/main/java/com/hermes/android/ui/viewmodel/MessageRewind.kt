@@ -55,3 +55,11 @@ internal fun hiddenRowsBefore(server: List<ChatMessage.User>, rowId: Long, max: 
     val previous = server.mapNotNull { it.rowId }.filter { it < rowId }.maxOrNull() ?: 0L
     return ((rowId - 1) downTo (previous + 1)).take(max)
 }
+
+/** What the user is told when a change to the chat (an edit, a retry, a delete) is refused. */
+internal fun rewindFailure(e: Exception): String =
+    if (e.message.orEmpty().startsWith("RPC error 4009:")) {
+        "Hermes is still finishing the last reply. Try again in a moment."
+    } else {
+        "Could not change the chat: ${e.message}"
+    }
