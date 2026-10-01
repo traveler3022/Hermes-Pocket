@@ -13,6 +13,11 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -228,12 +233,32 @@ private fun HermesNavHost(
     val navController = rememberNavController()
 
     // Every back arrow is wrapped in dropUnlessResumed: after a pop, the leaving
-    // screen stays on top for the 700 ms fade and still takes taps. A tap on the
+    // screen stays on top for the page transition and still takes taps. A tap on the
     // chat's hamburger in that window hit Settings' back arrow (same corner) and
     // popped `chat` too, leaving an empty NavHost — a black screen.
     NavHost(
         navController = navController,
         startDestination = if (startInSetup) "setup" else "chat",
+        // Navigation's default is a bare 700 ms crossfade, which reads as lag. A short
+        // slide of an eighth of the width plus a fade, 300 ms, follows Material's
+        // shared-axis page transition; Start/End follow the layout direction, so RTL
+        // pages come in from the left.
+        enterTransition = {
+            slideIntoContainer(SlideDirection.Start, tween(PAGE_MS, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeIn(tween(PAGE_MS))
+        },
+        exitTransition = {
+            slideOutOfContainer(SlideDirection.Start, tween(PAGE_MS, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeOut(tween(PAGE_MS / 2))
+        },
+        popEnterTransition = {
+            slideIntoContainer(SlideDirection.End, tween(PAGE_MS, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeIn(tween(PAGE_MS))
+        },
+        popExitTransition = {
+            slideOutOfContainer(SlideDirection.End, tween(PAGE_MS, easing = FastOutSlowInEasing)) { it / 8 } +
+                fadeOut(tween(PAGE_MS / 2))
+        },
     ) {
         composable("setup") {
             com.hermes.android.ui.screen.SetupScreen(
@@ -411,3 +436,6 @@ private fun HermesNavHost(
 
 /** One notification tap; a class, not data, so tapping the same chat again still counts. */
 private class NotificationOpen(val sessionId: String)
+
+/** Length of a page transition in [HermesNavHost]. */
+private const val PAGE_MS = 300
