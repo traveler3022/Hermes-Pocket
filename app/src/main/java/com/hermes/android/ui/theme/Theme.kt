@@ -42,7 +42,8 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     // The key stays "claude" so a saved choice survives.
     MOCHA("claude", "Mocha", "موکا"),
     MIDNIGHT("midnight", "Midnight", "میدنایت"),
-    INDIGO_PRO("indigo_pro", "Indigo", "ایندیگو"),
+    // The key stays "indigo_pro" so a saved choice survives.
+    MANUS("indigo_pro", "Manus", "مانوس"),
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
@@ -310,60 +311,60 @@ private val MidnightDarkColors = darkColorScheme(
     outlineVariant = midnight_dark_outlineVariant,
 )
 
-// ── Indigo palette ──
+// ── Manus palette ──
 
-private val IndigoLightColors = lightColorScheme(
-    primary = indigo_light_primary,
-    onPrimary = indigo_light_onPrimary,
-    primaryContainer = indigo_light_primaryContainer,
-    onPrimaryContainer = indigo_light_onPrimaryContainer,
-    secondary = indigo_light_secondary,
-    onSecondary = indigo_light_onSecondary,
-    secondaryContainer = indigo_light_secondaryContainer,
-    onSecondaryContainer = indigo_light_onSecondaryContainer,
-    tertiary = indigo_light_tertiary,
-    onTertiary = indigo_light_onTertiary,
-    tertiaryContainer = indigo_light_tertiaryContainer,
-    onTertiaryContainer = indigo_light_onTertiaryContainer,
-    error = indigo_light_error,
-    onError = indigo_light_onError,
-    errorContainer = indigo_light_errorContainer,
-    onErrorContainer = indigo_light_onErrorContainer,
-    background = indigo_light_background,
-    onBackground = indigo_light_onBackground,
-    surface = indigo_light_surface,
-    onSurface = indigo_light_onSurface,
-    surfaceVariant = indigo_light_surfaceVariant,
-    onSurfaceVariant = indigo_light_onSurfaceVariant,
-    outline = indigo_light_outline,
-    outlineVariant = indigo_light_outlineVariant,
+private val ManusLightColors = lightColorScheme(
+    primary = manus_light_primary,
+    onPrimary = manus_light_onPrimary,
+    primaryContainer = manus_light_primaryContainer,
+    onPrimaryContainer = manus_light_onPrimaryContainer,
+    secondary = manus_light_secondary,
+    onSecondary = manus_light_onSecondary,
+    secondaryContainer = manus_light_secondaryContainer,
+    onSecondaryContainer = manus_light_onSecondaryContainer,
+    tertiary = manus_light_tertiary,
+    onTertiary = manus_light_onTertiary,
+    tertiaryContainer = manus_light_tertiaryContainer,
+    onTertiaryContainer = manus_light_onTertiaryContainer,
+    error = manus_light_error,
+    onError = manus_light_onError,
+    errorContainer = manus_light_errorContainer,
+    onErrorContainer = manus_light_onErrorContainer,
+    background = manus_light_background,
+    onBackground = manus_light_onBackground,
+    surface = manus_light_surface,
+    onSurface = manus_light_onSurface,
+    surfaceVariant = manus_light_surfaceVariant,
+    onSurfaceVariant = manus_light_onSurfaceVariant,
+    outline = manus_light_outline,
+    outlineVariant = manus_light_outlineVariant,
 )
 
-private val IndigoDarkColors = darkColorScheme(
-    primary = indigo_dark_primary,
-    onPrimary = indigo_dark_onPrimary,
-    primaryContainer = indigo_dark_primaryContainer,
-    onPrimaryContainer = indigo_dark_onPrimaryContainer,
-    secondary = indigo_dark_secondary,
-    onSecondary = indigo_dark_onSecondary,
-    secondaryContainer = indigo_dark_secondaryContainer,
-    onSecondaryContainer = indigo_dark_onSecondaryContainer,
-    tertiary = indigo_dark_tertiary,
-    onTertiary = indigo_dark_onTertiary,
-    tertiaryContainer = indigo_dark_tertiaryContainer,
-    onTertiaryContainer = indigo_dark_onTertiaryContainer,
-    error = indigo_dark_error,
-    onError = indigo_dark_onError,
-    errorContainer = indigo_dark_errorContainer,
-    onErrorContainer = indigo_dark_onErrorContainer,
-    background = indigo_dark_background,
-    onBackground = indigo_dark_onBackground,
-    surface = indigo_dark_surface,
-    onSurface = indigo_dark_onSurface,
-    surfaceVariant = indigo_dark_surfaceVariant,
-    onSurfaceVariant = indigo_dark_onSurfaceVariant,
-    outline = indigo_dark_outline,
-    outlineVariant = indigo_dark_outlineVariant,
+private val ManusDarkColors = darkColorScheme(
+    primary = manus_dark_primary,
+    onPrimary = manus_dark_onPrimary,
+    primaryContainer = manus_dark_primaryContainer,
+    onPrimaryContainer = manus_dark_onPrimaryContainer,
+    secondary = manus_dark_secondary,
+    onSecondary = manus_dark_onSecondary,
+    secondaryContainer = manus_dark_secondaryContainer,
+    onSecondaryContainer = manus_dark_onSecondaryContainer,
+    tertiary = manus_dark_tertiary,
+    onTertiary = manus_dark_onTertiary,
+    tertiaryContainer = manus_dark_tertiaryContainer,
+    onTertiaryContainer = manus_dark_onTertiaryContainer,
+    error = manus_dark_error,
+    onError = manus_dark_onError,
+    errorContainer = manus_dark_errorContainer,
+    onErrorContainer = manus_dark_onErrorContainer,
+    background = manus_dark_background,
+    onBackground = manus_dark_onBackground,
+    surface = manus_dark_surface,
+    onSurface = manus_dark_onSurface,
+    surfaceVariant = manus_dark_surfaceVariant,
+    onSurfaceVariant = manus_dark_onSurfaceVariant,
+    outline = manus_dark_outline,
+    outlineVariant = manus_dark_outlineVariant,
 )
 
 // ── Carbon — Perplexity-inspired: near-black + teal ──
@@ -507,7 +508,7 @@ fun Hermes2Theme(
             ColorTheme.BLUE_EYE -> if (useDark) BlueDarkColors else BlueLightColors
             ColorTheme.MOCHA -> if (useDark) MochaDarkColors else MochaLightColors
             ColorTheme.MIDNIGHT -> if (useDark) MidnightDarkColors else MidnightLightColors
-            ColorTheme.INDIGO_PRO -> if (useDark) IndigoDarkColors else IndigoLightColors
+            ColorTheme.MANUS -> if (useDark) ManusDarkColors else ManusLightColors
             ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
         }
     }
