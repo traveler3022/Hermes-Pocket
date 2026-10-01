@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.hermes.android.MainActivity
 import com.hermes.android.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.hermes.android.i18n.tForContext

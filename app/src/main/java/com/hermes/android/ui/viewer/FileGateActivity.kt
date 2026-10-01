@@ -26,8 +26,6 @@ import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.i18n.tForContext
-import com.hermes.android.ui.screen.guestPathIn
-import com.hermes.android.ui.screen.startExternalView
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint

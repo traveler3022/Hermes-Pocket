@@ -1,4 +1,4 @@
-package com.hermes.android.ui.screen
+package com.hermes.android.ui.viewer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

@@ -112,7 +112,6 @@ import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
 import com.hermes.android.ui.i18n.t
-import com.hermes.android.ui.screen.openUrlExternally
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint

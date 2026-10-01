@@ -11,7 +11,8 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.hermes.android.ui.viewer.FileViewerActivity
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Plays the audio viewer's file so it keeps going with the screen off or the app in the
@@ -19,7 +20,10 @@ import com.hermes.android.ui.viewer.FileViewerActivity
  * shows it on the lock screen; tapping it reopens the viewer on the same file. Headphones
  * unplugged pause it, and it yields audio focus to calls and other players.
  */
+@AndroidEntryPoint
 class AudioPlaybackService : MediaSessionService() {
+
+    @Inject lateinit var playbackViewer: PlaybackViewer
 
     private var session: MediaSession? = null
 
@@ -64,7 +68,7 @@ class AudioPlaybackService : MediaSessionService() {
     private fun viewerIntent(item: MediaItem): PendingIntent? {
         val url = item.localConfiguration?.uri?.toString() ?: return null
         val name = item.mediaMetadata.title?.toString().orEmpty()
-        val intent = FileViewerActivity.intent(this, url, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = playbackViewer.intent(this, url, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return PendingIntent.getActivity(
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
