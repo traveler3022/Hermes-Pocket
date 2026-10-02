@@ -255,6 +255,11 @@ fun RuntimeSetupScreen(
                         CircularProgressIndicator()
                     }
 
+                    is RuntimeUiState.Missing -> MissingContent(
+                        storeUrl = state.storeUrl,
+                        onCheckAgain = { viewModel.detect() },
+                    )
+
                     is RuntimeUiState.Detected -> if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
                         BuiltInLinuxDetectedContent(
                             diskFreeBytes = state.diskFreeBytes,

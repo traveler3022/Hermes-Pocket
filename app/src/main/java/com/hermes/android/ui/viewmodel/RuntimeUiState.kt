@@ -21,6 +21,9 @@ sealed class RuntimeUiState {
     /** Detection in progress. */
     object Detecting : RuntimeUiState()
 
+    /** The host app (Termux) is not installed; [storeUrl] is where to get it. */
+    data class Missing(val storeUrl: String?) : RuntimeUiState()
+
     /**
      * Runtime detected but not yet installed.
      */

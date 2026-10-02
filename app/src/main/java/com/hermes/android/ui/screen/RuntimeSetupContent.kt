@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -236,6 +237,45 @@ internal fun InstalledContent(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(startLabel)
+            }
+        }
+    }
+}
+
+/** Termux is not installed: say so, link to F-Droid, and re-check once the user is back. */
+@Composable
+internal fun MissingContent(storeUrl: String?, onCheckAgain: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = t("Termux is not installed", "Termux نصب نیست"),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = t(
+                    "Hermes runs inside the Termux app in this mode. Install Termux from F-Droid " +
+                        "(not the Play Store version), open it once, then come back and check again.",
+                    "در این حالت Hermes داخل اپ Termux اجرا می‌شود. Termux را از F-Droid نصب کنید " +
+                        "(نه نسخه‌ی Play Store)، یک بار بازش کنید، بعد برگردید و دوباره بررسی کنید.",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (storeUrl != null) {
+                    Button(onClick = { runCatching { uriHandler.openUri(storeUrl) } }) {
+                        Text(t("Get Termux", "دریافت Termux"))
+                    }
+                }
+                OutlinedButton(onClick = onCheckAgain) { Text(t("Check again", "بررسی دوباره")) }
             }
         }
     }

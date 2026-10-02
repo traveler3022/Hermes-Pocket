@@ -7,6 +7,7 @@ import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
+import com.hermes.android.runtime.InstallAction
 import com.hermes.android.runtime.InstallResult
 import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -138,6 +140,9 @@ class RuntimeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<RuntimeUiState>(RuntimeUiState.NotDetected)
     val uiState: StateFlow<RuntimeUiState> = _uiState.asStateFlow()
 
+    /** Set when the last detect() found the host app missing; the runtime state alone says only NotDetected. */
+    private val _missing = MutableStateFlow<RuntimeUiState.Missing?>(null)
+
     private val _installProgress = MutableStateFlow<InstallProgressUi?>(null)
     val installProgress: StateFlow<InstallProgressUi?> = _installProgress.asStateFlow()
 
@@ -170,9 +175,11 @@ class RuntimeViewModel @Inject constructor(
 
         // Bridge runtime state → UI state
         viewModelScope.launch {
-            runtimeManager.state.collect { runtimeState ->
-                _uiState.value = mapToUiState(runtimeState)
-            }
+            combine(runtimeManager.state, _missing) { runtimeState, missing ->
+                // NotDetected is also the state before any probe: only a Missing result
+                // turns it into "not installed" instead of an endless spinner.
+                if (runtimeState is RuntimeState.NotDetected && missing != null) missing else mapToUiState(runtimeState)
+            }.collect { _uiState.value = it }
         }
         viewModelScope.launch {
             runtimeManager.installProgress.collect { progress ->
@@ -210,9 +217,17 @@ class RuntimeViewModel @Inject constructor(
         viewModelScope.launch {
             _errorMessage.value = null
             try {
+                _missing.value = null
                 val result = runtimeManager.runtime.detect()
                 if (result is DetectionResult.Missing) {
                     Timber.i("[Runtime] Runtime missing: ${result.title}")
+                    _missing.value = RuntimeUiState.Missing(
+                        storeUrl = when (val action = result.action) {
+                            is InstallAction.OpenStore -> action.fDroidUrl
+                            is InstallAction.OpenUrl -> action.url
+                            InstallAction.None -> null
+                        },
+                    )
                 }
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Detection failed")

@@ -222,6 +222,7 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     when (val state = uiState) {
         RuntimeUiState.NotDetected, RuntimeUiState.Detecting ->
             CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+        is RuntimeUiState.Missing -> MissingContent(storeUrl = state.storeUrl, onCheckAgain = viewModel::detect)
         is RuntimeUiState.Detected -> if (choice == RuntimeChoiceUi.BuiltInLinux) {
             BuiltInLinuxDetectedContent(diskFreeBytes = state.diskFreeBytes, onStartInstall = viewModel::startInstall)
         } else {
