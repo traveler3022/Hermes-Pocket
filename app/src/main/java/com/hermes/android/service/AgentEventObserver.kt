@@ -99,6 +99,14 @@ class AgentEventObserver @Inject constructor(
         }
     }
 
+    /**
+     * The id a notification opens [liveId] by. A live id dies with the gateway
+     * process (a restart, or Android killing it), and tapping a notification
+     * that still held it failed with 4001; the stored id resumes the same chat
+     * on any gateway, and reuses the live session while it is still there.
+     */
+    fun openableId(liveId: String): String = storedByLive[liveId] ?: liveId
+
     private fun rememberTitle(id: String, title: String) {
         watched.compute(id) { _, old -> if (old.isNullOrBlank()) title else old }
     }
@@ -162,7 +170,7 @@ class AgentEventObserver @Inject constructor(
                     storedByLive[liveId]?.let { completionTracker.claim(it) }
                 }
                 if (!foregroundState.isForeground) {
-                    notifier.showTurnComplete(event.sessionId, event.text, title)
+                    notifier.showTurnComplete(event.sessionId?.let(::openableId), event.text, title)
                 }
             }
             is GatewayEvent.BackgroundComplete -> {
@@ -260,7 +268,7 @@ class AgentEventObserver @Inject constructor(
             val preview = row?.str("preview").orEmpty().ifBlank { title }
             Timber.i("[AgentObserver] session $id completed while offline — notifying from sync")
             if (!foregroundState.isForeground) {
-                notifier.showTurnComplete(id, preview.ifBlank { notifier.taskFinishedText() }, title)
+                notifier.showTurnComplete(openableId(id), preview.ifBlank { notifier.taskFinishedText() }, title)
             }
         }
         publishWork()

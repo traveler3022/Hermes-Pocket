@@ -305,7 +305,7 @@ class HermesGatewayService : Service() {
         return HermesNotifications.builder(this, WORKING_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(line)
-            .setContentIntent(HermesNotifications.openApp(this, if (single) sessionId else null))
+            .setContentIntent(HermesNotifications.openApp(this, if (single) agentEventObserver.openableId(sessionId) else null))
             .setShowWhen(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
