@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +20,11 @@ import androidx.compose.material.icons.Icons
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.ExpandLess
 import com.hermes.android.ui.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -91,10 +90,9 @@ internal fun AssistantMessageBubble(
             Box {
                 Column(
                     modifier = Modifier
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { showContextMenu = true },
-                        )
+                        // No long-press menu here: it opened together with the text
+                        // selection's own Copy / Select all. A long press now only
+                        // selects text; the reply's actions live behind the ⋮ below.
                         // Only a finished reply animates its size (Show more /
                         // Collapse). While streaming the text grows every 80ms
                         // flush, and each growth restarted a size animation:
@@ -239,50 +237,6 @@ internal fun AssistantMessageBubble(
                         TypingDots(dotSize = 4.dp)
                     }
                 }
-                DropdownMenu(
-                    expanded = showContextMenu,
-                    onDismissRequest = { showContextMenu = false },
-                ) {
-                    if (reactionsEnabled && onReact != null) {
-                        ReactionPicker(
-                            selected = message.reactions.firstOrNull { it.isMine }?.emoji,
-                            onSelect = { showContextMenu = false; onReact(it) },
-                        )
-                        HorizontalDivider()
-                    }
-                    DropdownMenuItem(
-                        text = { Text(t("Copy text", "کپی متن")) },
-                        onClick = { onCopyMessage(message.text); showContextMenu = false },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                    )
-                    // Scanned when the menu opens, not on every streamed flush.
-                    val firstCode = remember(message.text) { extractCodeBlocks(message.text).firstOrNull() }
-                    if (firstCode != null) {
-                        DropdownMenuItem(
-                            text = { Text(t("Copy code", "کپی کد")) },
-                            onClick = { onCopyCode(firstCode); showContextMenu = false },
-                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(t("Share", "اشتراک\u200Cگذاری")) },
-                        onClick = {
-                            val sendIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, message.text)
-                                type = "text/plain"
-                            }
-                            assistantContext.startActivity(Intent.createChooser(sendIntent, null))
-                            showContextMenu = false
-                        },
-                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(t("Branch conversation", "شاخه\u200Cزدن گفتگو")) },
-                        onClick = { onBranch(); showContextMenu = false },
-                        leadingIcon = { Icon(HxIcons.GitBranch, contentDescription = null) },
-                    )
-                }
             }
 
             if (!message.isStreaming && message.text.isNotBlank()) {
@@ -290,23 +244,6 @@ internal fun AssistantMessageBubble(
                     modifier = Modifier.padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MessageActionIcon(
-                        icon = Icons.Default.ContentCopy,
-                        contentDescription = t("Copy text", "کپی متن"),
-                        onClick = { onCopyMessage(message.text) },
-                    )
-                    MessageActionIcon(
-                        icon = Icons.Default.Share,
-                        contentDescription = t("Share", "اشتراک\u200Cگذاری"),
-                        onClick = {
-                            val sendIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, message.text)
-                                type = "text/plain"
-                            }
-                            assistantContext.startActivity(Intent.createChooser(sendIntent, null))
-                        },
-                    )
                     if (isLastAssistant && !isSending) {
                         MessageActionIcon(
                             icon = Icons.Default.Refresh,
@@ -316,6 +253,52 @@ internal fun AssistantMessageBubble(
                     }
                     if (onReact != null && (reactionsEnabled || message.reactions.isNotEmpty())) {
                         ReactionSlot(reactions = message.reactions, enabled = reactionsEnabled, onReact = onReact)
+                    }
+                    // Copy and share used to sit in this row and again in the
+                    // long-press menu; they now live only here, behind the ⋮.
+                    Box {
+                        MessageActionIcon(
+                            icon = Icons.Default.MoreVert,
+                            contentDescription = t("More options", "گزینه\u200Cهای بیشتر"),
+                            onClick = { showContextMenu = true },
+                        )
+                        DropdownMenu(
+                            expanded = showContextMenu,
+                            onDismissRequest = { showContextMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(t("Copy text", "کپی متن")) },
+                                onClick = { onCopyMessage(message.text); showContextMenu = false },
+                                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                            )
+                            // Scanned when the menu opens, not on every streamed flush.
+                            val firstCode = remember(message.text) { extractCodeBlocks(message.text).firstOrNull() }
+                            if (firstCode != null) {
+                                DropdownMenuItem(
+                                    text = { Text(t("Copy code", "کپی کد")) },
+                                    onClick = { onCopyCode(firstCode); showContextMenu = false },
+                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(t("Share", "اشتراک\u200Cگذاری")) },
+                                onClick = {
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, message.text)
+                                        type = "text/plain"
+                                    }
+                                    assistantContext.startActivity(Intent.createChooser(sendIntent, null))
+                                    showContextMenu = false
+                                },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Branch conversation", "شاخه\u200Cزدن گفتگو")) },
+                                onClick = { onBranch(); showContextMenu = false },
+                                leadingIcon = { Icon(HxIcons.GitBranch, contentDescription = null) },
+                            )
+                        }
                     }
                 }
             }

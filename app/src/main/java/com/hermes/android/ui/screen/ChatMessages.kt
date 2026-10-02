@@ -46,19 +46,19 @@ import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 
-/** One quiet icon in the post-reply action row: 32dp touch target, 16dp
- *  glyph, muted tint — present but never competing with the reply text. */
+/** One quiet icon in the post-reply action row: 40dp touch target, 20dp
+ *  glyph, muted tint — easy to hit, never competing with the reply text. */
 @Composable
 internal fun MessageActionIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
     }
