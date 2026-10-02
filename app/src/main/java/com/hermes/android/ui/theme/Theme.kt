@@ -44,6 +44,7 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
     MIDNIGHT("midnight", "Midnight", "میدنایت"),
     // The key stays "indigo_pro" so a saved choice survives.
     MANUS("indigo_pro", "Manus", "مانوس"),
+    AETHER("aether", "Aether", "اتر"),
     CARBON("carbon", "Carbon", "کربن");
 
     companion object {
@@ -367,6 +368,78 @@ private val ManusDarkColors = darkColorScheme(
     outlineVariant = manus_dark_outlineVariant,
 )
 
+// ── Aether palette ──
+// Sets its own surface container roles from Aether's surface ladder, so it skips
+// withSurfaceContainers below.
+
+private val AetherLightColors = lightColorScheme(
+    primary = aether_light_primary,
+    onPrimary = aether_light_onPrimary,
+    primaryContainer = aether_light_primaryContainer,
+    onPrimaryContainer = aether_light_onPrimaryContainer,
+    secondary = aether_light_secondary,
+    onSecondary = aether_light_onSecondary,
+    secondaryContainer = aether_light_secondaryContainer,
+    onSecondaryContainer = aether_light_onSecondaryContainer,
+    tertiary = aether_light_tertiary,
+    onTertiary = aether_light_onTertiary,
+    tertiaryContainer = aether_light_tertiaryContainer,
+    onTertiaryContainer = aether_light_onTertiaryContainer,
+    error = aether_light_error,
+    onError = aether_light_onError,
+    errorContainer = aether_light_errorContainer,
+    onErrorContainer = aether_light_onErrorContainer,
+    background = aether_light_background,
+    onBackground = aether_light_onBackground,
+    surface = aether_light_surface,
+    onSurface = aether_light_onSurface,
+    surfaceVariant = aether_light_surfaceVariant,
+    onSurfaceVariant = aether_light_onSurfaceVariant,
+    outline = aether_light_outline,
+    outlineVariant = aether_light_outlineVariant,
+    surfaceContainerLowest = aether_light_surface,
+    surfaceContainerLow = aether_light_surfaceLow,
+    surfaceContainer = aether_light_surfaceHigh,
+    surfaceContainerHigh = aether_light_surfaceHigher,
+    surfaceContainerHighest = aether_light_surfaceVariant,
+    surfaceBright = aether_light_surface,
+    surfaceDim = aether_light_surfaceHigher,
+)
+
+private val AetherDarkColors = darkColorScheme(
+    primary = aether_dark_primary,
+    onPrimary = aether_dark_onPrimary,
+    primaryContainer = aether_dark_primaryContainer,
+    onPrimaryContainer = aether_dark_onPrimaryContainer,
+    secondary = aether_dark_secondary,
+    onSecondary = aether_dark_onSecondary,
+    secondaryContainer = aether_dark_secondaryContainer,
+    onSecondaryContainer = aether_dark_onSecondaryContainer,
+    tertiary = aether_dark_tertiary,
+    onTertiary = aether_dark_onTertiary,
+    tertiaryContainer = aether_dark_tertiaryContainer,
+    onTertiaryContainer = aether_dark_onTertiaryContainer,
+    error = aether_dark_error,
+    onError = aether_dark_onError,
+    errorContainer = aether_dark_errorContainer,
+    onErrorContainer = aether_dark_onErrorContainer,
+    background = aether_dark_background,
+    onBackground = aether_dark_onBackground,
+    surface = aether_dark_surface,
+    onSurface = aether_dark_onSurface,
+    surfaceVariant = aether_dark_surfaceVariant,
+    onSurfaceVariant = aether_dark_onSurfaceVariant,
+    outline = aether_dark_outline,
+    outlineVariant = aether_dark_outlineVariant,
+    surfaceContainerLowest = aether_dark_background,
+    surfaceContainerLow = aether_dark_surface,
+    surfaceContainer = aether_dark_surfaceHigh,
+    surfaceContainerHigh = aether_dark_surfaceHigher,
+    surfaceContainerHighest = aether_dark_surfaceVariant,
+    surfaceBright = aether_dark_surfaceVariant,
+    surfaceDim = aether_dark_background,
+)
+
 // ── Carbon — Perplexity-inspired: near-black + teal ──
 
 private val CarbonLightColors = lightColorScheme(
@@ -509,6 +582,7 @@ fun Hermes2Theme(
             ColorTheme.MOCHA -> if (useDark) MochaDarkColors else MochaLightColors
             ColorTheme.MIDNIGHT -> if (useDark) MidnightDarkColors else MidnightLightColors
             ColorTheme.MANUS -> if (useDark) ManusDarkColors else ManusLightColors
+            ColorTheme.AETHER -> if (useDark) AetherDarkColors else AetherLightColors
             ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
         }
     }
@@ -520,7 +594,7 @@ fun Hermes2Theme(
 
     MaterialTheme(
         colorScheme = (if (warmMode) colorScheme.warmed() else colorScheme)
-            .let { if (isDynamic) it else it.withSurfaceContainers(useDark) },
+            .let { if (isDynamic || colorTheme == ColorTheme.AETHER) it else it.withSurfaceContainers(useDark) },
         typography = hermesTypography(fontFamily, fontScalePct),
         content = content
     )
