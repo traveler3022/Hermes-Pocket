@@ -117,6 +117,11 @@ fun HermesScaffold(
     floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit,
 ) {
+    val pageBackground = if (com.hermes.android.ui.theme.LocalAetherStyle.current) {
+        com.hermes.android.ui.theme.aetherPageBackground()
+    } else {
+        MaterialTheme.colorScheme.background
+    }
     Scaffold(
         floatingActionButton = floatingActionButton,
         topBar = {
@@ -152,11 +157,11 @@ fun HermesScaffold(
                 },
                 actions = actions,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = pageBackground,
                 ),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = pageBackground,
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
         content = content,
     )

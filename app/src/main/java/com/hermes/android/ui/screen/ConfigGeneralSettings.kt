@@ -123,7 +123,11 @@ internal fun SettingsCardGroup(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(
+                // Aether's cards are its surface on the grey settings page.
+                if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
+                else MaterialTheme.colorScheme.surfaceVariant,
+            ),
         content = content,
     )
 }

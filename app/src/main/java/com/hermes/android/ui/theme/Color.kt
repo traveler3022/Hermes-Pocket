@@ -299,6 +299,7 @@ val aether_light_outlineVariant = Color(0xFFE7E7E7)
 val aether_light_surfaceLow = Color(0xFFF9F9F9)
 val aether_light_surfaceHigh = Color(0xFFF3F3F2)
 val aether_light_surfaceHigher = Color(0xFFECECEC)
+val aether_light_settingsBackground = Color(0xFFF2F2F7)
 
 val aether_dark_primary = Color(0xFFC0AEFF)
 val aether_dark_onPrimary = Color(0xFF251448)

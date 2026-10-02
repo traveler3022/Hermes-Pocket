@@ -203,7 +203,11 @@ internal fun InputBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
                 .clip(RoundedCornerShape(26.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(
+                    // Aether's composer card is its plain surface.
+                    if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                )
                 .padding(4.dp),
         ) {
             TextField(

@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.hermes.android.ui.viewmodel.MESSAGE_REACTIONS_PREF
 
@@ -552,6 +555,20 @@ private val MochaDarkColors = darkColorScheme(
     outlineVariant = mocha_dark_outlineVariant,
 )
 
+/**
+ * True while the Aether theme is on. The Aether theme is more than a palette: screens
+ * that Aether draws differently (user bubble, composer, settings cards and page) read this
+ * and switch to Aether's own shapes and colours.
+ */
+val LocalAetherStyle = staticCompositionLocalOf { false }
+
+/** Aether's page colour under settings and other secondary pages: iOS grey in light, the plain background in dark. */
+@Composable
+fun aetherPageBackground(): androidx.compose.ui.graphics.Color {
+    val background = MaterialTheme.colorScheme.background
+    return if (background.luminance() > 0.5f) aether_light_settingsBackground else background
+}
+
 @Composable
 fun Hermes2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -592,12 +609,16 @@ fun Hermes2Theme(
         AppFont.SYSTEM -> androidx.compose.ui.text.font.FontFamily.Default
     }
 
-    MaterialTheme(
-        colorScheme = (if (warmMode) colorScheme.warmed() else colorScheme)
-            .let { if (isDynamic || colorTheme == ColorTheme.AETHER) it else it.withSurfaceContainers(useDark) },
-        typography = hermesTypography(fontFamily, fontScalePct),
-        content = content
-    )
+    val aether = colorTheme == ColorTheme.AETHER && !isDynamic
+    CompositionLocalProvider(LocalAetherStyle provides aether) {
+        MaterialTheme(
+            colorScheme = (if (warmMode) colorScheme.warmed() else colorScheme)
+                .let { if (isDynamic || aether) it else it.withSurfaceContainers(useDark) },
+            typography = hermesTypography(fontFamily, fontScalePct)
+                .let { if (aether) it.aetherSized(fontScalePct) else it },
+            content = content
+        )
+    }
 }
 
 /** Night/warm reading mode: nudges the large background/surface areas

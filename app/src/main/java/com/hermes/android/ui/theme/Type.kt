@@ -146,3 +146,29 @@ fun hermesTypography(
         ),
     )
 }
+
+/**
+ * Aether's type scale (its getAetherTypography): larger body text with taller lines and
+ * semibold headings. Only sizes and weights change; the chosen font and the font-size
+ * slider still apply.
+ */
+fun Typography.aetherSized(fontScalePct: Int): Typography {
+    val s = fontScalePct / 100f
+    fun TextStyle.sized(size: Float, line: Float, weight: FontWeight, spacing: Float = 0f) = copy(
+        fontSize = (size * s).sp,
+        lineHeight = (line * s).sp,
+        fontWeight = weight,
+        letterSpacing = spacing.sp,
+    )
+    return copy(
+        headlineLarge = headlineLarge.sized(34f, 40f, FontWeight.SemiBold, -0.9f),
+        headlineMedium = headlineMedium.sized(29f, 36f, FontWeight.SemiBold, -0.5f),
+        titleLarge = titleLarge.sized(24f, 31f, FontWeight.SemiBold),
+        titleMedium = titleMedium.sized(18f, 25f, FontWeight.Medium),
+        bodyLarge = bodyLarge.sized(17f, 28f, FontWeight.Normal),
+        bodyMedium = bodyMedium.sized(15f, 24f, FontWeight.Normal),
+        bodySmall = bodySmall.sized(13f, 18f, FontWeight.Normal),
+        labelLarge = labelLarge.sized(14f, 20f, FontWeight.Medium),
+        labelMedium = labelMedium.sized(13f, 18f, FontWeight.Medium),
+    )
+}
