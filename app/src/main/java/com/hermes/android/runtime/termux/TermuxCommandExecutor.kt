@@ -1,12 +1,12 @@
 package com.hermes.android.runtime.termux
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Build
-import android.os.IBinder
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,6 +56,7 @@ import javax.inject.Singleton
 class TermuxCommandExecutor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val detector: TermuxDetector,
+    private val results: TermuxPendingResults,
 ) {
 
     /**
@@ -133,6 +134,7 @@ class TermuxCommandExecutor @Inject constructor(
         arguments: Array<String>,
         workingDirectory: String,
         background: Boolean,
+        resultIntent: PendingIntent? = null,
     ): Result {
         // Pre-flight: is Termux installed?
         val detection = detector.detect()
@@ -148,10 +150,11 @@ class TermuxCommandExecutor @Inject constructor(
             putExtra(EXTRA_ARGUMENTS, arguments)
             putExtra(EXTRA_WORKDIR, workingDirectory)
             putExtra(EXTRA_BACKGROUND, background)
+            if (resultIntent != null) putExtra(EXTRA_PENDING_INTENT, resultIntent)
         }
 
         return try {
-            val component = context.startService(intent)
+            val component = startRunCommandService(intent)
 
             if (component == null) {
                 // startService returns null when:
@@ -189,21 +192,66 @@ class TermuxCommandExecutor @Inject constructor(
     }
 
     /**
-     * Check whether `allow-external-apps` is enabled in Termux. We cannot
-     * read `~/.termux/termux.properties` directly (it lives in Termux's
-     * private storage). Instead we send a no-op probe command and inspect
-     * the result: if [execute] returns [Result.Accepted], the policy is
-     * enabled. Any other result means the user needs to enable it.
-     *
-     * This is a probe — calling it has the side effect of briefly starting
-     * the Termux service. Use sparingly (e.g. once during onboarding).
+     * RunCommandService calls startForeground() in onCreate, so Termux expects
+     * startForegroundService(): a plain startService() is refused with "app is in
+     * background" whenever Termux isn't already running. Same order as Aether, whose
+     * Termux link works.
      */
-    fun isAllowExternalAppsEnabled(): Boolean {
-        val probe = executeBackgroundScript(
-            script = "true # hermes probe",
-            workingDirectory = TERMUX_HOME,
+    private fun startRunCommandService(intent: Intent): ComponentName? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return context.startService(intent)
+        return try {
+            context.startForegroundService(intent)
+        } catch (e: IllegalStateException) {
+            // Android 12+ refuses a foreground start while Hermes itself is in the background.
+            Timber.w(e, "[TermuxExecutor] startForegroundService refused, trying startService")
+            context.startService(intent)
+        }
+    }
+
+    /**
+     * Checks that Termux really runs our commands: it must echo a marker back through
+     * a result PendingIntent ([TermuxResultReceiver]). An accepted intent alone proves
+     * nothing: with `allow-external-apps` off, Termux takes the intent, shows a
+     * notification and drops the command; its reply carries the reason.
+     *
+     * @return Accepted only when the marker came back; AllowExternalAppsDisabled when
+     *   Termux says so; Failure when it gave another reason or did not answer.
+     */
+    suspend fun probe(): Result {
+        val marker = "__hermes_termux_ready__"
+        val (id, reply) = results.register()
+        val resultIntent = PendingIntent.getBroadcast(
+            context,
+            id,
+            Intent(context, TermuxResultReceiver::class.java)
+                .putExtra(TermuxResultReceiver.EXTRA_EXECUTION_ID, id),
+            // Mutable: Termux fills its result bundle into this intent.
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0),
         )
-        return probe is Result.Accepted
+        val dispatch = execute(BASH_PATH, arrayOf("-c", "printf '$marker'"), TERMUX_HOME, true, resultIntent)
+        if (dispatch !is Result.Accepted) {
+            results.remove(id)
+            return dispatch
+        }
+        val output = withTimeoutOrNull(PROBE_TIMEOUT_MS) { reply.await() }
+        if (output == null) {
+            results.remove(id)
+            return Result.Failure(
+                "Termux did not answer. Open Termux once (it finishes its own setup on first launch), " +
+                    "then try again. If it still does not answer, turn off battery optimisation for Termux.",
+            )
+        }
+        Timber.i("[TermuxExecutor] probe reply exit=${output.exitCode} err=${output.err} errmsg=${output.errmsg}")
+        return when {
+            output.stdout.contains(marker) -> Result.Accepted
+            output.errmsg.contains("allow-external-apps", ignoreCase = true) ->
+                Result.AllowExternalAppsDisabled(output.errmsg)
+            else -> Result.Failure(
+                "Termux did not run the setup check: " +
+                    output.errmsg.ifBlank { output.stderr.ifBlank { "exit code ${output.exitCode}" } },
+            )
+        }
     }
 
     /**
@@ -216,9 +264,10 @@ class TermuxCommandExecutor @Inject constructor(
 
         Steps:
         1. Open Termux.
-        2. Run: mkdir -p ~/.termux && echo 'allow-external-apps=true' > ~/.termux/termux.properties
-        3. Restart Termux (close and reopen the app).
-        4. Return to Hermes2.
+        2. Paste and run this line (it only changes allow-external-apps and keeps
+           your other Termux settings):
+           $ALLOW_EXTERNAL_APPS_COMMAND
+        3. Return to Hermes2.
 
         After this, Hermes2 can install, start, and stop the gateway
         automatically — you will never need to open Termux manually.
@@ -236,6 +285,16 @@ class TermuxCommandExecutor @Inject constructor(
         const val EXTRA_ARGUMENTS = "com.termux.RUN_COMMAND_ARGUMENTS"
         const val EXTRA_WORKDIR = "com.termux.RUN_COMMAND_WORKDIR"
         const val EXTRA_BACKGROUND = "com.termux.RUN_COMMAND_BACKGROUND"
+        const val EXTRA_PENDING_INTENT = "com.termux.RUN_COMMAND_PENDING_INTENT"
+
+        private const val PROBE_TIMEOUT_MS = 8_000L
+
+        /** Aether's setup line: edits the one property in place and reloads Termux's settings. */
+        const val ALLOW_EXTERNAL_APPS_COMMAND =
+            "mkdir -p ~/.termux && touch ~/.termux/termux.properties && " +
+                "if grep -Eq '^[[:space:]]*#?[[:space:]]*allow-external-apps[[:space:]]*=' ~/.termux/termux.properties; " +
+                "then sed -i -E 's/^[[:space:]]*#?[[:space:]]*allow-external-apps[[:space:]]*=.*/allow-external-apps=true/' ~/.termux/termux.properties; " +
+                "else printf '\\nallow-external-apps=true\\n' >> ~/.termux/termux.properties; fi && termux-reload-settings"
 
         // Canonical Termux filesystem paths
         const val TERMUX_HOME = "/data/data/com.termux/files/home"

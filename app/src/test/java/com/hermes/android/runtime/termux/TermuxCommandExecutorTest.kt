@@ -39,7 +39,7 @@ class TermuxCommandExecutorTest {
     fun setUp() {
         context = mockk(relaxed = true)
         detector = mockk(relaxed = true)
-        executor = TermuxCommandExecutor(context, detector)
+        executor = TermuxCommandExecutor(context, detector, TermuxPendingResults())
         // Production minSdk = 29 (Android 10), but in pure-JVM unit tests
         // Build.VERSION.SDK_INT defaults to 0 (android.jar stub). The
         // executor's `if (SDK_INT >= O)` check therefore falls into the

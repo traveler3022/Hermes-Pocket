@@ -14,7 +14,7 @@ import org.junit.Test
  *
  * Verifies that the generated install script:
  * - Sets the correct receiver package name (so broadcast permissions match)
- * - Uses install.sh's `--stage --json` API (per ADR-007)
+ * - Installs Hermes's signed Termux APT package (install.sh refuses Termux)
  * - Reports progress via `am broadcast` (per TermuxInstallProgressReceiver)
  * - Verifies hermes --version and hermes doctor
  * - Reports Python version (Fix S2F01)
@@ -44,11 +44,42 @@ class TermuxInstallerTest {
     }
 
     @Test
-    fun `generateInstallScript uses install_sh stage manifest API`() {
+    fun `generateInstallScript installs the signed APT package not install_sh`() {
         val script = installer.generateInstallScript()
-        assertTrue("Script must call install.sh --manifest", script.contains("--manifest"))
-        assertTrue("Script must call install.sh --stage", script.contains("--stage"))
-        assertTrue("Script must call install.sh --json", script.contains("--json"))
+        assertTrue("Script must install the hermes-agent package", script.contains("apt_retry install hermes-agent"))
+        assertTrue("Script must pin the repository key", script.contains("signed-by=\$KEYRING"))
+        assertTrue("Script must check the documented key fingerprint", script.contains("C572B5FDD1A29CCFA9A912B6840B0848E139156D"))
+        assertFalse("install.sh refuses Termux; the script must not run it", script.contains("hermes_install.sh"))
+    }
+
+    @Test
+    fun `generateInstallScript falls back to canary while stable is unpublished`() {
+        val script = installer.generateInstallScript()
+        assertTrue(script.contains("hermes-stable/Release"))
+        assertTrue(script.contains("CHANNEL=canary"))
+        assertTrue(script.contains("hermes-\$CHANNEL main"))
+    }
+
+    @Test
+    fun `generateInstallScript refuses Termux builds other than aarch64`() {
+        val script = installer.generateInstallScript()
+        assertTrue(script.contains("dpkg --print-architecture"))
+        assertTrue(script.contains("[ \"\$TERMUX_ARCH\" != \"aarch64\" ]"))
+    }
+
+    @Test
+    fun `generateInstallScript moves a foreign hermes launcher aside`() {
+        // The package's postinst refuses to replace a launcher it does not own.
+        val script = installer.generateInstallScript()
+        assertTrue(script.contains("../lib/hermes-agent/bin/\$name"))
+        assertTrue(script.contains("mv -f \"\$link\" \"\$link.old\""))
+    }
+
+    @Test
+    fun `generateInstallScript never waits on a dpkg prompt`() {
+        val script = installer.generateInstallScript()
+        assertTrue(script.contains("DEBIAN_FRONTEND=noninteractive apt-get -y"))
+        assertTrue(script.contains("--force-confold"))
     }
 
     @Test
@@ -78,8 +109,8 @@ class TermuxInstallerTest {
     @Test
     fun `generateInstallScript reports python version`() {
         val script = installer.generateInstallScript()
-        // Fix S2F01: detect and broadcast python3 version
-        assertTrue("Script must run python3 --version", script.contains("python3 --version"))
+        // The package brings its own Python; Termux's python3 may not be installed.
+        assertTrue(script.contains("lib/hermes-agent/venv/bin/python\" --version"))
         assertTrue("Script must broadcast python_version stage", script.contains("python_version"))
     }
 
@@ -95,73 +126,6 @@ class TermuxInstallerTest {
         // The trap calls report_error on ERR — this is how failures reach the app
         assertTrue("Script must set up ERR trap", script.contains("trap") && script.contains("ERR"))
         assertTrue("Trap must call report_error", script.contains("report_error"))
-    }
-
-    @Test
-    fun `generateInstallScript recovers non git repo directory without precreating it`() {
-        val script = installer.generateInstallScript()
-
-        assertFalse(
-            "Script must not pre-create repo dir before install_sh repository stage",
-            script.contains("mkdir -p \"\$HOME/.hermes/hermes-agent\""),
-        )
-        assertTrue(
-            "Script must move a non-git repo path aside before running repository stage",
-            script.contains("BROKEN_REPO_DIR=\"\$REPO_DIR.broken-\$(date +%Y%m%d-%H%M%S)\""),
-        )
-        assertTrue(
-            "Script must detect repo path without .git",
-            script.contains("[ -e \"\$REPO_DIR\" ] && [ ! -d \"\$REPO_DIR/.git\" ]"),
-        )
-    }
-
-    @Test
-    fun `generateInstallScript handles Android psutil failures without deleting core dependency`() {
-        val script = installer.generateInstallScript()
-
-        assertTrue("Script must know the upstream psutil Android workaround", script.contains("install_psutil_android.py"))
-        assertTrue("Script must detect Android psutil unsupported errors", script.contains("platform android is not supported"))
-        assertTrue(
-            "Script must run the psutil shim with the Hermes venv pip, not global python",
-            script.contains("--pip \"\$PIP_PYTHON -m pip\""),
-        )
-        assertFalse(
-            "Script must not delete psutil from pyproject.toml; psutil is a core runtime dependency",
-            script.contains("psutil==7.2.2"),
-        )
-    }
-
-    @Test
-    fun `generateInstallScript follows upstream manifest and non interactive stages`() {
-        val script = installer.generateInstallScript()
-
-        assertTrue("Script must parse stage names from install_sh manifest", script.contains("s['name']"))
-        assertTrue("Script must pass --non-interactive to stage runs", script.contains("--non-interactive"))
-        assertFalse(
-            "Script must not hard-code a partial stage list that skips setup and gateway accounting",
-            script.contains("for STAGE in prerequisites repository venv python-deps node-deps path config complete"),
-        )
-    }
-
-    @Test
-    fun `generateInstallScript ensures dashboard web dependencies for Android websocket`() {
-        val script = installer.generateInstallScript()
-
-        assertTrue("Script must check dashboard dependencies", script.contains("dashboard WebSocket dependencies"))
-        assertTrue("Script must install the web extra if upstream falls back to baseline termux", script.contains("pip install -e '.[web]' -c constraints-termux.txt"))
-    }
-
-    @Test
-    fun `generateInstallScript prepares Termux Rust build env for jiter`() {
-        val script = installer.generateInstallScript()
-
-        assertTrue("Script must export ANDROID_API_LEVEL for maturin builds", script.contains("ANDROID_API_LEVEL"))
-        assertTrue("Script must export CARGO_BUILD_TARGET for Termux Rust builds", script.contains("CARGO_BUILD_TARGET"))
-        assertTrue("Script must install LLVM for maturin jiter builds", script.contains(" llvm lld"))
-        assertTrue("Script must isolate Cargo from broken user mirror configs", script.contains("CARGO_HOME=\"\$HOME/.hermes/cargo\""))
-        assertTrue("Script must force Cargo sparse crates.io protocol", script.contains("CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse"))
-        assertTrue("Script must disable Cargo LTO to avoid Termux rustc ICE", script.contains("CARGO_PROFILE_RELEASE_LTO=false"))
-        assertTrue("Script must serialize Cargo jobs for phone builds", script.contains("CARGO_BUILD_JOBS=1"))
     }
 
     @Test

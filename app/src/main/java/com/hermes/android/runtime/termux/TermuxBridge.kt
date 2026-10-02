@@ -187,23 +187,37 @@ class TermuxBridge @Inject constructor(
                 ),
             )
         }
-        // 2. allow-external-apps must be on, or RUN_COMMAND is silently dropped
-        //    and the install would never actually start. Probe it up front.
-        if (!executor.isAllowExternalAppsEnabled()) {
-            return PrerequisiteResult.Blocked(
+        // 2. Termux must really run our commands. With allow-external-apps off it accepts
+        //    RUN_COMMAND and drops it, so the probe waits for Termux's own reply.
+        when (val probe = executor.probe()) {
+            is TermuxCommandExecutor.Result.Accepted -> Unit
+            is TermuxCommandExecutor.Result.AllowExternalAppsDisabled -> return PrerequisiteResult.Blocked(
                 title = "Allow Hermes2 to control Termux (allow-external-apps)",
                 instructions = executor.buildAllowExternalAppsInstructions(),
                 action = InstallAction.None,
             )
+            is TermuxCommandExecutor.Result.TermuxMissing -> return PrerequisiteResult.Blocked(
+                title = "Install Termux first",
+                instructions = probe.message,
+                action = InstallAction.OpenStore(
+                    packageName = TermuxDetector.Package.TERMUX.packageName,
+                    fDroidUrl = TermuxDetector.Package.TERMUX.fDroidUrl,
+                ),
+            )
+            is TermuxCommandExecutor.Result.Failure -> return PrerequisiteResult.Blocked(
+                title = "Termux did not respond",
+                instructions = probe.message,
+                action = InstallAction.None,
+            )
         }
-        // 3. Enough free space for the Python/Rust build (~500 MB headroom).
+        // 3. Enough free space for the package: ~160 MB download, ~720 MB unpacked.
         //    diskFreeBytes is nullable — only block when we actually know it's low.
         val freeBytes = detection.diskFreeBytes
         if (freeBytes != null && freeBytes < MIN_FREE_BYTES_FOR_INSTALL) {
             val freeMb = freeBytes / (1024 * 1024)
             return PrerequisiteResult.Blocked(
                 title = "Not enough free storage",
-                instructions = "The install needs about 500 MB free to build the agent. " +
+                instructions = "The install needs about 1 GB free (Hermes's Termux package unpacks to ~720 MB). " +
                     "You have ~$freeMb MB. Free up some space and try again.",
                 action = InstallAction.None,
             )
@@ -418,16 +432,7 @@ class TermuxBridge @Inject constructor(
             export HERMES_DASHBOARD_SESSION_TOKEN="$sessionToken"
             export HERMES_WEB_DIST="${'$'}HERMES_HOME/web_dist_placeholder"
             export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-            HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-            elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                HERMES_CMD="$(command -v hermes)"
-            fi
+            $RESOLVE_HERMES_CMD
             if ! [ -x "${'$'}HERMES_CMD" ]; then
                 echo "Hermes command not found. Install likely failed before linking hermes. Expected: ${'$'}HERMES_CMD"
                 exit 1
@@ -519,16 +524,7 @@ class TermuxBridge @Inject constructor(
         val script = """
             set -e
             export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-            HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-            if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-            elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-            elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                HERMES_CMD="$(command -v hermes)"
-            fi
+            $RESOLVE_HERMES_CMD
             "${'$'}HERMES_CMD" dashboard --stop || {
                 # Fallback: pkill any hermes dashboard process
                 echo "hermes dashboard --stop failed, trying pkill fallback..."
@@ -623,16 +619,7 @@ class TermuxBridge @Inject constructor(
                 RECEIVER="${context.packageName}"
                 ACTION="$action"
                 export PATH=/data/data/com.termux/files/usr/bin:${'$'}HOME/.hermes/hermes-agent/venv/bin:${'$'}HOME/.hermes/venv/bin:${'$'}HOME/.venv/bin:${'$'}PATH
-                HERMES_CMD="${TermuxCommandExecutor.HERMES_BIN}"
-                if [ -f "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.hermes/venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.hermes/venv/bin/hermes"
-                elif [ -f "${'$'}HOME/.venv/bin/hermes" ]; then
-                    HERMES_CMD="${'$'}HOME/.venv/bin/hermes"
-                elif ! [ -f "${'$'}HERMES_CMD" ] && command -v hermes >/dev/null 2>&1; then
-                    HERMES_CMD="$(command -v hermes)"
-                fi
+                $RESOLVE_HERMES_CMD
                 OUT="${'$'}HOME/.hermes/logs/doctor_from_app.log"
                 mkdir -p "${'$'}HOME/.hermes/logs"
                 {
@@ -801,8 +788,25 @@ class TermuxBridge @Inject constructor(
         private const val DEFAULT_GATEWAY_PORT = 9119
         private const val DEFAULT_GATEWAY_HOST = "127.0.0.1"
 
-        // Preflight storage gate: the Rust/Python build needs headroom.
-        private const val MIN_FREE_BYTES_FOR_INSTALL = 500L * 1024 * 1024
+        /**
+         * Sets HERMES_CMD: the APT package's launcher (today's only supported Termux
+         * install) wins over the venvs the old install.sh path left behind, which are
+         * not updated any more. A single line so it can be dropped into any script.
+         */
+        private val RESOLVE_HERMES_CMD = listOf(
+            "${TermuxCommandExecutor.TERMUX_PREFIX}/lib/hermes-agent/bin/hermes",
+            "${'$'}HOME/.hermes/hermes-agent/venv/bin/hermes",
+            "${'$'}HOME/.hermes/venv/bin/hermes",
+            "${'$'}HOME/.venv/bin/hermes",
+        ).joinToString(
+            separator = " ",
+            prefix = "HERMES_CMD=\"${TermuxCommandExecutor.HERMES_BIN}\"; for c in ",
+            postfix = "; do if [ -x \"${'$'}c\" ]; then HERMES_CMD=\"${'$'}c\"; break; fi; done; " +
+                "if ! [ -x \"${'$'}HERMES_CMD\" ] && command -v hermes >/dev/null 2>&1; then HERMES_CMD=\"${'$'}(command -v hermes)\"; fi",
+        ) { "\"$it\"" }
+
+        // Preflight storage gate: the APT package unpacks to ~720 MB.
+        private const val MIN_FREE_BYTES_FOR_INSTALL = 1024L * 1024 * 1024
         private const val TERMUX_PREFIX_PATH = "/data/data/com.termux/files/usr"
         private val INSTALL_TIMEOUT = 30.minutes
         private val DOCTOR_COMMAND_TIMEOUT = 90.seconds

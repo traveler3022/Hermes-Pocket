@@ -118,6 +118,11 @@
             android:name=".service.AgentStopReceiver"
             android:exported="false" />
 
+        <!-- Termux's reply to a RUN_COMMAND, delivered through our own PendingIntent. -->
+        <receiver
+            android:name=".runtime.termux.TermuxResultReceiver"
+            android:exported="false" />
+
         <!-- Built-in Linux files in the Files app and file pickers. MANAGE_DOCUMENTS
              means only the system DocumentsUI can bind to it. -->
         <!-- In-app viewer (audio/video/Markdown/HTML/image). The chat opens it directly; no

@@ -41,7 +41,7 @@ class TermuxCommandExecutorInstrumentedTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         detector = mockk(relaxed = true)
-        executor = TermuxCommandExecutor(context, detector)
+        executor = TermuxCommandExecutor(context, detector, TermuxPendingResults())
     }
 
     @Test

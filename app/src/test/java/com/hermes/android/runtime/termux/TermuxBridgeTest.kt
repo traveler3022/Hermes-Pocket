@@ -89,7 +89,7 @@ class TermuxBridgeTest {
             termuxBootInstalled = false,
             diskFreeBytes = 5_000L * 1024 * 1024,
         )
-        every { executor.isAllowExternalAppsEnabled() } returns true
+        coEvery { executor.probe() } returns TermuxCommandExecutor.Result.Accepted
     }
 
     @Test
@@ -150,7 +150,9 @@ class TermuxBridgeTest {
             termuxBootInstalled = false,
             diskFreeBytes = 5_000L * 1024 * 1024,
         )
-        every { executor.isAllowExternalAppsEnabled() } returns false
+        coEvery { executor.probe() } returns TermuxCommandExecutor.Result.AllowExternalAppsDisabled(
+            "RUN_COMMAND intent requires `allow-external-apps` property to be set to `true`",
+        )
         every { executor.buildAllowExternalAppsInstructions() } returns "Setup instructions here"
 
         val result = bridge.install(ProgressEmitter { })
