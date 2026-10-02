@@ -141,14 +141,20 @@ class TermuxBridge @Inject constructor(
             )
         }
 
-        val previouslyInstalled = isPreviouslyInstalled()
+        // Ask Termux itself: Hermes installed by hand, or before this app was
+        // reinstalled, is not in our prefs. Prefs only answer when Termux can't.
+        val probe = probeHermesInstall()
+        val previouslyInstalled = probe?.installed ?: isPreviouslyInstalled()
+        if (probe?.installed == true && !isPreviouslyInstalled()) {
+            Timber.i("[Runtime] Hermes found in Termux (${probe.version ?: "version unknown"}) though this app never installed it")
+        }
         val info = RuntimeInfo(
             type = RuntimeType.TERMUX,
             version = detection.termuxVersion,
             path = TERMUX_PREFIX_PATH,
             pythonVersion = null, // probed during install script (Fix S2F01)
             diskFreeBytes = detection.diskFreeBytes,
-            hermesVersion = if (previouslyInstalled) "installed" else null,
+            hermesVersion = if (previouslyInstalled) probe?.version ?: "installed" else null,
             extras = buildMap {
                 put("termuxApiInstalled", detection.termuxApiInstalled.toString())
                 put("termuxBootInstalled", detection.termuxBootInstalled.toString())
@@ -828,6 +834,40 @@ class TermuxBridge @Inject constructor(
         // in startGateway(), and the ?token= query param we add to the WS URL
         // in getWebSocketUrl()) must use this same value.
         private const val KEY_SESSION_TOKEN = "session_token"
+    }
+
+    private data class HermesInstallProbe(val installed: Boolean, val version: String?)
+
+    /**
+     * Whether Termux has a hermes launcher (the APT package's or an older venv's).
+     * Null when Termux did not answer (allow-external-apps off, not opened yet...).
+     * The version comes from dpkg, which answers at once; `hermes --version` would
+     * start Python and can take seconds on a phone.
+     */
+    private suspend fun probeHermesInstall(): HermesInstallProbe? {
+        val script = RESOLVE_HERMES_CMD + "\n" + """
+            if [ -x "${'$'}HERMES_CMD" ]; then
+                echo "installed=1"
+                echo "version=$(dpkg-query -W -f='${'$'}{Version}' hermes-agent 2>/dev/null)"
+            fi
+            echo "probe=done"
+        """.trimIndent()
+        val stdout = try {
+            executor.runForStdout(script)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "[Runtime] Hermes install probe failed")
+            null
+        } ?: return null
+        val values = stdout.lines().mapNotNull { line ->
+            line.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1].trim() }
+        }.toMap()
+        if (values["probe"] != "done") return null
+        return HermesInstallProbe(
+            installed = values["installed"] == "1",
+            version = values["version"]?.takeIf { it.isNotBlank() },
+        )
     }
 
     // Fix S2F03: Cache install state
