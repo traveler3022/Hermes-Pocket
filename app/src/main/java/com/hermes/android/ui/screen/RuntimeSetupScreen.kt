@@ -155,6 +155,12 @@ fun RuntimeSetupScreen(
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
+                RuntimeChoiceRow(
+                    selected = runtimeChoice,
+                    enabled = !installing,
+                    onSelect = { viewModel.selectRuntime(it) },
+                    showServer = true,
+                )
                 Text(
                     text = t("Connect to your Hermes server", "اتصال به سرور هرمس"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -170,9 +176,16 @@ fun RuntimeSetupScreen(
                     textAlign = TextAlign.Center,
                 )
 
+                val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
+                val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
                 ServerConfigCard(
                     initialUrl = serverConfig.serverUrl,
                     initialToken = serverConfig.token,
+                    signedInAs = signedInAs,
+                    signingIn = signingIn,
+                    onSignIn = { url -> viewModel.signInToRemoteServer(url) },
+                    onCancelSignIn = { viewModel.cancelSignIn() },
+                    onSignOut = { viewModel.signOut() },
                     onSaveAndConnect = { url, token ->
                         viewModel.saveServerConfigAndConnect(url, token)
                     },
@@ -227,6 +240,7 @@ fun RuntimeSetupScreen(
                     selected = runtimeChoice,
                     enabled = !installing,
                     onSelect = { viewModel.selectRuntime(it) },
+                    showServer = true,
                 )
                 Text(
                     text = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
@@ -435,7 +449,8 @@ fun RuntimeSetupScreen(
 }
 
 /**
- * Server address + token input for the remote runtime.
+ * Server address and sign-in for the remote runtime; older servers without app sign-in
+ * can still use a session token.
  *
  * The token is rendered masked (password field) with a show/hide toggle,
  * and is never echoed anywhere else in the UI.
@@ -444,6 +459,11 @@ fun RuntimeSetupScreen(
 private fun ServerConfigCard(
     initialUrl: String,
     initialToken: String,
+    signedInAs: String?,
+    signingIn: Boolean,
+    onSignIn: (url: String) -> Unit,
+    onCancelSignIn: () -> Unit,
+    onSignOut: () -> Unit,
     onSaveAndConnect: (url: String, token: String) -> Unit,
 ) {
     var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
@@ -468,47 +488,104 @@ private fun ServerConfigCard(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text(t("Server address", "آدرس سرور")) },
-                placeholder = { Text("wss://example.com:2083") },
+                placeholder = { Text("https://example.com:9119") },
                 leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
+                enabled = !signingIn,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                label = { Text(t("Session token", "توکن نشست")) },
-                singleLine = true,
-                visualTransformation = if (showToken) {
-                    VisualTransformation.None
-                } else {
-                    PasswordVisualTransformation()
-                },
-                // The token controls the whole agent: keep it out of the keyboard's learning.
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { showToken = !showToken }) {
-                        Icon(
-                            if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (showToken) t("Hide token", "پنهان کردن توکن") else t("Show token", "نمایش توکن"),
-                        )
+            when {
+                signedInAs != null -> {
+                    Text(
+                        text = t(
+                            "Signed in as $signedInAs. Every connection uses a new one-time ticket.",
+                            "واردشده با $signedInAs. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+                        Text(t("Sign out", "خروج"))
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = t(
-                    "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
-                    "توکن باید با HERMES_DASHBOARD_SESSION_TOKEN روی سرورت یکی باشه.",
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(
-                onClick = { onSaveAndConnect(url, token) },
-                enabled = url.isNotBlank() && token.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(t("Save & Connect", "ذخیره و اتصال"))
+                }
+                signingIn -> {
+                    Text(
+                        text = t(
+                            "Finish signing in on your server's page in the browser, then come back here.",
+                            "ورود را در صفحه‌ی سرورت در مرورگر تمام کن و به این‌جا برگرد.",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    OutlinedButton(onClick = onCancelSignIn, modifier = Modifier.fillMaxWidth()) {
+                        Text(t("Cancel", "لغو"))
+                    }
+                }
+                else -> {
+                    Button(
+                        onClick = { onSignIn(url) },
+                        enabled = url.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(t("Sign in", "ورود"))
+                    }
+                    Text(
+                        text = t(
+                            "Opens your server's login page. Your password stays there; the app gets a key, " +
+                                "and every connection uses a new one-time ticket.",
+                            "صفحه‌ی ورود سرورت باز می‌شود. رمزت همان‌جا می‌ماند؛ اپ فقط یک کلید می‌گیرد " +
+                                "و هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (signedInAs == null && !signingIn) {
+                Text(
+                    text = t(
+                        "Older server without sign-in? Use its session token:",
+                        "سرور قدیمی بدون ورود؟ توکن نشستش را بزن:",
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(t("Session token", "توکن نشست")) },
+                    singleLine = true,
+                    visualTransformation = if (showToken) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    // The token controls the whole agent: keep it out of the keyboard's learning.
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { showToken = !showToken }) {
+                            Icon(
+                                if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showToken) t("Hide token", "پنهان کردن توکن") else t("Show token", "نمایش توکن"),
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = t(
+                        "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
+                        "توکن باید با HERMES_DASHBOARD_SESSION_TOKEN روی سرورت یکی باشه.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = { onSaveAndConnect(url, token) },
+                    enabled = url.isNotBlank() && token.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(t("Save & Connect", "ذخیره و اتصال"))
+                }
             }
         }
     }

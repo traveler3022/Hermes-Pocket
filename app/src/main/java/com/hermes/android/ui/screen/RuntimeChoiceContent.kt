@@ -23,6 +23,8 @@ internal fun RuntimeChoiceRow(
     selected: RuntimeChoiceUi?,
     enabled: Boolean,
     onSelect: (RuntimeChoiceUi) -> Unit,
+    /** Settings offer the user's own server too; first-run setup has no place to enter one. */
+    showServer: Boolean = false,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
@@ -37,6 +39,14 @@ internal fun RuntimeChoiceRow(
             onClick = { onSelect(RuntimeChoiceUi.Termux) },
             label = { Text("Termux") },
         )
+        if (showServer) {
+            FilterChip(
+                selected = selected == RuntimeChoiceUi.RemoteServer,
+                enabled = enabled,
+                onClick = { onSelect(RuntimeChoiceUi.RemoteServer) },
+                label = { Text(t("Server", "سرور")) },
+            )
+        }
     }
 }
 

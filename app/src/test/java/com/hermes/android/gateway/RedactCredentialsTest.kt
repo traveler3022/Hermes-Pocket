@@ -24,6 +24,14 @@ class RedactCredentialsTest {
     }
 
     @Test
+    fun `a connection ticket is redacted`() {
+        assertEquals(
+            "<-- 101 https://h/api/ws?ticket=REDACTED (12ms)",
+            redactCredentials("<-- 101 https://h/api/ws?ticket=AbC-123_x (12ms)"),
+        )
+    }
+
+    @Test
     fun `other query parameters are kept`() {
         assertEquals(
             "--> GET http://h/api/files/download?path=%2Froot%2Fa.png&token=REDACTED",

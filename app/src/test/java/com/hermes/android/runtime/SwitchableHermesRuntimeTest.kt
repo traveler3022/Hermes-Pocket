@@ -2,6 +2,7 @@ package com.hermes.android.runtime
 
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.linux.ProotLinuxRuntime
+import com.hermes.android.runtime.remote.RemoteRuntime
 import com.hermes.android.runtime.termux.TermuxBridge
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -21,6 +22,7 @@ class SwitchableHermesRuntimeTest {
     }
     private val termux = runtimeMock<TermuxBridge>(RuntimeType.TERMUX, "ws://127.0.0.1:9119/api/ws?token=t")
     private val linux = runtimeMock<ProotLinuxRuntime>(RuntimeType.PROOT_LINUX, "ws://127.0.0.1:9120/api/ws?token=l")
+    private val remote = runtimeMock<RemoteRuntime>(RuntimeType.REMOTE, "wss://example.com/api/ws")
     private val gatewayClient = mockk<GatewayClient>(relaxed = true)
 
     private inline fun <reified T : HermesRuntime> runtimeMock(type: RuntimeType, url: String): T = mockk(relaxed = true) {
@@ -32,7 +34,7 @@ class SwitchableHermesRuntimeTest {
 
     @Test
     fun `calls go to the selected runtime`() {
-        val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
+        val router = SwitchableHermesRuntime(selection, termux, linux, remote, gatewayClient)
 
         assertEquals(RuntimeType.PROOT_LINUX, router.type)
         assertEquals("ws://127.0.0.1:9120/api/ws?token=l", router.getWebSocketUrl())
@@ -44,9 +46,19 @@ class SwitchableHermesRuntimeTest {
     }
 
     @Test
+    fun `the server choice goes to the remote runtime`() {
+        val router = SwitchableHermesRuntime(selection, termux, linux, remote, gatewayClient)
+
+        router.select(RuntimeType.REMOTE)
+
+        assertEquals(RuntimeType.REMOTE, router.type)
+        assertEquals("wss://example.com/api/ws", router.getWebSocketUrl())
+    }
+
+    @Test
     fun `switching away from the built-in runtime drops the socket and stops its gateway`() {
         coEvery { linux.stopGateway() } returns StopResult.Success
-        val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
+        val router = SwitchableHermesRuntime(selection, termux, linux, remote, gatewayClient)
 
         router.select(RuntimeType.TERMUX)
 
@@ -58,7 +70,7 @@ class SwitchableHermesRuntimeTest {
     fun `switching away from Termux stops its dashboard and forgets its address`() {
         coEvery { termux.stopGateway() } returns StopResult.Success
         selected.value = RuntimeType.TERMUX
-        val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
+        val router = SwitchableHermesRuntime(selection, termux, linux, remote, gatewayClient)
 
         router.select(RuntimeType.PROOT_LINUX)
 
@@ -68,7 +80,7 @@ class SwitchableHermesRuntimeTest {
 
     @Test
     fun `selecting the current runtime keeps the connection but records the choice`() {
-        val router = SwitchableHermesRuntime(selection, termux, linux, gatewayClient)
+        val router = SwitchableHermesRuntime(selection, termux, linux, remote, gatewayClient)
 
         router.select(RuntimeType.PROOT_LINUX)
 

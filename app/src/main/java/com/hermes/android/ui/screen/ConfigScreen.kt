@@ -149,6 +149,7 @@ fun ConfigScreen(
     } else when (runtimeChoice) {
         com.hermes.android.ui.viewmodel.RuntimeChoiceUi.BuiltInLinux -> t("Built-in Linux", "لینوکس داخلی")
         com.hermes.android.ui.viewmodel.RuntimeChoiceUi.Termux -> "Termux"
+        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.RemoteServer -> t("Remote Server", "سرور راه دور")
     }
 
     // Nested navigation: null = the top-level category menu; a value = drilled

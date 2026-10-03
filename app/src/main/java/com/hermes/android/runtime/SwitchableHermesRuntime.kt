@@ -3,6 +3,7 @@ package com.hermes.android.runtime
 import android.content.Context
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.linux.ProotLinuxRuntime
+import com.hermes.android.runtime.remote.RemoteRuntime
 import com.hermes.android.runtime.termux.TermuxBridge
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +21,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Persisted user choice between the Termux and built-in Linux runtimes. */
+/** Persisted user choice between the built-in Linux, Termux and a remote server. */
 @Singleton
 class RuntimeSelection @Inject constructor(
     @ApplicationContext context: Context,
@@ -61,7 +62,7 @@ class RuntimeSelection @Inject constructor(
     }
 
     companion object {
-        val Selectable = setOf(RuntimeType.PROOT_LINUX, RuntimeType.TERMUX)
+        val Selectable = setOf(RuntimeType.PROOT_LINUX, RuntimeType.TERMUX, RuntimeType.REMOTE)
         private const val KEY = "selected_runtime"
     }
 }
@@ -73,6 +74,7 @@ class SwitchableHermesRuntime @Inject constructor(
     private val selection: RuntimeSelection,
     private val termux: TermuxBridge,
     private val linux: ProotLinuxRuntime,
+    private val remote: RemoteRuntime,
     private val gatewayClient: GatewayClient,
 ) : HermesRuntime {
 
@@ -80,8 +82,11 @@ class SwitchableHermesRuntime @Inject constructor(
 
     private val active: HermesRuntime get() = runtimeFor(selection.selected.value)
 
-    private fun runtimeFor(type: RuntimeType): HermesRuntime =
-        if (type == RuntimeType.TERMUX) termux else linux
+    private fun runtimeFor(type: RuntimeType): HermesRuntime = when (type) {
+        RuntimeType.TERMUX -> termux
+        RuntimeType.REMOTE -> remote
+        else -> linux
+    }
 
     fun select(type: RuntimeType) {
         val previous = active

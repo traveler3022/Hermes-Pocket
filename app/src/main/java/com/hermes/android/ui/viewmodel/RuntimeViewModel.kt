@@ -1,5 +1,8 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
@@ -13,11 +16,16 @@ import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.remote.PendingSignIn
+import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
 import com.hermes.android.service.HermesGatewayService
+import com.hermes.android.service.RemoteSignInService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,8 +37,8 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
-/** Which on-device runtime hosts Hermes. */
-enum class RuntimeChoiceUi { BuiltInLinux, Termux }
+/** Where Hermes runs: on the phone (built-in Linux or Termux) or on the user's own server. */
+enum class RuntimeChoiceUi { BuiltInLinux, Termux, RemoteServer }
 
 
 /**
@@ -51,8 +59,9 @@ enum class RuntimeChoiceUi { BuiltInLinux, Termux }
 class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
     private val remoteServerSettings: RemoteServerSettings,
-    gatewayClient: GatewayClient,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val remoteAuth: RemoteAuth,
+    private val gatewayClient: GatewayClient,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     /** True when the bound runtime is the remote-server runtime. */
@@ -91,8 +100,11 @@ class RuntimeViewModel @Inject constructor(
     /** False until the user has picked a runtime; setup waits for that. */
     val runtimeChosen: StateFlow<Boolean> = runtimeManager.runtimeChosen
 
-    private fun RuntimeType.toChoice() =
-        if (this == RuntimeType.TERMUX) RuntimeChoiceUi.Termux else RuntimeChoiceUi.BuiltInLinux
+    private fun RuntimeType.toChoice() = when (this) {
+        RuntimeType.TERMUX -> RuntimeChoiceUi.Termux
+        RuntimeType.REMOTE -> RuntimeChoiceUi.RemoteServer
+        else -> RuntimeChoiceUi.BuiltInLinux
+    }
 
     fun selectRuntime(choice: RuntimeChoiceUi) {
         if (_installing.value) {
@@ -100,14 +112,29 @@ class RuntimeViewModel @Inject constructor(
             return
         }
         runtimeManager.selectRuntime(
-            if (choice == RuntimeChoiceUi.Termux) RuntimeType.TERMUX else RuntimeType.PROOT_LINUX,
+            when (choice) {
+                RuntimeChoiceUi.Termux -> RuntimeType.TERMUX
+                RuntimeChoiceUi.BuiltInLinux -> RuntimeType.PROOT_LINUX
+                RuntimeChoiceUi.RemoteServer -> RuntimeType.REMOTE
+            }
         )
         detect()
     }
 
     /** Current remote-server connection settings (URL + token). */
-    val serverConfig: kotlinx.coroutines.flow.StateFlow<RemoteServerConfig> =
-        remoteServerSettings.config
+    val serverConfig: StateFlow<RemoteServerConfig> = remoteServerSettings.config
+
+    /** Who the app is signed in as on the configured server; null when not signed in there. */
+    val remoteSignedInAs: StateFlow<String?> = combine(remoteAuth.session, remoteServerSettings.config) { session, config ->
+        session?.takeIf { remoteAuth.isSignedInTo(config.serverUrl) }?.let { it.userId.ifBlank { it.provider } }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _signingIn = MutableStateFlow(false)
+
+    /** True while the server's login page is open in the browser. */
+    val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
+
+    private var signInJob: Job? = null
 
     /**
      * Persist the server address + token, then immediately re-detect and
@@ -118,18 +145,92 @@ class RuntimeViewModel @Inject constructor(
             _errorMessage.value = null
             try {
                 remoteServerSettings.save(serverUrl, token)
-                val result = runtimeManager.runtime.detect()
-                if (result is DetectionResult.Available) {
-                    val handle = runtimeManager.runtime.startGateway()
-                    Timber.i("[Runtime] Connected to remote server: ${handle.webSocketUrl.substringBefore("?token=")}")
-                    HermesGatewayService.start(context)
-                }
+                connectRemote()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.e(e, "[Runtime] Failed to connect to remote server")
                 _errorMessage.value = e.message ?: "Failed to connect to the server"
             }
+        }
+    }
+
+    /**
+     * Signs in to the server at [serverUrl] through the server's own login page in the browser,
+     * then connects. From then on every connection uses a fresh one-time ticket.
+     */
+    fun signInToRemoteServer(serverUrl: String) {
+        if (serverUrl.isBlank()) {
+            _errorMessage.value = "Enter the server address first."
+            return
+        }
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+            _errorMessage.value = null
+            _signingIn.value = true
+            var pending: PendingSignIn? = null
+            try {
+                remoteServerSettings.save(serverUrl, remoteServerSettings.config.value.token)
+                if (!remoteAuth.probe(serverUrl).nativeSignIn) {
+                    _errorMessage.value = "This server doesn't offer app sign-in. Update Hermes on it " +
+                        "and set a dashboard username and password."
+                    return@launch
+                }
+                // Foreground first: once the browser is up this app is in the background, where
+                // Android no longer lets it start a foreground service.
+                RemoteSignInService.start(context)
+                val started = remoteAuth.beginSignIn(serverUrl)
+                pending = started
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(started.authorizeUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                remoteAuth.completeSignIn(started)
+                connectRemote()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Sign-in failed")
+                _errorMessage.value = e.message ?: "Sign-in failed"
+            } finally {
+                pending?.close()
+                RemoteSignInService.stop(context)
+                _signingIn.value = false
+            }
+        }
+    }
+
+    /** Stops waiting for the browser. */
+    fun cancelSignIn() {
+        signInJob?.cancel()
+    }
+
+    /** Forgets the sign-in on this phone and drops the connection; the server address stays. */
+    fun signOut() {
+        viewModelScope.launch {
+            _errorMessage.value = null
+            remoteAuth.signOut()
+            HermesGatewayService.stop(context)
+            gatewayClient.disconnect()
+            gatewayClient.forgetEndpoint()
+            detect()
+        }
+    }
+
+    /** Detects the server and connects, first dropping a socket that may still use the old setup. */
+    private suspend fun connectRemote() {
+        // An already-connected client ignores a new URL, so the old socket has to go first.
+        gatewayClient.disconnect()
+        gatewayClient.forgetEndpoint()
+        when (val result = runtimeManager.runtime.detect()) {
+            is DetectionResult.Available -> {
+                runtimeManager.runtime.startGateway()
+                // After a sign-in the browser is in front; should Android refuse the service from
+                // the background, the sign-in is still kept and "Try again" connects.
+                runCatching { HermesGatewayService.start(context) }
+                    .onFailure { Timber.w(it, "[Runtime] Could not start the gateway service yet") }
+            }
+            is DetectionResult.Missing -> _errorMessage.value = result.instructions
+            is DetectionResult.Incompatible -> _errorMessage.value = result.reason
         }
     }
 
@@ -159,7 +260,7 @@ class RuntimeViewModel @Inject constructor(
     val logs: StateFlow<String?> = _logs.asStateFlow()
 
     private val logReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+        override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == "com.hermes.android.LOG_UPDATE") {
                 val logContent = intent.getStringExtra("logs")
                 _logs.value = logContent

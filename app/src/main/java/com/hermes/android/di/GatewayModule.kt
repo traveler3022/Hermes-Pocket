@@ -3,6 +3,7 @@ package com.hermes.android.di
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.OkHttpGatewayClient
 import com.hermes.android.gateway.redactCredentials
+import com.hermes.android.runtime.remote.RemoteAuthInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,7 +35,7 @@ object GatewayModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(remoteAuth: RemoteAuthInterceptor): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             timber.log.Timber.d("[OkHttp] ${redactCredentials(message)}")
         }.apply {
@@ -43,6 +44,9 @@ object GatewayModule {
 
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            // After the logger, which logs each request before the sign-in is added
+            // (the ticket on the logged response line is redacted).
+            .addInterceptor(remoteAuth)
             .pingInterval(15, TimeUnit.SECONDS) // ping every 15s; if pong
             // doesn't arrive, OkHttp fires onFailure → reconnect kicks in.
             // 15s is low enough to detect stale connections through TLS proxies.
