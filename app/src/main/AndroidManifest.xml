@@ -13,8 +13,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- RemoteSignInService: keeps the app alive while the browser finishes a server sign-in. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Notifications — tool approval, gateway status (ADR-003) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -90,13 +88,6 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Runs the user's on-device AI agent (Hermes in its built-in Linux) while it works in the background" />
         </service>
-
-        <!-- Keeps the app alive while the browser finishes a server sign-in, so the redirect to
-             127.0.0.1 is read. dataSync fits: it runs for the length of one sign-in. -->
-        <service
-            android:name=".service.RemoteSignInService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
 
         <!-- The audio viewer's player: plays on in the background with its media notification. -->
         <service

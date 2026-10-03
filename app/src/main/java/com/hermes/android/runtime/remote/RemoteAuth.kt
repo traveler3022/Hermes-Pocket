@@ -1,8 +1,6 @@
 package com.hermes.android.runtime.remote
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +15,8 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -26,12 +26,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
 import java.io.IOException
-import java.io.OutputStream
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -43,28 +37,17 @@ import javax.inject.Singleton
 data class ServerAuthInfo(
     val version: String?,
     val authRequired: Boolean,
-    /** The server offers app sign-in (system browser + PKCE). Older servers don't. */
+    /** The server offers app sign-in (PKCE code for native apps). Older servers don't. */
     val nativeSignIn: Boolean,
 )
 
-/** One sign-in in flight: the page to open in the browser, and the listener its redirect comes back to. */
-class PendingSignIn internal constructor(
-    val serverUrl: String,
-    val authorizeUrl: String,
-    internal val listener: ServerSocket,
-    internal val verifier: String,
-    internal val state: String,
-) : AutoCloseable {
-    override fun close() {
-        runCatching { listener.close() }
-    }
-}
-
 /**
- * Signs the app in to a Hermes server the way the server asks native apps to (RFC 8252): the
- * server's own login page opens in the browser, the result comes back to a one-shot listener on
- * 127.0.0.1, and the app trades it for tokens. The password is typed into the server's page, never
- * into the app.
+ * Signs the app in to a Hermes server with the Hermes username and password typed into the app,
+ * through the server's own native-app flow: `/auth/native/authorize` (PKCE), then
+ * `/auth/password-login`, whose answer carries a one-time code the app trades at
+ * `/auth/native/token`. No browser is involved, so it works over the in-app Tailscale tunnel that a
+ * browser can't use. The login is kept encrypted ([RemoteTokenStore]) so that when the server ends
+ * the sign-in the app signs in again by itself instead of asking.
  *
  * Every WebSocket connection then gets its own ticket ([mintTicketBlocking]): single-use and dead
  * after 30 s, so the socket URL carries nothing that works twice.
@@ -72,12 +55,15 @@ class PendingSignIn internal constructor(
 @Singleton
 class RemoteAuth @Inject constructor(
     private val store: RemoteTokenStore,
+    private val tailnet: TailnetRoute,
 ) {
     // Its own client: the shared one runs RemoteAuthInterceptor, which calls back in here.
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .proxySelector(tailnet.proxySelector)
+        .proxyAuthenticator(tailnet.proxyAuthenticator)
         .build()
 
     private val refreshLock = Any()
@@ -101,64 +87,53 @@ class RemoteAuth @Inject constructor(
         return tokens.takeIf { sameOrigin && url.encodedPath.startsWith(base.encodedPath.trimEnd('/')) }
     }
 
-    /** Reads the server's public `/api/status`. Throws [IOException] when it can't be reached. */
-    suspend fun probe(serverUrl: String): ServerAuthInfo = withContext(Dispatchers.IO) {
+    /**
+     * Reads the server's public `/api/status`, bringing the Tailscale tunnel up first for a tailnet
+     * address. Throws [IOException] with a reason the user can act on when it can't be reached.
+     */
+    suspend fun probe(serverUrl: String): ServerAuthInfo {
         val base = encryptedBase(serverUrl)
-        val request = Request.Builder().url("$base/api/status").header("Accept", "application/json").build()
-        val call = try {
-            http.newCall(request).execute()
-        } catch (e: UnknownHostException) {
-            val host = base.toHttpUrl().host
-            if (host.endsWith(".ts.net")) {
-                throw IOException("Can't find $host. Turn on Tailscale on this phone, signed in to the same account as the server.")
+        tailnet.ensureUp(base.toHttpUrl().host)
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder().url("$base/api/status").header("Accept", "application/json").build()
+            val call = try {
+                http.newCall(request).execute()
+            } catch (e: IOException) {
+                throw reachError(base, e)
             }
-            throw e
+            call.use { response ->
+                if (!response.isSuccessful) throw IOException("The server answered HTTP ${response.code}")
+                val o = runCatching { Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }.getOrNull()
+                    ?: throw IOException("That address answered, but not like a Hermes server")
+                val flows = (o["auth_flows"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
+                ServerAuthInfo(
+                    version = (o["version"] as? JsonPrimitive)?.takeIf { it.isString }?.content,
+                    authRequired = (o["auth_required"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                    nativeSignIn = "native_pkce" in flows,
+                )
+            }
         }
-        call.use { response ->
-            if (!response.isSuccessful) throw IOException("The server answered HTTP ${response.code}")
-            val o = runCatching { Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }.getOrNull()
-                ?: throw IOException("That address answered, but not like a Hermes server")
-            val flows = (o["auth_flows"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
-            ServerAuthInfo(
-                version = (o["version"] as? JsonPrimitive)?.takeIf { it.isString }?.content,
-                authRequired = (o["auth_required"] as? JsonPrimitive)?.booleanOrNull ?: false,
-                nativeSignIn = "native_pkce" in flows,
-            )
-        }
-    }
-
-    /** Opens the one-shot listener on 127.0.0.1 and builds the server's sign-in page URL for the browser. */
-    suspend fun beginSignIn(serverUrl: String): PendingSignIn = withContext(Dispatchers.IO) {
-        val base = encryptedBase(serverUrl)
-        val listener = ServerSocket().apply {
-            bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 4)
-        }
-        val verifier = randomToken(32)
-        val state = randomToken(16)
-        val challenge = b64url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
-        val authorizeUrl = "$base/auth/native/authorize".toHttpUrl().newBuilder()
-            .addQueryParameter("code_challenge", challenge)
-            .addQueryParameter("code_challenge_method", "S256")
-            .addQueryParameter("redirect_uri", "http://127.0.0.1:${listener.localPort}/callback")
-            .addQueryParameter("state", state)
-            .build()
-            .toString()
-        PendingSignIn(base, authorizeUrl, listener, verifier, state)
     }
 
     /**
-     * Waits for the browser to come back with the one-time code, then trades it for tokens and
-     * keeps them. Throws on timeout, on a refusal from the server, or when the coroutine is cancelled.
+     * Signs in to the server at [serverUrl] with its Hermes [username] and [password], keeps the
+     * tokens and the login, and returns the tokens. Throws [IOException] with the reason on failure.
      */
-    suspend fun completeSignIn(pending: PendingSignIn, timeoutMs: Long = SIGN_IN_TIMEOUT_MS): RemoteTokens =
-        withContext(Dispatchers.IO) {
-            pending.use {
-                val code = awaitCode(pending, timeoutMs)
-                exchange(pending.serverUrl, code, pending.verifier)
+    suspend fun signInWithPassword(serverUrl: String, username: String, password: String): RemoteTokens {
+        val base = encryptedBase(serverUrl)
+        tailnet.ensureUp(base.toHttpUrl().host)
+        return withContext(Dispatchers.IO) {
+            val tokens = try {
+                passwordLoginBlocking(base, username, password)
+            } catch (e: IOException) {
+                throw reachError(base, e)
             }
+            store.saveCredentials(RemoteCredentials(base, username, password))
+            tokens
         }
+    }
 
-    /** Forgets the sign-in on this phone. */
+    /** Forgets the sign-in and the kept login on this phone. */
     fun signOut() {
         store.clear()
         _session.value = null
@@ -176,13 +151,14 @@ class RemoteAuth @Inject constructor(
     /**
      * Trades the refresh token for a new pair. [stale] is the access token the caller saw fail; when
      * another caller already replaced it, that newer pair is returned instead of refreshing twice.
-     * Null when the sign-in is over (the server said so, and it is dropped here) or the server is unreachable.
+     * When the server has ended the sign-in, the kept login signs in again; without one (or when it
+     * no longer works) the sign-in is dropped. Null when signed out or the server is unreachable.
      */
     fun refreshBlocking(stale: String): RemoteTokens? {
         synchronized(refreshLock) {
             val current = _session.value ?: return null
             if (current.accessToken != stale) return current
-            if (current.refreshToken.isBlank()) return null
+            if (current.refreshToken.isBlank()) return signInAgainBlocking(current)
             val body = buildJsonObject {
                 put("refresh_token", current.refreshToken)
                 put("provider", current.provider)
@@ -195,8 +171,7 @@ class RemoteAuth @Inject constructor(
                         response.isSuccessful -> parseTokens(current.serverUrl, text)?.also { keep(it) }
                         response.code == 401 -> {
                             Timber.w("[RemoteAuth] The server ended the sign-in")
-                            signOut()
-                            null
+                            signInAgainBlocking(current)
                         }
                         else -> null
                     }
@@ -240,50 +215,95 @@ class RemoteAuth @Inject constructor(
         return null
     }
 
-    private suspend fun awaitCode(pending: PendingSignIn, timeoutMs: Long): String {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        pending.listener.soTimeout = ACCEPT_POLL_MS
-        var code: String? = null
-        while (code == null) {
-            currentCoroutineContext().ensureActive()
-            if (System.currentTimeMillis() > deadline) throw IOException("Sign-in timed out")
-            val socket = try {
-                pending.listener.accept()
-            } catch (e: SocketTimeoutException) {
-                null
-            }
-            if (socket != null) code = socket.use { readCallback(it, pending) }
+    /** With the kept login for [ended]'s server, signs in again; otherwise drops the sign-in. */
+    private fun signInAgainBlocking(ended: RemoteTokens): RemoteTokens? {
+        val login = store.loadCredentials()?.takeIf { it.serverUrl == ended.serverUrl }
+        if (login == null) {
+            signOut()
+            return null
         }
-        return checkNotNull(code)
+        return try {
+            passwordLoginBlocking(login.serverUrl, login.username, login.password).also {
+                Timber.i("[RemoteAuth] Signed in again with the kept login")
+            }
+        } catch (e: WrongLoginException) {
+            // The password changed on the server: asking is the only way on.
+            Timber.w("[RemoteAuth] The kept login no longer works")
+            signOut()
+            null
+        } catch (e: IOException) {
+            Timber.w(e, "[RemoteAuth] Could not sign in again yet")
+            null
+        }
     }
 
-    /** The code from one request on the listener, or null when it isn't the redirect this sign-in waits for. */
-    private fun readCallback(socket: Socket, pending: PendingSignIn): String? {
-        socket.soTimeout = 5_000
-        val requestLine = socket.getInputStream().bufferedReader(Charsets.US_ASCII).readLine().orEmpty()
-        val target = requestLine.split(' ').getOrNull(1).orEmpty()
-        val url = "http://127.0.0.1$target".toHttpUrlOrNull()
-        val out = socket.getOutputStream()
-        if (url == null || url.encodedPath != "/callback") {
-            respond(out, 404, PAGE_FAILED)
-            return null
+    /**
+     * The server's native-app flow with a username and password, all from the app:
+     * `/auth/native/authorize` starts a PKCE sign-in (its cookie carries the broker state),
+     * `/auth/password-login` checks the password and answers with the loopback URL holding a
+     * one-time code, and `/auth/native/token` trades the code for tokens. The loopback address is
+     * only a value the server checks; the app reads the code from the answer and listens nowhere.
+     */
+    private fun passwordLoginBlocking(base: String, username: String, password: String): RemoteTokens {
+        val provider = passwordProviderBlocking(base)
+        val verifier = randomToken(32)
+        val state = randomToken(16)
+        val challenge = b64url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+        val client = http.newBuilder()
+            .cookieJar(SessionCookies())
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+
+        val authorize = "$base/auth/native/authorize".toHttpUrl().newBuilder()
+            .addQueryParameter("provider", provider)
+            .addQueryParameter("code_challenge", challenge)
+            .addQueryParameter("code_challenge_method", "S256")
+            .addQueryParameter("redirect_uri", LOOPBACK_REDIRECT)
+            .addQueryParameter("state", state)
+            .build()
+        client.newCall(Request.Builder().url(authorize).build()).execute().use { response ->
+            if (response.code !in 300..399) throw IOException("The server did not start the sign-in (HTTP ${response.code})")
         }
-        // Only the browser this sign-in opened knows the state; anything else is ignored.
-        if (url.queryParameter("state") != pending.state) {
-            respond(out, 400, PAGE_FAILED)
-            return null
+
+        val login = buildJsonObject {
+            put("provider", provider)
+            put("username", username)
+            put("password", password)
+            put("next", "")
+        }.toString().toRequestBody(JSON)
+        val next = client.newCall(Request.Builder().url("$base/auth/password-login").post(login).build()).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            when (response.code) {
+                200 -> Unit
+                401 -> throw WrongLoginException()
+                429 -> throw IOException("Too many tries. Wait a minute, then try again.")
+                else -> throw IOException("The server refused the sign-in (HTTP ${response.code})")
+            }
+            val o = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull()
+            o?.str("next").orEmpty()
         }
-        url.queryParameter("error")?.let { error ->
-            respond(out, 400, PAGE_FAILED)
-            throw IOException("The server refused the sign-in: ${url.queryParameter("error_description") ?: error}")
+        val redirect = next.toHttpUrlOrNull() ?: throw IOException("The server's sign-in answer was not understood")
+        if (redirect.queryParameter("state") != state) throw IOException("The server's sign-in answer did not match this sign-in")
+        val code = redirect.queryParameter("code")?.takeIf { it.isNotBlank() }
+            ?: throw IOException("The server sent no sign-in code")
+        return exchange(base, code, verifier)
+    }
+
+    /** The server's username/password provider (`basic` on a normal self-hosted server). */
+    private fun passwordProviderBlocking(base: String): String {
+        val request = Request.Builder().url("$base/api/auth/providers").header("Accept", "application/json").build()
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("The server lists no sign-in options (HTTP ${response.code})")
+            val o = runCatching { Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }.getOrNull()
+            val providers = (o?.get("providers") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            return providers.firstOrNull { (it["supports_password"] as? JsonPrimitive)?.booleanOrNull == true }
+                ?.str("name")?.takeIf { it.isNotEmpty() }
+                ?: throw IOException(
+                    "This server has no username and password login. Set HERMES_DASHBOARD_BASIC_AUTH_USERNAME " +
+                        "and _PASSWORD on the server (see How to set up your server).",
+                )
         }
-        val code = url.queryParameter("code")
-        if (code.isNullOrBlank()) {
-            respond(out, 400, PAGE_FAILED)
-            throw IOException("The server sent no sign-in code")
-        }
-        respond(out, 200, PAGE_DONE)
-        return code
     }
 
     private fun exchange(base: String, code: String, verifier: String): RemoteTokens {
@@ -299,6 +319,26 @@ class RemoteAuth @Inject constructor(
             keep(tokens)
             Timber.i("[RemoteAuth] Signed in to $base as ${tokens.userId} (${tokens.provider})")
             return tokens
+        }
+    }
+
+    /** [e] from reaching [base], said so the user knows what to fix. */
+    private fun reachError(base: String, e: IOException): IOException {
+        if (e is WrongLoginException) return e
+        val host = base.toHttpUrl().host
+        val message = e.message.orEmpty()
+        return when {
+            // The in-app tunnel refused or could not reach the device (see tsbridge proxyConn).
+            "CONNECT: 502" in message || "CONNECT: 403" in message -> IOException(
+                "Can't reach $host inside Tailscale. Check that the server is online in Tailscale and that " +
+                    "tailscale serve is on (see How to set up your server).",
+                e,
+            )
+            e is UnknownHostException && host.endsWith(".ts.net") -> IOException(
+                "Can't find $host. Sign in to Tailscale above with the same account as the server.",
+                e,
+            )
+            else -> e
         }
     }
 
@@ -324,29 +364,30 @@ class RemoteAuth @Inject constructor(
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
 
-    private fun respond(out: OutputStream, status: Int, html: String) {
-        val body = html.toByteArray(Charsets.UTF_8)
-        val reason = when (status) {
-            200 -> "OK"
-            404 -> "Not Found"
-            else -> "Bad Request"
-        }
-        val head = "HTTP/1.1 $status $reason\r\nContent-Type: text/html; charset=utf-8\r\n" +
-            "Content-Length: ${body.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
-        out.write(head.toByteArray(Charsets.US_ASCII))
-        out.write(body)
-        out.flush()
-    }
-
     private companion object {
         val JSON = "application/json".toMediaType()
-        const val SIGN_IN_TIMEOUT_MS = 5 * 60_000L
-        const val ACCEPT_POLL_MS = 1_000
         const val EXPIRY_SKEW_S = 60L
 
-        const val PAGE_DONE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hermes</title></head><body style="font-family:sans-serif;text-align:center;padding:3em 1em"><h2>&#10003; Signed in</h2><p>You can go back to the Hermes app.</p><p dir="rtl">وارد شدید. به اپ هرمس برگردید.</p></body></html>"""
-        const val PAGE_FAILED = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hermes</title></head><body style="font-family:sans-serif;text-align:center;padding:3em 1em"><h2>Sign-in did not finish</h2><p>Go back to the Hermes app and try again.</p><p dir="rtl">ورود کامل نشد. به اپ هرمس برگردید و دوباره امتحان کنید.</p></body></html>"""
+        /** RFC 8252 loopback redirect the server requires; nothing listens on it (see [passwordLoginBlocking]). */
+        const val LOOPBACK_REDIRECT = "http://127.0.0.1:47123/callback"
     }
+}
+
+/** The server said the username or password is wrong. */
+class WrongLoginException : IOException("Wrong username or password")
+
+/** Cookies for one sign-in: the server's PKCE cookie has to come back on the password request. */
+private class SessionCookies : CookieJar {
+    private val cookies = mutableListOf<Cookie>()
+
+    @Synchronized
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        this.cookies.removeAll { old -> cookies.any { it.name == old.name } }
+        this.cookies += cookies
+    }
+
+    @Synchronized
+    override fun loadForRequest(url: HttpUrl): List<Cookie> = cookies.filter { it.matches(url) }
 }
 
 /**

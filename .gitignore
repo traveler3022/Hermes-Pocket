@@ -27,3 +27,6 @@ keystore.properties
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Built by CI from tsbridge/ (gomobile bind)
+app/libs/tsbridge.aar

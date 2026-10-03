@@ -57,3 +57,8 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# Tailscale inside the app: gomobile's Java side is called from Go through JNI by name.
+-keep class go.** { *; }
+-keep class tsbridge.** { *; }
+-keep class * implements tsbridge.Platform { *; }

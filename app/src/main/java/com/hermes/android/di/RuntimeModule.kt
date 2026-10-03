@@ -3,6 +3,8 @@ package com.hermes.android.di
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
 import com.hermes.android.runtime.SwitchableHermesRuntime
+import com.hermes.android.runtime.remote.TailnetRoute
+import com.hermes.android.runtime.remote.tailscale.TailscaleNode
 import com.hermes.android.runtime.termux.InstallCompletionFlow
 import com.hermes.android.runtime.termux.InstallProgressFlow
 import com.hermes.android.runtime.termux.TermuxInstallProgressReceiver
@@ -30,6 +32,11 @@ object RuntimeModule {
     @Provides
     @Singleton
     fun provideHermesRuntime(router: SwitchableHermesRuntime): HermesRuntime = router
+
+    /** Tailnet hosts are reached through the in-app Tailscale node. */
+    @Provides
+    @Singleton
+    fun provideTailnetRoute(node: TailscaleNode): TailnetRoute = node
 
     /**
      * Shared state flow for install progress. Bridged between

@@ -2,7 +2,6 @@ package com.hermes.android.ui.viewmodel
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
@@ -16,29 +15,67 @@ import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
-import com.hermes.android.runtime.remote.PendingSignIn
 import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import com.hermes.android.runtime.remote.tailscale.TailscaleNode
+import com.hermes.android.runtime.remote.tailscale.TailscaleStatus
 import com.hermes.android.service.HermesGatewayService
-import com.hermes.android.service.RemoteSignInService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
 /** Where Hermes runs: on the phone (built-in Linux or Termux) or on the user's own server. */
 enum class RuntimeChoiceUi { BuiltInLinux, Termux, RemoteServer }
+
+enum class TailscaleUiState { Off, Starting, NeedsLogin, NeedsApproval, Connected, Unavailable }
+
+/** A device in the user's tailnet, as the server screen lists it. */
+data class TailnetDeviceUi(
+    val name: String,
+    /** `https://<machine>.<tailnet>.ts.net`: what the app dials when this is the server. */
+    val address: String,
+    val os: String,
+    val online: Boolean,
+    val direct: Boolean,
+    val relay: String,
+)
+
+/** One-off steps of Tailscale's own login that the server screen carries out. */
+sealed interface TailscaleLoginEvent {
+    /** Open Tailscale's login page in a browser tab on top of the app. */
+    data class Open(val url: String) : TailscaleLoginEvent
+
+    /** The login went through: bring the app back over the browser tab. */
+    data object Done : TailscaleLoginEvent
+}
+
+/** The in-app Tailscale connection, as the server screen shows it. */
+data class TailscaleUi(
+    val state: TailscaleUiState,
+    /** The Tailscale account this phone is in. */
+    val account: String = "",
+    /** This phone's name in the tailnet. */
+    val device: String = "",
+    val devices: List<TailnetDeviceUi> = emptyList(),
+    val error: String? = null,
+)
 
 
 /**
@@ -60,6 +97,7 @@ class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
     private val remoteServerSettings: RemoteServerSettings,
     private val remoteAuth: RemoteAuth,
+    private val tailscale: TailscaleNode,
     private val gatewayClient: GatewayClient,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -118,6 +156,8 @@ class RuntimeViewModel @Inject constructor(
                 RuntimeChoiceUi.RemoteServer -> RuntimeType.REMOTE
             }
         )
+        // Only the server needs the tailnet; on the phone it would just keep a connection open.
+        if (choice != RuntimeChoiceUi.RemoteServer) viewModelScope.launch { tailscale.stop() }
         detect()
     }
 
@@ -131,41 +171,128 @@ class RuntimeViewModel @Inject constructor(
 
     private val _signingIn = MutableStateFlow(false)
 
-    /** True while the server's login page is open in the browser. */
+    /** True while the username and password are being checked. */
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
 
     private var signInJob: Job? = null
 
+    /** The in-app Tailscale connection and the devices in its tailnet. */
+    val tailscaleUi: StateFlow<TailscaleUi> = tailscale.status
+        .map { it.toUi() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, tailscale.status.value.toUi())
+
+    private fun TailscaleStatus.toUi() = TailscaleUi(
+        state = when (state) {
+            TailscaleStatus.State.Off, TailscaleStatus.State.Stopped -> TailscaleUiState.Off
+            TailscaleStatus.State.Starting -> TailscaleUiState.Starting
+            TailscaleStatus.State.NeedsLogin -> TailscaleUiState.NeedsLogin
+            TailscaleStatus.State.NeedsMachineAuth -> TailscaleUiState.NeedsApproval
+            TailscaleStatus.State.Running -> TailscaleUiState.Connected
+            TailscaleStatus.State.Unavailable, TailscaleStatus.State.Error -> TailscaleUiState.Unavailable
+        },
+        account = user,
+        device = self.substringBefore('.'),
+        devices = peers.filter { it.dnsName.isNotEmpty() }.map {
+            TailnetDeviceUi(
+                name = it.name.ifEmpty { it.dnsName.substringBefore('.') },
+                address = "https://${it.dnsName}",
+                os = it.os,
+                online = it.online,
+                direct = it.direct,
+                relay = it.relay,
+            )
+        },
+        error = error,
+    )
+
+    /** Starts Tailscale inside the app, so the server screen can show it and sign in. */
+    fun startTailscale() {
+        viewModelScope.launch {
+            try {
+                tailscale.start()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+            }
+        }
+    }
+
+    private val _tailscaleLogin = MutableSharedFlow<TailscaleLoginEvent>(extraBufferCapacity = 2)
+
+    /** Steps of Tailscale's login for the screen: open the page, then come back when it went through. */
+    val tailscaleLogin: SharedFlow<TailscaleLoginEvent> = _tailscaleLogin.asSharedFlow()
+
+    private var tailscaleLoginJob: Job? = null
+
     /**
-     * Signs in to the server at [serverUrl] through the server's own login page in the browser,
-     * then connects. From then on every connection uses a fresh one-time ticket.
+     * Tailscale's own login (not Hermes'): its page opens in a browser tab on top of the app. The
+     * page has no way back to the app, so the app waits for this phone to join the tailnet and then
+     * returns by itself.
      */
-    fun signInToRemoteServer(serverUrl: String) {
+    fun signInToTailscale() {
+        if (tailscaleLoginJob?.isActive == true) return
+        tailscaleLoginJob = viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                val url = tailscale.loginUrl()
+                if (url == null) {
+                    if (tailscale.status.value.state != TailscaleStatus.State.Running) {
+                        _errorMessage.value = "Tailscale sent no login link yet. Check the internet connection and try again."
+                    }
+                    return@launch
+                }
+                _tailscaleLogin.emit(TailscaleLoginEvent.Open(url))
+                val joined = withTimeoutOrNull(TAILSCALE_LOGIN_WAIT_MS) {
+                    tailscale.status.first { it.state == TailscaleStatus.State.Running }
+                }
+                if (joined != null) _tailscaleLogin.emit(TailscaleLoginEvent.Done)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Tailscale login failed")
+                _errorMessage.value = e.message ?: "Tailscale login failed"
+            }
+        }
+    }
+
+    /** Takes this phone out of the tailnet. */
+    fun signOutOfTailscale() {
+        viewModelScope.launch { tailscale.logout() }
+    }
+
+    /** Uses [device] as the Hermes server. */
+    fun chooseServer(device: TailnetDeviceUi) {
+        viewModelScope.launch {
+            _errorMessage.value = null
+            remoteServerSettings.save(device.address, "")
+        }
+    }
+
+    /**
+     * Signs in to the server at [serverUrl] with its Hermes [username] and [password], then
+     * connects. The login is kept encrypted so the app can sign in again by itself.
+     */
+    fun signInToRemoteServer(serverUrl: String, username: String, password: String) {
         if (serverUrl.isBlank()) {
             _errorMessage.value = "Enter the server address first."
+            return
+        }
+        if (username.isBlank() || password.isEmpty()) {
+            _errorMessage.value = "Enter your Hermes username and password."
             return
         }
         if (signInJob?.isActive == true) return
         signInJob = viewModelScope.launch {
             _errorMessage.value = null
             _signingIn.value = true
-            var pending: PendingSignIn? = null
             try {
                 remoteServerSettings.save(serverUrl, "")
                 if (!remoteAuth.probe(serverUrl).nativeSignIn) {
-                    _errorMessage.value = "This server doesn't offer app sign-in. Give its Hermes dashboard a " +
-                        "username, password and dashboard.public_url (see How to set up your server)."
+                    _errorMessage.value = "This server's Hermes is too old for app sign-in. Update it."
                     return@launch
                 }
-                // Foreground first: once the browser is up this app is in the background, where
-                // Android no longer lets it start a foreground service.
-                RemoteSignInService.start(context)
-                val started = remoteAuth.beginSignIn(serverUrl)
-                pending = started
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(started.authorizeUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-                remoteAuth.completeSignIn(started)
+                remoteAuth.signInWithPassword(serverUrl, username.trim(), password)
                 connectRemote()
             } catch (e: CancellationException) {
                 throw e
@@ -173,16 +300,9 @@ class RuntimeViewModel @Inject constructor(
                 Timber.e(e, "[Runtime] Sign-in failed")
                 _errorMessage.value = e.message ?: "Sign-in failed"
             } finally {
-                pending?.close()
-                RemoteSignInService.stop(context)
                 _signingIn.value = false
             }
         }
-    }
-
-    /** Stops waiting for the browser. */
-    fun cancelSignIn() {
-        signInJob?.cancel()
     }
 
     /** Forgets the sign-in on this phone and drops the connection; the server address stays. */
@@ -205,8 +325,8 @@ class RuntimeViewModel @Inject constructor(
         when (val result = runtimeManager.runtime.detect()) {
             is DetectionResult.Available -> {
                 runtimeManager.runtime.startGateway()
-                // After a sign-in the browser is in front; should Android refuse the service from
-                // the background, the sign-in is still kept and "Try again" connects.
+                // Should Android refuse the service (the app went to the background meanwhile),
+                // the sign-in is still kept and "Try again" connects.
                 runCatching { HermesGatewayService.start(context) }
                     .onFailure { Timber.w(it, "[Runtime] Could not start the gateway service yet") }
             }
@@ -438,5 +558,10 @@ class RuntimeViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         try { context.unregisterReceiver(logReceiver) } catch (e: Exception) { Timber.w(e, "[Runtime] Failed to unregister log receiver") }
+    }
+
+    private companion object {
+        /** How long the app waits for Tailscale's login in the browser before it stops watching. */
+        const val TAILSCALE_LOGIN_WAIT_MS = 10 * 60_000L
     }
 }

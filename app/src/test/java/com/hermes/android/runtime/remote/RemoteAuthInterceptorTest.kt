@@ -85,7 +85,7 @@ class RemoteAuthInterceptorTest {
     }
 
     private fun clientFor(store: RemoteTokenStore) =
-        OkHttpClient.Builder().addInterceptor(RemoteAuthInterceptor(RemoteAuth(store))).build()
+        OkHttpClient.Builder().addInterceptor(RemoteAuthInterceptor(RemoteAuth(store, TailnetRoute.None))).build()
 
     private fun get(client: OkHttpClient, url: String) =
         client.newCall(Request.Builder().url(url).build()).execute().close()

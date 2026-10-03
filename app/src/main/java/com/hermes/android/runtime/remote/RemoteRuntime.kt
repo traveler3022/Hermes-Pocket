@@ -13,9 +13,11 @@ import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
+import com.hermes.android.runtime.remote.tailscale.TailscaleLoginNeeded
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,13 +25,15 @@ import javax.inject.Singleton
 /**
  * Hermes on the user's own server: nothing to install or start on the phone, the app only connects.
  * The server keeps Hermes on 127.0.0.1 and shares it inside its tailnet with Tailscale Serve, so the
- * address is `https://<machine>.<tailnet>.ts.net`; nothing is exposed to the internet. Sign-in and
- * the per-connection tickets live in [RemoteAuth] and [RemoteAuthInterceptor].
+ * address is `https://<machine>.<tailnet>.ts.net`; nothing is exposed to the internet. The app joins
+ * that tailnet itself ([TailnetRoute], Tailscale inside the app). Sign-in and the per-connection
+ * tickets live in [RemoteAuth] and [RemoteAuthInterceptor].
  */
 @Singleton
 class RemoteRuntime @Inject constructor(
     private val settings: RemoteServerSettings,
     private val auth: RemoteAuth,
+    private val tailnet: TailnetRoute,
 ) : HermesRuntime {
 
     override val type: RuntimeType = RuntimeType.REMOTE
@@ -56,6 +60,13 @@ class RemoteRuntime @Inject constructor(
         _state.value = RuntimeState.Detecting
         val status = try {
             auth.probe(base)
+        } catch (e: TailscaleLoginNeeded) {
+            _state.value = RuntimeState.NotDetected
+            return DetectionResult.Missing(
+                "Sign in to Tailscale",
+                "Tap Sign in to Tailscale and log in with the same account as your server.",
+                InstallAction.None,
+            )
         } catch (e: IOException) {
             val reason = e.message ?: "Can't reach $base"
             _state.value = RuntimeState.Error(reason, e)
@@ -69,7 +80,7 @@ class RemoteRuntime @Inject constructor(
             )
             !status.nativeSignIn -> DetectionResult.Incompatible("This server's Hermes is too old for app sign-in. Update it.")
             !auth.isSignedInTo(base) ->
-                DetectionResult.Missing("Sign in needed", "Tap Sign in and log in with your server account.", InstallAction.None)
+                DetectionResult.Missing("Sign in needed", "Enter your Hermes username and password and tap Sign in.", InstallAction.None)
             else -> null
         }
         if (problem != null) {
@@ -96,6 +107,8 @@ class RemoteRuntime @Inject constructor(
 
     override suspend fun startGateway(): GatewayHandle {
         val base = serverBase ?: throw IllegalStateException("No server address set")
+        // The socket to a tailnet address goes through the in-app Tailscale node; have it up first.
+        tailnet.ensureUp(base.toHttpUrl().host)
         val handle = GatewayHandle(startedAt = System.currentTimeMillis(), webSocketUrl = getWebSocketUrl())
         _state.value = RuntimeState.Running(RuntimeInfo(type = type, path = base), handle)
         return handle

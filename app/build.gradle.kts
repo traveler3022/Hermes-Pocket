@@ -138,6 +138,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.browser)
+    // Tailscale inside the app (tsnet through gomobile), built by CI from tsbridge/.
+    implementation(files("libs/tsbridge.aar"))
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

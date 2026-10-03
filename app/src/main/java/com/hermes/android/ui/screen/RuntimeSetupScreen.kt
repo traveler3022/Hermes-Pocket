@@ -2,10 +2,14 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.selection.SelectionContainer
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -77,6 +81,10 @@ import com.hermes.android.ui.viewmodel.InstallProgressUi
 import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 import com.hermes.android.ui.viewmodel.RuntimeUiState
 import com.hermes.android.ui.viewmodel.RuntimeViewModel
+import com.hermes.android.ui.viewmodel.TailnetDeviceUi
+import com.hermes.android.ui.viewmodel.TailscaleLoginEvent
+import com.hermes.android.ui.viewmodel.TailscaleUi
+import com.hermes.android.ui.viewmodel.TailscaleUiState
 import kotlinx.coroutines.launch
 
 
@@ -178,14 +186,34 @@ fun RuntimeSetupScreen(
                     textAlign = TextAlign.Center,
                 )
 
+                // Tailscale inside the app: this phone joins the server's tailnet itself.
+                LaunchedEffect(Unit) { viewModel.startTailscale() }
+                // Not lifecycle-bound on purpose: the "come back" step arrives while the browser
+                // tab covers this screen.
+                LaunchedEffect(Unit) {
+                    viewModel.tailscaleLogin.collect { event ->
+                        when (event) {
+                            is TailscaleLoginEvent.Open -> openInBrowserTab(context, event.url)
+                            TailscaleLoginEvent.Done -> returnOverBrowserTab(context)
+                        }
+                    }
+                }
+                val tailscaleUi by viewModel.tailscaleUi.collectAsStateWithLifecycle()
+                TailscaleCard(
+                    ui = tailscaleUi,
+                    serverUrl = serverConfig.serverUrl,
+                    onSignIn = { viewModel.signInToTailscale() },
+                    onSignOut = { viewModel.signOutOfTailscale() },
+                    onChoose = { viewModel.chooseServer(it) },
+                )
+
                 val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
                 val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
                 ServerConfigCard(
                     initialUrl = serverConfig.serverUrl,
                     signedInAs = signedInAs,
                     signingIn = signingIn,
-                    onSignIn = { url -> viewModel.signInToRemoteServer(url) },
-                    onCancelSignIn = { viewModel.cancelSignIn() },
+                    onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
                     onSignOut = { viewModel.signOut() },
                 )
 
@@ -426,19 +454,151 @@ fun RuntimeSetupScreen(
 }
 
 /**
- * Server address and sign-in for the remote runtime. Only `https://` addresses are accepted:
- * Hermes serves plain HTTP, so the encryption comes from Tailscale Serve in front of it.
+ * Tailscale inside the app: this phone joins the user's tailnet itself, without the Tailscale app.
+ * Shows Tailscale's own login, then the tailnet's devices; tapping one makes it the Hermes server.
+ */
+@Composable
+private fun TailscaleCard(
+    ui: TailscaleUi,
+    serverUrl: String,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    onChoose: (TailnetDeviceUi) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(text = "Tailscale", style = MaterialTheme.typography.titleMedium)
+            when (ui.state) {
+                TailscaleUiState.Off, TailscaleUiState.Starting -> {
+                    Text(t("Starting Tailscale…", "در حال روشن کردن Tailscale…"), style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                TailscaleUiState.NeedsLogin -> {
+                    Text(
+                        text = t(
+                            "Sign in once with the same account as your server, for example your Google account. " +
+                                "The page opens over the app and closes by itself. No Tailscale app is needed on this phone.",
+                            "یک بار با همان حسابی وارد شو که سرور با آن وارد شده، مثلاً حساب گوگل. " +
+                                "صفحه روی اپ باز می‌شود و خودش بسته می‌شود. اپ Tailscale روی این گوشی لازم نیست.",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
+                        Text(t("Sign in to Tailscale", "ورود به Tailscale"))
+                    }
+                }
+                TailscaleUiState.NeedsApproval -> Text(
+                    text = t(
+                        "Approve this phone in the Tailscale admin console (Machines).",
+                        "این گوشی را در کنسول Tailscale، بخش Machines، تأیید کن.",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TailscaleUiState.Unavailable -> Text(
+                    text = t("Tailscale isn't available: ", "Tailscale در دسترس نیست: ") + ui.error.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TailscaleUiState.Connected -> {
+                    Text(
+                        text = t("Connected as ${ui.account}. This phone: ${ui.device}", "وصل با ${ui.account}. این گوشی: ${ui.device}"),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (ui.devices.isEmpty()) {
+                        Text(
+                            text = t("No other devices in this tailnet yet.", "هنوز دستگاه دیگری در این شبکه نیست."),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        Text(t("Tap your server:", "سرورت را انتخاب کن:"), style = MaterialTheme.typography.labelLarge)
+                        val chosen = serverUrl.trim().trimEnd('/')
+                        ui.devices.forEach { device ->
+                            DeviceRow(
+                                device = device,
+                                selected = device.address.equals(chosen, ignoreCase = true),
+                                onClick = { onChoose(device) },
+                            )
+                        }
+                    }
+                    TextButton(onClick = onSignOut) {
+                        Text(t("Sign out of Tailscale", "خروج از Tailscale"))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+                text = (if (device.online) "● " else "○ ") + device.name + (if (selected) "  ✓" else ""),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+            val path = when {
+                !device.online -> t("offline", "خاموش")
+                device.direct -> t("direct", "مستقیم")
+                device.relay.isNotEmpty() -> t("via relay ${device.relay}", "از رله‌ی ${device.relay}")
+                else -> null
+            }
+            Text(
+                text = listOfNotNull(device.os.ifEmpty { null }, path).joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Tailscale's login page in a browser tab on top of the app, so the app can come back by itself. */
+private fun openInBrowserTab(context: Context, url: String) {
+    val uri = Uri.parse(url)
+    runCatching { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, uri) }
+        .onFailure { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** Brings the app back over the login tab, which lives in the app's own task. */
+private fun returnOverBrowserTab(context: Context) {
+    val activity = generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+        .filterIsInstance<Activity>()
+        .firstOrNull() ?: return
+    runCatching {
+        activity.startActivity(
+            Intent(activity, activity.javaClass).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        )
+    }
+}
+
+/**
+ * Server address and the Hermes sign-in for the remote runtime. Only `https://` addresses are
+ * accepted: Hermes serves plain HTTP, so the encryption comes from Tailscale Serve in front of it.
  */
 @Composable
 private fun ServerConfigCard(
     initialUrl: String,
     signedInAs: String?,
     signingIn: Boolean,
-    onSignIn: (url: String) -> Unit,
-    onCancelSignIn: () -> Unit,
+    onSignIn: (url: String, username: String, password: String) -> Unit,
     onSignOut: () -> Unit,
 ) {
     var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -464,51 +624,62 @@ private fun ServerConfigCard(
                 enabled = !signingIn,
                 modifier = Modifier.fillMaxWidth(),
             )
-            when {
-                signedInAs != null -> {
-                    Text(
-                        text = t(
-                            "Signed in as $signedInAs. Every connection uses a new one-time ticket.",
-                            "واردشده با $signedInAs. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Sign out", "خروج"))
-                    }
+            if (signedInAs != null) {
+                Text(
+                    text = t(
+                        "Signed in as $signedInAs. Every connection uses a new one-time ticket.",
+                        "واردشده با $signedInAs. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+                    Text(t("Sign out", "خروج"))
                 }
-                signingIn -> {
-                    Text(
-                        text = t(
-                            "Finish signing in on your server's page in the browser, then come back here.",
-                            "ورود را در صفحه‌ی سرورت در مرورگر تمام کن و به این‌جا برگرد.",
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    OutlinedButton(onClick = onCancelSignIn, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Cancel", "لغو"))
-                    }
+            } else {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text(t("Hermes username", "نام کاربری هرمس")) },
+                    singleLine = true,
+                    enabled = !signingIn,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(t("Hermes password", "رمز هرمس")) },
+                    singleLine = true,
+                    enabled = !signingIn,
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showPassword) t("Hide password", "پنهان کردن رمز") else t("Show password", "نمایش رمز"),
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = { onSignIn(url, username, password) },
+                    enabled = !signingIn && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(t("Sign in", "ورود"))
                 }
-                else -> {
-                    Button(
-                        onClick = { onSignIn(url) },
-                        enabled = url.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(t("Sign in", "ورود"))
-                    }
-                    Text(
-                        text = t(
-                            "Opens your server's login page. Your password stays there; the app gets a key, " +
-                                "and every connection uses a new one-time ticket. Only https:// addresses are accepted.",
-                            "صفحه‌ی ورود سرورت باز می‌شود. رمزت همان‌جا می‌ماند؛ اپ فقط یک کلید می‌گیرد " +
-                                "و هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود. فقط آدرس https:// قبول می‌شود.",
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                if (signingIn) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = t(
+                        "The Hermes login you set on the server. The app keeps it encrypted on this phone and signs " +
+                            "in again by itself, so you type it once. Every connection uses a new one-time ticket.",
+                        "همان نام کاربری و رمزی که روی سرور برای هرمس گذاشتی. اپ آن را رمزگذاری‌شده روی همین گوشی نگه " +
+                            "می‌دارد و خودش دوباره وارد می‌شود؛ پس فقط یک بار تایپش می‌کنی. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -560,10 +731,10 @@ private fun ServerSetupGuide() {
                 GuideCode("sudo tailscale serve --bg http://127.0.0.1:9119")
                 GuideStep(
                     t(
-                        "5. On this phone install Tailscale and sign in to the same account. Then enter " +
-                            "https://<machine>.<tailnet>.ts.net above and tap Sign in.",
-                        "۵. روی همین گوشی Tailscale را نصب کن و با همان حساب وارد شو. بعد " +
-                            "https://<machine>.<tailnet>.ts.net را بالا بزن و «ورود» را بزن.",
+                        "5. In this app, tap Sign in to Tailscale above and use the same account. Pick your server " +
+                            "in the device list, then enter the Hermes username and password from step 3.",
+                        "۵. در همین اپ، «ورود به Tailscale» را بزن و با همان حساب وارد شو. سرورت را در لیست دستگاه‌ها " +
+                            "انتخاب کن و بعد نام کاربری و رمز هرمس از مرحله‌ی ۳ را بزن.",
                     ),
                 )
                 Text(
