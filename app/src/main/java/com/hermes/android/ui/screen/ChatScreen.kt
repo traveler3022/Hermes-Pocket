@@ -148,6 +148,7 @@ fun ChatScreen(
     onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
+    onNavigateToGroups: () -> Unit = {},
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
@@ -453,6 +454,7 @@ fun ChatScreen(
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
+                        onGroups = { closeDrawerThen(onNavigateToGroups) },
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context)) {

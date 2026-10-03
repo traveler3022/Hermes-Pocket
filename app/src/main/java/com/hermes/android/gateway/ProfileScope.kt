@@ -66,7 +66,10 @@ class ProfileScope @Inject constructor(
     internal fun profileFor(method: String, params: Map<String, JsonElement>): String? {
         // profiles.* name their profile with `name`; a `profile` beside it would also
         // turn their own 4064 ("no such profile") into "the selection is gone".
-        if (method.startsWith("profiles.") || method in NO_PROFILE || method in refused || "profile" in params) {
+        // Group Chat rooms belong to the whole install, not to one profile.
+        if (method.startsWith("profiles.") || method.startsWith("groups.") ||
+            method in NO_PROFILE || method in refused || "profile" in params
+        ) {
             return null
         }
         val sid = (params["session_id"] as? JsonPrimitive)?.contentOrNull

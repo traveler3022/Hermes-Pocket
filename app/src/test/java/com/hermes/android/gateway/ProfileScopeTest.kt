@@ -83,6 +83,8 @@ class ProfileScopeTest {
     fun `profile calls name their profile themselves`() {
         scope.select("writer")
         assertNull(scope.profileFor("profiles.describe", params("name" to "other")))
+        // Group Chat rooms belong to the whole install.
+        assertNull(scope.profileFor("groups.send", params("room_id" to "room-1")))
     }
 
     @Test

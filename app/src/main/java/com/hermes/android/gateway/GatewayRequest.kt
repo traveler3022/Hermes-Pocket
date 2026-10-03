@@ -129,6 +129,19 @@ object GatewayMethods {
     const val PROFILES_DESCRIBE = "profiles.describe"
     const val PROFILES_CONFIGURE = "profiles.configure"
 
+    // Group Chat: rooms the gateway itself drives (tui_gateway/methods_groups.py).
+    const val GROUPS_CAPABILITIES = "groups.capabilities"
+    const val GROUPS_LIST = "groups.list"
+    const val GROUPS_CREATE = "groups.create"
+    const val GROUPS_STATE = "groups.state"
+    const val GROUPS_SEND = "groups.send"
+    const val GROUPS_LOG = "groups.log"
+    const val GROUPS_STOP = "groups.stop"
+    const val GROUPS_APPROVE = "groups.approve"
+    const val GROUPS_RETRY = "groups.retry"
+    const val GROUPS_RENAME = "groups.rename"
+    const val GROUPS_DISBAND = "groups.disband"
+
     // Task Desk: delegation control
     const val DELEGATION_STATUS = "delegation.status"
     const val DELEGATION_PAUSE = "delegation.pause"

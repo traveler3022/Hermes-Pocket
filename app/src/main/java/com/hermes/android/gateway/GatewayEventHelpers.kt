@@ -26,6 +26,17 @@ internal object GatewayEventHelpers {
     private val BUSY_SESSION_STATUSES = setOf("working", "waiting", "streaming", "running")
 
     /**
+     * A hidden session the Group Chat worker runs a member's turns in. The worker
+     * titles them `Group: <room_id>` (`tui_gateway/hosted_room_driver.py`) and the
+     * server itself tells them apart by that prefix (`methods_prompt.py`). They are
+     * room plumbing, never one of the user's chats: the room screen shows their
+     * replies from the room log.
+     */
+    fun isRoomSessionTitle(title: String?): Boolean = title?.startsWith(ROOM_SESSION_TITLE_PREFIX) == true
+
+    private const val ROOM_SESSION_TITLE_PREFIX = "Group: "
+
+    /**
      * Side-job failures (title generation, compression summary) that do not touch the
      * reply. The server keeps these out of its own chat surfaces (`_TELEGRAM_NOISY_STATUS_RE`
      * in gateway/run.py); this is the auxiliary part of that list.

@@ -233,6 +233,8 @@ class AgentEventObserver @Inject constructor(
         for (row in rows) {
             val id = row.str("id")
             if (id.isEmpty()) continue
+            // A Group Chat member's turn: the room's, not a chat of the user's to announce.
+            if (GatewayEventHelpers.isRoomSessionTitle(row.str("title"))) continue
             if (GatewayEventHelpers.isBusySessionStatus(row.str("status"))) streamingNow[id] = row
         }
 

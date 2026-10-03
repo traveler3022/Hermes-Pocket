@@ -656,7 +656,15 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
 
         // Same launch as Hermes' TUI (ui-tui/src/gatewayClient.ts startSpawnedGateway):
-        // `python -m tui_gateway.entry` from the source root, JSON-RPC lines on stdio.
+        // `tui_gateway.entry` from the source root, JSON-RPC lines on stdio.
+        //
+        // Plus the Group Chat room worker, which `hermes dashboard` starts
+        // (hermes_cli/web_server.py) and the stdio entry does not: without it every
+        // groups.create / groups.send answers 4123. Its idle re-check goes from 5 s to
+        // 60 s. A send, a finished turn, a stop or an approval wakes it at once; the
+        // timer only covers writers outside this process. Measured on the 0.21.4
+        // gateway: 3 idle rooms cost 3.4% of a core at 5 s, 0.7% at 60 s, and with no
+        // rooms the worker costs nothing.
         private val GATEWAY_SCRIPT = """
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
@@ -676,7 +684,18 @@ class ProotLinuxRuntime @Inject constructor(
             # never has to spend seconds in `hermes config set` to change them.
             ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
             [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
-            exec "${'$'}REPO/venv/bin/python" -u -m tui_gateway.entry
+            exec "${'$'}REPO/venv/bin/python" -u -c '
+            import logging, threading
+            from tui_gateway import entry, hosted_room_service, methods_groups
+            hosted_room_service._HOSTED_ROOM_IDLE_FALLBACK_SECONDS = 60.0
+            def start_rooms():
+                try:
+                    methods_groups.start_hosted_room_service()
+                except Exception:
+                    logging.getLogger("hosted-rooms").exception("Group Chat room worker did not start")
+            threading.Thread(target=start_rooms, name="hosted-rooms-start", daemon=True).start()
+            entry.main()
+            '
         """.trimIndent()
     }
 }

@@ -3,6 +3,7 @@ package com.hermes.android.ui.screen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import com.hermes.android.ui.icons.outlined.Folder
+import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -350,15 +351,20 @@ internal fun rememberWorkspaceDestinations(
     onWorkbench: () -> Unit,
     onAgent: () -> Unit,
     onScheduled: () -> Unit,
+    onGroups: () -> Unit,
     onFiles: () -> Unit,
 ): List<WorkspaceDestination> {
     val workbench = t("Workbench", "میز کار")
     val agent = t("Agent", "عامل")
     val scheduled = t("Scheduled", "زمان‌بندی‌شده")
+    val groups = t("Group chats", "گفتگوهای گروهی")
     val files = t("Files", "فایل‌ها")
     // Remembered, as the name says: a new list on every call made the drawer
     // recompose along with the chat behind it.
-    return remember(waitingCount, workbench, agent, scheduled, files, onWorkbench, onAgent, onScheduled, onFiles) {
+    return remember(
+        waitingCount, workbench, agent, scheduled, groups, files,
+        onWorkbench, onAgent, onScheduled, onGroups, onFiles,
+    ) {
         listOf(
             WorkspaceDestination(
                 label = workbench,
@@ -368,6 +374,7 @@ internal fun rememberWorkspaceDestinations(
             ),
             WorkspaceDestination(agent, HxIcons.Bot, null, onAgent),
             WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
+            WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups),
             WorkspaceDestination(files, Icons.Outlined.Folder, null, onFiles),
         )
     }
