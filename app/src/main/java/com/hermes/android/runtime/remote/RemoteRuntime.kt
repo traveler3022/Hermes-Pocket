@@ -17,13 +17,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.IOException
-import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Hermes on the user's own server: nothing to install or start on the phone, the app only connects.
- * Sign-in and the per-connection tickets live in [RemoteAuth] and [RemoteAuthInterceptor].
+ * The server keeps Hermes on 127.0.0.1 and shares it inside its tailnet with Tailscale Serve, so the
+ * address is `https://<machine>.<tailnet>.ts.net`; nothing is exposed to the internet. Sign-in and
+ * the per-connection tickets live in [RemoteAuth] and [RemoteAuthInterceptor].
  */
 @Singleton
 class RemoteRuntime @Inject constructor(
@@ -38,31 +39,42 @@ class RemoteRuntime @Inject constructor(
 
     override val installProgress: StateFlow<InstallProgress?> = MutableStateFlow<InstallProgress?>(null).asStateFlow()
 
-    private val serverBase: String? get() = remoteHttpBase(settings.config.value.serverUrl)
+    /** The configured server, when its address is an encrypted one; nothing else is ever dialled. */
+    private val serverBase: String?
+        get() = remoteHttpBase(settings.config.value.serverUrl)?.takeIf { it.startsWith("https://") }
 
     override suspend fun detect(): DetectionResult {
         val base = serverBase
         if (base == null) {
             _state.value = RuntimeState.NotDetected
-            return DetectionResult.Missing("No server yet", "Enter your Hermes server's address.", InstallAction.None)
+            return if (remoteHttpBase(settings.config.value.serverUrl) == null) {
+                DetectionResult.Missing("No server yet", "Enter your Hermes server's address.", InstallAction.None)
+            } else {
+                DetectionResult.Incompatible("Only encrypted https:// addresses are allowed. Use your server's Tailscale Serve address (https://…ts.net).")
+            }
         }
         _state.value = RuntimeState.Detecting
         val status = try {
             auth.probe(base)
         } catch (e: IOException) {
-            val reason = "Can't reach $base: ${e.message}"
+            val reason = e.message ?: "Can't reach $base"
             _state.value = RuntimeState.Error(reason, e)
             return DetectionResult.Incompatible(reason)
         }
-        val canConnect = !status.authRequired || auth.isSignedInTo(base) || settings.config.value.token.isNotBlank()
-        if (!canConnect) {
-            val result = if (status.nativeSignIn) {
+        val problem = when {
+            // A dashboard without a login runs agent commands for anyone who reaches it.
+            !status.authRequired -> DetectionResult.Incompatible(
+                "This server has no login. Set a Hermes dashboard username and password and " +
+                    "dashboard.public_url (see the setup steps).",
+            )
+            !status.nativeSignIn -> DetectionResult.Incompatible("This server's Hermes is too old for app sign-in. Update it.")
+            !auth.isSignedInTo(base) ->
                 DetectionResult.Missing("Sign in needed", "Tap Sign in and log in with your server account.", InstallAction.None)
-            } else {
-                DetectionResult.Incompatible("This server's Hermes is too old for app sign-in. Update it, or use a session token.")
-            }
-            _state.value = RuntimeState.Error("Not signed in to $base")
-            return result
+            else -> null
+        }
+        if (problem != null) {
+            _state.value = RuntimeState.Error("Can't connect to $base yet")
+            return problem
         }
         // "Installed" means ready to start: for a server that is reachable and signed in to.
         val info = RuntimeInfo(type = type, path = base, hermesVersion = status.version ?: "remote")
@@ -111,6 +123,7 @@ class RemoteRuntime @Inject constructor(
         val signedIn = auth.session.value?.takeIf { auth.isSignedInTo(base) }
         lines += if (signedIn != null) "Signed in as: ${signedIn.userId} (${signedIn.provider})" else "Signed in: no"
         lines += "Each connection uses a new one-time ticket: ${if (signedIn != null) "yes" else "no"}"
+        lines += "Encrypted (https): yes"
         return lines.joinToString("\n")
     }
 
@@ -119,15 +132,8 @@ class RemoteRuntime @Inject constructor(
         return runCatching { auth.probe(base) }.isSuccess
     }
 
-    override fun getWebSocketUrl(): String {
-        val base = serverBase ?: return ""
-        val socket = remoteWebSocketUrl(base)
-        // Signed in: RemoteAuthInterceptor adds a fresh one-time ticket on every dial.
-        if (auth.isSignedInTo(base)) return socket
-        // Servers without app sign-in: the static session token, as before.
-        val token = settings.config.value.token.trim()
-        return if (token.isEmpty()) socket else "$socket?token=${URLEncoder.encode(token, "UTF-8")}"
-    }
+    // No credential in the URL: RemoteAuthInterceptor adds a fresh one-time ticket on every dial.
+    override fun getWebSocketUrl(): String = serverBase?.let(::remoteWebSocketUrl).orEmpty()
 
     override fun launchHostApp(): Boolean = false
 

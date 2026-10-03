@@ -1,5 +1,7 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.text.selection.SelectionContainer
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -130,7 +132,7 @@ fun RuntimeSetupScreen(
             com.hermes.android.ui.i18n.t("Termux & Agent Setup", "راه‌اندازی ترموکس و ایجنت")
         },
         subtitle = if (isRemote) {
-            com.hermes.android.ui.i18n.t("Address, token, and connection status", "آدرس، توکن و وضعیت اتصال")
+            com.hermes.android.ui.i18n.t("Address, sign-in, and connection status", "آدرس، ورود و وضعیت اتصال")
         } else null,
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
@@ -180,19 +182,15 @@ fun RuntimeSetupScreen(
                 val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
                 ServerConfigCard(
                     initialUrl = serverConfig.serverUrl,
-                    initialToken = serverConfig.token,
                     signedInAs = signedInAs,
                     signingIn = signingIn,
                     onSignIn = { url -> viewModel.signInToRemoteServer(url) },
                     onCancelSignIn = { viewModel.cancelSignIn() },
                     onSignOut = { viewModel.signOut() },
-                    onSaveAndConnect = { url, token ->
-                        viewModel.saveServerConfigAndConnect(url, token)
-                    },
                 )
 
                 // Mockup-A shape: the live state sits as a centered chip
-                // right under the Save & Connect button.
+                // right under the Sign in button.
                 ConnectionStatusBlock(
                     connection = connection,
                     onReconnect = { viewModel.startGateway() },
@@ -207,28 +205,7 @@ fun RuntimeSetupScreen(
                     Text(t("Test connection", "آزمایش اتصال"))
                 }
 
-                TextButton(
-                    onClick = {
-                        // The repo is hermes-agent (hyphen); hermes_agent is a 404.
-                        val guide = "https://github.com/NousResearch/hermes-agent"
-                        try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(guide))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        } catch (e: android.content.ActivityNotFoundException) {
-                            scope.launch { snackbarHostState.showSnackbar(guide) }
-                        }
-                    },
-                ) {
-                    Icon(
-                        Icons.Default.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Text(t("Server setup guide", "راهنمای راه‌اندازی سرور"))
-                }
+                ServerSetupGuide()
             } else {
                 // ── On-device flow: built-in Linux or Termux ───────────────
                 Text(
@@ -449,26 +426,19 @@ fun RuntimeSetupScreen(
 }
 
 /**
- * Server address and sign-in for the remote runtime; older servers without app sign-in
- * can still use a session token.
- *
- * The token is rendered masked (password field) with a show/hide toggle,
- * and is never echoed anywhere else in the UI.
+ * Server address and sign-in for the remote runtime. Only `https://` addresses are accepted:
+ * Hermes serves plain HTTP, so the encryption comes from Tailscale Serve in front of it.
  */
 @Composable
 private fun ServerConfigCard(
     initialUrl: String,
-    initialToken: String,
     signedInAs: String?,
     signingIn: Boolean,
     onSignIn: (url: String) -> Unit,
     onCancelSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onSaveAndConnect: (url: String, token: String) -> Unit,
 ) {
     var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
-    var token by rememberSaveable(initialToken) { mutableStateOf(initialToken) }
-    var showToken by rememberSaveable { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -488,7 +458,7 @@ private fun ServerConfigCard(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text(t("Server address", "آدرس سرور")) },
-                placeholder = { Text("https://example.com:9119") },
+                placeholder = { Text("https://my-server.tail1234.ts.net") },
                 leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
                 enabled = !signingIn,
@@ -531,63 +501,105 @@ private fun ServerConfigCard(
                     Text(
                         text = t(
                             "Opens your server's login page. Your password stays there; the app gets a key, " +
-                                "and every connection uses a new one-time ticket.",
+                                "and every connection uses a new one-time ticket. Only https:// addresses are accepted.",
                             "صفحه‌ی ورود سرورت باز می‌شود. رمزت همان‌جا می‌ماند؛ اپ فقط یک کلید می‌گیرد " +
-                                "و هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
+                                "و هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود. فقط آدرس https:// قبول می‌شود.",
                         ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            if (signedInAs == null && !signingIn) {
-                Text(
-                    text = t(
-                        "Older server without sign-in? Use its session token:",
-                        "سرور قدیمی بدون ورود؟ توکن نشستش را بزن:",
+        }
+    }
+}
+
+/**
+ * How to put Hermes behind Tailscale Serve: Hermes stays on 127.0.0.1, Tailscale shares it as
+ * tailnet-only HTTPS, and nothing on the server is opened to the internet.
+ */
+@Composable
+private fun ServerSetupGuide() {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TextButton(onClick = { open = !open }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (open) t("Hide server setup", "بستن راهنمای سرور") else t("How to set up your server", "راه‌اندازی سرور"))
+            }
+            if (open) {
+                GuideStep(t("1. On the server, install Tailscale and sign in:", "۱. روی سرور Tailscale را نصب کن و وارد شو:"))
+                GuideCode("curl -fsSL https://tailscale.com/install.sh | sh\nsudo tailscale up")
+                GuideStep(
+                    t(
+                        "2. In the Tailscale admin console turn on MagicDNS and HTTPS certificates. No domain needed: " +
+                            "the server gets a free https://<machine>.<tailnet>.ts.net name with a real certificate.",
+                        "۲. در کنسول Tailscale گزینه‌های MagicDNS و HTTPS certificates را روشن کن. دامنه لازم نیست: " +
+                            "سرور یک اسم مجانی https://<machine>.<tailnet>.ts.net با گواهی واقعی می‌گیرد.",
                     ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text(t("Session token", "توکن نشست")) },
-                    singleLine = true,
-                    visualTransformation = if (showToken) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    // The token controls the whole agent: keep it out of the keyboard's learning.
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        IconButton(onClick = { showToken = !showToken }) {
-                            Icon(
-                                if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showToken) t("Hide token", "پنهان کردن توکن") else t("Show token", "نمایش توکن"),
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+                GuideStep(t("3. Give Hermes a login and that address, and keep it on 127.0.0.1:", "۳. به Hermes نام کاربری، رمز و همان آدرس را بده و روی 127.0.0.1 نگهش دار:"))
+                GuideCode(
+                    "export HERMES_DASHBOARD_BASIC_AUTH_USERNAME=you\n" +
+                        "export HERMES_DASHBOARD_BASIC_AUTH_PASSWORD='a long password'\n" +
+                        "export HERMES_DASHBOARD_BASIC_AUTH_SECRET=\$(openssl rand -hex 32)\n" +
+                        "export HERMES_DASHBOARD_PUBLIC_URL=https://<machine>.<tailnet>.ts.net\n" +
+                        "hermes dashboard --host 127.0.0.1 --port 9119 --no-open",
+                )
+                GuideStep(
+                    t(
+                        "4. Share it only inside your tailnet. Never use tailscale funnel: that one is public.",
+                        "۴. فقط داخل شبکه‌ی Tailscale خودت به اشتراک بگذار. هرگز tailscale funnel نزن؛ آن عمومی است.",
+                    ),
+                )
+                GuideCode("sudo tailscale serve --bg http://127.0.0.1:9119")
+                GuideStep(
+                    t(
+                        "5. On this phone install Tailscale and sign in to the same account. Then enter " +
+                            "https://<machine>.<tailnet>.ts.net above and tap Sign in.",
+                        "۵. روی همین گوشی Tailscale را نصب کن و با همان حساب وارد شو. بعد " +
+                            "https://<machine>.<tailnet>.ts.net را بالا بزن و «ورود» را بزن.",
+                    ),
                 )
                 Text(
                     text = t(
-                        "The token must match HERMES_DASHBOARD_SESSION_TOKEN on your server.",
-                        "توکن باید با HERMES_DASHBOARD_SESSION_TOKEN روی سرورت یکی باشه.",
+                        "Hermes stays on 127.0.0.1 and no port is opened to the internet: only your own Tailscale " +
+                            "devices reach it, over an encrypted connection. Tip: turn on Device approval in Tailscale " +
+                            "so every new device needs your OK.",
+                        "Hermes روی 127.0.0.1 می‌ماند و هیچ پورتی به اینترنت باز نمی‌شود: فقط دستگاه‌های Tailscale خودت، " +
+                            "با اتصال رمزنگاری‌شده، به آن می‌رسند. پیشنهاد: Device approval را در Tailscale روشن کن تا " +
+                            "هر دستگاه جدید تأیید تو را لازم داشته باشد.",
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedButton(
-                    onClick = { onSaveAndConnect(url, token) },
-                    enabled = url.isNotBlank() && token.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(t("Save & Connect", "ذخیره و اتصال"))
-                }
             }
         }
+    }
+}
+
+@Composable
+private fun GuideStep(text: String) {
+    Text(text = text, style = MaterialTheme.typography.bodyMedium)
+}
+
+/** A command block; long-press to copy. */
+@Composable
+private fun GuideCode(code: String) {
+    SelectionContainer {
+        Text(
+            text = code,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                .padding(10.dp),
+        )
     }
 }
 

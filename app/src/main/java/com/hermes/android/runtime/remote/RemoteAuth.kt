@@ -32,6 +32,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
@@ -102,9 +103,18 @@ class RemoteAuth @Inject constructor(
 
     /** Reads the server's public `/api/status`. Throws [IOException] when it can't be reached. */
     suspend fun probe(serverUrl: String): ServerAuthInfo = withContext(Dispatchers.IO) {
-        val base = remoteHttpBase(serverUrl) ?: throw IOException("Not a server address: $serverUrl")
+        val base = encryptedBase(serverUrl)
         val request = Request.Builder().url("$base/api/status").header("Accept", "application/json").build()
-        http.newCall(request).execute().use { response ->
+        val call = try {
+            http.newCall(request).execute()
+        } catch (e: UnknownHostException) {
+            val host = base.toHttpUrl().host
+            if (host.endsWith(".ts.net")) {
+                throw IOException("Can't find $host. Turn on Tailscale on this phone, signed in to the same account as the server.")
+            }
+            throw e
+        }
+        call.use { response ->
             if (!response.isSuccessful) throw IOException("The server answered HTTP ${response.code}")
             val o = runCatching { Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }.getOrNull()
                 ?: throw IOException("That address answered, but not like a Hermes server")
@@ -119,7 +129,7 @@ class RemoteAuth @Inject constructor(
 
     /** Opens the one-shot listener on 127.0.0.1 and builds the server's sign-in page URL for the browser. */
     suspend fun beginSignIn(serverUrl: String): PendingSignIn = withContext(Dispatchers.IO) {
-        val base = remoteHttpBase(serverUrl) ?: throw IOException("Not a server address: $serverUrl")
+        val base = encryptedBase(serverUrl)
         val listener = ServerSocket().apply {
             bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 4)
         }
@@ -341,12 +351,12 @@ class RemoteAuth @Inject constructor(
 
 /**
  * The server's HTTP base from whatever was typed: `https://host:port`, a `wss://` gateway URL,
- * with or without `/api/ws` or a trailing slash. No scheme means `http://`. Null when it isn't a URL.
+ * with or without `/api/ws` or a trailing slash. No scheme means `https://`. Null when it isn't a URL.
  */
 internal fun remoteHttpBase(input: String): String? {
     var s = input.trim()
     if (s.isEmpty()) return null
-    if (!s.contains("://")) s = "http://$s"
+    if (!s.contains("://")) s = "https://$s"
     s = when {
         s.startsWith("wss://", ignoreCase = true) -> "https://" + s.substring(6)
         s.startsWith("ws://", ignoreCase = true) -> "http://" + s.substring(5)
@@ -361,6 +371,19 @@ internal fun remoteHttpBase(input: String): String? {
         .build()
         .toString()
         .removeSuffix("/")
+}
+
+/**
+ * [remoteHttpBase] for a server the app may talk to: `https://` only. Hermes itself serves plain
+ * HTTP, so the encryption has to come from in front of it (Tailscale Serve); a cleartext address
+ * would carry the password, the sign-in and every chat readable.
+ */
+internal fun encryptedBase(input: String): String {
+    val base = remoteHttpBase(input) ?: throw IOException("Not a server address: $input")
+    if (!base.startsWith("https://")) {
+        throw IOException("Only encrypted https:// addresses are allowed. Use your server's Tailscale Serve address (https://…ts.net).")
+    }
+    return base
 }
 
 /** The gateway socket of the server at [httpBase]: same origin, `ws(s)://…/api/ws`. */

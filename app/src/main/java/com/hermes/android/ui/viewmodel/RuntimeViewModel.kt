@@ -137,25 +137,6 @@ class RuntimeViewModel @Inject constructor(
     private var signInJob: Job? = null
 
     /**
-     * Persist the server address + token, then immediately re-detect and
-     * connect. This is the "Save & Connect" action in the setup screen.
-     */
-    fun saveServerConfigAndConnect(serverUrl: String, token: String) {
-        viewModelScope.launch {
-            _errorMessage.value = null
-            try {
-                remoteServerSettings.save(serverUrl, token)
-                connectRemote()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.e(e, "[Runtime] Failed to connect to remote server")
-                _errorMessage.value = e.message ?: "Failed to connect to the server"
-            }
-        }
-    }
-
-    /**
      * Signs in to the server at [serverUrl] through the server's own login page in the browser,
      * then connects. From then on every connection uses a fresh one-time ticket.
      */
@@ -170,10 +151,10 @@ class RuntimeViewModel @Inject constructor(
             _signingIn.value = true
             var pending: PendingSignIn? = null
             try {
-                remoteServerSettings.save(serverUrl, remoteServerSettings.config.value.token)
+                remoteServerSettings.save(serverUrl, "")
                 if (!remoteAuth.probe(serverUrl).nativeSignIn) {
-                    _errorMessage.value = "This server doesn't offer app sign-in. Update Hermes on it " +
-                        "and set a dashboard username and password."
+                    _errorMessage.value = "This server doesn't offer app sign-in. Give its Hermes dashboard a " +
+                        "username, password and dashboard.public_url (see How to set up your server)."
                     return@launch
                 }
                 // Foreground first: once the browser is up this app is in the background, where
