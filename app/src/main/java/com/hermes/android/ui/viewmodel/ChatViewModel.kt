@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -157,9 +156,9 @@ class ChatViewModel @Inject constructor(
      * going in the background (its calls carry its own profile).
      */
     private fun watchProfileSwitch() {
-        val active = profiles?.active ?: return
+        val switches = profiles?.switches ?: return
         viewModelScope.launch {
-            active.drop(1).collect {
+            switches.collect {
                 newConversation()
                 loadSessionList()
             }

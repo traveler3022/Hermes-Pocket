@@ -69,4 +69,27 @@ class ProfileScopeTest {
         scope.refuse("projects.tree")
         assertNull(scope.profileFor("projects.tree", params()))
     }
+
+    @Test
+    fun `a rename moves the selection and its sessions without a switch`() {
+        scope.select("writer")
+        scope.remember("writer", buildJsonObject { put("session_id", "live-1") })
+        scope.renamed("writer", "author")
+        assertEquals("author", scope.active.value)
+        assertEquals("author", scope.profileFor("prompt.submit", params("session_id" to "live-1")))
+    }
+
+    @Test
+    fun `profile calls name their profile themselves`() {
+        scope.select("writer")
+        assertNull(scope.profileFor("profiles.describe", params("name" to "other")))
+    }
+
+    @Test
+    fun `only the profile that was sent counts as unknown`() {
+        val gone = GatewayException("x", code = 4064, rpcMessage = "Profile 'writer' does not exist.")
+        val lookup = GatewayException("x", code = 4064, rpcMessage = "profile 'other' not found")
+        assertEquals(true, gone.isUnknownProfile("writer"))
+        assertEquals(false, lookup.isUnknownProfile("writer"))
+    }
 }

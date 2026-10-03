@@ -86,6 +86,8 @@ object GatewayMethods {
     const val INSIGHTS_GET = "insights.get"
 
     const val SHELL_EXEC = "shell.exec"
+    /** `python -m hermes_cli.main <argv>` on the gateway host (non-interactive commands only). */
+    const val CLI_EXEC = "cli.exec"
 
     // process.stop is a global kill_all — only the console's explicit
     // "emergency stop" may use it. Per-chat cleanup goes through the

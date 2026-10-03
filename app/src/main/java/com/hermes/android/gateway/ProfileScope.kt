@@ -2,8 +2,11 @@ package com.hermes.android.gateway
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -42,15 +45,30 @@ class ProfileScope @Inject constructor(
     /** Methods this backend refused a `profile` on, learned at run time (older backends). */
     private val refused = ConcurrentHashMap.newKeySet<String>()
 
+    private val _switches = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+
+    /** Another profile was picked (not a rename of the open one): new chats go there. */
+    val switches: SharedFlow<String?> = _switches.asSharedFlow()
+
     fun select(name: String?) {
         val value = name?.trim()?.ifEmpty { null }
+        if (value == _active.value) return
+        store(value)
+        _switches.tryEmit(value)
+    }
+
+    private fun store(value: String?) {
         prefs.edit().putString(KEY_ACTIVE, value).apply()
         _active.value = value
     }
 
     /** The profile [params] should run in, or null to send them as they are. */
     internal fun profileFor(method: String, params: Map<String, JsonElement>): String? {
-        if (method in NO_PROFILE || method in refused || "profile" in params) return null
+        // profiles.* name their profile with `name`; a `profile` beside it would also
+        // turn their own 4064 ("no such profile") into "the selection is gone".
+        if (method.startsWith("profiles.") || method in NO_PROFILE || method in refused || "profile" in params) {
+            return null
+        }
         val sid = (params["session_id"] as? JsonPrimitive)?.contentOrNull
         val owner = sid?.let { owners[it] }
         if (owner != null) return owner.ifEmpty { null }
@@ -70,6 +88,12 @@ class ProfileScope @Inject constructor(
     internal fun forget(name: String) {
         if (_active.value == name) select(null)
         owners.entries.removeIf { it.value == name }
+    }
+
+    /** Profile [old] is now called [new]: the selection and its sessions follow it. */
+    fun renamed(old: String, new: String) {
+        owners.replaceAll { _, profile -> if (profile == old) new else profile }
+        if (_active.value == old) store(new)
     }
 
     internal fun refuse(method: String) {
@@ -92,8 +116,13 @@ class ProfileScope @Inject constructor(
     }
 }
 
-/** True when [e] says the named profile does not exist on this backend (`rpc_dispatch.py`). */
-internal fun GatewayException.isUnknownProfile(): Boolean = code == UNKNOWN_PROFILE_CODE
+/**
+ * True when [e] says [profile] does not exist on this backend: `rpc_dispatch.py` answers
+ * "Profile '<name>' does not exist." with 4064. Handlers use 4064 for their own lookups too,
+ * so the name has to match.
+ */
+internal fun GatewayException.isUnknownProfile(profile: String): Boolean =
+    code == UNKNOWN_PROFILE_CODE && (rpcMessage ?: message).orEmpty().contains("'$profile'")
 
 /** True when the backend refused the `profile` param itself (an older backend). */
 internal fun GatewayException.refusedProfileParam(): Boolean =

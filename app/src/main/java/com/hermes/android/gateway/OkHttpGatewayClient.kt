@@ -345,7 +345,7 @@ class OkHttpGatewayClient @Inject constructor(
             when {
                 // The profile is gone (deleted, or this is another server): back to the
                 // launch profile instead of failing every call from now on.
-                e.isUnknownProfile() -> profileScope.forget(profile)
+                e.isUnknownProfile(profile) -> profileScope.forget(profile)
                 e.refusedProfileParam() -> profileScope.refuse(method)
                 else -> throw e
             }

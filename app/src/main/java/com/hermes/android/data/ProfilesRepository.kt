@@ -3,6 +3,7 @@ package com.hermes.android.data
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.ProfileScope
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -34,6 +35,9 @@ class ProfilesRepository @Inject constructor(
 
     /** The selected profile's name; null is the profile the gateway was started with. */
     val active: StateFlow<String?> get() = scope.active
+
+    /** Fires when another profile is picked or the open one is gone; not on a rename. */
+    val switches: SharedFlow<String?> get() = scope.switches
 
     /**
      * Every profile the user can talk to. Rows with a backend `role` (the setup
@@ -76,6 +80,88 @@ class ProfilesRepository @Inject constructor(
             if (copyFrom != null) put("clone_from", JsonPrimitive(copyFrom))
         }
         gatewayClient.request(GatewayMethods.PROFILES_CREATE, params, trackSession = false)
+    }
+
+    /** What the editor shows: everything here is the profile's own, not the selection's. */
+    data class Details(
+        val name: String,
+        val description: String,
+        val soul: String,
+        val model: String,
+        val provider: String,
+    )
+
+    suspend fun describe(name: String): Details {
+        val result = gatewayClient.request(
+            GatewayMethods.PROFILES_DESCRIBE,
+            mapOf("name" to JsonPrimitive(name)),
+            trackSession = false,
+        ) as? JsonObject ?: throw IllegalStateException("profiles.describe: no result")
+        val model = result["model"] as? JsonObject
+        return Details(
+            name = result.str("name").ifEmpty { name },
+            description = result.str("description"),
+            soul = result.str("soul"),
+            model = model?.str("default").orEmpty(),
+            provider = model?.str("provider").orEmpty(),
+        )
+    }
+
+    /** Writes [description] and [soul] (SOUL.md, the agent's persona) of profile [name]. */
+    suspend fun save(name: String, description: String, soul: String) {
+        val result = gatewayClient.request(
+            GatewayMethods.PROFILES_CONFIGURE,
+            mapOf(
+                "name" to JsonPrimitive(name),
+                "description" to JsonPrimitive(description),
+                "soul" to JsonPrimitive(soul),
+            ),
+            trackSession = false,
+        ) as? JsonObject
+        val applied = result?.get("applied") as? JsonObject
+        val failed = applied?.filterValues { (it as? JsonPrimitive)?.contentOrNull == "false" }?.keys.orEmpty()
+        if (failed.isNotEmpty()) throw IllegalStateException("Not saved: ${failed.joinToString()}")
+    }
+
+    /**
+     * Renames [old] to [new]. For the default profile only its shown name changes (its id
+     * stays `default`). The gateway has no RPC for this; the CLI does it
+     * (`hermes profile rename`), so it runs through `cli.exec` on the gateway's host —
+     * the same way in every runtime.
+     */
+    suspend fun rename(old: String, new: String) {
+        cli("profile", "rename", old, new)
+        if (old != "default") scope.renamed(old, new)
+    }
+
+    /**
+     * Deletes profile [name] with its config, skills, memory and chats. The open profile
+     * is left first, so nothing is still talking to it while its folder goes.
+     */
+    suspend fun delete(name: String) {
+        if (scope.active.value == name) scope.select(null)
+        cli("profile", "delete", name, "--yes")
+        scope.forget(name)
+    }
+
+    private suspend fun cli(vararg argv: String) {
+        val result = gatewayClient.request(
+            GatewayMethods.CLI_EXEC,
+            mapOf(
+                "argv" to JsonArray(argv.map { JsonPrimitive(it) }),
+                // Run from the gateway's own profile, never from inside the one being
+                // renamed or deleted (the CLI finds every profile from the Hermes root).
+                "profile" to JsonPrimitive(""),
+                "timeout" to JsonPrimitive(60),
+            ),
+            timeoutMs = 90_000,
+            trackSession = false,
+        ) as? JsonObject ?: throw IllegalStateException("cli.exec: no result")
+        val output = result.str("output").trim()
+        if (result.str("blocked") == "true") throw IllegalStateException(result.str("hint"))
+        if (result.str("code") != "0") {
+            throw IllegalStateException(output.lines().lastOrNull { it.isNotBlank() } ?: "hermes ${argv.joinToString(" ")} failed")
+        }
     }
 
     /** Talk to [name] from now on; null goes back to the gateway's own profile. */

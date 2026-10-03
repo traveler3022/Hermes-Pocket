@@ -15,6 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,10 +59,15 @@ internal fun ProfilePickerSheet(
     active: String?,
     onSelect: (ProfilesRepository.Profile) -> Unit,
     onCreate: (name: String, description: String, copyCurrent: Boolean) -> Unit,
+    onEdit: (ProfilesRepository.Profile) -> Unit,
+    onSave: (name: String, newName: String, description: String, soul: String, onDone: () -> Unit) -> Unit,
+    onDelete: (name: String, onDone: () -> Unit) -> Unit,
+    onCloseEditor: () -> Unit,
     onClearError: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var creating by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<ProfilesRepository.Profile?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -71,6 +80,23 @@ internal fun ProfilePickerSheet(
                 onBack = {
                     onClearError()
                     creating = false
+                },
+            )
+            return@ModalBottomSheet
+        }
+        editing?.let { profile ->
+            ProfileEditor(
+                profile = profile,
+                state = state,
+                isActive = if (active == null) profile.isDefault else profile.name == active,
+                // Back to the list once the server has it.
+                onSave = { name, newName, description, soul ->
+                    onSave(name, newName, description, soul) { editing = null }
+                },
+                onDelete = { name -> onDelete(name) { editing = null } },
+                onBack = {
+                    onCloseEditor()
+                    editing = null
                 },
             )
             return@ModalBottomSheet
@@ -95,7 +121,15 @@ internal fun ProfilePickerSheet(
                 state.profiles.isEmpty() && state.error != null -> item { SheetHint(state.error) }
                 else -> items(state.profiles, key = { it.name }) { profile ->
                     val selected = if (active == null) profile.isDefault else profile.name == active
-                    ProfileRow(profile, selected) { onSelect(profile) }
+                    ProfileRow(
+                        profile = profile,
+                        selected = selected,
+                        onClick = { onSelect(profile) },
+                        onEdit = {
+                            editing = profile
+                            onEdit(profile)
+                        },
+                    )
                 }
             }
             item {
@@ -111,7 +145,12 @@ internal fun ProfilePickerSheet(
 }
 
 @Composable
-private fun ProfileRow(profile: ProfilesRepository.Profile, selected: Boolean, onClick: () -> Unit) {
+private fun ProfileRow(
+    profile: ProfilesRepository.Profile,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -130,7 +169,18 @@ private fun ProfileRow(profile: ProfilesRepository.Profile, selected: Boolean, o
                 Text(line, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         },
-        trailingContent = { SelectedMark(selected) },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectedMark(selected)
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = t("Edit profile", "ویرایش پروفایل"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
     )
 }
 
@@ -228,5 +278,147 @@ private fun NewProfileForm(
                 }
             }
         }
+    }
+}
+
+/**
+ * One profile's settings: name, what it is for, and its SOUL (the persona every chat in
+ * it starts from). The model is changed from the chat's model chip while the profile is
+ * open, which already writes to the open profile; here it is only shown.
+ */
+@Composable
+private fun ProfileEditor(
+    profile: ProfilesRepository.Profile,
+    state: ProfilesViewModel.UiState,
+    isActive: Boolean,
+    onSave: (name: String, newName: String, description: String, soul: String) -> Unit,
+    onDelete: (name: String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val details = state.editing
+    // The default profile's id cannot change; renaming it sets the name it is shown with.
+    var newName by remember(details) { mutableStateOf(if (profile.isDefault) profile.title else profile.name) }
+    var description by remember(details) { mutableStateOf(details?.description.orEmpty()) }
+    var soul by remember(details) { mutableStateOf(details?.soul.orEmpty()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val nameValid = if (profile.isDefault) newName.isNotBlank() else ProfilesRepository.isValidName(newName)
+
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
+        verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
+    ) {
+        item { SheetHeader(profile.title, onBack = onBack) }
+        if (details == null) {
+            item {
+                if (state.isLoadingEditor) {
+                    CircularProgressIndicator(modifier = Modifier.padding(HxSpace.sm))
+                } else {
+                    SheetHint(state.error ?: "")
+                }
+            }
+            return@LazyColumn
+        }
+        item {
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = if (profile.isDefault) it else it.lowercase().replace(' ', '-') },
+                label = { Text(t("Name", "نام")) },
+                singleLine = true,
+                isError = !nameValid,
+                supportingText = if (profile.isDefault) null else {
+                    { Text(t("English letters, numbers, - and _", "حروف انگلیسی، عدد، - و _")) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text(t("What is it for?", "برای چه کاری؟")) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = soul,
+                onValueChange = { soul = it },
+                label = { Text(t("Persona (SOUL.md)", "شخصیت (SOUL.md)")) },
+                placeholder = {
+                    Text(t("Who this agent is and how it should work.", "این عامل کیست و چطور باید کار کند."))
+                },
+                minLines = 6,
+                maxLines = 14,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            val model = details.model.ifBlank { t("Same as the main profile", "مثل پروفایل اصلی") }
+            SheetHint(
+                t("Model: $model — change it from the chat's model button while this profile is open.",
+                    "مدل: $model — وقتی این پروفایل باز است، از دکمهٔ مدل در چت عوضش کن.")
+            )
+        }
+        state.error?.let { error ->
+            item { Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+        item {
+            Button(
+                onClick = { onSave(profile.name, newName.trim(), description, soul) },
+                enabled = nameValid && !state.isBusy,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (state.isBusy) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(t("Save", "ذخیره"))
+                }
+            }
+        }
+        // The default profile is the Hermes install itself; the CLI refuses to delete it.
+        if (!profile.isDefault) {
+            item {
+                TextButton(
+                    onClick = { confirmDelete = true },
+                    enabled = !state.isBusy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(t("Delete profile", "حذف پروفایل"), color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(t("Delete ${profile.title}?", "${profile.title} حذف شود؟")) },
+            text = {
+                Text(
+                    buildString {
+                        append(
+                            t(
+                                "Its chats, memory, skills and settings are deleted from the server. This cannot be undone.",
+                                "گفتگوها، حافظه، مهارت‌ها و تنظیماتش از سرور پاک می‌شوند. برگشت ندارد.",
+                            )
+                        )
+                        if (isActive) {
+                            append("\n\n")
+                            append(t("The app goes back to the main profile.", "اپ به پروفایل اصلی برمی‌گردد."))
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    onDelete(profile.name)
+                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) }
+            },
+        )
     }
 }

@@ -1135,9 +1135,13 @@ fun ChatScreen(
                     scope.launch { drawerState.close() }
                 }
             },
+            onEdit = profilesViewModel::openEditor,
+            onSave = profilesViewModel::save,
+            onDelete = profilesViewModel::delete,
+            onCloseEditor = profilesViewModel::closeEditor,
             onClearError = profilesViewModel::clearError,
             onDismiss = {
-                profilesViewModel.clearError()
+                profilesViewModel.closeEditor()
                 showProfiles = false
             },
         )
