@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Hermes server setup, for the Hermes Android app.
 #
-#   curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash
 #
 # Run it on the server where Hermes Agent is installed. Running it again is safe. It:
 #   1. installs Tailscale when it is missing and signs this server in (it prints a link),

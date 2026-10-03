@@ -10,7 +10,7 @@ Hermes's own source code in this repository.
 
 1. **Attribution (section 7(b)).** You must keep the copyright notices of the
    original work and the notice
-   "Based on Hermes by traveler3022 — https://github.com/traveler3022/Hermes-android-termux-".
+   "Based on Hermes by traveler3022 — https://github.com/traveler3022/Hermes-Pocket".
    If your version of the app shows an About, credits or legal-notices screen,
    that notice must be shown there.
 

@@ -688,8 +688,8 @@ private fun ServerConfigCard(
 
 /** The repo's server setup (server/setup.sh) and its guide; they work once the repo is public. */
 private const val SERVER_SETUP_COMMAND =
-    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash"
-private const val SERVER_GUIDE_URL = "https://github.com/traveler3022/Hermes-android-termux-/tree/main/server"
+    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash"
+private const val SERVER_GUIDE_URL = "https://github.com/traveler3022/Hermes-Pocket/tree/main/server"
 
 /**
  * How to put Hermes behind Tailscale Serve: one command on the server (server/setup.sh) keeps

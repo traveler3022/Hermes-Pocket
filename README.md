@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest"><img alt="Download APK" src="https://img.shields.io/badge/⬇_Download_APK-6750A4?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest"><img alt="Download APK" src="https://img.shields.io/badge/⬇_Download_APK-6750A4?style=for-the-badge&logo=android&logoColor=white"></a>
   <br>
-  <a href="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml/badge.svg"></a>
+  <a href="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml/badge.svg"></a>
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
   <a href="LICENSE"><img alt="GPLv3" src="https://img.shields.io/badge/License-GPLv3-00BCD4?style=flat-square"></a>
 </p>
@@ -54,7 +54,7 @@ files and API key stay on the device — no account, no telemetry, no server of 
 
 ## 🚀 Quick Start
 
-1. **[Download the APK](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest)** and install it.
+1. **[Download the APK](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest)** and install it.
 2. Open Hermes → **Get started** → **Built-in Linux** → **Install Hermes**. Keep the app open while it sets itself up (needs ~1 GB free and a stable connection, once).
 3. Choose your AI provider, paste the API key, pick a model.
 4. Say hi. 👋
@@ -75,14 +75,14 @@ files and API key stay on the device — no account, no telemetry, no server of 
 ## 🛠 Build from Source
 
 ```bash
-git clone https://github.com/traveler3022/Hermes-android-termux-.git
-cd Hermes-android-termux-
+git clone https://github.com/traveler3022/Hermes-Pocket.git
+cd Hermes-Pocket
 ./gradlew :app:assembleDebug        # APK → app/build/outputs/apk/debug/
 ./gradlew :app:testDebugUnitTest    # unit tests
 ```
 
 Needs JDK 17 and Android SDK 35. Kotlin · Jetpack Compose · Material 3 · Hilt · OkHttp.
-Every push is built on GitHub Actions and published to the [`debug-latest`](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest) release.
+Every push is built on GitHub Actions and published to the [`debug-latest`](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest) release.
 
 ---
 

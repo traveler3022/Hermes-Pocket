@@ -18,7 +18,7 @@ The Hermes app can connect to Hermes Agent running on your own Linux server. The
 On the server, as the user Hermes is installed for:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash
 ```
 
 If you are logged in as root, leave out `sudo`. The script ([setup.sh](setup.sh)):
@@ -44,7 +44,7 @@ The app keeps the login encrypted on the phone and signs in again by itself, so 
 ## Change the password
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash -s -- --new-password
+curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash -s -- --new-password
 ```
 
 Every device is signed out and needs the new password once.

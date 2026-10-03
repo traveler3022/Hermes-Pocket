@@ -18,7 +18,7 @@
 روی سرور، با همان کاربری که هرمس برایش نصب شده، این را بزن:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash
 ```
 
 اگر با root وارد شده‌ای، `sudo` را نزن. این اسکریپت ([setup.sh](setup.sh)):
@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-
 ## عوض کردن رمز
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash -s -- --new-password
+curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash -s -- --new-password
 ```
 
 همهٔ دستگاه‌ها خارج می‌شوند و یک بار رمز جدید را می‌خواهند.

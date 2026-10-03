@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest"><img alt="دانلود APK" src="https://img.shields.io/badge/⬇_Download_APK-6750A4?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest"><img alt="دانلود APK" src="https://img.shields.io/badge/⬇_Download_APK-6750A4?style=for-the-badge&logo=android&logoColor=white"></a>
   <br>
-  <a href="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-android-termux-/actions/workflows/build-apk.yml/badge.svg"></a>
+  <a href="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml/badge.svg"></a>
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
   <a href="LICENSE"><img alt="GPLv3" src="https://img.shields.io/badge/License-GPLv3-00BCD4?style=flat-square"></a>
 </p>
@@ -56,7 +56,7 @@
 
 ## 🚀 شروع سریع
 
-۱. **[APK رو دانلود کن](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest)** و نصبش کن.
+۱. **[APK رو دانلود کن](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest)** و نصبش کن.
 
 ۲. Hermes رو باز کن ← **شروع** ← **لینوکس داخلی** ← **نصب Hermes**. تا وقتی خودش رو آماده می‌کنه اپ رو باز نگه دار (فقط یک بار، حدود ۱ گیگابایت فضای خالی و اینترنت پایدار لازمه).
 
@@ -82,8 +82,8 @@
 </div>
 
 ```bash
-git clone https://github.com/traveler3022/Hermes-android-termux-.git
-cd Hermes-android-termux-
+git clone https://github.com/traveler3022/Hermes-Pocket.git
+cd Hermes-Pocket
 ./gradlew :app:assembleDebug        # APK → app/build/outputs/apk/debug/
 ./gradlew :app:testDebugUnitTest    # unit tests
 ```
@@ -91,7 +91,7 @@ cd Hermes-android-termux-
 <div dir="rtl">
 
 JDK 17 و Android SDK 35 لازمه. Kotlin · Jetpack Compose · Material 3 · Hilt · OkHttp.
-هر push روی GitHub Actions ساخته می‌شه و در ریلیز [`debug-latest`](https://github.com/traveler3022/Hermes-android-termux-/releases/tag/debug-latest) منتشر می‌شه.
+هر push روی GitHub Actions ساخته می‌شه و در ریلیز [`debug-latest`](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest) منتشر می‌شه.
 
 ---
 
