@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -685,13 +686,19 @@ private fun ServerConfigCard(
     }
 }
 
+/** The repo's server setup (server/setup.sh) and its guide; they work once the repo is public. */
+private const val SERVER_SETUP_COMMAND =
+    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-android-termux-/main/server/setup.sh | sudo bash"
+private const val SERVER_GUIDE_URL = "https://github.com/traveler3022/Hermes-android-termux-/tree/main/server"
+
 /**
- * How to put Hermes behind Tailscale Serve: Hermes stays on 127.0.0.1, Tailscale shares it as
- * tailnet-only HTTPS, and nothing on the server is opened to the internet.
+ * How to put Hermes behind Tailscale Serve: one command on the server (server/setup.sh) keeps
+ * Hermes on 127.0.0.1 and shares it as tailnet-only HTTPS; nothing is opened to the internet.
  */
 @Composable
 private fun ServerSetupGuide() {
     var open by rememberSaveable { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -704,39 +711,29 @@ private fun ServerSetupGuide() {
                 Text(if (open) t("Hide server setup", "بستن راهنمای سرور") else t("How to set up your server", "راه‌اندازی سرور"))
             }
             if (open) {
-                GuideStep(t("1. On the server, install Tailscale and sign in:", "۱. روی سرور Tailscale را نصب کن و وارد شو:"))
-                GuideCode("curl -fsSL https://tailscale.com/install.sh | sh\nsudo tailscale up")
+                GuideStep(t("1. On the server where Hermes is installed, run:", "۱. روی سروری که Hermes رویش نصب است این را بزن:"))
+                GuideCode(SERVER_SETUP_COMMAND)
                 GuideStep(
                     t(
-                        "2. In the Tailscale admin console turn on MagicDNS and HTTPS certificates. No domain needed: " +
-                            "the server gets a free https://<machine>.<tailnet>.ts.net name with a real certificate.",
-                        "۲. در کنسول Tailscale گزینه‌های MagicDNS و HTTPS certificates را روشن کن. دامنه لازم نیست: " +
-                            "سرور یک اسم مجانی https://<machine>.<tailnet>.ts.net با گواهی واقعی می‌گیرد.",
+                        "It installs Tailscale if needed and prints a sign-in link: log in with the account you use " +
+                            "in this app. If Tailscale asks to turn on HTTPS, open that link too. At the end it prints " +
+                            "your Hermes username and password.",
+                        "اگر لازم باشد Tailscale را نصب می‌کند و یک لینک ورود نشان می‌دهد: با همان حسابی که در این اپ " +
+                            "داری وارد شو. اگر Tailscale خواست HTTPS را روشن کنی، آن لینک را هم باز کن. آخر کار نام کاربری " +
+                            "و رمز هرمس را نشان می‌دهد.",
                     ),
-                )
-                GuideStep(t("3. Give Hermes a login and that address, and keep it on 127.0.0.1:", "۳. به Hermes نام کاربری، رمز و همان آدرس را بده و روی 127.0.0.1 نگهش دار:"))
-                GuideCode(
-                    "export HERMES_DASHBOARD_BASIC_AUTH_USERNAME=you\n" +
-                        "export HERMES_DASHBOARD_BASIC_AUTH_PASSWORD='a long password'\n" +
-                        "export HERMES_DASHBOARD_BASIC_AUTH_SECRET=\$(openssl rand -hex 32)\n" +
-                        "export HERMES_DASHBOARD_PUBLIC_URL=https://<machine>.<tailnet>.ts.net\n" +
-                        "hermes dashboard --host 127.0.0.1 --port 9119 --no-open",
                 )
                 GuideStep(
                     t(
-                        "4. Share it only inside your tailnet. Never use tailscale funnel: that one is public.",
-                        "۴. فقط داخل شبکه‌ی Tailscale خودت به اشتراک بگذار. هرگز tailscale funnel نزن؛ آن عمومی است.",
+                        "2. In this app, tap Sign in to Tailscale above and use the same account. Pick your server " +
+                            "in the device list, then enter that username and password.",
+                        "۲. در همین اپ، «ورود به Tailscale» را بزن و با همان حساب وارد شو. سرورت را در لیست دستگاه‌ها " +
+                            "انتخاب کن و بعد همان نام کاربری و رمز را بزن.",
                     ),
                 )
-                GuideCode("sudo tailscale serve --bg http://127.0.0.1:9119")
-                GuideStep(
-                    t(
-                        "5. In this app, tap Sign in to Tailscale above and use the same account. Pick your server " +
-                            "in the device list, then enter the Hermes username and password from step 3.",
-                        "۵. در همین اپ، «ورود به Tailscale» را بزن و با همان حساب وارد شو. سرورت را در لیست دستگاه‌ها " +
-                            "انتخاب کن و بعد نام کاربری و رمز هرمس از مرحله‌ی ۳ را بزن.",
-                    ),
-                )
+                TextButton(onClick = { runCatching { uriHandler.openUri(SERVER_GUIDE_URL) } }) {
+                    Text(t("Full guide and the script on GitHub", "راهنمای کامل و اسکریپت در GitHub"))
+                }
                 Text(
                     text = t(
                         "Hermes stays on 127.0.0.1 and no port is opened to the internet: only your own Tailscale " +
