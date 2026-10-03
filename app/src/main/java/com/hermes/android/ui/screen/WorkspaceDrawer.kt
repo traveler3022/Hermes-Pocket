@@ -1,6 +1,7 @@
 package com.hermes.android.ui.screen
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import com.hermes.android.ui.icons.outlined.Folder
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -85,6 +86,8 @@ internal fun WorkspaceDrawerSheet(
     onNewChat: () -> Unit,
     onSessionClick: (SessionItem) -> Unit,
     onAccount: () -> Unit,
+    profileTitle: String? = null,
+    onProfileClick: () -> Unit = {},
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
     unreadOf: (SessionItem) -> Int = { 0 },
     onSessionLongClick: (SessionItem) -> Unit = {},
@@ -104,12 +107,30 @@ internal fun WorkspaceDrawerSheet(
                     .padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = t("Hermes", "هرمس"),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
+                // The title is the profile switcher: which agent these chats belong to.
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onProfileClick)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = profileTitle ?: t("Hermes", "هرمس"),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = t("Switch profile", "عوض کردن پروفایل"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 HxHeaderCircleButton(
                     icon = HxIcons.Search,
                     contentDescription = t("Search chats", "جستجو در گفتگوها"),

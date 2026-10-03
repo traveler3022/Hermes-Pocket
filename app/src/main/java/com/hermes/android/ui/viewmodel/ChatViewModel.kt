@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +48,7 @@ class ChatViewModel @Inject constructor(
     private val approvalNotificationManager: ApprovalNotificationManager,
     private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
+    private val profiles: com.hermes.android.data.ProfilesRepository? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -133,6 +135,7 @@ class ChatViewModel @Inject constructor(
         loadDraft()
         watchForQueuedPromptFlush()
         connectAndCollect()
+        watchProfileSwitch()
         // Asked once at init the catalog raced Hermes' boot and usually failed, leaving
         // only the built-in fallback list: ask on every connect instead.
         viewModelScope.launch {
@@ -145,6 +148,21 @@ class ChatViewModel @Inject constructor(
                         reactionsDelegate.onConnected()
                     }
                 }
+        }
+    }
+
+    /**
+     * Another profile was picked: its chats are not this one's, so open a new chat
+     * in it and list its sessions. A chat still running in the old profile keeps
+     * going in the background (its calls carry its own profile).
+     */
+    private fun watchProfileSwitch() {
+        val active = profiles?.active ?: return
+        viewModelScope.launch {
+            active.drop(1).collect {
+                newConversation()
+                loadSessionList()
+            }
         }
     }
 

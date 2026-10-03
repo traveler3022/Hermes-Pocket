@@ -120,6 +120,13 @@ object GatewayMethods {
     const val PROJECT_FACTS = "project.facts"
     const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
 
+    // Profiles: separate agents (own config, skills, memory, sessions) on one gateway.
+    // Any other call picks one with a `profile` param (gateway/ProfileScope.kt).
+    const val PROFILES_LIST = "profiles.list"
+    const val PROFILES_CREATE = "profiles.create"
+    const val PROFILES_DESCRIBE = "profiles.describe"
+    const val PROFILES_CONFIGURE = "profiles.configure"
+
     // Task Desk: delegation control
     const val DELEGATION_STATUS = "delegation.status"
     const val DELEGATION_PAUSE = "delegation.pause"

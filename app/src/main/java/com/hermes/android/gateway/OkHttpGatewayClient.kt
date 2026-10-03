@@ -63,6 +63,7 @@ class OkHttpGatewayClient @Inject constructor(
     private val json: Json,
     private val stdioHub: StdioGatewayHub,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
+    private val profileScope: ProfileScope = ProfileScope(appContext),
 ) : GatewayClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -330,6 +331,30 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     override suspend fun request(
+        method: String,
+        params: Map<String, JsonElement>,
+        timeoutMs: Long,
+        trackSession: Boolean,
+    ): JsonElement {
+        val profile = profileScope.profileFor(method, params)
+            ?: return send(method, params, timeoutMs, trackSession).also { profileScope.remember(null, it) }
+        return try {
+            send(method, params + ("profile" to JsonPrimitive(profile)), timeoutMs, trackSession)
+                .also { profileScope.remember(profile, it) }
+        } catch (e: GatewayException) {
+            when {
+                // The profile is gone (deleted, or this is another server): back to the
+                // launch profile instead of failing every call from now on.
+                e.isUnknownProfile() -> profileScope.forget(profile)
+                e.refusedProfileParam() -> profileScope.refuse(method)
+                else -> throw e
+            }
+            Timber.w("[Gateway] $method without profile '$profile': ${e.rpcMessage}")
+            send(method, params, timeoutMs, trackSession).also { profileScope.remember(null, it) }
+        }
+    }
+
+    private suspend fun send(
         method: String,
         params: Map<String, JsonElement>,
         timeoutMs: Long,
