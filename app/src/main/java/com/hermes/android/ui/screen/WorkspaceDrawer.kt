@@ -1,7 +1,10 @@
 package com.hermes.android.ui.screen
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import com.hermes.android.ui.icons.outlined.Folder
+import com.hermes.android.ui.icons.filled.Forum
+import com.hermes.android.ui.icons.filled.Inventory2
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,6 +88,8 @@ internal fun WorkspaceDrawerSheet(
     onNewChat: () -> Unit,
     onSessionClick: (SessionItem) -> Unit,
     onAccount: () -> Unit,
+    profileTitle: String? = null,
+    onProfileClick: () -> Unit = {},
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
     unreadOf: (SessionItem) -> Int = { 0 },
     onSessionLongClick: (SessionItem) -> Unit = {},
@@ -104,12 +109,30 @@ internal fun WorkspaceDrawerSheet(
                     .padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = t("Hermes", "هرمس"),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
+                // The title is the profile switcher: which agent these chats belong to.
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onProfileClick)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = profileTitle ?: t("Hermes", "هرمس"),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = t("Switch profile", "عوض کردن پروفایل"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 HxHeaderCircleButton(
                     icon = HxIcons.Search,
                     contentDescription = t("Search chats", "جستجو در گفتگوها"),
@@ -329,16 +352,23 @@ internal fun rememberWorkspaceDestinations(
     onWorkbench: () -> Unit,
     onAgent: () -> Unit,
     onScheduled: () -> Unit,
+    onGroups: () -> Unit,
     onFiles: () -> Unit,
+    onKanban: (() -> Unit)? = null,
 ): List<WorkspaceDestination> {
     val workbench = t("Workbench", "میز کار")
     val agent = t("Agent", "عامل")
     val scheduled = t("Scheduled", "زمان‌بندی‌شده")
+    val groups = t("Group chats", "گفتگوهای گروهی")
     val files = t("Files", "فایل‌ها")
+    val kanban = t("Kanban", "کانبان")
     // Remembered, as the name says: a new list on every call made the drawer
     // recompose along with the chat behind it.
-    return remember(waitingCount, workbench, agent, scheduled, files, onWorkbench, onAgent, onScheduled, onFiles) {
-        listOf(
+    return remember(
+        waitingCount, workbench, agent, scheduled, groups, files, kanban,
+        onWorkbench, onAgent, onScheduled, onGroups, onFiles, onKanban,
+    ) {
+        listOfNotNull(
             WorkspaceDestination(
                 label = workbench,
                 icon = HxIcons.LayoutGrid,
@@ -347,6 +377,8 @@ internal fun rememberWorkspaceDestinations(
             ),
             WorkspaceDestination(agent, HxIcons.Bot, null, onAgent),
             WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
+            WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups),
+            onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it) },
             WorkspaceDestination(files, Icons.Outlined.Folder, null, onFiles),
         )
     }

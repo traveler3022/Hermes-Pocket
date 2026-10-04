@@ -148,6 +148,8 @@ fun ChatScreen(
     onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
+    onNavigateToGroups: () -> Unit = {},
+    onNavigateToKanban: () -> Unit = {},
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
@@ -158,6 +160,7 @@ fun ChatScreen(
     // session about the change rather than only the next one. Reaching for it
     // here keeps one implementation of that rather than a second copy.
     modelPicker: com.hermes.android.ui.viewmodel.ModelPickerViewModel = hiltViewModel(),
+    profilesViewModel: com.hermes.android.ui.viewmodel.ProfilesViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val modelPickerState by modelPicker.uiState.collectAsStateWithLifecycle()
@@ -181,6 +184,14 @@ fun ChatScreen(
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
+    var showProfiles by remember { mutableStateOf(false) }
+    val kanbanSwitchedOn by viewModel.kanbanSwitchedOn.collectAsStateWithLifecycle()
+    val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
+    val activeProfile by profilesViewModel.active.collectAsStateWithLifecycle()
+    // Null (the plain "Hermes" title) until the list is in, and for the default profile.
+    val activeProfileTitle = profilesState.profiles
+        .firstOrNull { if (activeProfile == null) it.isDefault else it.name == activeProfile }
+        ?.title
 
     // Feature #4: Detect if user has scrolled away from bottom
     val showScrollToBottom by remember {
@@ -296,6 +307,7 @@ fun ChatScreen(
             focusManager.clearFocus()
             // However it opened (hamburger or swipe), fetch a current chat list.
             viewModel.onSessionDrawerOpened()
+            profilesViewModel.load()
         } else {
             viewModel.closeSessionDrawer()
         }
@@ -444,6 +456,12 @@ fun ChatScreen(
                         onWorkbench = { closeDrawerThen(onNavigateToTasks) },
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
+                        onGroups = { closeDrawerThen(onNavigateToGroups) },
+                        onKanban = if (kanbanSwitchedOn && viewModel.kanbanAvailable) {
+                            { closeDrawerThen(onNavigateToKanban) }
+                        } else {
+                            null
+                        },
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context)) {
@@ -457,6 +475,11 @@ fun ChatScreen(
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
                     onAccount = { closeDrawerThen(onNavigateToSettings) },
+                    profileTitle = activeProfileTitle,
+                    onProfileClick = {
+                        profilesViewModel.load()
+                        showProfiles = true
+                    },
                 )
 
                 // ── Long-press menu: rename / pin / delete ─────────────────
@@ -1105,4 +1128,31 @@ fun ChatScreen(
         onReasoningLevelChange = viewModel::setReasoningLevel,
         onDismissSheet = { showModelSheet = false },
     )
+
+    if (showProfiles) {
+        ProfilePickerSheet(
+            state = profilesState,
+            active = activeProfile,
+            onSelect = { profile ->
+                showProfiles = false
+                profilesViewModel.select(profile)
+                scope.launch { drawerState.close() }
+            },
+            onCreate = { name, description, copyCurrent ->
+                profilesViewModel.create(name, description, copyCurrent) {
+                    showProfiles = false
+                    scope.launch { drawerState.close() }
+                }
+            },
+            onEdit = profilesViewModel::openEditor,
+            onSave = profilesViewModel::save,
+            onDelete = profilesViewModel::delete,
+            onCloseEditor = profilesViewModel::closeEditor,
+            onClearError = profilesViewModel::clearError,
+            onDismiss = {
+                profilesViewModel.closeEditor()
+                showProfiles = false
+            },
+        )
+    }
 }

@@ -47,6 +47,8 @@ class ChatViewModel @Inject constructor(
     private val approvalNotificationManager: ApprovalNotificationManager,
     private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
+    private val profiles: com.hermes.android.data.ProfilesRepository? = null,
+    private val kanban: com.hermes.android.data.KanbanRepository? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -63,6 +65,12 @@ class ChatViewModel @Inject constructor(
     private var connectionWatchJob: Job? = null
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    /** Kanban is here: switched on in Settings › General, on a runtime that has it. */
+    val kanbanAvailable: Boolean get() = kanban?.available == true
+
+    /** The Kanban switch, so the drawer follows it at once. */
+    val kanbanSwitchedOn: StateFlow<Boolean> = kanban?.switchedOn ?: MutableStateFlow(false)
 
     // ── Delegates ───────────────────────────────────────────────────────
 
@@ -133,6 +141,7 @@ class ChatViewModel @Inject constructor(
         loadDraft()
         watchForQueuedPromptFlush()
         connectAndCollect()
+        watchProfileSwitch()
         // Asked once at init the catalog raced Hermes' boot and usually failed, leaving
         // only the built-in fallback list: ask on every connect instead.
         viewModelScope.launch {
@@ -145,6 +154,21 @@ class ChatViewModel @Inject constructor(
                         reactionsDelegate.onConnected()
                     }
                 }
+        }
+    }
+
+    /**
+     * Another profile was picked: its chats are not this one's, so open a new chat
+     * in it and list its sessions. A chat still running in the old profile keeps
+     * going in the background (its calls carry its own profile).
+     */
+    private fun watchProfileSwitch() {
+        val switches = profiles?.switches ?: return
+        viewModelScope.launch {
+            switches.collect {
+                newConversation()
+                loadSessionList()
+            }
         }
     }
 

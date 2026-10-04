@@ -49,6 +49,7 @@ class ProotLinuxRuntime @Inject constructor(
     private val rootfsInstaller: RootfsInstaller,
     private val stdioHub: StdioGatewayHub,
     private val desktop: LinuxDesktop,
+    private val kanban: LinuxKanban,
 ) : HermesRuntime {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -337,6 +338,8 @@ class ProotLinuxRuntime @Inject constructor(
         stopProcess()
         // The gateway reads gateway.env (the browser's secret address) once, at start.
         desktop.beforeHermesStarts()
+        // And whether to run Kanban (Settings › General).
+        withContext(Dispatchers.IO) { runCatching { kanban.syncBeforeStart() } }
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
         val process = withContext(Dispatchers.IO) {
@@ -656,7 +659,18 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
 
         // Same launch as Hermes' TUI (ui-tui/src/gatewayClient.ts startSpawnedGateway):
-        // `python -m tui_gateway.entry` from the source root, JSON-RPC lines on stdio.
+        // `tui_gateway.entry` from the source root, JSON-RPC lines on stdio.
+        //
+        // Plus the Group Chat room worker, which `hermes dashboard` starts
+        // (hermes_cli/web_server.py) and the stdio entry does not: without it every
+        // groups.create / groups.send answers 4123. Its idle re-check goes from 5 s to
+        // 60 s. A send, a finished turn, a stop or an approval wakes it at once; the
+        // timer only covers writers outside this process. Measured on the 0.21.4
+        // gateway: 3 idle rooms cost 3.4% of a core at 5 s, 0.7% at 60 s, and with no
+        // rooms the worker costs nothing.
+        //
+        // Plus Kanban when the user turned it on (KanbanSwitch, LinuxKanban): a stand-in for the
+        // dashboard API and the gateway dispatcher, which this runtime has neither of.
         private val GATEWAY_SCRIPT = """
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
@@ -676,7 +690,67 @@ class ProotLinuxRuntime @Inject constructor(
             # never has to spend seconds in `hermes config set` to change them.
             ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
             [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
-            exec "${'$'}REPO/venv/bin/python" -u -m tui_gateway.entry
+            # Kanban, when the user turned it on (Settings › General; LinuxKanban writes the flag).
+            [ -f "${'$'}HERMES_HOME/android/kanban.enabled" ] && export HERMES_ANDROID_KANBAN=1
+            exec "${'$'}REPO/venv/bin/python" -u -c '
+            import logging, os, sys, threading, time
+            from tui_gateway import entry, hosted_room_service, methods_groups, server
+            hosted_room_service._HOSTED_ROOM_IDLE_FALLBACK_SECONDS = 60.0
+            def start_rooms():
+                try:
+                    methods_groups.start_hosted_room_service()
+                except Exception:
+                    logging.getLogger("hosted-rooms").exception("Group Chat room worker did not start")
+            threading.Thread(target=start_rooms, name="hosted-rooms-start", daemon=True).start()
+            # Kanban without a dashboard: android.kanban hands a request to the dashboard Kanban
+            # plugin router (plugins/kanban/dashboard/plugin_api.py) in this process, so the app
+            # sends the same calls as to a server; a thread does what the gateway dispatcher
+            # does, a dispatch every 60 s.
+            def install_kanban(repo):
+                log = logging.getLogger("android-kanban")
+                lock, state = threading.Lock(), {}
+                def client():
+                    with lock:
+                        if "client" not in state:
+                            import importlib.util
+                            from fastapi import FastAPI
+                            from fastapi.testclient import TestClient
+                            spec = importlib.util.spec_from_file_location(
+                                "android_kanban_plugin_api", os.path.join(repo, "plugins/kanban/dashboard/plugin_api.py"))
+                            module = importlib.util.module_from_spec(spec)
+                            # FastAPI resolves the request bodies through sys.modules.
+                            sys.modules[spec.name] = module
+                            spec.loader.exec_module(module)
+                            app = FastAPI()
+                            app.include_router(module.router)
+                            state["client"] = TestClient(app)
+                        return state["client"]
+                def handle(rid, params):
+                    try:
+                        response = client().request(
+                            str(params.get("method") or "GET").upper(), str(params.get("path") or "/"),
+                            json=params.get("body"))
+                        return server._ok(rid, {"status": response.status_code, "body": response.json() if response.content else None})
+                    except Exception as exc:
+                        log.exception("kanban call failed")
+                        return server._err(rid, 5900, f"kanban: {exc}")
+                server._methods["android.kanban"] = handle
+                server._LONG_HANDLERS = server._LONG_HANDLERS | {"android.kanban"}
+                def dispatch():
+                    from hermes_cli import kanban_db_dispatch
+                    time.sleep(15)
+                    while True:
+                        try:
+                            kanban_db_dispatch.reap_worker_zombies()
+                            client().post("/dispatch")
+                        except Exception:
+                            log.exception("kanban dispatch failed")
+                        time.sleep(60)
+                threading.Thread(target=dispatch, name="android-kanban", daemon=True).start()
+            if os.environ.get("HERMES_ANDROID_KANBAN") == "1":
+                install_kanban(os.environ["HERMES_PYTHON_SRC_ROOT"])
+            entry.main()
+            '
         """.trimIndent()
     }
 }

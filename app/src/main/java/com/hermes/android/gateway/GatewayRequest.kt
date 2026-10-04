@@ -86,6 +86,8 @@ object GatewayMethods {
     const val INSIGHTS_GET = "insights.get"
 
     const val SHELL_EXEC = "shell.exec"
+    /** `python -m hermes_cli.main <argv>` on the gateway host (non-interactive commands only). */
+    const val CLI_EXEC = "cli.exec"
 
     // process.stop is a global kill_all — only the console's explicit
     // "emergency stop" may use it. Per-chat cleanup goes through the
@@ -119,6 +121,26 @@ object GatewayMethods {
     const val PROJECTS_TREE = "projects.tree"
     const val PROJECT_FACTS = "project.facts"
     const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
+
+    // Profiles: separate agents (own config, skills, memory, sessions) on one gateway.
+    // Any other call picks one with a `profile` param (gateway/ProfileScope.kt).
+    const val PROFILES_LIST = "profiles.list"
+    const val PROFILES_CREATE = "profiles.create"
+    const val PROFILES_DESCRIBE = "profiles.describe"
+    const val PROFILES_CONFIGURE = "profiles.configure"
+
+    // Group Chat: rooms the gateway itself drives (tui_gateway/methods_groups.py).
+    const val GROUPS_CAPABILITIES = "groups.capabilities"
+    const val GROUPS_LIST = "groups.list"
+    const val GROUPS_CREATE = "groups.create"
+    const val GROUPS_STATE = "groups.state"
+    const val GROUPS_SEND = "groups.send"
+    const val GROUPS_LOG = "groups.log"
+    const val GROUPS_STOP = "groups.stop"
+    const val GROUPS_APPROVE = "groups.approve"
+    const val GROUPS_RETRY = "groups.retry"
+    const val GROUPS_RENAME = "groups.rename"
+    const val GROUPS_DISBAND = "groups.disband"
 
     // Task Desk: delegation control
     const val DELEGATION_STATUS = "delegation.status"

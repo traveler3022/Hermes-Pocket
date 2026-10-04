@@ -63,6 +63,7 @@ class OkHttpGatewayClient @Inject constructor(
     private val json: Json,
     private val stdioHub: StdioGatewayHub,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
+    private val profileScope: ProfileScope = ProfileScope(appContext),
 ) : GatewayClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -124,6 +125,26 @@ class OkHttpGatewayClient @Inject constructor(
     private var lastSessionId: String? = null
 
     private val eventSequence = EventSequenceTracker()
+
+    /**
+     * Group Chat member sessions seen on this transport (see [GatewayEventHelpers.isRoomSessionTitle]).
+     * Over WebSocket the server never sends their frames (they have no client), but the stdio
+     * gateway writes everything to its one channel: without this, each member turn would read
+     * as a chat of the user's (notifications, auto-resume onto it, an approval sheet).
+     */
+    private val roomSessions = ConcurrentHashMap.newKeySet<String>()
+
+    /** True for a frame of a room session; a room session announces itself with session.info first. */
+    private fun isRoomSessionFrame(sid: String?, eventType: String, payload: JsonObject): Boolean {
+        if (sid == null) return false
+        if (sid in roomSessions) return true
+        if (eventType != "session.info" || !GatewayEventHelpers.isRoomSessionTitle(payload["title"].asText())) {
+            return false
+        }
+        roomSessions += sid
+        payload["stored_session_id"].sessionIdOrNull()?.let { roomSessions += it }
+        return true
+    }
 
     /** HTTP status code from the last connection failure (for permanent error detection). */
     @Volatile
@@ -330,6 +351,30 @@ class OkHttpGatewayClient @Inject constructor(
     }
 
     override suspend fun request(
+        method: String,
+        params: Map<String, JsonElement>,
+        timeoutMs: Long,
+        trackSession: Boolean,
+    ): JsonElement {
+        val profile = profileScope.profileFor(method, params)
+            ?: return send(method, params, timeoutMs, trackSession).also { profileScope.remember(null, it) }
+        return try {
+            send(method, params + ("profile" to JsonPrimitive(profile)), timeoutMs, trackSession)
+                .also { profileScope.remember(profile, it) }
+        } catch (e: GatewayException) {
+            when {
+                // The profile is gone (deleted, or this is another server): back to the
+                // launch profile instead of failing every call from now on.
+                e.isUnknownProfile(profile) -> profileScope.forget(profile)
+                e.refusedProfileParam() -> profileScope.refuse(method)
+                else -> throw e
+            }
+            Timber.w("[Gateway] $method without profile '$profile': ${e.rpcMessage}")
+            send(method, params, timeoutMs, trackSession).also { profileScope.remember(null, it) }
+        }
+    }
+
+    private suspend fun send(
         method: String,
         params: Map<String, JsonElement>,
         timeoutMs: Long,
@@ -829,6 +874,9 @@ class OkHttpGatewayClient @Inject constructor(
         val id = (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
         val method = (obj["method"] as? JsonPrimitive)?.contentOrNull ?: return
         val params = obj["params"] as? JsonObject ?: JsonObject(emptyMap())
+        // A room member's approval or question: the room shows it (groups.state) and answers it
+        // (groups.approve). No reply here — declining would answer it with a refusal.
+        if (params["session_id"].sessionIdOrNull() in roomSessions) return
         val event = ServerRequestParser.parse(id, method, params)
         if (event == null) {
             Timber.w("[Gateway] no handler for server request $method; declining")
@@ -870,6 +918,7 @@ class OkHttpGatewayClient @Inject constructor(
         // resume is how a reconnect silently lands in a brand new chat.
         val sid = (params["sid"] ?: params["session_id"]).sessionIdOrNull()
         val payload = params["payload"] as? JsonObject ?: JsonObject(emptyMap())
+        if (isRoomSessionFrame(sid, eventType, payload)) return
         // A hole in the per-session seq means frames were lost on this socket;
         // announce it before the event so the chat rebuilds from the server.
         val seq = (params["seq"] as? JsonPrimitive)?.longOrNull
