@@ -1,14 +1,20 @@
 package com.hermes.android.data
 
+import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.linux.LinuxKanban
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -44,12 +50,24 @@ class KanbanRepositoryTest {
             .build()
     }.build()
 
-    private fun repo(type: RuntimeType = RuntimeType.REMOTE): KanbanRepository {
+    /** What the phone's gateway was asked (`android.kanban` params) and answers. */
+    private val phoneCalls = mutableListOf<Map<String, JsonElement>>()
+    private var phoneAnswer: (Map<String, JsonElement>) -> JsonElement = { buildJsonObject { put("status", 200) } }
+    private val gateway = mockk<GatewayClient> {
+        coEvery { request("android.kanban", any(), any(), any()) } answers {
+            @Suppress("UNCHECKED_CAST") val params = secondArg<Map<String, JsonElement>>()
+            phoneCalls += params
+            phoneAnswer(params)
+        }
+    }
+
+    private fun repo(type: RuntimeType = RuntimeType.REMOTE, kanbanOnPhone: Boolean = true): KanbanRepository {
         val runtime = mockk<HermesRuntime> { every { this@mockk.type } returns type }
         val settings = mockk<RemoteServerSettings> {
             every { config } returns MutableStateFlow(RemoteServerConfig("https://box.tail1234.ts.net"))
         }
-        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings)
+        val linux = mockk<LinuxKanban> { every { enabled } returns kanbanOnPhone }
+        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings, gateway, linux)
     }
 
     @Test
@@ -108,9 +126,48 @@ class KanbanRepositoryTest {
     }
 
     @Test
-    fun `only a remote server offers the board`() {
+    fun `a server, or the phone once Kanban is turned on there`() {
         assertTrue(repo().available)
-        assertFalse(repo(RuntimeType.PROOT_LINUX).available)
+        assertTrue(repo(RuntimeType.PROOT_LINUX, kanbanOnPhone = true).available)
+        assertFalse(repo(RuntimeType.PROOT_LINUX, kanbanOnPhone = false).available)
         assertFalse(repo(RuntimeType.TERMUX).available)
+    }
+
+    @Test
+    fun `assignees come as rows with a name`() = runTest {
+        answer = { 200 to """{"assignees":[{"name":"critic","on_disk":true,"counts":{}},{"name":"default","on_disk":true}]}""" }
+        assertEquals(listOf("critic", "default"), repo().assignees())
+    }
+
+    @Test
+    fun `on the phone the same calls go to the gateway`() = runTest {
+        phoneAnswer = { buildJsonObject { put("status", 200); put("body", Json.parseToJsonElement("""{"columns":[{"name":"ready","tasks":[{"id":"t_1","title":"x","status":"ready"}]}]}""")) } }
+        val board = repo(RuntimeType.PROOT_LINUX).board()
+
+        assertEquals("t_1", board.getValue("ready").single().id)
+        assertEquals("GET", phoneCalls.single()["method"]!!.jsonPrimitive.content)
+        assertEquals("/board", phoneCalls.single()["path"]!!.jsonPrimitive.content)
+        assertTrue("no HTTP on the phone", sent.isEmpty())
+    }
+
+    @Test
+    fun `on the phone an unassigned task is split right after it is made`() = runTest {
+        phoneAnswer = { params ->
+            buildJsonObject {
+                put("status", 200)
+                if (params["path"]!!.jsonPrimitive.content == "/tasks") put("body", Json.parseToJsonElement("""{"task":{"id":"t_7","title":"Plan","status":"triage"}}"""))
+            }
+        }
+        repo(RuntimeType.PROOT_LINUX).create("Plan the launch", "", assignee = null)
+
+        assertEquals(listOf("/tasks", "/tasks/t_7/decompose", "/dispatch"), phoneCalls.map { it["path"]!!.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `on the phone a refusal carries the reason`() = runTest {
+        phoneAnswer = { buildJsonObject { put("status", 404); put("body", Json.parseToJsonElement("""{"detail":"task nope not found"}""")) } }
+        val error = runCatching { repo(RuntimeType.PROOT_LINUX).move("nope", "ready") }.exceptionOrNull()
+
+        assertEquals("task nope not found", error?.message)
     }
 }

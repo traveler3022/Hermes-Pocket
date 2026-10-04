@@ -1,7 +1,9 @@
 package com.hermes.android.data
 
+import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.linux.LinuxKanban
 import com.hermes.android.runtime.remote.RemoteServerSettings
 import com.hermes.android.runtime.remote.remoteHttpBase
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,8 @@ class KanbanRepository @Inject constructor(
     private val json: Json,
     private val runtime: HermesRuntime,
     private val remote: RemoteServerSettings,
+    private val gatewayClient: GatewayClient,
+    private val linuxKanban: LinuxKanban,
 ) {
     data class Task(
         val id: String,
@@ -70,8 +74,18 @@ class KanbanRepository @Inject constructor(
         .callTimeout(45, TimeUnit.SECONDS)
         .build()
 
-    /** Kanban needs the server's dashboard: the remote runtime, over https. */
-    val available: Boolean get() = runtime.type == RuntimeType.REMOTE && base() != null
+    /**
+     * A remote server over https (its dashboard), or the built-in Linux once the user turned
+     * Kanban on there (its gateway then answers `android.kanban`, see [LinuxKanban]).
+     */
+    val available: Boolean
+        get() = when (runtime.type) {
+            RuntimeType.REMOTE -> base() != null
+            RuntimeType.PROOT_LINUX -> linuxKanban.enabled
+            else -> false
+        }
+
+    private val onPhone: Boolean get() = runtime.type == RuntimeType.PROOT_LINUX
 
     /** The board, column name → tasks, in the server's column order. */
     suspend fun board(): Map<String, List<Task>> {
@@ -93,7 +107,10 @@ class KanbanRepository @Inject constructor(
     /** Profiles a task can go to: every profile on the server plus any already used on the board. */
     suspend fun assignees(): List<String> {
         val root = call("GET", "/assignees") as? JsonObject ?: return emptyList()
-        return (root["assignees"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        // Rows are `{name, on_disk, counts}`; a bare name is accepted too.
+        return (root["assignees"] as? JsonArray).orEmpty().mapNotNull { row ->
+            (row as? JsonPrimitive)?.contentOrNull ?: (row as? JsonObject)?.str("name")?.ifEmpty { null }
+        }
     }
 
     /**
@@ -109,8 +126,16 @@ class KanbanRepository @Inject constructor(
             // A resend after a dropped answer finds the first copy instead of making a second.
             put("idempotency_key", JsonPrimitive("app-${UUID.randomUUID()}"))
         }
-        call("POST", "/tasks", JsonObject(payload))
-        if (assignee != null) dispatchNow()
+        val created = call("POST", "/tasks", JsonObject(payload)) as? JsonObject
+        when {
+            assignee != null -> dispatchNow()
+            // A server's dispatcher splits triage tasks on its own; the phone's stand-in only
+            // dispatches, so it asks for the split here.
+            onPhone -> ((created?.get("task") as? JsonObject)?.str("id"))?.takeIf { it.isNotEmpty() }?.let { id ->
+                call("POST", "/tasks/${id.urlPart()}/decompose", JsonObject(emptyMap()))
+                dispatchNow()
+            }
+        }
     }
 
     /**
@@ -142,6 +167,27 @@ class KanbanRepository @Inject constructor(
     private fun base(): String? = remoteHttpBase(remote.config.value.serverUrl)?.takeIf { it.startsWith("https://") }
 
     private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement =
+        if (onPhone) callOnPhone(method, path, body) else callServer(method, path, body)
+
+    /** The phone's gateway runs the same plugin router in-process (`android.kanban`). */
+    private suspend fun callOnPhone(method: String, path: String, body: JsonObject?): JsonElement {
+        val params = buildMap<String, JsonElement> {
+            put("method", JsonPrimitive(method))
+            put("path", JsonPrimitive(path))
+            if (body != null) put("body", body)
+        }
+        val result = gatewayClient.request(KANBAN_METHOD, params, trackSession = false) as? JsonObject
+            ?: throw IOException("No answer from Kanban")
+        val status = (result["status"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
+        val answer = result["body"] ?: JsonNull
+        if (status !in 200..299) {
+            val detail = ((answer as? JsonObject)?.get("detail") as? JsonPrimitive)?.contentOrNull
+            throw IOException(detail ?: "Kanban answered $status")
+        }
+        return answer
+    }
+
+    private suspend fun callServer(method: String, path: String, body: JsonObject? = null): JsonElement =
         withContext(Dispatchers.IO) {
             val base = base() ?: throw IOException("Kanban needs a connected server.")
             val requestBody = body?.toString()?.toRequestBody(JSON_TYPE)
@@ -164,6 +210,7 @@ class KanbanRepository @Inject constructor(
 
     private companion object {
         const val API = "/api/plugins/kanban"
+        const val KANBAN_METHOD = "android.kanban"
         val JSON_TYPE = "application/json".toMediaType()
     }
 }

@@ -103,7 +103,7 @@ fun KanbanScreen(
 
     HermesScaffold(
         title = t("Kanban", "کانبان"),
-        subtitle = t("Tasks your profiles work on, on your server", "کارهایی که پروفایل‌ها روی سرورت انجام می‌دهند"),
+        subtitle = t("Tasks your profiles work on", "کارهایی که پروفایل‌ها انجام می‌دهند"),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
@@ -123,10 +123,10 @@ fun KanbanScreen(
             if (!state.available) {
                 HermesEmptyState(
                     icon = Icons.Default.Inventory2,
-                    title = t("Kanban runs on your server", "کانبان روی سرورت اجرا می‌شود"),
+                    title = t("Kanban is off", "کانبان خاموش است"),
                     caption = t(
-                        "Connect the app to your server (Remote) to use the board.",
-                        "برای استفاده از تابلو، اپ را به سرورت وصل کن (حالت ریموت).",
+                        "On the built-in Linux, turn it on in Settings › Linux. With Termux, connect to a server (Remote) instead.",
+                        "در لینوکس داخلی از تنظیمات › لینوکس روشنش کن. با ترموکس، به یک سرور وصل شو (حالت ریموت).",
                     ),
                 )
                 return@Column

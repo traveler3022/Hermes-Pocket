@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,6 +150,26 @@ fun LinuxToolsScreen(
                     ),
                     icon = Icons.Default.Inventory2,
                     onClick = { showPackages = true },
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SettingsGroup {
+                SettingRow(
+                    title = t("Kanban board", "تابلوی کانبان"),
+                    subtitle = t(
+                        "Off by default. When on, a dispatcher checks the board every minute and each task " +
+                            "runs as its own Hermes process: heavy on the phone. Turning it on or off restarts Hermes.",
+                        "پیش‌فرض خاموش. روشن که باشد، هر دقیقه تابلو بررسی می‌شود و هر کار یک پروسهٔ جدای " +
+                            "هرمس است: برای گوشی سنگین است. روشن یا خاموش کردنش هرمس را دوباره راه می‌اندازد.",
+                    ),
+                    trailing = {
+                        if (state.kanbanApplying) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Switch(checked = state.kanbanEnabled, onCheckedChange = viewModel::setKanban)
+                        }
+                    },
                 )
             }
         }

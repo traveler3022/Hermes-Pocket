@@ -48,6 +48,7 @@ class ChatViewModel @Inject constructor(
     private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
     private val profiles: com.hermes.android.data.ProfilesRepository? = null,
+    private val kanban: com.hermes.android.data.KanbanRepository? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -65,9 +66,8 @@ class ChatViewModel @Inject constructor(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** Connected to a remote server (features that live on its dashboard, like Kanban). */
-    val isRemoteRuntime: Boolean
-        get() = hermesRuntime.type == com.hermes.android.runtime.RuntimeType.REMOTE
+    /** Kanban is here: on a remote server, or on the phone once turned on in the Linux settings. */
+    val kanbanAvailable: Boolean get() = kanban?.available == true
 
     // ── Delegates ───────────────────────────────────────────────────────
 

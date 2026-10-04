@@ -456,8 +456,7 @@ fun ChatScreen(
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
-                        // The board lives on the server's dashboard: remote runtime only.
-                        onKanban = if (viewModel.isRemoteRuntime) { { closeDrawerThen(onNavigateToKanban) } } else null,
+                        onKanban = if (viewModel.kanbanAvailable) { { closeDrawerThen(onNavigateToKanban) } } else null,
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context)) {
