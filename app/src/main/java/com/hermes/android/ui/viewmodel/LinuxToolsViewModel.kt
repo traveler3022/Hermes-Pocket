@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import javax.inject.Inject
 
 /** One of Aether's Alpine package profiles (`AlpineRuntime.AlpinePackageProfiles`). */
@@ -35,22 +34,14 @@ data class LinuxToolsUiState(
     val installing: String? = null,
     val log: List<String> = emptyList(),
     val error: String? = null,
-    /** Kanban runs on this Linux (off unless the user turns it on). */
-    val kanbanEnabled: Boolean = false,
-    /** The gateway is restarting to apply the Kanban switch. */
-    val kanbanApplying: Boolean = false,
 )
 
 @HiltViewModel
 class LinuxToolsViewModel @Inject constructor(
     private val environment: ProotEnvironment,
-    private val kanban: com.hermes.android.runtime.linux.LinuxKanban,
-    private val runtime: com.hermes.android.runtime.HermesRuntime,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(
-        LinuxToolsUiState(rootfsInstalled = environment.isRootfsInstalled, kanbanEnabled = kanban.enabled),
-    )
+    private val _state = MutableStateFlow(LinuxToolsUiState(rootfsInstalled = environment.isRootfsInstalled))
     val state: StateFlow<LinuxToolsUiState> = _state.asStateFlow()
 
     val profiles: List<PackageProfile> = Profiles
@@ -121,32 +112,6 @@ class LinuxToolsViewModel @Inject constructor(
     fun clearError() = _state.update { it.copy(error = null) }
 
     fun showMessage(message: String) = _state.update { it.copy(error = message) }
-
-    /**
-     * Turns Kanban on or off on this Linux. The gateway reads the switch when it starts, so a
-     * running one is restarted (a chat that is mid-reply on it is cut off).
-     */
-    fun setKanban(on: Boolean) {
-        if (_state.value.kanbanApplying) return
-        viewModelScope.launch {
-            _state.update { it.copy(kanbanApplying = true) }
-            try {
-                withContext(Dispatchers.IO) { kanban.setEnabled(on) }
-                _state.update { it.copy(kanbanEnabled = kanban.enabled) }
-                if (runtime.type == com.hermes.android.runtime.RuntimeType.PROOT_LINUX &&
-                    runtime.state.value is com.hermes.android.runtime.RuntimeState.Running
-                ) {
-                    runtime.stopGateway()
-                    runtime.startGateway()
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "[LinuxTools] Kanban switch failed")
-                _state.update { it.copy(error = e.message ?: e.toString()) }
-            } finally {
-                _state.update { it.copy(kanbanApplying = false) }
-            }
-        }
-    }
 
     suspend fun terminalLaunchSpec(): Result<ProotEnvironment.TerminalLaunchSpec> = withContext(Dispatchers.IO) {
         runCatching {

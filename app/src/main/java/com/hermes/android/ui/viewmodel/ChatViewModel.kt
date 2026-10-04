@@ -66,8 +66,11 @@ class ChatViewModel @Inject constructor(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** Kanban is here: on a remote server, or on the phone once turned on in the Linux settings. */
+    /** Kanban is here: switched on in Settings › General, on a runtime that has it. */
     val kanbanAvailable: Boolean get() = kanban?.available == true
+
+    /** The Kanban switch, so the drawer follows it at once. */
+    val kanbanSwitchedOn: StateFlow<Boolean> = kanban?.switchedOn ?: MutableStateFlow(false)
 
     // ── Delegates ───────────────────────────────────────────────────────
 

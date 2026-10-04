@@ -1,26 +1,27 @@
 package com.hermes.android.runtime.linux
 
+import com.hermes.android.runtime.KanbanSwitch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Whether the built-in Linux runs Hermes Kanban. Off unless the user turns it on: a
- * dispatcher then wakes every minute, and each task it starts is a whole Hermes process
- * on the phone.
+ * Hermes Kanban on the built-in Linux, when the user turned Kanban on ([KanbanSwitch]): a
+ * dispatcher then wakes every minute, and each task it starts is a whole Hermes process on
+ * the phone.
  *
- * The switch is a file the gateway script looks for at start
- * ([ProotLinuxRuntime] `GATEWAY_SCRIPT`), so a change applies when the gateway restarts.
+ * The gateway script looks for a flag file at start ([ProotLinuxRuntime] `GATEWAY_SCRIPT`);
+ * [syncBeforeStart] writes it from the switch right before every start, so a change applies
+ * with the next (re)start of the gateway.
  */
 @Singleton
 class LinuxKanban @Inject constructor(
     private val environment: ProotEnvironment,
+    private val switch: KanbanSwitch,
 ) {
-    private val flag get() = environment.guestFile(FLAG_PATH)
-
-    val enabled: Boolean get() = environment.isRootfsInstalled && flag.isFile
-
-    fun setEnabled(on: Boolean) {
-        if (on) {
+    fun syncBeforeStart() {
+        if (!environment.isRootfsInstalled) return
+        val flag = environment.guestFile(FLAG_PATH)
+        if (switch.on.value) {
             flag.parentFile?.mkdirs()
             flag.writeText("1\n")
         } else {

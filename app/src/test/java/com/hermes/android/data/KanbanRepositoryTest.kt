@@ -3,7 +3,7 @@ package com.hermes.android.data
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
-import com.hermes.android.runtime.linux.LinuxKanban
+import com.hermes.android.runtime.KanbanSwitch
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
 import io.mockk.coEvery
@@ -61,13 +61,13 @@ class KanbanRepositoryTest {
         }
     }
 
-    private fun repo(type: RuntimeType = RuntimeType.REMOTE, kanbanOnPhone: Boolean = true): KanbanRepository {
+    private fun repo(type: RuntimeType = RuntimeType.REMOTE, switchedOn: Boolean = true): KanbanRepository {
         val runtime = mockk<HermesRuntime> { every { this@mockk.type } returns type }
         val settings = mockk<RemoteServerSettings> {
             every { config } returns MutableStateFlow(RemoteServerConfig("https://box.tail1234.ts.net"))
         }
-        val linux = mockk<LinuxKanban> { every { enabled } returns kanbanOnPhone }
-        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings, gateway, linux)
+        val switch = mockk<KanbanSwitch> { every { on } returns MutableStateFlow(switchedOn) }
+        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings, gateway, switch)
     }
 
     @Test
@@ -126,10 +126,11 @@ class KanbanRepositoryTest {
     }
 
     @Test
-    fun `a server, or the phone once Kanban is turned on there`() {
+    fun `off unless switched on, and never on Termux`() {
         assertTrue(repo().available)
-        assertTrue(repo(RuntimeType.PROOT_LINUX, kanbanOnPhone = true).available)
-        assertFalse(repo(RuntimeType.PROOT_LINUX, kanbanOnPhone = false).available)
+        assertTrue(repo(RuntimeType.PROOT_LINUX).available)
+        assertFalse(repo(switchedOn = false).available)
+        assertFalse(repo(RuntimeType.PROOT_LINUX, switchedOn = false).available)
         assertFalse(repo(RuntimeType.TERMUX).available)
     }
 

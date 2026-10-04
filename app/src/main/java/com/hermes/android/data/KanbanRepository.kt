@@ -3,10 +3,11 @@ package com.hermes.android.data
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
-import com.hermes.android.runtime.linux.LinuxKanban
+import com.hermes.android.runtime.KanbanSwitch
 import com.hermes.android.runtime.remote.RemoteServerSettings
 import com.hermes.android.runtime.remote.remoteHttpBase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -32,9 +33,8 @@ import javax.inject.Singleton
  * worker; the worker reports back on the card.
  *
  * Read and written through the dashboard's Kanban plugin API
- * (`plugins/kanban/dashboard/plugin_api.py`, mounted at `/api/plugins/kanban`). Only a
- * remote server has that dashboard here: the built-in Linux runtime runs no dashboard and
- * no dispatcher, so this is offered for the remote runtime only. The shared HTTP client
+ * (`plugins/kanban/dashboard/plugin_api.py`, mounted at `/api/plugins/kanban`) on a remote
+ * server, or the same router run by the phone's own gateway (see [available]). The shared HTTP client
  * signs each call in (RemoteAuthInterceptor) and reaches a tailnet server through the
  * in-app Tailscale node, as for the chat connection itself.
  */
@@ -45,7 +45,7 @@ class KanbanRepository @Inject constructor(
     private val runtime: HermesRuntime,
     private val remote: RemoteServerSettings,
     private val gatewayClient: GatewayClient,
-    private val linuxKanban: LinuxKanban,
+    private val switch: KanbanSwitch,
 ) {
     data class Task(
         val id: String,
@@ -75,15 +75,19 @@ class KanbanRepository @Inject constructor(
         .build()
 
     /**
-     * A remote server over https (its dashboard), or the built-in Linux once the user turned
-     * Kanban on there (its gateway then answers `android.kanban`, see [LinuxKanban]).
+     * Turned on in Settings › General ([KanbanSwitch]), and a runtime that has it: a remote
+     * server over https (its dashboard), or the built-in Linux, whose gateway then answers
+     * `android.kanban` (runtime/linux/LinuxKanban). Termux has neither.
      */
     val available: Boolean
-        get() = when (runtime.type) {
+        get() = switch.on.value && when (runtime.type) {
             RuntimeType.REMOTE -> base() != null
-            RuntimeType.PROOT_LINUX -> linuxKanban.enabled
+            RuntimeType.PROOT_LINUX -> true
             else -> false
         }
+
+    /** The Settings › General switch, for screens that must follow it live. */
+    val switchedOn: StateFlow<Boolean> get() = switch.on
 
     private val onPhone: Boolean get() = runtime.type == RuntimeType.PROOT_LINUX
 

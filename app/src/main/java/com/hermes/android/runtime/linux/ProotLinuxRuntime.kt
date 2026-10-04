@@ -49,6 +49,7 @@ class ProotLinuxRuntime @Inject constructor(
     private val rootfsInstaller: RootfsInstaller,
     private val stdioHub: StdioGatewayHub,
     private val desktop: LinuxDesktop,
+    private val kanban: LinuxKanban,
 ) : HermesRuntime {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -337,6 +338,8 @@ class ProotLinuxRuntime @Inject constructor(
         stopProcess()
         // The gateway reads gateway.env (the browser's secret address) once, at start.
         desktop.beforeHermesStarts()
+        // And whether to run Kanban (Settings › General).
+        withContext(Dispatchers.IO) { runCatching { kanban.syncBeforeStart() } }
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
         val process = withContext(Dispatchers.IO) {
@@ -666,7 +669,7 @@ class ProotLinuxRuntime @Inject constructor(
         // gateway: 3 idle rooms cost 3.4% of a core at 5 s, 0.7% at 60 s, and with no
         // rooms the worker costs nothing.
         //
-        // Plus Kanban when the user turned it on (LinuxKanban): a stand-in for the
+        // Plus Kanban when the user turned it on (KanbanSwitch, LinuxKanban): a stand-in for the
         // dashboard API and the gateway dispatcher, which this runtime has neither of.
         private val GATEWAY_SCRIPT = """
             export HERMES_HOME=/root/.hermes
@@ -687,7 +690,7 @@ class ProotLinuxRuntime @Inject constructor(
             # never has to spend seconds in `hermes config set` to change them.
             ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
             [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
-            # Kanban, when the user turned it on (LinuxKanban).
+            # Kanban, when the user turned it on (Settings › General; LinuxKanban writes the flag).
             [ -f "${'$'}HERMES_HOME/android/kanban.enabled" ] && export HERMES_ANDROID_KANBAN=1
             exec "${'$'}REPO/venv/bin/python" -u -c '
             import logging, os, sys, threading, time

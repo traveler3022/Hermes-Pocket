@@ -30,6 +30,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -218,6 +220,8 @@ internal fun GeneralTab(
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    KanbanSettingRow()
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = t("Font", "فونت"),
                         style = MaterialTheme.typography.titleSmall,
@@ -273,5 +277,45 @@ internal fun GeneralTab(
             }
         }
 
+    }
+}
+
+/** Kanban, off unless turned on: shows the board, and on the built-in Linux runs it too. */
+@Composable
+private fun KanbanSettingRow(
+    viewModel: com.hermes.android.ui.viewmodel.KanbanSettingViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+) {
+    val on by viewModel.on.collectAsStateWithLifecycle()
+    val applying by viewModel.applying.collectAsStateWithLifecycle()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = t("Kanban board", "تابلوی کانبان"),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = t(
+                    "A task board your profiles work through, in the menu. With a server it runs there. " +
+                        "On the built-in Linux it runs on the phone: a check every minute and a Hermes process " +
+                        "per task, so it is heavy, and switching it restarts Hermes.",
+                    "تابلوی کارهایی که پروفایل‌ها انجام می‌دهند، در منو. با سرور، روی سرور اجرا می‌شود. " +
+                        "در لینوکس داخلی روی خود گوشی اجرا می‌شود: هر دقیقه یک بررسی و برای هر کار یک پروسهٔ " +
+                        "هرمس، پس سنگین است و روشن یا خاموش کردنش هرمس را دوباره راه می‌اندازد.",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (applying) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Switch(checked = on, onCheckedChange = viewModel::set)
+        }
     }
 }

@@ -125,8 +125,8 @@ fun KanbanScreen(
                     icon = Icons.Default.Inventory2,
                     title = t("Kanban is off", "کانبان خاموش است"),
                     caption = t(
-                        "On the built-in Linux, turn it on in Settings › Linux. With Termux, connect to a server (Remote) instead.",
-                        "در لینوکس داخلی از تنظیمات › لینوکس روشنش کن. با ترموکس، به یک سرور وصل شو (حالت ریموت).",
+                        "Turn it on in Settings › General. Termux has no Kanban: use the built-in Linux or a server.",
+                        "از تنظیمات › عمومی روشنش کن. ترموکس کانبان ندارد: از لینوکس داخلی یا سرور استفاده کن.",
                     ),
                 )
                 return@Column

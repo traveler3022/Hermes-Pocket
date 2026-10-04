@@ -185,6 +185,7 @@ fun ChatScreen(
     var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
     var showProfiles by remember { mutableStateOf(false) }
+    val kanbanSwitchedOn by viewModel.kanbanSwitchedOn.collectAsStateWithLifecycle()
     val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
     val activeProfile by profilesViewModel.active.collectAsStateWithLifecycle()
     // Null (the plain "Hermes" title) until the list is in, and for the default profile.
@@ -456,7 +457,11 @@ fun ChatScreen(
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
-                        onKanban = if (viewModel.kanbanAvailable) { { closeDrawerThen(onNavigateToKanban) } } else null,
+                        onKanban = if (kanbanSwitchedOn && viewModel.kanbanAvailable) {
+                            { closeDrawerThen(onNavigateToKanban) }
+                        } else {
+                            null
+                        },
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context)) {
