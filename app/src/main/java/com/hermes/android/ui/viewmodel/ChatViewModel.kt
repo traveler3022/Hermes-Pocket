@@ -65,6 +65,10 @@ class ChatViewModel @Inject constructor(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /** Connected to a remote server (features that live on its dashboard, like Kanban). */
+    val isRemoteRuntime: Boolean
+        get() = hermesRuntime.type == com.hermes.android.runtime.RuntimeType.REMOTE
+
     // ── Delegates ───────────────────────────────────────────────────────
 
     private val sessionDelegate = ChatSessionDelegate(

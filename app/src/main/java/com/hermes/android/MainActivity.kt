@@ -289,6 +289,7 @@ private fun HermesNavHost(
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToGroups = { navController.navigate("groups") },
+                onNavigateToKanban = { navController.navigate("kanban") },
                 sharedText = shared,
                 onSharedTextTaken = onSharedTextTaken,
                 resumeSessionId = resumeId,
@@ -388,6 +389,12 @@ private fun HermesNavHost(
             arguments = listOf(navArgument("roomId") { type = NavType.StringType }),
         ) {
             com.hermes.android.ui.screen.GroupChatScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("kanban") {
+            com.hermes.android.ui.screen.KanbanScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }

@@ -149,6 +149,7 @@ fun ChatScreen(
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToGroups: () -> Unit = {},
+    onNavigateToKanban: () -> Unit = {},
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
@@ -455,6 +456,8 @@ fun ChatScreen(
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
+                        // The board lives on the server's dashboard: remote runtime only.
+                        onKanban = if (viewModel.isRemoteRuntime) { { closeDrawerThen(onNavigateToKanban) } } else null,
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context)) {
