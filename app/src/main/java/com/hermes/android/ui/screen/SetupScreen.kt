@@ -187,15 +187,20 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     LaunchedEffect(chosen) { if (chosen) viewModel.detect() }
 
     Text(t("Where should Hermes run?", "Hermes کجا اجرا شود؟"), style = MaterialTheme.typography.headlineSmall)
-    RuntimeChoiceRow(selected = choice.takeIf { chosen }, enabled = !installing, onSelect = viewModel::selectRuntime)
+    RuntimeChoiceRow(
+        selected = choice.takeIf { chosen },
+        enabled = !installing,
+        onSelect = viewModel::selectRuntime,
+        showServer = true,
+    )
     if (!chosen) {
         Text(
             t(
                 "Built-in Linux runs Hermes inside this app, with nothing else to install. " +
-                    "Termux uses the separate Termux app — pick it if you run Hermes there. " +
+                    "Termux uses the separate Termux app. Remote/Server connects to Hermes on your own server. " +
                     "You can switch later in Settings.",
                 "لینوکس داخلی Hermes را داخل همین اپ اجرا می‌کند و چیز دیگری لازم نیست. " +
-                    "Termux از اپ جداگانه‌ی Termux استفاده می‌کند — اگر Hermes را آنجا اجرا می‌کنید این را بزنید. " +
+                    "Termux از اپ جداگانه‌ی Termux استفاده می‌کند. سرور راه دور به Hermes روی سرور خودت وصل می‌شود. " +
                     "بعداً از تنظیمات هم می‌شود عوضش کرد.",
             ),
             style = MaterialTheme.typography.bodyMedium,
@@ -204,61 +209,70 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
         return
     }
     Text(
-        if (choice == RuntimeChoiceUi.BuiltInLinux) {
-            t(
+        when (choice) {
+            RuntimeChoiceUi.BuiltInLinux -> t(
                 "Recommended. A small Linux runs inside this app — nothing else to install.",
                 "پیشنهادی. یک لینوکس کوچک داخل همین اپ اجرا می‌شود — نیازی به نصب چیز دیگری نیست.",
             )
-        } else {
-            t(
+            RuntimeChoiceUi.Termux -> t(
                 "Uses the separate Termux app. Pick this if you already run Hermes in Termux.",
                 "از اپ جداگانه‌ی Termux استفاده می‌کند. اگر Hermes را از قبل در Termux دارید این را انتخاب کنید.",
+            )
+            RuntimeChoiceUi.RemoteServer -> t(
+                "Connects this app to Hermes running on your own server; it does not provide a hosted server. " +
+                    "Use your server's Tailscale address and Hermes sign-in.",
+                "این اپ را به Hermes روی سرور خودت وصل می‌کند و سرور میزبانی‌شده‌ای ارائه نمی‌دهد. " +
+                    "از نشانی Tailscale و ورود هرمسِ سرورت استفاده کن.",
             )
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    when (val state = uiState) {
-        RuntimeUiState.NotDetected, RuntimeUiState.Detecting ->
-            CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
-        is RuntimeUiState.Missing -> MissingContent(storeUrl = state.storeUrl, onCheckAgain = viewModel::detect)
-        is RuntimeUiState.Detected -> if (choice == RuntimeChoiceUi.BuiltInLinux) {
-            BuiltInLinuxDetectedContent(diskFreeBytes = state.diskFreeBytes, onStartInstall = viewModel::startInstall)
-        } else {
-            DetectedContent(
-                version = state.version,
-                diskFreeBytes = state.diskFreeBytes,
-                onShowInstallInstructions = viewModel::prepareInstallInstructions,
-                onStartInstall = viewModel::startInstall,
-                onLaunchHostApp = viewModel::launchHostApp,
+    if (choice == RuntimeChoiceUi.RemoteServer) {
+        RemoteServerSetupContent(viewModel = viewModel, onContinue = onReady)
+    } else {
+        when (val state = uiState) {
+            RuntimeUiState.NotDetected, RuntimeUiState.Detecting ->
+                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+            is RuntimeUiState.Missing -> MissingContent(storeUrl = state.storeUrl, onCheckAgain = viewModel::detect)
+            is RuntimeUiState.Detected -> if (choice == RuntimeChoiceUi.BuiltInLinux) {
+                BuiltInLinuxDetectedContent(diskFreeBytes = state.diskFreeBytes, onStartInstall = viewModel::startInstall)
+            } else {
+                DetectedContent(
+                    version = state.version,
+                    diskFreeBytes = state.diskFreeBytes,
+                    onShowInstallInstructions = viewModel::prepareInstallInstructions,
+                    onStartInstall = viewModel::startInstall,
+                    onLaunchHostApp = viewModel::launchHostApp,
+                    onStartGateway = viewModel::startGateway,
+                )
+            }
+            RuntimeUiState.Installing -> InstallingContent(progress = progress)
+            is RuntimeUiState.Installed -> InstalledContent(
+                hermesVersion = state.hermesVersion,
                 onStartGateway = viewModel::startGateway,
+                startLabel = t("Start Hermes", "اجرای Hermes"),
+            )
+            is RuntimeUiState.Running -> {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.size(12.dp))
+                        Text(t("Hermes is running", "Hermes در حال اجراست"), style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+                Button(onClick = onReady, modifier = Modifier.fillMaxWidth()) { Text(t("Continue", "ادامه")) }
+            }
+            is RuntimeUiState.Error -> ErrorContent(
+                message = state.message,
+                onRetry = viewModel::detect,
+                onFetchLogs = viewModel::fetchLogs,
             )
         }
-        RuntimeUiState.Installing -> InstallingContent(progress = progress)
-        is RuntimeUiState.Installed -> InstalledContent(
-            hermesVersion = state.hermesVersion,
-            onStartGateway = viewModel::startGateway,
-            startLabel = t("Start Hermes", "اجرای Hermes"),
-        )
-        is RuntimeUiState.Running -> {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.size(12.dp))
-                    Text(t("Hermes is running", "Hermes در حال اجراست"), style = MaterialTheme.typography.titleMedium)
-                }
-            }
-            Button(onClick = onReady, modifier = Modifier.fillMaxWidth()) { Text(t("Continue", "ادامه")) }
-        }
-        is RuntimeUiState.Error -> ErrorContent(
-            message = state.message,
-            onRetry = viewModel::detect,
-            onFetchLogs = viewModel::fetchLogs,
-        )
     }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
     logs?.let {
