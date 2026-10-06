@@ -74,3 +74,7 @@ data class GatewayConnectionUi(
     val detail: String? = null,
     val reconnectAttempt: Int? = null,
 )
+
+/** Remote onboarding is ready only when this server is signed in and its gateway is connected. */
+internal fun isRemoteSetupReady(signedInAs: String?, connection: GatewayConnectionUi): Boolean =
+    !signedInAs.isNullOrBlank() && connection.state == ChatConnectionState.Connected

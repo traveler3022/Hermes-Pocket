@@ -86,6 +86,7 @@ import com.hermes.android.ui.viewmodel.TailnetDeviceUi
 import com.hermes.android.ui.viewmodel.TailscaleLoginEvent
 import com.hermes.android.ui.viewmodel.TailscaleUi
 import com.hermes.android.ui.viewmodel.TailscaleUiState
+import com.hermes.android.ui.viewmodel.isRemoteSetupReady
 import kotlinx.coroutines.launch
 
 
@@ -113,7 +114,6 @@ fun RuntimeSetupScreen(
     val installing by viewModel.installing.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
-    val serverConfig by viewModel.serverConfig.collectAsStateWithLifecycle()
     val isRemote = viewModel.isRemoteRuntime
     val runtimeChoice by viewModel.runtimeChoice.collectAsStateWithLifecycle()
 
@@ -156,85 +156,7 @@ fun RuntimeSetupScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (isRemote) {
-                // ── Remote server flow (design A) ─────────────────────────
-                // The live gateway connection state drives everything here;
-                // RuntimeUiState only matters for the legacy Termux flow.
-                val connection by viewModel.connectionState.collectAsStateWithLifecycle()
-
-                Text(
-                    text = "⬡",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                RuntimeChoiceRow(
-                    selected = runtimeChoice,
-                    enabled = !installing,
-                    onSelect = { viewModel.selectRuntime(it) },
-                    showServer = true,
-                )
-                Text(
-                    text = t("Connect to your Hermes server", "اتصال به سرور هرمس"),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = t(
-                        "The agent lives on your server — this app is just the key to it.",
-                        "عامل روی سرور شماست؛ این اپ فقط کلید آن است.",
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-
-                // Tailscale inside the app: this phone joins the server's tailnet itself.
-                LaunchedEffect(Unit) { viewModel.startTailscale() }
-                // Not lifecycle-bound on purpose: the "come back" step arrives while the browser
-                // tab covers this screen.
-                LaunchedEffect(Unit) {
-                    viewModel.tailscaleLogin.collect { event ->
-                        when (event) {
-                            is TailscaleLoginEvent.Open -> openInBrowserTab(context, event.url)
-                            TailscaleLoginEvent.Done -> returnOverBrowserTab(context)
-                        }
-                    }
-                }
-                val tailscaleUi by viewModel.tailscaleUi.collectAsStateWithLifecycle()
-                TailscaleCard(
-                    ui = tailscaleUi,
-                    serverUrl = serverConfig.serverUrl,
-                    onSignIn = { viewModel.signInToTailscale() },
-                    onSignOut = { viewModel.signOutOfTailscale() },
-                    onChoose = { viewModel.chooseServer(it) },
-                )
-
-                val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
-                val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
-                ServerConfigCard(
-                    initialUrl = serverConfig.serverUrl,
-                    signedInAs = signedInAs,
-                    signingIn = signingIn,
-                    onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
-                    onSignOut = { viewModel.signOut() },
-                )
-
-                // Mockup-A shape: the live state sits as a centered chip
-                // right under the Sign in button.
-                ConnectionStatusBlock(
-                    connection = connection,
-                    onReconnect = { viewModel.startGateway() },
-                )
-
-                OutlinedButton(
-                    onClick = { viewModel.runDoctor() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Default.Description, contentDescription = null)
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(t("Test connection", "آزمایش اتصال"))
-                }
-
-                ServerSetupGuide()
+                RemoteServerSetupContent(viewModel = viewModel, showDiagnostics = true)
             } else {
                 // ── On-device flow: built-in Linux or Termux ───────────────
                 Text(
@@ -450,6 +372,98 @@ fun RuntimeSetupScreen(
             if (installing) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
+        }
+    }
+}
+
+/** Shared Tailscale, server sign-in, setup guide, and live gateway status for remote runtime setup. */
+@Composable
+internal fun RemoteServerSetupContent(
+    viewModel: RuntimeViewModel,
+    onContinue: (() -> Unit)? = null,
+    showDiagnostics: Boolean = false,
+) {
+    val context = LocalContext.current
+    val serverConfig by viewModel.serverConfig.collectAsStateWithLifecycle()
+    val tailscaleUi by viewModel.tailscaleUi.collectAsStateWithLifecycle()
+    val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
+    val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
+    val connection by viewModel.connectionState.collectAsStateWithLifecycle()
+    val ready = isRemoteSetupReady(signedInAs, connection)
+
+    // This phone joins the server's tailnet directly; no Tailscale app is needed.
+    LaunchedEffect(viewModel) { viewModel.startTailscale() }
+    // Keep collecting while a browser tab covers the app during Tailscale sign-in.
+    LaunchedEffect(viewModel) {
+        viewModel.tailscaleLogin.collect { event ->
+            when (event) {
+                is TailscaleLoginEvent.Open -> openInBrowserTab(context, event.url)
+                TailscaleLoginEvent.Done -> returnOverBrowserTab(context)
+            }
+        }
+    }
+
+    Text(
+        text = "⬡",
+        style = MaterialTheme.typography.displaySmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Text(
+        text = t("Connect to your Hermes server", "اتصال به سرور هرمس"),
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = t(
+            "Hermes runs on your own server; this app connects to it over your private Tailscale network. " +
+                "No hosted server is provided.",
+            "هرمس روی سرور خودت اجرا می‌شود و این اپ از شبکه‌ی خصوصی Tailscale به آن وصل می‌شود. " +
+                "سرور میزبانی‌شده‌ای ارائه نمی‌شود.",
+        ),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
+
+    TailscaleCard(
+        ui = tailscaleUi,
+        serverUrl = serverConfig.serverUrl,
+        onSignIn = { viewModel.signInToTailscale() },
+        onSignOut = { viewModel.signOutOfTailscale() },
+        onChoose = { viewModel.chooseServer(it) },
+    )
+    ServerConfigCard(
+        initialUrl = serverConfig.serverUrl,
+        signedInAs = signedInAs,
+        signingIn = signingIn,
+        onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
+        onSignOut = { viewModel.signOut() },
+    )
+    ConnectionStatusBlock(
+        connection = connection,
+        onReconnect = { viewModel.startGateway() },
+    )
+
+    if (showDiagnostics) {
+        OutlinedButton(
+            onClick = { viewModel.runDoctor() },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Default.Description, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(t("Test connection", "آزمایش اتصال"))
+        }
+    }
+
+    ServerSetupGuide()
+
+    if (onContinue != null) {
+        Button(
+            onClick = { if (isRemoteSetupReady(signedInAs, connection)) onContinue() },
+            enabled = ready,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(t("Continue", "ادامه"))
         }
     }
 }
@@ -827,4 +841,3 @@ private fun ConnectionStatusBlock(
         }
     }
 }
-
