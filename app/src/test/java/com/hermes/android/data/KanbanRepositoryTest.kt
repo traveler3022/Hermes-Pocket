@@ -126,6 +126,61 @@ class KanbanRepositoryTest {
     }
 
     @Test
+    fun `a task reads its attempts, open and ended`() = runTest {
+        answer = {
+            200 to """{"task":{"id":"t_1","title":"x","status":"running"},"comments":[],"runs":[
+                {"id":1,"task_id":"t_1","profile":"ops","status":"crashed","outcome":"crashed","started_at":100,
+                 "ended_at":160,"summary":null,"error":"boom","worker_pid":7},
+                {"id":2,"task_id":"t_1","profile":"ops","status":"running","outcome":null,"started_at":200,
+                 "ended_at":null,"summary":null,"error":null,"worker_pid":8}]}"""
+        }
+        val runs = repo().task("t_1").runs
+
+        assertEquals(listOf(1L, 2L), runs.map { it.id })
+        assertEquals(160L, runs[0].endedAt)
+        assertEquals("boom", runs[0].error)
+        assertEquals(null, runs[1].endedAt)
+        assertEquals(null, runs[1].outcome)
+        assertEquals("", runs[1].summary)
+    }
+
+    @Test
+    fun `the log asks for its tail only`() = runTest {
+        answer = { 200 to """{"task_id":"t_1","exists":true,"size_bytes":9,"content":"started\n","truncated":true}""" }
+        val log = repo().log("t_1")
+
+        assertEquals("started\n", log.text)
+        assertTrue(log.exists)
+        assertTrue(log.truncated)
+        val url = sent.single().first.url
+        assertEquals("/api/plugins/kanban/tasks/t_1/log", url.encodedPath)
+        assertEquals("65536", url.queryParameter("tail"))
+    }
+
+    @Test
+    fun `reassigning a running task releases it first`() = runTest {
+        repo().reassign("t_1", "critic", stopWorker = true)
+
+        val (call, body) = sent[0]
+        assertEquals("/api/plugins/kanban/tasks/t_1/reassign", call.url.encodedPath)
+        val json = Json.parseToJsonElement(body).jsonObject
+        assertEquals("critic", json["profile"]!!.jsonPrimitive.content)
+        assertEquals("true", json["reclaim_first"]!!.jsonPrimitive.content)
+        assertEquals("/api/plugins/kanban/dispatch", sent[1].first.url.encodedPath)
+    }
+
+    @Test
+    fun `an inspected worker that is gone says why`() = runTest {
+        answer = { 200 to """{"run_id":2,"alive":false,"pid":8,"reason":"process not found"}""" }
+        val found = repo().inspect(2)
+
+        assertFalse(found.alive)
+        assertEquals(8L, found.pid)
+        assertEquals("process not found", found.reason)
+        assertEquals("/api/plugins/kanban/runs/2/inspect", sent.single().first.url.encodedPath)
+    }
+
+    @Test
     fun `off unless switched on, and never on Termux`() {
         assertTrue(repo().available)
         assertTrue(repo(RuntimeType.PROOT_LINUX).available)

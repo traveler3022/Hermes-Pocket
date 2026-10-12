@@ -66,7 +66,33 @@ class KanbanRepository @Inject constructor(
 
     data class Comment(val author: String, val body: String, val createdAt: Long)
 
-    data class Detail(val task: Task, val comments: List<Comment>)
+    /** One attempt at a task: opened when a worker claims it, closed when it ends. */
+    data class Run(
+        val id: Long,
+        val profile: String?,
+        val status: String,
+        val outcome: String?,
+        val startedAt: Long,
+        /** Null while the worker is still on it. */
+        val endedAt: Long?,
+        val summary: String,
+        val error: String,
+    )
+
+    data class Detail(val task: Task, val comments: List<Comment>, val runs: List<Run> = emptyList())
+
+    /** The end of the worker's stdout/stderr; [exists] is false until a worker has started. */
+    data class Log(val text: String, val exists: Boolean, val truncated: Boolean)
+
+    /** The live worker process of an open run, as the server sees it right now. */
+    data class Inspection(
+        val alive: Boolean,
+        val pid: Long?,
+        val cpuPercent: Double?,
+        val memoryBytes: Long?,
+        /** Why there are no numbers (run ended, process gone, no access). */
+        val reason: String,
+    )
 
     /** The app's client (sign-in, Tailscale route) with a deadline: it has none for its WebSocket. */
     private val rest = http.newBuilder()
@@ -105,7 +131,55 @@ class KanbanRepository @Inject constructor(
         val comments = (root["comments"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map {
             Comment(author = it.str("author"), body = it.str("body"), createdAt = it.long("created_at"))
         }
-        return Detail(task, comments)
+        val runs = (root["runs"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { it.toRun() }
+        return Detail(task, comments, runs)
+    }
+
+    /** The last [LOG_TAIL_BYTES] of the task's worker log (the server keeps up to 2 MiB). */
+    suspend fun log(id: String): Log {
+        val root = call("GET", "/tasks/${id.urlPart()}/log?tail=$LOG_TAIL_BYTES") as? JsonObject
+            ?: return Log("", exists = false, truncated = false)
+        return Log(
+            text = root.str("content"),
+            exists = root.bool("exists"),
+            truncated = root.bool("truncated"),
+        )
+    }
+
+    /** CPU and memory of the worker behind an open run. */
+    suspend fun inspect(runId: Long): Inspection {
+        val root = call("GET", "/runs/$runId/inspect") as? JsonObject ?: throw IOException("No run $runId")
+        return Inspection(
+            alive = root.bool("alive") && root.str("error").isEmpty(),
+            pid = root.str("pid").toLongOrNull(),
+            cpuPercent = root.str("cpu_percent").toDoubleOrNull(),
+            memoryBytes = root.str("memory_rss_bytes").toDoubleOrNull()?.toLong(),
+            reason = root.str("reason").ifEmpty { root.str("error") },
+        )
+    }
+
+    /**
+     * Stops a running task's worker and releases its claim: the task goes back to where it
+     * came from (usually ready) with a fresh retry budget, so the dispatcher starts it again.
+     * The server refuses a task that isn't running.
+     */
+    suspend fun reclaim(id: String, reason: String) {
+        call("POST", "/tasks/${id.urlPart()}/reclaim", JsonObject(mapOf("reason" to JsonPrimitive(reason))))
+        dispatchNow()
+    }
+
+    /**
+     * Gives the task to [profile] (null: nobody). A running task is refused unless
+     * [stopWorker] first releases it from the current worker.
+     */
+    suspend fun reassign(id: String, profile: String?, stopWorker: Boolean) {
+        val payload = buildMap<String, JsonElement> {
+            put("profile", profile?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("reclaim_first", JsonPrimitive(stopWorker))
+            put("reason", JsonPrimitive("Reassigned from the Hermes app"))
+        }
+        call("POST", "/tasks/${id.urlPart()}/reassign", JsonObject(payload))
+        if (profile != null) dispatchNow()
     }
 
     /** Profiles a task can go to: every profile on the server plus any already used on the board. */
@@ -215,6 +289,7 @@ class KanbanRepository @Inject constructor(
     private companion object {
         const val API = "/api/plugins/kanban"
         const val KANBAN_METHOD = "android.kanban"
+        const val LOG_TAIL_BYTES = 64 * 1024
         val JSON_TYPE = "application/json".toMediaType()
     }
 }
@@ -224,6 +299,22 @@ private fun String.urlPart(): String = java.net.URLEncoder.encode(this, "UTF-8")
 private fun JsonObject.str(key: String): String = (this[key] as? JsonPrimitive)?.contentOrNull ?: ""
 
 private fun JsonObject.long(key: String): Long = (this[key] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong() ?: 0
+
+private fun JsonObject.bool(key: String): Boolean = (this[key] as? JsonPrimitive)?.contentOrNull == "true"
+
+private fun JsonObject.toRun(): KanbanRepository.Run? {
+    val id = str("id").toDoubleOrNull()?.toLong() ?: return null
+    return KanbanRepository.Run(
+        id = id,
+        profile = str("profile").ifEmpty { null },
+        status = str("status"),
+        outcome = str("outcome").ifEmpty { null },
+        startedAt = long("started_at"),
+        endedAt = str("ended_at").toDoubleOrNull()?.toLong(),
+        summary = str("summary"),
+        error = str("error"),
+    )
+}
 
 private fun JsonObject.toTask(): KanbanRepository.Task? {
     val id = str("id").ifEmpty { return null }

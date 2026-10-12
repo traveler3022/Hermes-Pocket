@@ -26,6 +26,11 @@ class KanbanViewModel @Inject constructor(
         val isLoading: Boolean = true,
         val assignees: List<String> = emptyList(),
         val detail: KanbanRepository.Detail? = null,
+        /** The open task's worker log, once asked for; re-read with the board while it runs. */
+        val log: KanbanRepository.Log? = null,
+        val isLogLoading: Boolean = false,
+        /** Run id → the live numbers of its worker, for the open task. */
+        val inspections: Map<Long, KanbanRepository.Inspection> = emptyMap(),
         val isBusy: Boolean = false,
         val error: String? = null,
     )
@@ -50,7 +55,20 @@ class KanbanViewModel @Inject constructor(
                 val column = if (state.isLoading) firstBusy(columns) ?: state.column else state.column
                 state.copy(columns = columns, column = column, isLoading = false)
             }
-            _uiState.value.detail?.let { open -> _uiState.update { it.copy(detail = kanban.task(open.task.id)) } }
+            _uiState.value.detail?.let { open ->
+                val detail = kanban.task(open.task.id)
+                // Read it before the update: a sheet closed meanwhile must stay closed.
+                // A failed log read keeps the last one; it must not fail the board.
+                val log = if (_uiState.value.log != null && detail.task.status == "running") {
+                    runCatching { kanban.log(detail.task.id) }.getOrNull()
+                } else {
+                    null
+                }
+                _uiState.update { state ->
+                    if (state.detail?.task?.id != detail.task.id) state
+                    else state.copy(detail = detail, log = log ?: state.log)
+                }
+            }
         } catch (e: Exception) {
             Timber.w(e, "[Kanban] read failed")
             _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -70,12 +88,40 @@ class KanbanViewModel @Inject constructor(
     fun open(task: KanbanRepository.Task) {
         viewModelScope.launch {
             runCatching { kanban.task(task.id) }
-                .onSuccess { detail -> _uiState.update { it.copy(detail = detail) } }
+                .onSuccess { detail ->
+                    _uiState.update { it.copy(detail = detail, log = null, isLogLoading = false, inspections = emptyMap()) }
+                }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
-    fun close() = _uiState.update { it.copy(detail = null) }
+    fun close() = _uiState.update { it.copy(detail = null, log = null, isLogLoading = false, inspections = emptyMap()) }
+
+    fun loadLog(id: String) {
+        if (_uiState.value.isLogLoading) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLogLoading = true) }
+            runCatching { kanban.log(id) }
+                .onSuccess { log -> _uiState.update { if (it.detail?.task?.id == id) it.copy(log = log) else it } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+            _uiState.update { it.copy(isLogLoading = false) }
+        }
+    }
+
+    fun inspect(runId: Long) {
+        val id = _uiState.value.detail?.task?.id ?: return
+        viewModelScope.launch {
+            runCatching { kanban.inspect(runId) }
+                .onSuccess { found ->
+                    _uiState.update { if (it.detail?.task?.id == id) it.copy(inspections = it.inspections + (runId to found)) else it }
+                }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun reclaim(id: String) = act { kanban.reclaim(id, "Stopped from the Hermes app") }
+
+    fun reassign(id: String, profile: String?, running: Boolean) = act { kanban.reassign(id, profile, stopWorker = running) }
 
     fun create(title: String, body: String, assignee: String?, onDone: () -> Unit) = act(onDone) {
         kanban.create(title, body, assignee)
@@ -88,7 +134,7 @@ class KanbanViewModel @Inject constructor(
 
     fun delete(id: String) = act {
         kanban.delete(id)
-        _uiState.update { it.copy(detail = null) }
+        close()
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }

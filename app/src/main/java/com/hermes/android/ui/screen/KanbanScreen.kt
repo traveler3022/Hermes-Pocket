@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -176,6 +177,15 @@ fun KanbanScreen(
         TaskSheet(
             detail = detail,
             isBusy = state.isBusy,
+            assignees = state.assignees,
+            log = state.log,
+            isLogLoading = state.isLogLoading,
+            inspections = state.inspections,
+            onLoadAssignees = viewModel::loadAssignees,
+            onLoadLog = { viewModel.loadLog(detail.task.id) },
+            onInspect = viewModel::inspect,
+            onReclaim = { viewModel.reclaim(detail.task.id) },
+            onReassign = { profile -> viewModel.reassign(detail.task.id, profile, running = detail.task.status == "running") },
             onMove = { status, reason -> viewModel.move(detail.task.id, status, reason) },
             onComment = { text, done -> viewModel.comment(detail.task.id, text, done) },
             onDelete = { viewModel.delete(detail.task.id) },
@@ -226,6 +236,15 @@ private fun TaskCard(task: KanbanRepository.Task, onClick: () -> Unit) {
 private fun TaskSheet(
     detail: KanbanRepository.Detail,
     isBusy: Boolean,
+    assignees: List<String>,
+    log: KanbanRepository.Log?,
+    isLogLoading: Boolean,
+    inspections: Map<Long, KanbanRepository.Inspection>,
+    onLoadAssignees: () -> Unit,
+    onLoadLog: () -> Unit,
+    onInspect: (runId: Long) -> Unit,
+    onReclaim: () -> Unit,
+    onReassign: (profile: String?) -> Unit,
     onMove: (status: String, reason: String?) -> Unit,
     onComment: (text: String, onDone: () -> Unit) -> Unit,
     onDelete: () -> Unit,
@@ -234,6 +253,8 @@ private fun TaskSheet(
     val task = detail.task
     var comment by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmReclaim by remember { mutableStateOf(false) }
+    var reassigning by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         LazyColumn(
@@ -257,7 +278,60 @@ private fun TaskSheet(
                 item { SheetSection(t("Worker's report", "گزارش کارگزار")) }
                 item { HermesMarkdown(markdown = report) }
             }
-            item { TaskActions(task.status, isBusy, onMove) { confirmDelete = true } }
+            item {
+                TaskActions(task.status, isBusy, onMove, onStopWorker = { confirmReclaim = true }) { confirmDelete = true }
+            }
+            if (task.status != "done" && task.status != "archived") {
+                item {
+                    TextButton(
+                        onClick = {
+                            onLoadAssignees()
+                            reassigning = !reassigning
+                        },
+                        enabled = !isBusy,
+                    ) { Text(t("Change who does it", "تغییر مسئول")) }
+                }
+                if (reassigning) {
+                    item {
+                        AssigneePicker(task.assignee, assignees, enabled = !isBusy) { profile ->
+                            reassigning = false
+                            onReassign(profile)
+                        }
+                    }
+                    if (task.status == "running") {
+                        item {
+                            SheetHint(
+                                t(
+                                    "The current worker is stopped first, then the new profile starts over.",
+                                    "اول کارگزار فعلی متوقف می‌شود، بعد پروفایل جدید از اول شروع می‌کند.",
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            if (detail.runs.isNotEmpty()) {
+                item { HorizontalDivider() }
+                item { SheetSection(t("Attempts", "تلاش‌ها")) }
+                items(detail.runs.reversed(), key = { "run-${it.id}" }) { run ->
+                    RunRow(run, inspections[run.id], onInspect = { onInspect(run.id) })
+                }
+            }
+            item { HorizontalDivider() }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        t("Worker log", "لاگ کارگزار"),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onLoadLog, enabled = !isLogLoading) {
+                        Text(if (log == null) t("Show", "نمایش") else t("Refresh", "تازه‌سازی"))
+                    }
+                }
+            }
+            if (isLogLoading && log == null) item { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+            log?.let { item { LogView(it) } }
             item { HorizontalDivider() }
             item { SheetSection(t("Comments", "نظرها")) }
             items(detail.comments) { c ->
@@ -282,6 +356,27 @@ private fun TaskSheet(
             }
         }
     }
+    if (confirmReclaim) {
+        AlertDialog(
+            onDismissRequest = { confirmReclaim = false },
+            title = { Text(t("Stop the worker?", "کارگزار متوقف شود؟")) },
+            text = {
+                Text(
+                    t(
+                        "The worker process is ended and the task goes back to the queue, so it starts over.",
+                        "پردازش کارگزار بسته می‌شود و کار به صف برمی‌گردد تا از اول شروع شود.",
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmReclaim = false
+                    onReclaim()
+                }) { Text(t("Stop", "توقف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmReclaim = false }) { Text(t("Cancel", "لغو")) } },
+        )
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -299,7 +394,13 @@ private fun TaskSheet(
 
 /** The moves a person makes; the worker's own moves (start, complete) are the dispatcher's. */
 @Composable
-private fun TaskActions(status: String, isBusy: Boolean, onMove: (String, String?) -> Unit, onDelete: () -> Unit) {
+private fun TaskActions(
+    status: String,
+    isBusy: Boolean,
+    onMove: (String, String?) -> Unit,
+    onStopWorker: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
@@ -311,11 +412,15 @@ private fun TaskActions(status: String, isBusy: Boolean, onMove: (String, String
             }
             "blocked", "scheduled", "triage", "todo" ->
                 Button(onClick = { onMove("ready", null) }, enabled = !isBusy) { Text(t("Make ready", "آماده کن")) }
-            "ready", "running" ->
+            "ready", "running" -> {
                 OutlinedButton(
                     onClick = { onMove("blocked", "Paused from the Hermes app") },
                     enabled = !isBusy,
                 ) { Text(t("Pause", "توقف")) }
+                if (status == "running") {
+                    OutlinedButton(onClick = onStopWorker, enabled = !isBusy) { Text(t("Stop and retry", "توقف و شروع دوباره")) }
+                }
+            }
             "done" -> OutlinedButton(onClick = { onMove("archived", null) }, enabled = !isBusy) { Text(t("Archive", "بایگانی")) }
         }
         TextButton(onClick = onDelete, enabled = !isBusy) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
@@ -381,6 +486,98 @@ private fun NewTaskSheet(
             ) {
                 if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(t("Add task", "افزودن کار"))
             }
+        }
+    }
+}
+
+/** Nobody, or one of the profiles; the current one is marked. */
+@Composable
+private fun AssigneePicker(current: String?, assignees: List<String>, enabled: Boolean, onPick: (String?) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+        FilterChip(
+            selected = current == null,
+            onClick = { if (current != null) onPick(null) },
+            enabled = enabled,
+            label = { Text(t("Nobody", "هیچ‌کس")) },
+        )
+        assignees.forEach { name ->
+            FilterChip(
+                selected = current == name,
+                onClick = { if (current != name) onPick(name) },
+                enabled = enabled,
+                label = { Text("@$name") },
+            )
+        }
+    }
+}
+
+/** One attempt: who ran it, how it ended, how long it took; an open one can be checked live. */
+@Composable
+private fun RunRow(run: KanbanRepository.Run, inspection: KanbanRepository.Inspection?, onInspect: () -> Unit) {
+    val open = run.endedAt == null
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        val seconds = ((run.endedAt ?: (System.currentTimeMillis() / 1000)) - run.startedAt).coerceAtLeast(0)
+        val state = if (open) t("running", "در حال اجرا") else (run.outcome ?: run.status)
+        Text(
+            listOfNotNull("#${run.id}", run.profile?.let { "@$it" }, state, duration(seconds)).joinToString(" · "),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (run.error.isNotBlank()) {
+            Text(run.error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        }
+        if (run.summary.isNotBlank()) {
+            Text(run.summary, style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        }
+        if (open) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onInspect) { Text(t("Check worker", "بررسی کارگزار")) }
+                inspection?.let { Text(inspectionLine(it), style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun inspectionLine(found: KanbanRepository.Inspection): String =
+    if (!found.alive) {
+        t("Not running", "در حال اجرا نیست") + found.reason.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+    } else {
+        listOfNotNull(
+            found.pid?.let { "PID $it" },
+            found.cpuPercent?.let { "CPU ${"%.0f".format(it)}%" },
+            found.memoryBytes?.let { "${it / (1024 * 1024)} MB" },
+        ).joinToString(" · ").ifEmpty { t("Alive", "زنده") }
+    }
+
+@Composable
+private fun duration(seconds: Long): String = when {
+    seconds < 60 -> t("${seconds}s", "${seconds} ثانیه")
+    seconds < 3600 -> t("${seconds / 60}m", "${seconds / 60} دقیقه")
+    else -> t("${seconds / 3600}h ${seconds % 3600 / 60}m", "${seconds / 3600} ساعت و ${seconds % 3600 / 60} دقیقه")
+}
+
+/** The tail of the worker's output, in a fixed-width face; long lines scroll sideways. */
+@Composable
+private fun LogView(log: KanbanRepository.Log) {
+    if (!log.exists) {
+        SheetHint(t("No worker has started on this task yet.", "هنوز کارگزاری روی این کار شروع نکرده."))
+        return
+    }
+    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+        Column(Modifier.fillMaxWidth().padding(HxSpace.sm)) {
+            if (log.truncated) {
+                Text(
+                    t("Showing the last part only.", "فقط بخش آخر نمایش داده می‌شود."),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                log.text.ifEmpty { t("(empty)", "(خالی)") },
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            )
         }
     }
 }
