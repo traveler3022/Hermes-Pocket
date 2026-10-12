@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import com.hermes.android.domain.session.DelegationStatus
+import com.hermes.android.domain.session.ModelChoice
+import com.hermes.android.domain.session.TaskRow
 import com.hermes.android.ui.icons.filled.Stop
 import com.hermes.android.ui.icons.filled.WorkOutline
 import androidx.compose.material3.AlertDialog
@@ -58,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.SessionRepository
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
@@ -69,7 +71,7 @@ import com.hermes.android.ui.viewmodel.TasksViewModel
 
 @Composable
 internal fun DelegationRow(
-    delegation: SessionRepository.DelegationStatus,
+    delegation: DelegationStatus,
     onTogglePaused: () -> Unit,
 ) {
     Surface(
@@ -116,7 +118,7 @@ internal fun LoadingBox() {
 
 @Composable
 internal fun TaskRow(
-    task: SessionRepository.TaskRow,
+    task: TaskRow,
     onOpen: () -> Unit,
     onInterrupt: () -> Unit,
     onClose: () -> Unit,
@@ -232,15 +234,15 @@ internal fun ResultSheet(
 @Composable
 internal fun NewTaskDialog(
     isLaunching: Boolean,
-    models: List<SessionRepository.ModelChoice>,
+    models: List<ModelChoice>,
     onDismiss: () -> Unit,
-    onLaunch: (title: String, prompt: String, effort: String?, model: SessionRepository.ModelChoice?) -> Unit,
+    onLaunch: (title: String, prompt: String, effort: String?, model: ModelChoice?) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
     // " " = use the default effort; otherwise a per-task override.
     var effort by remember { mutableStateOf("") }
     // null = use the default model; otherwise a per-task override.
-    var model by remember { mutableStateOf<SessionRepository.ModelChoice?>(null) }
+    var model by remember { mutableStateOf<ModelChoice?>(null) }
     val effortOptions = listOf("", "low", "medium", "high", "xhigh")
 
     // ── Plan builder state ─────────────────────────────────────────────

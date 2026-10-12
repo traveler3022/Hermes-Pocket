@@ -1,6 +1,7 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.AttachedSession
+import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.asText
@@ -19,7 +20,7 @@ import java.util.UUID
 
 internal class ChatSessionDelegate(
     private val gatewayClient: GatewayClient,
-    private val sessionRepository: SessionRepository,
+    private val sessionRepository: ChatSessions,
     private val scope: CoroutineScope,
     private val loadReasoningLevel: () -> Unit,
 ) {
@@ -211,7 +212,7 @@ internal class ChatSessionDelegate(
     fun adoptRebound(
         state: MutableStateFlow<ChatUiState>,
         oldLiveId: String,
-        attached: SessionRepository.AttachedSession,
+        attached: AttachedSession,
     ) {
         val snapshot = parseSessionHistory(attached.raw)
         state.update { current ->

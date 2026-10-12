@@ -2,7 +2,12 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.AgentTasks
+import com.hermes.android.domain.session.DelegationStatus
+import com.hermes.android.domain.session.ModelChoice
+import com.hermes.android.domain.session.TaskHistoryRow
+import com.hermes.android.domain.session.TaskRow
+import com.hermes.android.domain.session.TranscriptEntry
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayEventHelpers
@@ -22,18 +27,18 @@ import javax.inject.Inject
  * A task is an ordinary live gateway session, created with a title and fired
  * with one prompt, that keeps running server-side whether or not this phone
  * is watching. All session-protocol semantics (id kinds, task identity,
- * launch mechanics) live in [SessionRepository] — this ViewModel only holds
+ * launch mechanics) live behind [AgentTasks] — this ViewModel only holds
  * screen state (Milestone A, پیمان ۵).
  */
 @HiltViewModel
 class TasksViewModel @Inject constructor(
-    private val repository: SessionRepository,
+    private val repository: AgentTasks,
     gatewayClient: GatewayClient,
 ) : ViewModel() {
 
     data class TasksUiState(
-        val tasks: List<SessionRepository.TaskRow> = emptyList(),
-        val history: List<SessionRepository.TaskHistoryRow> = emptyList(),
+        val tasks: List<TaskRow> = emptyList(),
+        val history: List<TaskHistoryRow> = emptyList(),
         val isLoading: Boolean = false,
         val isLoadingHistory: Boolean = false,
         val isLaunching: Boolean = false,
@@ -42,15 +47,15 @@ class TasksViewModel @Inject constructor(
         val openResult: ResultSheet? = null,
         val isLoadingResult: Boolean = false,
         /** Models available for the per-task picker (loaded lazily). */
-        val models: List<SessionRepository.ModelChoice> = emptyList(),
+        val models: List<ModelChoice> = emptyList(),
         /** Process-wide subagent spawn control (delegation.status/pause). */
-        val delegation: SessionRepository.DelegationStatus? = null,
+        val delegation: DelegationStatus? = null,
     )
 
     data class ResultSheet(
         val sessionId: String,
         val title: String,
-        val entries: List<SessionRepository.TranscriptEntry>,
+        val entries: List<TranscriptEntry>,
     )
 
     private val _uiState = MutableStateFlow(TasksUiState())
@@ -167,7 +172,7 @@ class TasksViewModel @Inject constructor(
         title: String,
         prompt: String,
         reasoningEffort: String? = null,
-        model: SessionRepository.ModelChoice? = null,
+        model: ModelChoice? = null,
         onLaunched: (String) -> Unit = {},
     ) {
         if (prompt.isBlank()) return

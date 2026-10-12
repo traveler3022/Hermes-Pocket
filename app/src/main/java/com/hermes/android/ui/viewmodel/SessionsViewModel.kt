@@ -1,10 +1,10 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.deleteStoredSession
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -45,7 +45,7 @@ sealed interface SessionsEffect {
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
-    private val sessionRepository: SessionRepository,
+    private val sessionRepository: ChatSessions,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 

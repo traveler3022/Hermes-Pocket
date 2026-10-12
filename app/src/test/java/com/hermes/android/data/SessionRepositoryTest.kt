@@ -1,5 +1,8 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.session.AttachedSession
+import com.hermes.android.domain.session.ModelChoice
+import com.hermes.android.domain.session.SteerResult
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
@@ -284,7 +287,7 @@ class SessionRepositoryTest {
         repo.launchTask(
             "deep", "analyze logs",
             reasoningEffort = "high",
-            model = SessionRepository.ModelChoice(provider = "anthropic", modelId = "claude-x"),
+            model = ModelChoice(provider = "anthropic", modelId = "claude-x"),
         )
         val create = gateway.calls.first { it.method == GatewayMethods.SESSION_CREATE }
         assertEquals("high", create.params.str("reasoning_effort"))
@@ -317,8 +320,8 @@ class SessionRepositoryTest {
         }
         val models = repo.availableModels()
         assertEquals(3, models.size)
-        assertEquals(SessionRepository.ModelChoice("anthropic", "claude-x"), models[0])
-        assertEquals(SessionRepository.ModelChoice("openai", "gpt-z"), models[2])
+        assertEquals(ModelChoice("anthropic", "claude-x"), models[0])
+        assertEquals(ModelChoice("openai", "gpt-z"), models[2])
     }
 
     @Test
@@ -431,7 +434,7 @@ class SessionRepositoryTest {
 
     @Test
     fun `onLiveSession passes a healthy live id straight through`() = runTest {
-        var rebound: SessionRepository.AttachedSession? = null
+        var rebound: AttachedSession? = null
         val result = repo.onLiveSession("live1", "stored1", { rebound = it }) { live -> "ok:$live" }
         assertEquals("ok:live1", result)
         assertEquals(null, rebound)
@@ -445,7 +448,7 @@ class SessionRepositoryTest {
             buildJsonObject { put("session_id", "live2"); put("session_key", "stored1") }
         }
         val tried = mutableListOf<String>()
-        var rebound: SessionRepository.AttachedSession? = null
+        var rebound: AttachedSession? = null
         val result = repo.onLiveSession("live1", "stored1", { rebound = it }) { live ->
             tried += live
             if (live == "live1") throw GatewayException("RPC error 4001: session not found")
@@ -536,7 +539,7 @@ class SessionRepositoryTest {
     @Test
     fun `steer reports a refusal with the server's note`() = runTest {
         gateway.handler = { _, _ -> buildJsonObject { put("status", "rejected"); put("text", "not now") } }
-        assertEquals(SessionRepository.SteerResult(accepted = false, note = "not now"), repo.steer("live1", "go left"))
+        assertEquals(SteerResult(accepted = false, note = "not now"), repo.steer("live1", "go left"))
         assertEquals("go left", gateway.calls.single().params.str("text"))
 
         gateway.handler = { _, _ -> buildJsonObject { put("status", "queued") } }

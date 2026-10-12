@@ -1,6 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.ChatSessions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -13,7 +13,7 @@ import java.util.UUID
  * resend it with the stored chat cut before it), and deleting from a message on.
  */
 internal class ChatRewindDelegate(
-    private val sessionRepository: SessionRepository,
+    private val sessionRepository: ChatSessions,
     private val sessionDelegate: ChatSessionDelegate,
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatUiState>,

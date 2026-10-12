@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import com.hermes.android.domain.session.TaskHistoryRow
+import com.hermes.android.domain.session.TaskRow
 import com.hermes.android.ui.icons.filled.Stop
 import com.hermes.android.ui.icons.filled.WorkOutline
 import androidx.compose.material3.AlertDialog
@@ -53,7 +55,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.SessionRepository
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
@@ -193,10 +194,10 @@ fun TasksScreen(
 @Composable
 private fun LiveTab(
     uiState: TasksViewModel.TasksUiState,
-    onOpenResult: (SessionRepository.TaskRow) -> Unit,
-    onOpenInChat: (SessionRepository.TaskRow) -> Unit,
-    onInterrupt: (SessionRepository.TaskRow) -> Unit,
-    onClose: (SessionRepository.TaskRow) -> Unit,
+    onOpenResult: (TaskRow) -> Unit,
+    onOpenInChat: (TaskRow) -> Unit,
+    onInterrupt: (TaskRow) -> Unit,
+    onClose: (TaskRow) -> Unit,
     onStart: () -> Unit,
 ) {
     when {
@@ -227,8 +228,8 @@ private fun LiveTab(
 @Composable
 private fun HistoryTab(
     uiState: TasksViewModel.TasksUiState,
-    onOpenResult: (SessionRepository.TaskHistoryRow) -> Unit,
-    onOpenInChat: (SessionRepository.TaskHistoryRow) -> Unit,
+    onOpenResult: (TaskHistoryRow) -> Unit,
+    onOpenInChat: (TaskHistoryRow) -> Unit,
 ) {
     when {
         uiState.isLoadingHistory && uiState.history.isEmpty() -> LoadingBox()

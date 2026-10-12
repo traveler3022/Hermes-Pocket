@@ -1,5 +1,24 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.session.AgentTasks
+import com.hermes.android.domain.session.AttachedSession
+import com.hermes.android.domain.session.ChatSessions
+import com.hermes.android.domain.session.Checkpoint
+import com.hermes.android.domain.session.CheckpointDiff
+import com.hermes.android.domain.session.CompressionResult
+import com.hermes.android.domain.session.ContextBreakdown
+import com.hermes.android.domain.session.ContextCategory
+import com.hermes.android.domain.session.DelegationStatus
+import com.hermes.android.domain.session.ModelChoice
+import com.hermes.android.domain.session.RestoreResult
+import com.hermes.android.domain.session.SessionCheckpoints
+import com.hermes.android.domain.session.SessionContext
+import com.hermes.android.domain.session.SteerResult
+import com.hermes.android.domain.session.StoredMessages
+import com.hermes.android.domain.session.SubagentRow
+import com.hermes.android.domain.session.TaskHistoryRow
+import com.hermes.android.domain.session.TaskRow
+import com.hermes.android.domain.session.TranscriptEntry
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -45,27 +64,9 @@ import kotlinx.serialization.json.contentOrNull
 class SessionRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val taskRegistry: TaskRegistry,
-) {
+) : ChatSessions, AgentTasks, SessionContext, SessionCheckpoints {
 
     // ── Attach (resume/activate semantics) ────────────────────────────────
-
-    /**
-     * A session the client is attached to: [liveId] is what every subsequent
-     * RPC/event speaks; [raw] is the full server payload (messages included)
-     * for the transcript parser.
-     */
-    data class AttachedSession(
-        val liveId: String,
-        val raw: JsonObject,
-    ) {
-        /** The stored id the server bound [liveId] to, when the payload names it. */
-        val storedId: String?
-            get() = (raw["stored_session_id"] ?: raw["session_key"])
-                .let { it as? kotlinx.serialization.json.JsonPrimitive }
-                ?.takeIf { it.isString }
-                ?.content
-                ?.takeIf { it.isNotBlank() }
-    }
 
     /**
      * Attach to a session given EITHER id kind.
@@ -78,10 +79,10 @@ class SessionRepository @Inject constructor(
      * Callers attaching a chat that is not the one on screen pass
      * [trackSession] false, so a reconnect does not resume that chat instead.
      */
-    suspend fun attach(
+    override suspend fun attach(
         sessionId: String,
-        preferLive: Boolean = false,
-        trackSession: Boolean = true,
+        preferLive: Boolean,
+        trackSession: Boolean,
     ): AttachedSession {
         val first = if (preferLive) GatewayMethods.SESSION_ACTIVATE else GatewayMethods.SESSION_RESUME
         val second = if (preferLive) GatewayMethods.SESSION_RESUME else GatewayMethods.SESSION_ACTIVATE
@@ -108,7 +109,7 @@ class SessionRepository @Inject constructor(
      * rejected before it ran, so the retry cannot duplicate it. [onRebound]
      * sees the new attachment before the retry goes out.
      */
-    suspend fun <T> onLiveSession(
+    override suspend fun <T> onLiveSession(
         liveId: String,
         storedId: String?,
         onRebound: (AttachedSession) -> Unit,
@@ -131,14 +132,14 @@ class SessionRepository @Inject constructor(
     // ── Chats ──────────────────────────────────────────────────────────────
 
     /** The STORED id of the chat the server used last, or null when it has none. */
-    suspend fun mostRecentId(): String? =
+    override suspend fun mostRecentId(): String? =
         (gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT) as? JsonObject)?.get("session_id").sessionIdOrNull()
 
     /**
      * A new chat, working in [cwd] when given. Filed under [SessionSource.CHAT], so the model
      * knows it can hand over files. Null when the server named no session.
      */
-    suspend fun createChat(cwd: String? = null): AttachedSession? {
+    override suspend fun createChat(cwd: String?): AttachedSession? {
         val params = buildJsonObject {
             cwd?.let { put("cwd", it) }
             put("source", SessionSource.CHAT)
@@ -152,7 +153,7 @@ class SessionRepository @Inject constructor(
      * Lend [block] a throwaway session, closed after: some writes need a session, and a fresh
      * install has none (a sessionless model set answers 4001).
      */
-    suspend fun <T> withScratchSession(block: suspend (liveId: String) -> T): T {
+    override suspend fun <T> withScratchSession(block: suspend (liveId: String) -> T): T {
         val created = gatewayClient.request(GatewayMethods.SESSION_CREATE) as? JsonObject
         val liveId = created?.get("session_id").sessionIdOrNull()
             ?: throw GatewayException("session.create returned no session_id")
@@ -170,17 +171,17 @@ class SessionRepository @Inject constructor(
     }
 
     /** The server's stored chats, as session.list sends them. */
-    suspend fun storedChats(): JsonElement = gatewayClient.request(GatewayMethods.SESSION_LIST)
+    override suspend fun storedChats(): JsonElement = gatewayClient.request(GatewayMethods.SESSION_LIST)
 
     /** The transcript of a LIVE session as the server stores it, row ids included. */
-    suspend fun history(liveId: String): JsonElement =
+    override suspend fun history(liveId: String): JsonElement =
         gatewayClient.request(
             GatewayMethods.SESSION_HISTORY,
             buildJsonObject { put("session_id", liveId) }.toElementMap(),
         )
 
     /** A new chat that goes on from a copy of [liveId]'s; its id, or null when none came back. */
-    suspend fun branch(liveId: String): String? =
+    override suspend fun branch(liveId: String): String? =
         (gatewayClient.request(
             GatewayMethods.SESSION_BRANCH,
             buildJsonObject { put("session_id", liveId) }.toElementMap(),
@@ -190,18 +191,15 @@ class SessionRepository @Inject constructor(
      * Token use of a LIVE session ({calls, input, output, total, credits_lines}); the counters
      * are the live agent's, so a chat resumed just now has none.
      */
-    suspend fun usage(liveId: String): JsonObject? =
+    override suspend fun usage(liveId: String): JsonObject? =
         gatewayClient.request(
             GatewayMethods.SESSION_USAGE,
             buildJsonObject { put("session_id", liveId) }.toElementMap(),
             trackSession = false,
         ) as? JsonObject
 
-    /** What session.steer made of a message sent mid-turn: taken, or refused with the server's [note]. */
-    data class SteerResult(val accepted: Boolean, val note: String?)
-
     /** Hands [text] to the turn running in [liveId]. A live-only method: a stored id answers 4001. */
-    suspend fun steer(liveId: String, text: String): SteerResult {
+    override suspend fun steer(liveId: String, text: String): SteerResult {
         val result = gatewayClient.request(
             GatewayMethods.SESSION_STEER,
             buildJsonObject {
@@ -220,7 +218,7 @@ class SessionRepository @Inject constructor(
      * process.stop: that is the registry's kill_all, and stopping one chat killed the others'
      * work. process.list/process.kill are scoped to the session.
      */
-    suspend fun stopTurn(liveId: String) {
+    override suspend fun stopTurn(liveId: String) {
         try {
             gatewayClient.request(
                 GatewayMethods.SESSION_INTERRUPT,
@@ -260,45 +258,12 @@ class SessionRepository @Inject constructor(
 
     // ── Tasks (delegation) ─────────────────────────────────────────────────
 
-    data class TaskRow(
-        val id: String,
-        val sessionKey: String,
-        val title: String,
-        val status: String,
-        val preview: String,
-        val model: String,
-        val messageCount: Int,
-        val lastActive: Double,
-    ) {
-        val isRunning: Boolean get() = com.hermes.android.gateway.GatewayEventHelpers.isBusySessionStatus(status)
-    }
-
-    /** A finished/idle task from the server's session store (history tab). */
-    data class TaskHistoryRow(
-        val id: String,
-        val title: String,
-        val preview: String,
-        val messageCount: Int,
-    )
-
-    /** One transcript line for the result sheet. */
-    data class TranscriptEntry(
-        val role: String,
-        val text: String,
-    )
-
-    /** A selectable model for a new task (provider slug + model id). */
-    data class ModelChoice(
-        val provider: String,
-        val modelId: String,
-    )
-
     /**
      * Flat list of available models across authenticated providers, for the
      * per-task model picker. Shape mirrors ConfigViewModel.parseModelOptions
      * (build_models_payload → {providers:[{slug, models:[str]}]}).
      */
-    suspend fun availableModels(): List<ModelChoice> {
+    override suspend fun availableModels(): List<ModelChoice> {
         val result = gatewayClient.request(GatewayMethods.MODEL_OPTIONS)
         val providers = ((result as? JsonObject)?.get("providers") as? JsonArray) ?: return emptyList()
         return providers.mapNotNull { it as? JsonObject }.flatMap { p ->
@@ -317,11 +282,11 @@ class SessionRepository @Inject constructor(
      * (that belongs to the user's chat). [reasoningEffort] is a per-session
      * override (none/minimal/low/medium/high/xhigh); blank leaves the default.
      */
-    suspend fun launchTask(
+    override suspend fun launchTask(
         title: String,
         prompt: String,
-        reasoningEffort: String? = null,
-        model: ModelChoice? = null,
+        reasoningEffort: String?,
+        model: ModelChoice?,
     ): String {
         val createParams = buildJsonObject {
             val cleanTitle = title.trim()
@@ -353,7 +318,7 @@ class SessionRepository @Inject constructor(
     }
 
     /** Live sessions that belong to the Task Desk (registry-filtered). */
-    suspend fun activeTasks(): List<TaskRow> {
+    override suspend fun activeTasks(): List<TaskRow> {
         val result = gatewayClient.request(GatewayMethods.SESSION_ACTIVE_LIST)
         val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
             ?.mapNotNull { it as? JsonObject } ?: return emptyList()
@@ -381,7 +346,7 @@ class SessionRepository @Inject constructor(
      * source AND the local registry (a shared server could hold pocket_task
      * rows this device never created). Newest first.
      */
-    suspend fun taskHistory(): List<TaskHistoryRow> {
+    override suspend fun taskHistory(): List<TaskHistoryRow> {
         val result = gatewayClient.request(GatewayMethods.SESSION_LIST)
         val rows = ((result as? JsonObject)?.get("sessions") as? JsonArray)
             ?.mapNotNull { it as? JsonObject } ?: return emptyList()
@@ -404,7 +369,7 @@ class SessionRepository @Inject constructor(
      * lazily rebuilds a reaped session from its db row), so it works for both
      * live and finished tasks.
      */
-    suspend fun transcript(sessionId: String): List<TranscriptEntry> {
+    override suspend fun transcript(sessionId: String): List<TranscriptEntry> {
         val messages = storedMessages(sessionId).messages ?: return emptyList()
         return messages.mapNotNull { it as? JsonObject }.mapNotNull { m ->
             val role = m.str("role").ifEmpty { return@mapNotNull null }
@@ -413,9 +378,6 @@ class SessionRepository @Inject constructor(
         }
     }
 
-    /** A chat's raw history rows, and the live id they were read through. */
-    data class StoredMessages(val liveId: String, val messages: JsonArray?)
-
     /**
      * Raw history rows of a chat that is not on screen, by either id kind.
      * `session.history` only takes live ids and list rows carry stored ones,
@@ -423,7 +385,7 @@ class SessionRepository @Inject constructor(
      * messages itself. Not tracked: looking at a chat must not make a
      * reconnect resume it in place of the open one.
      */
-    suspend fun storedMessages(sessionId: String): StoredMessages {
+    override suspend fun storedMessages(sessionId: String): StoredMessages {
         val attached = attach(sessionId, trackSession = false)
         val messages = attached.raw["messages"] as? JsonArray
             ?: run {
@@ -442,7 +404,7 @@ class SessionRepository @Inject constructor(
      * (a stored id answers 4001), and the drawer and Sessions list hold
      * stored ones. Resume reuses the chat's live session when it has one.
      */
-    suspend fun rename(sessionId: String, title: String) {
+    override suspend fun rename(sessionId: String, title: String) {
         val liveId = attach(sessionId, trackSession = false).liveId
         gatewayClient.request(
             GatewayMethods.SESSION_TITLE,
@@ -460,7 +422,7 @@ class SessionRepository @Inject constructor(
      * Cross-references session.list (persistent; survives session reaping)
      * against the live running set so a task mid-turn is never reported done.
      */
-    suspend fun finishedTasks(): List<TaskHistoryRow> {
+    override suspend fun finishedTasks(): List<TaskHistoryRow> {
         // active_list rows are keyed by live id, session.list rows by stored
         // id; a running task has to be recognized under either.
         val running = activeTasks().filter { it.isRunning }
@@ -470,7 +432,7 @@ class SessionRepository @Inject constructor(
         return taskHistory().filter { it.id !in running && it.messageCount > 0 }
     }
 
-    suspend fun interrupt(liveId: String) {
+    override suspend fun interrupt(liveId: String) {
         gatewayClient.request(
             GatewayMethods.SESSION_INTERRUPT,
             buildJsonObject { put("session_id", liveId) }.toElementMap(),
@@ -478,7 +440,7 @@ class SessionRepository @Inject constructor(
     }
 
     /** Tears the live worker down; the transcript stays in the server store. */
-    suspend fun closeSession(liveId: String) {
+    override suspend fun closeSession(liveId: String) {
         gatewayClient.request(
             GatewayMethods.SESSION_CLOSE,
             buildJsonObject { put("session_id", liveId) }.toElementMap(),
@@ -491,7 +453,7 @@ class SessionRepository @Inject constructor(
      * The effort the given live session actually runs at (server prefers the
      * session's live reasoning_config over the global config.yaml default).
      */
-    suspend fun reasoningLevel(liveSessionId: String?): String {
+    override suspend fun reasoningLevel(liveSessionId: String?): String {
         val params = buildJsonObject {
             put("key", "reasoning")
             liveSessionId?.let { put("session_id", it) }
@@ -505,10 +467,10 @@ class SessionRepository @Inject constructor(
      * [persistGlobal], a best-effort global write so the choice survives new
      * chats and app restarts — the session write alone dies with the session.
      */
-    suspend fun setReasoningLevel(
+    override suspend fun setReasoningLevel(
         rawLevel: String,
         liveSessionId: String?,
-        persistGlobal: Boolean = true,
+        persistGlobal: Boolean,
     ): String {
         val level = rawLevel.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
         val params = buildJsonObject {
@@ -535,23 +497,7 @@ class SessionRepository @Inject constructor(
 
     // ── Delegation control (subagent spawning, process-wide not per-session) ─
 
-    data class SubagentRow(
-        val subagentId: String,
-        val goal: String,
-        val model: String,
-        val depth: Int,
-        val toolCount: Int,
-        val status: String,
-    )
-
-    data class DelegationStatus(
-        val active: List<SubagentRow>,
-        val paused: Boolean,
-        val maxSpawnDepth: Int,
-        val maxConcurrentChildren: Int,
-    )
-
-    suspend fun delegationStatus(): DelegationStatus {
+    override suspend fun delegationStatus(): DelegationStatus {
         val result = gatewayClient.request(GatewayMethods.DELEGATION_STATUS) as? JsonObject
             ?: return DelegationStatus(emptyList(), false, 0, 0)
         val rows = (result["active"] as? JsonArray)
@@ -575,7 +521,7 @@ class SessionRepository @Inject constructor(
     }
 
     /** Returns the new paused state. */
-    suspend fun setDelegationPaused(paused: Boolean): Boolean {
+    override suspend fun setDelegationPaused(paused: Boolean): Boolean {
         val result = gatewayClient.request(
             GatewayMethods.DELEGATION_PAUSE,
             buildJsonObject { put("paused", paused) }.toElementMap(),
@@ -585,18 +531,8 @@ class SessionRepository @Inject constructor(
 
     // ── Context window (breakdown + manual compression) ────────────────────
 
-    data class ContextCategory(val id: String, val label: String, val tokens: Int)
-
-    data class ContextBreakdown(
-        val categories: List<ContextCategory>,
-        val used: Int,
-        val max: Int,
-        val percent: Int,
-        val model: String,
-    )
-
     /** What is filling this LIVE session's context window, largest first. */
-    suspend fun contextBreakdown(liveSessionId: String): ContextBreakdown {
+    override suspend fun contextBreakdown(liveSessionId: String): ContextBreakdown {
         val result = gatewayClient.request(
             GatewayMethods.SESSION_CONTEXT_BREAKDOWN,
             buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
@@ -615,24 +551,11 @@ class SessionRepository @Inject constructor(
     }
 
     /**
-     * Outcome of a manual compress. The server answers in several shapes: a
-     * finished local run, an "still running" ack from a compute host, and a
-     * skip when another compressor holds the lock.
-     */
-    data class CompressionResult(
-        val status: String,
-        val beforeTokens: Int,
-        val afterTokens: Int,
-        val removedMessages: Int,
-        val message: String,
-    )
-
-    /**
      * Compress a LIVE session's history. [focusTopic] tells the summarizer what
      * to preserve. The server refuses with 4009 while a turn is running, so the
      * caller has to interrupt first.
      */
-    suspend fun compressSession(liveSessionId: String, focusTopic: String = ""): CompressionResult {
+    override suspend fun compressSession(liveSessionId: String, focusTopic: String): CompressionResult {
         val result = gatewayClient.request(
             GatewayMethods.SESSION_COMPRESS,
             buildJsonObject {
@@ -655,12 +578,8 @@ class SessionRepository @Inject constructor(
 
     // ── Rollback / undo (git-checkpoint diff + restore) ────────────────────
 
-    data class Checkpoint(val hash: String, val timestamp: String, val message: String)
-    data class CheckpointDiff(val stat: String, val diff: String, val rendered: String?)
-    data class RestoreResult(val success: Boolean, val historyRemoved: Int)
-
     /** Checkpoints for a LIVE session's cwd; empty when rollback tracking is off. */
-    suspend fun checkpoints(liveSessionId: String): List<Checkpoint> {
+    override suspend fun checkpoints(liveSessionId: String): List<Checkpoint> {
         val result = gatewayClient.request(
             GatewayMethods.ROLLBACK_LIST,
             buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),
@@ -672,7 +591,7 @@ class SessionRepository @Inject constructor(
         }
     }
 
-    suspend fun checkpointDiff(liveSessionId: String, hash: String): CheckpointDiff {
+    override suspend fun checkpointDiff(liveSessionId: String, hash: String): CheckpointDiff {
         val result = gatewayClient.request(
             GatewayMethods.ROLLBACK_DIFF,
             buildJsonObject {
@@ -684,7 +603,7 @@ class SessionRepository @Inject constructor(
     }
 
     /** [filePath] null = full-session restore (rejected server-side mid-turn). */
-    suspend fun restoreCheckpoint(liveSessionId: String, hash: String, filePath: String? = null): RestoreResult {
+    override suspend fun restoreCheckpoint(liveSessionId: String, hash: String, filePath: String?): RestoreResult {
         val result = gatewayClient.request(
             GatewayMethods.ROLLBACK_RESTORE,
             buildJsonObject {
@@ -700,7 +619,7 @@ class SessionRepository @Inject constructor(
     }
 
     /** Pops the last user+assistant/tool turn from a LIVE session. Returns count removed. */
-    suspend fun undoLastTurn(liveSessionId: String): Int {
+    override suspend fun undoLastTurn(liveSessionId: String): Int {
         val result = gatewayClient.request(
             GatewayMethods.SESSION_UNDO,
             buildJsonObject { put("session_id", liveSessionId) }.toElementMap(),

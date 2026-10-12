@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.hermes.android.domain.session.ContextBreakdown
+import com.hermes.android.domain.session.ContextCategory
 import com.hermes.android.ui.icons.filled.Compress
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,7 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.SessionRepository
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ContextViewModel
@@ -150,7 +151,7 @@ private fun ContextLoadingRow() {
 }
 
 @Composable
-private fun ContextUsageHeader(breakdown: SessionRepository.ContextBreakdown) {
+private fun ContextUsageHeader(breakdown: ContextBreakdown) {
     Column(verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -187,7 +188,7 @@ private fun ContextUsageHeader(breakdown: SessionRepository.ContextBreakdown) {
 }
 
 @Composable
-private fun ContextCategoryRow(category: SessionRepository.ContextCategory, total: Int) {
+private fun ContextCategoryRow(category: ContextCategory, total: Int) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

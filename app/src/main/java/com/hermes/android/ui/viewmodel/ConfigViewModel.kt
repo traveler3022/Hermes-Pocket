@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayException
@@ -44,7 +45,7 @@ import kotlinx.serialization.json.contentOrNull
 @HiltViewModel
 class ConfigViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
-    private val sessionRepository: com.hermes.android.data.SessionRepository,
+    private val sessionRepository: ChatSessions,
     private val modelSwitcher: ModelSwitcher,
     private val connectionJournal: com.hermes.android.diagnostics.ConnectionJournal,
     @ApplicationContext private val context: Context,

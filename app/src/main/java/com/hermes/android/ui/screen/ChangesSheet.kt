@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.domain.session.CheckpointDiff
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HxRadius
@@ -144,7 +145,7 @@ fun ChangesSheet(
 
 @Composable
 private fun DiffView(
-    diff: com.hermes.android.data.SessionRepository.CheckpointDiff,
+    diff: com.hermes.android.data.CheckpointDiff,
     hash: String,
     isRestoring: Boolean,
     onBack: () -> Unit,

@@ -2,7 +2,9 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.CompressionResult
+import com.hermes.android.domain.session.ContextBreakdown
+import com.hermes.android.domain.session.SessionContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,11 +19,11 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ContextViewModel @Inject constructor(
-    private val repository: SessionRepository,
+    private val repository: SessionContext,
 ) : ViewModel() {
 
     data class ContextUiState(
-        val breakdown: SessionRepository.ContextBreakdown? = null,
+        val breakdown: ContextBreakdown? = null,
         val isLoading: Boolean = false,
         val isCompressing: Boolean = false,
         val focusTopic: String = "",
@@ -84,7 +86,7 @@ class ContextViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(lastActionMessage = null)
     }
 
-    private fun describe(result: SessionRepository.CompressionResult): String = when (result.status) {
+    private fun describe(result: CompressionResult): String = when (result.status) {
         "compressed" -> {
             val saved = result.beforeTokens - result.afterTokens
             if (saved > 0) {

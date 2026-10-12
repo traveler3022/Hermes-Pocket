@@ -2,7 +2,9 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.Checkpoint
+import com.hermes.android.domain.session.CheckpointDiff
+import com.hermes.android.domain.session.SessionCheckpoints
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,14 +20,14 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ChangesViewModel @Inject constructor(
-    private val repository: SessionRepository,
+    private val repository: SessionCheckpoints,
 ) : ViewModel() {
 
     data class ChangesUiState(
-        val checkpoints: List<SessionRepository.Checkpoint> = emptyList(),
+        val checkpoints: List<Checkpoint> = emptyList(),
         val isLoading: Boolean = false,
         val selectedHash: String? = null,
-        val selectedDiff: SessionRepository.CheckpointDiff? = null,
+        val selectedDiff: CheckpointDiff? = null,
         val isLoadingDiff: Boolean = false,
         val isRestoring: Boolean = false,
         val error: String? = null,

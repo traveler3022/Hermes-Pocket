@@ -3,7 +3,7 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.ProjectsRepository
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.ChatSessions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +15,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
     private val repository: ProjectsRepository,
-    private val sessionRepository: SessionRepository,
+    private val sessionRepository: ChatSessions,
 ) : ViewModel() {
 
     data class ProjectsUiState(

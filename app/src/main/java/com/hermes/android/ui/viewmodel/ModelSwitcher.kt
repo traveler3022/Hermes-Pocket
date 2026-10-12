@@ -1,6 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.SessionRepository
+import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -48,7 +48,7 @@ data class ModelCatalog(
 /** Hermes model RPCs shared by Settings and the chat's model sheet. */
 class ModelSwitcher @Inject constructor(
     private val gatewayClient: GatewayClient,
-    private val sessionRepository: SessionRepository,
+    private val sessionRepository: ChatSessions,
 ) {
 
     /** [liveSessionId]: an open chat — the gateway then reports THAT session's model, else config.yaml's default. */

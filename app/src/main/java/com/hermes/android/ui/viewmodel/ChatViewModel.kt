@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
@@ -42,7 +43,7 @@ import kotlinx.serialization.json.contentOrNull
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
-    private val sessionRepository: com.hermes.android.data.SessionRepository,
+    private val sessionRepository: ChatSessions,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
     private val approvalNotificationManager: ApprovalNotificationManager,
     private val foregroundState: com.hermes.android.service.AppForegroundState,
