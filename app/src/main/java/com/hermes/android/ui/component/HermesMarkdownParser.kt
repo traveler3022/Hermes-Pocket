@@ -9,9 +9,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.em
 
 /**
  * Block model + parser behind [HermesMarkdown].
@@ -24,12 +26,24 @@ internal sealed class MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock()
     data class Code(val language: String, val code: String) : MdBlock()
     data class Quote(val depth: Int, val text: String) : MdBlock()
+    /**
+     * [text] is the item's first paragraph; [children] are the blocks indented under it
+     * after a blank line (a second paragraph, a quote, a table). Nested items are not
+     * children: they stay items of their own with a larger [depth].
+     */
     data class ListItem(
         val depth: Int,
         val ordinal: Int?,
         val checked: Boolean?,
         val text: String,
+        val children: List<MdBlock> = emptyList(),
     ) : MdBlock()
+
+    /** `Term` on one line and `: definition` on each line under it. */
+    data class Definition(val term: String, val definitions: List<String>) : MdBlock()
+
+    /** `[^label]: text`. Parsed where it stands; [HermesMarkdown] moves them all to the end. */
+    data class Footnote(val label: String, val text: String) : MdBlock()
     data class Table(val rows: List<List<String>>, val hasHeader: Boolean) : MdBlock()
     data class Para(val text: String) : MdBlock()
     data object Rule : MdBlock()
@@ -39,6 +53,8 @@ internal data class InlineStyle(
     val linkColor: Color,
     val codeBg: Color,
     val onCodeBg: Color,
+    /** Background of `==highlighted==` text. */
+    val markBg: Color = codeBg,
 )
 
 /**
@@ -84,15 +100,29 @@ internal class IncrementalMdParser {
     private fun lastStableBoundary(source: String, from: Int): Int {
         var fences = 0
         var lastBlank = from
+        var pendingBlank = -1
         var i = from
         while (i < source.length) {
             val end = source.indexOf('\n', i).let { if (it < 0) source.length else it }
-            val trimmed = source.substring(i, end).trimStart()
+            val line = source.substring(i, end)
+            val trimmed = line.trimStart()
+            if (fences % 2 == 0) {
+                if (trimmed.isEmpty()) {
+                    pendingBlank = (end + 1).coerceAtMost(source.length)
+                } else {
+                    // A blank line is a boundary only once the line after it is known to
+                    // start at the margin: an indented one may still belong to the list
+                    // item above, and a `: ` one makes the paragraph above a definition term.
+                    if (pendingBlank >= 0 && line.length == trimmed.length && !trimmed.startsWith(":")) {
+                        lastBlank = pendingBlank
+                    }
+                    pendingBlank = -1
+                }
+            }
             if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) fences++
-            if (trimmed.isEmpty() && fences % 2 == 0) lastBlank = (end + 1).coerceAtMost(source.length)
             i = end + 1
         }
-        // Keep the tail (everything after the last blank line) live.
+        // Keep the tail (everything after the last boundary) live.
         return if (fences % 2 == 0) lastBlank else from
     }
 }
@@ -103,6 +133,8 @@ private val numberRe = Regex("^(\\d{1,9})[.)]\\s+(.*)$")
 private val taskRe = Regex("^\\[([ xX])\\]\\s*(.*)$")
 private val ruleRe = Regex("^(?:\\s*[-*_]){3,}\\s*$")
 private val tableSepRe = Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
+private val footnoteDefRe = Regex("^\\[\\^([^\\]\\s]+)]:\\s*(.*)$")
+private val definitionRe = Regex("^:\\s+(.*)$")
 
 /** Nesting deeper than this is drawn at this depth, so an over-indented line cannot push text off screen. */
 private const val MaxListDepth = 6
@@ -127,6 +159,8 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
         val heading = headingRe.matchEntire(trimmed)
         val bullet = bulletRe.matchEntire(trimmed)
         val number = numberRe.matchEntire(trimmed)
+        val footnote = footnoteDefRe.matchEntire(trimmed)
+        val definition = definitionRe.matchEntire(trimmed)?.groupValues?.get(1)
 
         when {
             trimmed.startsWith("```") || trimmed.startsWith("~~~") -> {
@@ -184,27 +218,67 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
                 flush()
                 val body = bullet.groupValues[2]
                 val task = taskRe.matchEntire(body)
+                val item = listItemBody(lines, i, task?.groupValues?.get(2) ?: body, indent)
                 out.add(
                     MdBlock.ListItem(
                         depth = (indent / 2).coerceAtMost(MaxListDepth),
                         ordinal = null,
                         checked = task?.let { it.groupValues[1].lowercase() == "x" },
-                        text = task?.groupValues?.get(2) ?: body,
+                        text = item.text,
+                        children = item.children,
                     ),
                 )
-                i++
+                i = item.next
             }
 
             number != null -> {
                 flush()
+                val item = listItemBody(lines, i, number.groupValues[2], indent)
                 out.add(
                     MdBlock.ListItem(
                         depth = (indent / 2).coerceAtMost(MaxListDepth),
                         ordinal = number.groupValues[1].toIntOrNull() ?: 1,
                         checked = null,
-                        text = number.groupValues[2],
+                        text = item.text,
+                        children = item.children,
                     ),
                 )
+                i = item.next
+            }
+
+            footnote != null -> {
+                flush()
+                val text = StringBuilder(footnote.groupValues[2])
+                i++
+                // Indented lines right under it continue the note.
+                while (i < lines.size && lines[i].startsWith("  ") && lines[i].isNotBlank()) {
+                    text.append('\n').append(lines[i].trim())
+                    i++
+                }
+                out.add(MdBlock.Footnote(footnote.groupValues[1], text.toString()))
+            }
+
+            // `: definition` under a term: the term is the paragraph line right above,
+            // or, after a blank line, the last line of the paragraph before it.
+            definition != null && (para.isNotBlank() || out.lastOrNull().isTermHolder()) -> {
+                val last = out.lastOrNull()
+                when {
+                    para.isNotBlank() -> {
+                        val held = para.toString().trim()
+                        para.setLength(0)
+                        val above = held.substringBeforeLast('\n', "")
+                        if (above.isNotBlank()) out.add(MdBlock.Para(above.trim()))
+                        out.add(MdBlock.Definition(held.substringAfterLast('\n').trim(), listOf(definition)))
+                    }
+                    last is MdBlock.Definition ->
+                        out[out.lastIndex] = last.copy(definitions = last.definitions + definition)
+                    last is MdBlock.Para -> {
+                        out.removeAt(out.lastIndex)
+                        val above = last.text.substringBeforeLast('\n', "")
+                        if (above.isNotBlank()) out.add(MdBlock.Para(above.trim()))
+                        out.add(MdBlock.Definition(last.text.substringAfterLast('\n').trim(), listOf(definition)))
+                    }
+                }
                 i++
             }
 
@@ -221,6 +295,59 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
     return out
 }
 
+private fun MdBlock?.isTermHolder(): Boolean = this is MdBlock.Para || this is MdBlock.Definition
+
+private fun isListLine(trimmed: String): Boolean = bulletRe.matches(trimmed) || numberRe.matches(trimmed)
+
+/** A line that starts a block of its own, so it cannot run on as part of a paragraph above it. */
+private fun opensBlock(trimmed: String): Boolean =
+    trimmed.startsWith("```") || trimmed.startsWith("~~~") || trimmed.startsWith(">") ||
+        trimmed.startsWith("|") || headingRe.matches(trimmed) || ruleRe.matches(trimmed) ||
+        isListLine(trimmed) || footnoteDefRe.matches(trimmed) || definitionRe.matches(trimmed)
+
+private class ListItemBody(val text: String, val children: List<MdBlock>, val next: Int)
+
+/**
+ * The lines that belong to the list item opened on line [start]. Lines right under it
+ * continue its first paragraph, indented or not ("lazy", as CommonMark has it). After
+ * a blank line, lines indented past the marker become blocks of their own inside the
+ * item: a second paragraph, a quote, a table. Any list line ends the item, so nested
+ * items keep being flat items with a depth, and a line back at the item's margin
+ * after a blank line ends it too.
+ */
+private fun listItemBody(lines: List<String>, start: Int, first: String, indent: Int): ListItemBody {
+    val text = StringBuilder(first)
+    val rest = ArrayList<String>()
+    val inner = indent + 2
+    var blanks = 0
+    var next = start + 1
+    var j = start + 1
+    while (j < lines.size) {
+        val line = lines[j]
+        val trimmed = line.trimStart()
+        if (trimmed.isEmpty()) {
+            blanks++
+            j++
+            continue
+        }
+        if (isListLine(trimmed)) break
+        val indented = line.length - trimmed.length >= inner
+        when {
+            blanks == 0 && rest.isEmpty() && !opensBlock(trimmed) -> text.append('\n').append(trimmed)
+            indented -> {
+                if (rest.isNotEmpty()) repeat(blanks) { rest.add("") }
+                rest.add(line.substring(inner))
+            }
+            blanks == 0 && !opensBlock(trimmed) -> rest.add(trimmed)
+            else -> break
+        }
+        blanks = 0
+        j++
+        next = j
+    }
+    return ListItemBody(text.toString(), parseMdBlocks(rest.joinToString("\n")), next)
+}
+
 private fun splitRow(line: String): List<String> =
     line.trim().trim('|').split('|').map { it.trim() }
 
@@ -230,7 +357,8 @@ private val autoLinkRe = Regex("""https?://[^\s<>"')\]]+""")
 
 /**
  * Inline markdown → [AnnotatedString]: escapes, code spans, bold, italic,
- * strikethrough, explicit links and bare URLs.
+ * strikethrough, `==highlight==`, `^superscript^`, `~subscript~`, `<kbd>keys</kbd>`,
+ * footnote references, explicit links and bare URLs.
  *
  * Links are [LinkAnnotation.Url]s inside the string rather than annotations
  * resolved by a tap handler, so opening them is the platform's job and the text
@@ -254,6 +382,25 @@ internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnota
             j = at + delim.length
         }
         return -1
+    }
+
+    // `^sup^` / `~sub~` (Pandoc's rule): one word, no spaces inside, so "~5 min" and
+    // "x^2 + y^2" without a closing mark stay as typed; `~/path` is never a subscript.
+    fun scriptEnd(start: Int): Int {
+        val mark = text[start]
+        val close = text.indexOf(mark, start + 1)
+        if (close <= start + 1) return -1
+        val content = text.substring(start + 1, close)
+        if (content.any { it.isWhitespace() } || content.none { it.isLetterOrDigit() }) return -1
+        if (mark == '~' && content.startsWith("/")) return -1
+        return close
+    }
+
+    fun footnoteRefEnd(start: Int): Int {
+        val close = text.indexOf(']', start + 2)
+        if (close <= start + 2) return -1
+        if (text.substring(start + 2, close).any { it.isWhitespace() }) return -1
+        return if (text.getOrNull(close + 1) == '(') -1 else close
     }
 
     fun link(url: String, label: String) {
@@ -322,6 +469,60 @@ internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnota
                     }
                     i = end + 2
                 } else { append(c); i++ }
+            }
+
+            text.startsWith("==", i) -> {
+                val end = emphasisEnd("==", i + 2)
+                val content = if (end > i + 2) text.substring(i + 2, end) else ""
+                // "====" under a title is a rule of equals signs, not an empty highlight.
+                if (content.isNotEmpty() && !content[0].isWhitespace() && content.any { it != '=' }) {
+                    withStyle(SpanStyle(background = s.markBg)) { append(content) }
+                    i = end + 2
+                } else { append(c); i++ }
+            }
+
+            c == '^' || c == '~' -> {
+                val end = scriptEnd(i)
+                if (end > i) {
+                    val shift = if (c == '^') BaselineShift.Superscript else BaselineShift.Subscript
+                    withStyle(SpanStyle(baselineShift = shift, fontSize = 0.75.em)) {
+                        append(text.substring(i + 1, end))
+                    }
+                    i = end + 1
+                } else { append(c); i++ }
+            }
+
+            c == '<' && text.startsWith("<kbd>", i, ignoreCase = true) -> {
+                val end = text.indexOf("</kbd>", i + 5, ignoreCase = true)
+                if (end > i + 5) {
+                    withStyle(
+                        SpanStyle(
+                            fontFamily = FontFamily.Monospace,
+                            background = s.codeBg,
+                            color = s.onCodeBg,
+                        ),
+                    ) {
+                        // Thin spaces pad the key so its background reads as a keycap.
+                        append('\u2009')
+                        append(text.substring(i + 5, end).trim())
+                        append('\u2009')
+                    }
+                    i = end + 6
+                } else { append(c); i++ }
+            }
+
+            // `[^1]`: a reference to a footnote, drawn as its raised label. `[^x](url)`
+            // is a link whose label starts with a caret, left to the branch below.
+            text.startsWith("[^", i) && footnoteRefEnd(i) > i -> {
+                val close = footnoteRefEnd(i)
+                withStyle(
+                    SpanStyle(
+                        baselineShift = BaselineShift.Superscript,
+                        fontSize = 0.75.em,
+                        color = s.linkColor,
+                    ),
+                ) { append(text.substring(i + 2, close)) }
+                i = close + 1
             }
 
             (c == '*' || c == '_') && canOpenEmphasis(text, i) -> {
