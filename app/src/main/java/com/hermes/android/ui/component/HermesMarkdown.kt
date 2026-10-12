@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,8 +65,9 @@ import com.hermes.android.ui.i18n.t
  * 4. **Inline correctness.** `snake_case_name` and `*.kt` are not emphasis;
  *    `\*` escapes work; `__bold__`, `***both***`, `~~strike~~` and bare URLs
  *    are supported.
- * 5. **Block coverage.** Nested lists (by indent), task lists, tables and
- *    thematic breaks render instead of leaking their raw syntax.
+ * 5. **Block coverage.** Nested lists (by indent), list items with more than
+ *    one paragraph, task lists, tables, definition lists, footnotes (drawn at
+ *    the end) and thematic breaks render instead of leaking their raw syntax.
  * 6. **Type scale.** Heading sizes derive from the caller's `style.fontSize`.
  *
  * Code/images/mermaid/html are already split out upstream by
@@ -84,7 +86,7 @@ fun HermesMarkdown(
     persianDigits: Boolean = t("en", "fa") == "fa",
 ) {
     val parser = remember { IncrementalMdParser() }
-    val blocks = remember(markdown) { parser.parse(markdown) }
+    val blocks = remember(markdown) { footnotesLast(parser.parse(markdown)) }
 
     // A caller may hand over a style with no colour, size or line height; give
     // every block a concrete one so the arithmetic below cannot hit "unspecified".
@@ -97,121 +99,213 @@ fun HermesMarkdown(
     )
 
     val codeBg = MaterialTheme.colorScheme.surfaceVariant
-    val onCode = MaterialTheme.colorScheme.onSurfaceVariant
-    val muted = textColor.copy(alpha = 0.72f)
-    val rule = MaterialTheme.colorScheme.outlineVariant
-    val inlineStyle = InlineStyle(linkColor, codeBg, onCode)
+    val theme = MdTheme(
+        body = body,
+        base = base,
+        codeBg = codeBg,
+        onCode = MaterialTheme.colorScheme.onSurfaceVariant,
+        muted = textColor.copy(alpha = 0.72f),
+        rule = MaterialTheme.colorScheme.outlineVariant,
+        linkColor = linkColor,
+        inlineStyle = InlineStyle(
+            linkColor = linkColor,
+            codeBg = codeBg,
+            onCodeBg = MaterialTheme.colorScheme.onSurfaceVariant,
+            markBg = MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+        persianDigits = persianDigits,
+    )
 
     Column(modifier) {
-        blocks.forEach { block ->
-            when (block) {
-                is MdBlock.Heading -> {
-                    val scale = when (block.level) {
-                        1 -> 1.45f
-                        2 -> 1.28f
-                        3 -> 1.14f
-                        else -> 1.04f
-                    }
-                    MdText(
-                        raw = block.text,
-                        style = body.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = base * scale,
-                            lineHeight = base * scale * 1.45f,
-                        ),
-                        inlineStyle = inlineStyle,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                top = if (block.level <= 2) 10.dp else 6.dp,
-                                bottom = 2.dp,
-                            ),
-                    )
-                }
-
-                is MdBlock.Code -> CodeBlock(block, body, base, codeBg, onCode, muted)
-
-                is MdBlock.Rule -> Spacer(
+        blocks.forEachIndexed { index, block ->
+            if (block is MdBlock.Footnote && blocks.getOrNull(index - 1) !is MdBlock.Footnote) {
+                // A short rule sets the notes off from the reply, as in print.
+                Spacer(
                     Modifier
-                        .padding(vertical = 10.dp)
-                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 6.dp)
+                        .width(72.dp)
                         .height(1.dp)
-                        .background(rule),
+                        .background(theme.rule),
                 )
+            }
+            MdBlockView(block, theme)
+        }
+    }
+}
 
-                is MdBlock.Quote -> BlockRow(block.text) {
-                    Row(
+/** Everything a block needs to draw itself, resolved once per [HermesMarkdown]. */
+@Immutable
+private class MdTheme(
+    val body: TextStyle,
+    val base: TextUnit,
+    val codeBg: Color,
+    val onCode: Color,
+    val muted: Color,
+    val rule: Color,
+    val linkColor: Color,
+    val inlineStyle: InlineStyle,
+    val persianDigits: Boolean,
+)
+
+/** Footnotes are parsed where they were written and drawn after everything else. */
+private fun footnotesLast(blocks: List<MdBlock>): List<MdBlock> {
+    if (blocks.none { it is MdBlock.Footnote }) return blocks
+    val (notes, rest) = blocks.partition { it is MdBlock.Footnote }
+    return rest + notes
+}
+
+@Composable
+private fun MdBlockView(block: MdBlock, theme: MdTheme) {
+    val body = theme.body
+    val base = theme.base
+    val muted = theme.muted
+    val linkColor = theme.linkColor
+    val inlineStyle = theme.inlineStyle
+    when (block) {
+        is MdBlock.Heading -> {
+            val scale = when (block.level) {
+                1 -> 1.45f
+                2 -> 1.28f
+                3 -> 1.14f
+                else -> 1.04f
+            }
+            MdText(
+                raw = block.text,
+                style = body.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = base * scale,
+                    lineHeight = base * scale * 1.45f,
+                ),
+                inlineStyle = inlineStyle,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = if (block.level <= 2) 10.dp else 6.dp,
+                        bottom = 2.dp,
+                    ),
+            )
+        }
+
+        is MdBlock.Code -> CodeBlock(block, body, base, theme.codeBg, theme.onCode, muted)
+
+        is MdBlock.Rule -> Spacer(
+            Modifier
+                .padding(vertical = 10.dp)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(theme.rule),
+        )
+
+        is MdBlock.Quote -> BlockRow(block.text) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+                    .height(IntrinsicSize.Min),
+            ) {
+                repeat(block.depth.coerceAtMost(MaxQuoteBars)) {
+                    Spacer(
                         Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp)
-                            .height(IntrinsicSize.Min),
-                    ) {
-                        repeat(block.depth.coerceAtMost(MaxQuoteBars)) {
-                            Spacer(
-                                Modifier
-                                    .width(3.dp)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(linkColor.copy(alpha = 0.45f)),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        MdText(
-                            raw = block.text,
-                            style = body.copy(color = muted, fontStyle = FontStyle.Italic),
-                            inlineStyle = inlineStyle,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                            .width(3.dp)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(linkColor.copy(alpha = 0.45f)),
+                    )
+                    Spacer(Modifier.width(8.dp))
                 }
+                MdText(
+                    raw = block.text,
+                    style = body.copy(color = muted, fontStyle = FontStyle.Italic),
+                    inlineStyle = inlineStyle,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
 
-                is MdBlock.ListItem -> BlockRow(block.text) {
-                    val checked = block.checked
-                    val ordinal = block.ordinal
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                start = (4 + block.depth * 14).dp,
-                                top = 2.dp,
-                                bottom = 2.dp,
-                            ),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        val marker = when {
-                            checked != null -> if (checked) "☑" else "☐"
-                            ordinal != null -> "${ordinal.localizeDigits(persianDigits)}."
-                            else -> bulletFor(block.depth)
-                        }
-                        Text(
-                            text = marker,
-                            style = body.copy(color = if (checked == true) linkColor else muted),
-                        )
-                        Spacer(Modifier.width(7.dp))
-                        MdText(
-                            raw = block.text,
-                            style = if (checked == true) {
-                                body.copy(color = muted, textDecoration = TextDecoration.LineThrough)
-                            } else {
-                                body
-                            },
-                            inlineStyle = inlineStyle,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+        is MdBlock.ListItem -> BlockRow(block.text) {
+            val checked = block.checked
+            val ordinal = block.ordinal
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = (4 + block.depth * 14).dp,
+                        top = 2.dp,
+                        bottom = 2.dp,
+                    ),
+                verticalAlignment = Alignment.Top,
+            ) {
+                val marker = when {
+                    checked != null -> if (checked) "☑" else "☐"
+                    ordinal != null -> "${ordinal.localizeDigits(theme.persianDigits)}."
+                    else -> bulletFor(block.depth)
                 }
-
-                is MdBlock.Table -> MdTable(block, body, inlineStyle, rule, muted)
-
-                is MdBlock.Para -> BlockRow(block.text) {
+                Text(
+                    text = marker,
+                    style = body.copy(color = if (checked == true) linkColor else muted),
+                )
+                Spacer(Modifier.width(7.dp))
+                Column(Modifier.weight(1f)) {
                     MdText(
                         raw = block.text,
-                        style = body,
+                        style = if (checked == true) {
+                            body.copy(color = muted, textDecoration = TextDecoration.LineThrough)
+                        } else {
+                            body
+                        },
                         inlineStyle = inlineStyle,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    // The blocks indented under the item sit in its text column.
+                    block.children.forEach { MdBlockView(it, theme) }
                 }
             }
+        }
+
+        is MdBlock.Definition -> BlockRow(block.term) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                MdText(
+                    raw = block.term,
+                    style = body.copy(fontWeight = FontWeight.Bold),
+                    inlineStyle = inlineStyle,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                block.definitions.forEach { definition ->
+                    BlockRow(definition) {
+                        MdText(
+                            raw = definition,
+                            style = body,
+                            inlineStyle = inlineStyle,
+                            modifier = Modifier.fillMaxWidth().padding(start = 18.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        is MdBlock.Footnote -> BlockRow(block.text) {
+            val small = body.copy(fontSize = base * 0.86f, lineHeight = base * 1.45f)
+            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                Text(text = block.label, style = small.copy(color = linkColor))
+                Spacer(Modifier.width(6.dp))
+                MdText(
+                    raw = block.text,
+                    style = small.copy(color = muted),
+                    inlineStyle = inlineStyle,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        is MdBlock.Table -> MdTable(block, body, inlineStyle, theme.rule, muted)
+
+        is MdBlock.Para -> BlockRow(block.text) {
+            MdText(
+                raw = block.text,
+                style = body,
+                inlineStyle = inlineStyle,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            )
         }
     }
 }

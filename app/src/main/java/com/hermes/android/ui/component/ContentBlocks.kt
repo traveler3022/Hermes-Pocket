@@ -279,6 +279,24 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
  * An unterminated trailing fence (mid-stream) is still treated as code so a
  * streaming message doesn't flash half-parsed markdown.
  */
+/** How far the fence opening at [at] is indented: the whitespace between it and its line start. */
+private fun fenceIndent(text: String, at: Int): Int {
+    val lead = text.substring(text.lastIndexOf('\n', at - 1) + 1, at)
+    return if (lead.all { it == ' ' || it == '\t' }) lead.length else 0
+}
+
+/**
+ * Drops up to [indent] leading spaces from every line. A fence under a list item is
+ * indented with the item, and so is each line of its code: kept, the first line sat
+ * at the margin and every other line [indent] columns to its right.
+ */
+private fun dedent(code: String, indent: Int): String {
+    if (indent == 0) return code
+    return code.lines().joinToString("\n") { line ->
+        line.drop(line.take(indent).takeWhile { it == ' ' || it == '\t' }.length)
+    }
+}
+
 fun parseContentBlocks(text: String): List<ContentBlock> {
     val out = mutableListOf<ContentBlock>()
     var cursor = 0
@@ -286,7 +304,7 @@ fun parseContentBlocks(text: String): List<ContentBlock> {
         val before = text.substring(cursor, fence.range.first)
         if (before.isNotBlank()) parseParagraphs(before, out)
         val lang = fence.groupValues[1].lowercase()
-        val body = fence.groupValues[2].trimEnd()
+        val body = dedent(fence.groupValues[2], fenceIndent(text, fence.range.first)).trimEnd()
         if (body.isNotBlank()) {
             out.add(
                 if (lang == "mermaid") ContentBlock.Mermaid(body)

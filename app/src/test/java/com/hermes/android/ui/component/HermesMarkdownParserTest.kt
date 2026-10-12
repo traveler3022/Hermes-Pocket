@@ -3,6 +3,7 @@ package com.hermes.android.ui.component
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -119,6 +120,88 @@ class HermesMarkdownParserTest {
     }
 
     @Test
+    fun `lines right under an item continue it, indented or not`() {
+        assertEquals(
+            listOf(MdBlock.ListItem(0, null, null, "one\ntwo\nthree")),
+            parseMdBlocks("- one\n  two\nthree"),
+        )
+    }
+
+    @Test
+    fun `an indented paragraph after a blank line stays inside the item`() {
+        assertEquals(
+            listOf(
+                MdBlock.ListItem(0, 1, null, "Install", listOf(MdBlock.Para("Then restart."))),
+                MdBlock.ListItem(0, 2, null, "Done"),
+            ),
+            parseMdBlocks("1. Install\n\n   Then restart.\n\n2. Done"),
+        )
+    }
+
+    @Test
+    fun `an item can hold a quote and a table`() {
+        val item = parseMdBlocks("- a\n  > note\n\n  | x | y |\n  |---|---|\n  | 1 | 2 |")
+            .single() as MdBlock.ListItem
+        assertEquals("a", item.text)
+        assertEquals(
+            listOf(
+                MdBlock.Quote(1, "note"),
+                MdBlock.Table(listOf(listOf("x", "y"), listOf("1", "2")), hasHeader = true),
+            ),
+            item.children,
+        )
+    }
+
+    @Test
+    fun `text back at the margin after a blank line ends the list`() {
+        assertEquals(
+            listOf(MdBlock.ListItem(0, null, null, "a"), MdBlock.Para("after")),
+            parseMdBlocks("- a\n\nafter"),
+        )
+    }
+
+    @Test
+    fun `a heading right under an item is not swallowed by it`() {
+        assertEquals(
+            listOf(MdBlock.ListItem(0, null, null, "a"), MdBlock.Heading(2, "Next")),
+            parseMdBlocks("- a\n## Next"),
+        )
+    }
+
+    @Test
+    fun `a nested item is still its own item, not part of its parent`() {
+        assertEquals(
+            listOf(
+                MdBlock.ListItem(0, null, null, "a"),
+                MdBlock.ListItem(1, null, null, "b", listOf(MdBlock.Para("more b"))),
+            ),
+            parseMdBlocks("- a\n  - b\n\n    more b"),
+        )
+    }
+
+    @Test
+    fun `a definition takes the paragraph line above it as its term`() {
+        assertEquals(
+            listOf(MdBlock.Para("intro"), MdBlock.Definition("Term", listOf("first", "second"))),
+            parseMdBlocks("intro\nTerm\n: first\n: second"),
+        )
+        assertEquals(
+            listOf(MdBlock.Definition("Term", listOf("meaning"))),
+            parseMdBlocks("Term\n\n: meaning"),
+        )
+        // With no paragraph above it, a colon line is just text.
+        assertEquals(listOf(MdBlock.Para(": alone")), parseMdBlocks(": alone"))
+    }
+
+    @Test
+    fun `a footnote definition is its own block and takes the indented lines under it`() {
+        assertEquals(
+            listOf(MdBlock.Para("text[^1]"), MdBlock.Footnote("1", "the note\ngoes on")),
+            parseMdBlocks("text[^1]\n\n[^1]: the note\n  goes on"),
+        )
+    }
+
+    @Test
     fun `nothing to parse gives nothing`() {
         assertTrue(parseMdBlocks("").isEmpty())
         assertTrue(parseMdBlocks("  \n \n").isEmpty())
@@ -135,6 +218,19 @@ class HermesMarkdownParserTest {
         val incremental = IncrementalMdParser()
         for (length in 1..document.length) {
             val prefix = document.substring(0, length)
+            assertEquals("prefix of $length chars", parseMdBlocks(prefix), incremental.parse(prefix))
+        }
+    }
+
+    private val extendedDocument = "Intro\n\n1. Install\n   it now\n\n   Then restart.\n\n   > careful\n\n" +
+        "2. Done\n  - nested\n\n    more nested\n\nback at the margin\n\nTerm\n\n: meaning\n: another\n\n" +
+        "Body with a note[^1].\n\n[^1]: The note\n  continues\n\nend"
+
+    @Test
+    fun `lists with paragraphs, definitions and footnotes parse the same while they grow`() {
+        val incremental = IncrementalMdParser()
+        for (length in 1..extendedDocument.length) {
+            val prefix = extendedDocument.substring(0, length)
             assertEquals("prefix of $length chars", parseMdBlocks(prefix), incremental.parse(prefix))
         }
     }
@@ -195,6 +291,36 @@ class HermesMarkdownParserTest {
         assertEquals("see https://a.io/x, ok", out.text)
         val link = out.getLinkAnnotations(0, out.text.length).single().item as LinkAnnotation.Url
         assertEquals("https://a.io/x", link.url)
+    }
+
+    @Test
+    fun `highlight, superscript, subscript and kbd lose their marks and keep a style`() {
+        val out = inline("==hot== x^2^ H~2~O <kbd>Ctrl</kbd>", style)
+        assertEquals("hot x2 H2O \u2009Ctrl\u2009", out.text)
+        val spans = out.spanStyles.sortedBy { it.start }
+        assertEquals(4, spans.size)
+        assertEquals(style.markBg, spans[0].item.background)
+        assertEquals(BaselineShift.Superscript, spans[1].item.baselineShift)
+        assertEquals(BaselineShift.Subscript, spans[2].item.baselineShift)
+    }
+
+    @Test
+    fun `tildes and carets that are not a closed word stay as typed`() {
+        for (plain in listOf("about ~5 min or ~10", "cd ~/src and ~/bin", "x^2 + y^2", "a == b", "=====")) {
+            val out = inline(plain, style)
+            assertEquals(plain, out.text)
+            assertTrue(plain, out.spanStyles.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a footnote reference is a raised label, a link label starting with a caret is still a link`() {
+        val ref = inline("fact[^1].", style)
+        assertEquals("fact1.", ref.text)
+        assertEquals(BaselineShift.Superscript, ref.spanStyles.single().item.baselineShift)
+
+        val link = inline("[^x](https://a.io)", style)
+        assertEquals("^x", link.text)
     }
 
     // ── Direction ────────────────────────────────────────────────────────

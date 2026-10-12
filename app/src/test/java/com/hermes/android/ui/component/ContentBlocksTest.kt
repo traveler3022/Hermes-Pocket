@@ -284,4 +284,11 @@ class ContentBlocksTest {
             parseContentBlocks("::preview{file=\"/root/report.pdf\"}"),
         )
     }
+
+    @Test
+    fun `code fenced under a list item loses the item's indent on every line`() {
+        val code = parseContentBlocks("1. Run:\n   ```bash\n   cd app\n     ls\n   ```\n2. Done")
+            .filterIsInstance<ContentBlock.Code>().single()
+        assertEquals(ContentBlock.Code(language = "bash", code = "cd app\n  ls"), code)
+    }
 }
