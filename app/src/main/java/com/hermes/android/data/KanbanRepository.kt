@@ -106,7 +106,22 @@ class KanbanRepository @Inject constructor(
         val error: String,
     )
 
-    data class Detail(val task: Task, val comments: List<Comment>, val runs: List<Run> = emptyList())
+    /** A file on the task: the worker's full report is often one (the hand-off note only points to it). */
+    data class Attachment(val id: Long, val filename: String, val size: Long, val storedPath: String)
+
+    /** A task this one is linked to, by its title. */
+    data class LinkedTask(val id: String, val title: String, val status: String)
+
+    data class Detail(
+        val task: Task,
+        val comments: List<Comment>,
+        val runs: List<Run> = emptyList(),
+        val attachments: List<Attachment> = emptyList(),
+        /** Tasks this one waits on: it starts once they are done. */
+        val parents: List<LinkedTask> = emptyList(),
+        /** Tasks that wait on this one. */
+        val children: List<LinkedTask> = emptyList(),
+    )
 
     /** The end of the worker's stdout/stderr; [exists] is false until a worker has started. */
     data class Log(val text: String, val exists: Boolean, val truncated: Boolean)
@@ -125,6 +140,12 @@ class KanbanRepository @Inject constructor(
     private val rest = http.newBuilder()
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(45, TimeUnit.SECONDS)
+        .build()
+
+    /** For a call that waits on the server's model (specify). */
+    private val modelCalls = rest.newBuilder()
+        .readTimeout(3, TimeUnit.MINUTES)
+        .callTimeout(4, TimeUnit.MINUTES)
         .build()
 
     /**
@@ -227,7 +248,22 @@ class KanbanRepository @Inject constructor(
             Comment(author = it.str("author"), body = it.str("body"), createdAt = it.long("created_at"))
         }
         val runs = (root["runs"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { it.toRun() }
-        return Detail(task, comments, runs)
+        val attachments = (root["attachments"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
+            val path = row.str("stored_path").ifEmpty { return@mapNotNull null }
+            Attachment(
+                id = row.long("id"),
+                filename = row.str("filename").ifEmpty { path.substringAfterLast('/') },
+                size = row.long("size"),
+                storedPath = path,
+            )
+        }
+        // Titles come in link_tasks; a linked task gone from the board keeps its id.
+        val titles = (root["link_tasks"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            .associateBy { it.str("id") }
+        val links = root["links"] as? JsonObject
+        fun linked(key: String) = (links?.get(key) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            .map { id -> titles[id].let { LinkedTask(id, it?.str("title")?.ifEmpty { null } ?: id, it?.str("status").orEmpty()) } }
+        return Detail(task, comments, runs, attachments, parents = linked("parents"), children = linked("children"))
     }
 
     /** The last [LOG_TAIL_BYTES] of the task's worker log (the server keeps up to 2 MiB). */
@@ -378,6 +414,26 @@ class KanbanRepository @Inject constructor(
         return root.toOrchestration()
     }
 
+    /** Makes [childId] wait on [parentId]: it starts once that one is done. The server refuses a cycle. */
+    suspend fun link(parentId: String, childId: String) {
+        call("POST", "/links", JsonObject(mapOf("parent_id" to JsonPrimitive(parentId), "child_id" to JsonPrimitive(childId))))
+    }
+
+    suspend fun unlink(parentId: String, childId: String) {
+        call("DELETE", "/links?parent_id=${parentId.urlPart()}&child_id=${childId.urlPart()}")
+        dispatchNow()
+    }
+
+    /**
+     * Has the server's model write a triage task out in full (title, details) and move it to
+     * the queue. Takes a while: it waits on the model. Null when done, else the server's reason.
+     */
+    suspend fun specify(id: String): String? {
+        val root = call("POST", "/tasks/${id.urlPart()}/specify", JsonObject(mapOf("author" to JsonPrimitive("app"))), slow = true) as? JsonObject
+            ?: return "No answer"
+        return if (root.bool("ok")) null else root.str("reason").ifEmpty { "Refused" }
+    }
+
     /** Asks the dispatcher to start ready tasks now instead of at its next 60 s tick. */
     private suspend fun dispatchNow() {
         runCatching { call("POST", "/dispatch") }
@@ -385,9 +441,9 @@ class KanbanRepository @Inject constructor(
 
     private fun base(): String? = remoteHttpBase(remote.config.value.serverUrl)?.takeIf { it.startsWith("https://") }
 
-    private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement {
+    private suspend fun call(method: String, path: String, body: JsonObject? = null, slow: Boolean = false): JsonElement {
         val scopedPath = if (path.startsWith("/boards")) path else scoped(path)
-        return if (onPhone) callOnPhone(method, scopedPath, body) else callServer(method, scopedPath, body)
+        return if (onPhone) callOnPhone(method, scopedPath, body) else callServer(method, scopedPath, body, slow)
     }
 
     /** [path] on the selected board; the server's current board when none is selected. */
@@ -414,7 +470,7 @@ class KanbanRepository @Inject constructor(
         return answer
     }
 
-    private suspend fun callServer(method: String, path: String, body: JsonObject? = null): JsonElement =
+    private suspend fun callServer(method: String, path: String, body: JsonObject? = null, slow: Boolean = false): JsonElement =
         withContext(Dispatchers.IO) {
             val base = base() ?: throw IOException("Kanban needs a connected server.")
             val requestBody = body?.toString()?.toRequestBody(JSON_TYPE)
@@ -423,7 +479,7 @@ class KanbanRepository @Inject constructor(
                 .url("$base$API$path")
                 .method(method, requestBody)
                 .build()
-            rest.newCall(request).execute().use { response ->
+            (if (slow) modelCalls else rest).newCall(request).execute().use { response ->
                 val text = response.body?.string().orEmpty()
                 val parsed = runCatching { json.parseToJsonElement(text) }.getOrDefault(JsonNull)
                 if (!response.isSuccessful) {

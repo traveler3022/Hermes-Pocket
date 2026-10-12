@@ -1,9 +1,13 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.KanbanRepository
+import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.runtime.HermesRuntime
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -21,7 +25,13 @@ import javax.inject.Inject
 @HiltViewModel
 class KanbanViewModel @Inject constructor(
     private val kanban: KanbanRepository,
+    gatewayClient: GatewayClient,
+    hermesRuntime: HermesRuntime,
+    @ApplicationContext context: Context,
 ) : ViewModel() {
+
+    /** Turns a server path into what the file viewer reads, per runtime, as for chat files. */
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, context, viewModelScope)
 
     data class UiState(
         val available: Boolean = true,
@@ -47,6 +57,8 @@ class KanbanViewModel @Inject constructor(
         /** Tasks picked for a change on all of them at once (long press). */
         val selected: Set<String> = emptySet(),
         val orchestration: KanbanRepository.Orchestration? = null,
+        /** The open task is being written out by the server's model (specify). */
+        val isSpecifying: Boolean = false,
     ) {
         val filtering: Boolean get() = query.isNotBlank() || assigneeFilter != null
 
@@ -220,6 +232,35 @@ class KanbanViewModel @Inject constructor(
             // Not thrown: the others did change, and the board is re-read after a change that returns.
             if (refused.isNotEmpty()) {
                 _uiState.update { it.copy(error = "${refused.size}/${ids.size}: ${refused.values.first()}") }
+            }
+        }
+    }
+
+    /** What the file viewer opens for [attachment]: the server's download, or the file in the built-in Linux. */
+    fun attachmentUrl(attachment: KanbanRepository.Attachment): String = media.resolveMediaUrl(attachment.storedPath)
+
+    /** Makes the open task wait on [parentId]. */
+    fun addParent(parentId: String) {
+        val id = _uiState.value.detail?.task?.id ?: return
+        act { kanban.link(parentId = parentId, childId = id) }
+    }
+
+    fun unlink(parentId: String, childId: String) = act { kanban.unlink(parentId, childId) }
+
+    /** Has the server's model write the open triage task out; the sheet shows the new text when it returns. */
+    fun specify(id: String) {
+        if (_uiState.value.isSpecifying) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSpecifying = true, error = null) }
+            try {
+                val refused = kanban.specify(id)
+                if (refused != null) _uiState.update { it.copy(error = refused) }
+                refresh()
+            } catch (e: Exception) {
+                Timber.w(e, "[Kanban] specify failed")
+                _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isSpecifying = false) }
             }
         }
     }

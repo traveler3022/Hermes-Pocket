@@ -1,6 +1,7 @@
 package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,8 +71,11 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.icons.filled.AttachFile
+import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.ExpandMore
 import com.hermes.android.ui.icons.filled.Inventory2
+import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.KanbanViewModel
 
 /** The columns a person reads, in the board's order (`plugin_api.py` BOARD_COLUMNS). */
@@ -102,6 +107,7 @@ fun KanbanScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     var creating by remember { mutableStateOf(false) }
     var filterOpen by remember { mutableStateOf(false) }
     var orchestrating by remember { mutableStateOf(false) }
@@ -293,6 +299,12 @@ fun KanbanScreen(
             onComment = { text, done -> viewModel.comment(detail.task.id, text, done) },
             onDelete = { viewModel.delete(detail.task.id) },
             onDismiss = viewModel::close,
+            boardTasks = state.columns.values.flatten(),
+            isSpecifying = state.isSpecifying,
+            onSpecify = { viewModel.specify(detail.task.id) },
+            onOpenAttachment = { file -> FileViewerActivity.open(context, viewModel.attachmentUrl(file), file.filename) },
+            onAddParent = viewModel::addParent,
+            onUnlink = viewModel::unlink,
         )
     }
     if (creating) {
@@ -594,8 +606,15 @@ private fun TaskSheet(
     onComment: (text: String, onDone: () -> Unit) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    boardTasks: List<KanbanRepository.Task>,
+    isSpecifying: Boolean,
+    onSpecify: () -> Unit,
+    onOpenAttachment: (KanbanRepository.Attachment) -> Unit,
+    onAddParent: (parentId: String) -> Unit,
+    onUnlink: (parentId: String, childId: String) -> Unit,
 ) {
     val task = detail.task
+    var pickingParent by remember { mutableStateOf(false) }
     var comment by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmReclaim by remember { mutableStateOf(false) }
@@ -615,6 +634,30 @@ private fun TaskSheet(
                 )
             }
             if (task.body.isNotBlank()) item { HermesMarkdown(markdown = task.body) }
+            if (task.status == "triage") {
+                item {
+                    OutlinedButton(onClick = onSpecify, enabled = !isSpecifying && !isBusy) {
+                        if (isSpecifying) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(HxSpace.sm))
+                        Text(
+                            if (isSpecifying) t("Writing it out…", "در حال نوشتن…")
+                            else t("Write out the details with AI", "نوشتن جزئیات با هوش مصنوعی")
+                        )
+                    }
+                }
+                item {
+                    SheetHint(
+                        t(
+                            "The server's model writes a full title and details, then the task joins the queue.",
+                            "مدل سرور عنوان و جزئیات کامل را می‌نویسد، بعد کار به صف می‌رود.",
+                        )
+                    )
+                }
+            }
             if (task.lastError.isNotBlank()) {
                 item { Text(task.lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
@@ -623,8 +666,35 @@ private fun TaskSheet(
                 item { SheetSection(t("Worker's report", "گزارش کارگزار")) }
                 item { HermesMarkdown(markdown = report) }
             }
+            if (detail.attachments.isNotEmpty()) {
+                item { SheetSection(t("Files", "فایل‌ها")) }
+                items(detail.attachments, key = { "file-${it.id}" }) { file ->
+                    AttachmentRow(file) { onOpenAttachment(file) }
+                }
+            }
             item {
                 TaskActions(task.status, isBusy, onMove, onStopWorker = { confirmReclaim = true }) { confirmDelete = true }
+            }
+            item { HorizontalDivider() }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t("Waits on", "منتظر این کارها"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    if (task.status != "done" && task.status != "archived") {
+                        TextButton(onClick = { pickingParent = true }, enabled = !isBusy) { Text(t("Add", "افزودن")) }
+                    }
+                }
+            }
+            if (detail.parents.isEmpty()) {
+                item { SheetHint(t("Starts without waiting for another task.", "بدون منتظر ماندن برای کار دیگری شروع می‌شود.")) }
+            }
+            items(detail.parents, key = { "parent-${it.id}" }) { parent ->
+                LinkRow(parent, isBusy) { onUnlink(parent.id, task.id) }
+            }
+            if (detail.children.isNotEmpty()) {
+                item { SheetSection(t("Waiting on this", "منتظر این کار")) }
+                items(detail.children, key = { "child-${it.id}" }) { child ->
+                    LinkRow(child, isBusy) { onUnlink(task.id, child.id) }
+                }
             }
             if (task.status != "done" && task.status != "archived") {
                 item {
@@ -701,6 +771,38 @@ private fun TaskSheet(
             }
         }
     }
+    if (pickingParent) {
+        val linked = detail.parents.map { it.id }.toSet() + detail.children.map { it.id } + task.id
+        val choices = boardTasks.filter { it.id !in linked && it.status != "archived" }
+        AlertDialog(
+            onDismissRequest = { pickingParent = false },
+            title = { Text(t("Wait for which task?", "منتظر کدام کار بماند؟")) },
+            text = {
+                if (choices.isEmpty()) {
+                    Text(t("No other task on this board.", "کار دیگری در این تابلو نیست."))
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth()) {
+                        items(choices, key = { it.id }) { choice ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pickingParent = false
+                                        onAddParent(choice.id)
+                                    }
+                                    .padding(vertical = HxSpace.sm),
+                            ) {
+                                Text(choice.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(columnLabel(choice.status), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pickingParent = false }) { Text(t("Cancel", "لغو")) } },
+        )
+    }
     if (confirmReclaim) {
         AlertDialog(
             onDismissRequest = { confirmReclaim = false },
@@ -734,6 +836,45 @@ private fun TaskSheet(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) } },
         )
+    }
+}
+
+/** A file on the task: its name and size; a tap opens it in the app's viewer. */
+@Composable
+private fun AttachmentRow(file: KanbanRepository.Attachment, onOpen: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+    ) {
+        Row(Modifier.padding(HxSpace.sm), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(HxSpace.sm))
+            Text(file.filename, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(fileSize(file.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun fileSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> "%.1f MB".format(bytes / (1024.0 * 1024))
+}
+
+/** A linked task by title and column, with a button that removes the link. */
+@Composable
+private fun LinkRow(linked: KanbanRepository.LinkedTask, isBusy: Boolean, onUnlink: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(linked.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (linked.status.isNotEmpty()) {
+                Text(columnLabel(linked.status), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        IconButton(onClick = onUnlink, enabled = !isBusy) {
+            Icon(Icons.Default.Close, contentDescription = t("Remove link", "حذف پیوند"))
+        }
     }
 }
 
