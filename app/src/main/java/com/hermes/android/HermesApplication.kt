@@ -3,8 +3,12 @@ package com.hermes.android
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
+import okhttp3.OkHttpClient
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -18,7 +22,7 @@ import javax.inject.Inject
  * Reference: ADR-002 (Native Compose), ADR-004 (Foreground Service + WorkManager)
  */
 @HiltAndroidApp
-class HermesApplication : Application(), Configuration.Provider {
+class HermesApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -28,6 +32,9 @@ class HermesApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var connectionJournal: com.hermes.android.diagnostics.ConnectionJournal
+
+    @Inject
+    lateinit var httpClient: dagger.Lazy<OkHttpClient>
 
     override fun onCreate() {
         super.onCreate()
@@ -130,6 +137,15 @@ class HermesApplication : Application(), Configuration.Provider {
         runCatching { com.hermes.android.service.HermesGatewayService.start(this) }
             .onFailure { Timber.w(it, "[App] early gateway start refused; MainActivity will retry") }
     }
+
+    /**
+     * Chat images load through the app's own client, so a remote server's file link gets the
+     * sign-in (Bearer header) and the Tailscale route like every other call. Coil's own client
+     * had neither, and the server answered 401. The read timeout replaces the socket's "none".
+     */
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .okHttpClient { httpClient.get().newBuilder().readTimeout(30, TimeUnit.SECONDS).build() }
+        .build()
 
     /**
      * WorkManager configuration — uses HiltWorkerFactory so @HiltWorker
