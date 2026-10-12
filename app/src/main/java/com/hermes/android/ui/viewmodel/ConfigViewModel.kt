@@ -139,14 +139,9 @@ class ConfigViewModel @Inject constructor(
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
                     d = yaml.safe_load(p.read_text()) if p.exists() else {}
                     d = d or {}
-                    approvals = d.get('approvals') or {}
                     agent = d.get('agent') or {}
                     display = d.get('display') or {}
-                    # Unquoted `mode: off` is YAML for False; Hermes reads that as off.
-                    mode = approvals.get('mode')
-                    mode = 'off' if mode is False else str(mode or 'manual')
                     print(json.dumps({
-                        'approval_mode': mode,
                         'reasoning': str(agent.get('reasoning_effort', '') or 'medium'),
                         'personality': str(display.get('personality') or ''),
                     }))
@@ -154,12 +149,32 @@ class ConfigViewModel @Inject constructor(
                 )
                 val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
                 _uiState.value = _uiState.value.copy(
-                    approvalMode = (obj?.get("approval_mode") as? JsonPrimitive)?.contentOrNull ?: "manual",
                     reasoning = (obj?.get("reasoning") as? JsonPrimitive)?.contentOrNull ?: "medium",
                     personality = (obj?.get("personality") as? JsonPrimitive)?.contentOrNull ?: "",
                 )
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load behavior config")
+            }
+        }
+        loadApprovalMode()
+    }
+
+    // approvals.mode goes through config.get/config.set, not a config.yaml
+    // edit over shell.exec: shell.exec children get HOME rewritten to the
+    // profile home (containers, the built-in Linux), so `~/.hermes` there is
+    // the wrong file, and a non-default profile has its own config anyway.
+    // The RPC writes the active profile's config and refreshes live sessions.
+    private fun loadApprovalMode() {
+        viewModelScope.launch {
+            try {
+                val result = gatewayClient.request(
+                    GatewayMethods.CONFIG_GET,
+                    buildJsonObject { put("key", "approvals.mode") }.toMap(),
+                )
+                val mode = ((result as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull
+                _uiState.value = _uiState.value.copy(approvalMode = mode?.takeIf { it.isNotBlank() } ?: "manual")
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load approval mode")
             }
         }
     }
@@ -168,20 +183,16 @@ class ConfigViewModel @Inject constructor(
     fun setApprovalMode(rawMode: String) {
         viewModelScope.launch {
             try {
-                // Value comes from a fixed dropdown (manual/smart/off), but
-                // sanitize anyway before interpolating into python source.
-                val mode = rawMode.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
-                execPython(
-                    """
-                    import yaml, pathlib
-                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
-                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
-                    d = d or {}
-                    d.setdefault('approvals', {})['mode'] = '$mode'
-                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print('OK')
-                    """.trimIndent()
+                val result = gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "approvals.mode")
+                        put("value", rawMode)
+                    }.toMap(),
                 )
+                // The server answers with the normalised value it saved.
+                val mode = ((result as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull
+                    ?.takeIf { it.isNotBlank() } ?: rawMode
                 _uiState.value = _uiState.value.copy(approvalMode = mode)
                 Timber.i("[Config] approvals.mode set to $mode")
             } catch (e: Exception) {
