@@ -2,6 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.runtime.linux.LinuxDesktop
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +40,7 @@ data class LinuxToolsUiState(
 @HiltViewModel
 class LinuxToolsViewModel @Inject constructor(
     private val environment: ProotEnvironment,
+    val linuxFiles: LinuxFileAccess,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LinuxToolsUiState(rootfsInstalled = environment.isRootfsInstalled))

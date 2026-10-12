@@ -72,7 +72,7 @@ class MessageRowBindingTest {
 
     private fun viewModel() = ChatViewModel(
         gateway, SessionRepository(gateway, NoTasks), mockk(relaxed = true),
-        mockk(relaxed = true), AppForegroundState(), mockk(relaxed = true),
+        mockk(relaxed = true), AppForegroundState(), mockk(relaxed = true), mockk(relaxed = true),
     )
 
     private fun ChatViewModel.sent() = uiState.value.messages.filterIsInstance<ChatMessage.User>().single()

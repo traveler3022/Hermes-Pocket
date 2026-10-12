@@ -67,6 +67,9 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/libs.versions.toml', 'gradle.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Check layer boundaries
+        run: bash scripts/check-layers.sh
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 

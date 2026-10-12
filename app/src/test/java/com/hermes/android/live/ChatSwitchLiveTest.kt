@@ -63,7 +63,7 @@ class ChatSwitchLiveTest {
         val runtime = mockk<HermesRuntime>(relaxed = true) { every { getWebSocketUrl() } returns url!! }
         vm = ChatViewModel(
             gateway, SessionRepository(gateway, NoTasks), runtime,
-            mockk(relaxed = true), AppForegroundState(), context,
+            mockk(relaxed = true), AppForegroundState(), context, mockk(relaxed = true),
         )
     }
 

@@ -10,6 +10,7 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.runtime.HermesRuntime
+import com.hermes.android.runtime.LinuxFileAccess
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -33,6 +34,7 @@ class GroupChatViewModel @Inject constructor(
     private val groups: GroupsRepository,
     private val gatewayClient: GatewayClient,
     hermesRuntime: HermesRuntime,
+    linuxFiles: LinuxFileAccess,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -60,7 +62,7 @@ class GroupChatViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     /** Members' files resolve and download the way a chat reply's do. */
-    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, context, viewModelScope)
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope)
     private val downloads by lazy { DownloadStorage(context) }
 
     private val events = mutableListOf<GroupsRepository.Event>()

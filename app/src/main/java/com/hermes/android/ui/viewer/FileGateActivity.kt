@@ -18,9 +18,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
+import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.runtime.linux.FileGate
-import com.hermes.android.runtime.linux.GuestFiles
-import com.hermes.android.runtime.linux.ProotEnvironment
 import com.hermes.android.service.HermesNotifications
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
@@ -45,6 +44,7 @@ import javax.inject.Inject
 class FileGateActivity : ComponentActivity() {
 
     @Inject lateinit var fileGate: FileGate
+    @Inject lateinit var linuxFiles: LinuxFileAccess
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,8 +63,8 @@ class FileGateActivity : ComponentActivity() {
             }
             when {
                 // Gone or not a file: handed on all the same, and the other app says so.
-                file == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(File(path)).toString())
-                risk == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(file).toString())
+                file == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(File(path)).toString(), linuxFiles)
+                risk == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(file).toString(), linuxFiles)
                 else -> {
                     ask(file, risk, open)
                     return@launch
@@ -136,7 +136,7 @@ class FileGateActivity : ComponentActivity() {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { fileGate.approve(file) }
             if (open) {
-                startExternalView(this@FileGateActivity, Uri.fromFile(file).toString())
+                startExternalView(this@FileGateActivity, Uri.fromFile(file).toString(), linuxFiles)
             } else {
                 Toast.makeText(
                     this@FileGateActivity,
@@ -149,11 +149,7 @@ class FileGateActivity : ComponentActivity() {
     }
 
     /** The regular file at [path] in the rootfs, its symlinks followed as the Linux sees them; else null. */
-    private fun linuxFile(path: String): File? {
-        val rootfs = ProotEnvironment.rootfsDir(this)
-        val guestPath = guestPathIn(rootfs.absolutePath, path) ?: return null
-        return runCatching { GuestFiles(rootfs).hostFile(guestPath) }.getOrNull()?.takeIf { it.isFile }
-    }
+    private fun linuxFile(path: String): File? = linuxFiles.guestPathOf(path)?.let(linuxFiles::regularFile)
 
     companion object {
         private const val EXTRA_PATH = "com.hermes.android.gate.PATH"

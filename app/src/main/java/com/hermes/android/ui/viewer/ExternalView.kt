@@ -3,31 +3,28 @@ package com.hermes.android.ui.viewer
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
 import android.widget.Toast
-import com.hermes.android.runtime.linux.LinuxFilesProvider
-import com.hermes.android.runtime.linux.ProotEnvironment
+import com.hermes.android.runtime.LinuxFileAccess
 import java.io.File
 
 /**
  * Opens [url] in another app. A file of the built-in Linux goes by [FileGateActivity], which
  * reads it off the main thread and opens it, or asks first when it is a program.
  */
-internal fun openUrlExternally(context: Context, url: String) {
-    val rootfs = ProotEnvironment.rootfsDir(context).absolutePath
-    val linuxPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path?.takeIf { guestPathIn(rootfs, it) != null }
+internal fun openUrlExternally(context: Context, url: String, linuxFiles: LinuxFileAccess) {
+    val linuxPath = Uri.parse(url).takeIf { it.scheme == "file" }?.path?.takeIf { linuxFiles.guestPathOf(it) != null }
     if (linuxPath != null) {
         context.startActivity(FileGateActivity.intent(context, File(linuxPath), open = true))
     } else {
-        startExternalView(context, url)
+        startExternalView(context, url, linuxFiles)
     }
 }
 
 /** [externalViewIntent] for [url], or a toast when no app takes it. */
-internal fun startExternalView(context: Context, url: String) {
+internal fun startExternalView(context: Context, url: String, linuxFiles: LinuxFileAccess) {
     try {
-        context.startActivity(externalViewIntent(context, url))
+        context.startActivity(externalViewIntent(url, linuxFiles))
     } catch (e: Exception) {
         Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
     }
@@ -37,14 +34,14 @@ internal fun startExternalView(context: Context, url: String) {
  * ACTION_VIEW for [url]. A file of the built-in Linux arrives as a file:// URL into this
  * app's private storage, which Android refuses to put in an intent (and the other app could
  * not read anyway), so "Open in browser" and "Play" always failed for it. It goes out as a
- * document of [LinuxFilesProvider] instead, with a read grant for that one file.
+ * document of the Linux Files provider instead, with a read grant for that one file.
  */
-internal fun externalViewIntent(context: Context, url: String): Intent {
+internal fun externalViewIntent(url: String, linuxFiles: LinuxFileAccess): Intent {
     val uri = Uri.parse(url)
     val guestPath = uri.takeIf { it.scheme == "file" }?.path
-        ?.let { guestPathIn(ProotEnvironment.rootfsDir(context).absolutePath, it) }
+        ?.let(linuxFiles::guestPathOf)
         ?: return Intent(Intent.ACTION_VIEW, uri)
-    val document = DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), guestPath)
+    val document = linuxFiles.documentUri(guestPath)
     val type = MimeTypeMap.getSingleton()
         .getMimeTypeFromExtension(guestPath.substringAfterLast('.', "").lowercase())
         ?: "*/*"
@@ -52,7 +49,3 @@ internal fun externalViewIntent(context: Context, url: String): Intent {
         .setDataAndType(document, type)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }
-
-/** The guest path of [hostPath] when it lies inside [rootfs] (the built-in Linux), else null. */
-internal fun guestPathIn(rootfs: String, hostPath: String): String? =
-    hostPath.removePrefix(rootfs).takeIf { it != hostPath && it.startsWith("/") }

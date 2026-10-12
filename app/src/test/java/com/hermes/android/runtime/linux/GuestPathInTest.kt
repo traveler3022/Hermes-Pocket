@@ -1,4 +1,4 @@
-package com.hermes.android.ui.viewer
+package com.hermes.android.runtime.linux
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

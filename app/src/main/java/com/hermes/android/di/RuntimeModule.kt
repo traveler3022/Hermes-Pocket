@@ -2,7 +2,9 @@ package com.hermes.android.di
 
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
+import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.runtime.SwitchableHermesRuntime
+import com.hermes.android.runtime.linux.RootfsFileAccess
 import com.hermes.android.runtime.remote.TailnetRoute
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
 import com.hermes.android.runtime.termux.InstallCompletionFlow
@@ -32,6 +34,10 @@ object RuntimeModule {
     @Provides
     @Singleton
     fun provideHermesRuntime(router: SwitchableHermesRuntime): HermesRuntime = router
+
+    @Provides
+    @Singleton
+    fun provideLinuxFileAccess(rootfs: RootfsFileAccess): LinuxFileAccess = rootfs
 
     /** Tailnet hosts are reached through the in-app Tailscale node. */
     @Provides

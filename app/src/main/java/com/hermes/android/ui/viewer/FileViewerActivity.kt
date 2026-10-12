@@ -109,9 +109,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import com.hermes.android.runtime.linux.GuestFiles
-import com.hermes.android.runtime.linux.LinuxFilesProvider
-import com.hermes.android.runtime.linux.ProotEnvironment
+import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.ZoomableImage
@@ -142,12 +140,13 @@ class FileViewerActivity : ComponentActivity() {
     @Inject lateinit var gatewayClient: GatewayClient
     @Inject lateinit var remoteFiles: RemoteFiles
     @Inject lateinit var mediaStreams: MediaStreams
+    @Inject lateinit var linuxFiles: LinuxFileAccess
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Another app (the Files app) gets here only through the exported LinuxFileViewer alias.
         val external = intent.component?.className != FileViewerActivity::class.java.name
-        val source = viewerSource(external, intent.data, intent.getStringExtra(EXTRA_URL), LinuxFilesProvider.authority(this))
+        val source = viewerSource(external, intent.data, intent.getStringExtra(EXTRA_URL), linuxFiles.documentsAuthority)
         if (source == null) {
             finish()
             return
@@ -166,7 +165,7 @@ class FileViewerActivity : ComponentActivity() {
                 }
                 return
             }
-            if (!external) openUrlExternally(this, uri.toString())
+            if (!external) openUrlExternally(this, uri.toString(), linuxFiles)
             finish()
             return
         }
@@ -191,7 +190,7 @@ class FileViewerActivity : ComponentActivity() {
                             if (remoteFiles.isServerFile(uri.toString())) {
                                 lifecycleScope.launch { openServerFileOutside(uri.toString(), name) }
                             } else {
-                                openUrlExternally(this, uri.toString())
+                                openUrlExternally(this, uri.toString(), linuxFiles)
                             }
                         },
                         onBack = ::finish,
@@ -201,13 +200,10 @@ class FileViewerActivity : ComponentActivity() {
         }
     }
 
-    /** content:// of [LinuxFilesProvider] → file:// of the same file in the rootfs. */
+    /** content:// of the Linux Files provider → file:// of the same file in the rootfs. */
     private fun linuxFileUri(uri: Uri): Uri? {
-        if (uri.scheme != "content" || uri.authority != LinuxFilesProvider.authority(this)) return null
-        return runCatching {
-            val file = GuestFiles(ProotEnvironment.rootfsDir(this)).hostFile(DocumentsContract.getDocumentId(uri))
-            Uri.fromFile(file).takeIf { file.isFile }
-        }.getOrNull()
+        if (uri.scheme != "content" || uri.authority != linuxFiles.documentsAuthority) return null
+        return runCatching { linuxFiles.regularFile(DocumentsContract.getDocumentId(uri)) }.getOrNull()?.let(Uri::fromFile)
     }
 
     private fun displayName(uri: Uri): String =
@@ -222,8 +218,7 @@ class FileViewerActivity : ComponentActivity() {
         when (uri.scheme) {
             "file" -> {
                 val file = File(URI(uri.toString())).canonicalFile
-                val root = ProotEnvironment.rootfsDir(this@FileViewerActivity).canonicalPath + File.separator
-                if (!file.path.startsWith(root)) throw IOException("File is outside the built-in Linux")
+                if (!linuxFiles.contains(file)) throw IOException("File is outside the built-in Linux")
                 if (file.length() > MAX_TEXT_BYTES) throw IOException("File too large to show")
                 file.readBytes()
             }

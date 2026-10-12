@@ -47,6 +47,7 @@ class ChatViewModel @Inject constructor(
     private val approvalNotificationManager: ApprovalNotificationManager,
     private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
+    val linuxFiles: com.hermes.android.runtime.LinuxFileAccess,
     private val profiles: com.hermes.android.data.ProfilesRepository? = null,
     private val kanban: com.hermes.android.data.KanbanRepository? = null,
 ) : ViewModel() {
@@ -100,7 +101,7 @@ class ChatViewModel @Inject constructor(
     private var autoPickJob: Job? = null
 
     private val attachmentDelegate = ChatAttachmentDelegate(
-        gatewayClient, hermesRuntime, context, viewModelScope,
+        gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope,
     )
 
     private val drawerDelegate = ChatDrawerDelegate(

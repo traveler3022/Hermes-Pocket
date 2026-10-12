@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import android.util.Base64
@@ -14,7 +13,7 @@ import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
-import com.hermes.android.runtime.linux.LinuxFilesProvider
+import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.runtime.linux.LinuxUploads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +31,7 @@ import kotlinx.serialization.json.contentOrNull
 internal class ChatAttachmentDelegate(
     private val gatewayClient: GatewayClient,
     private val hermesRuntime: HermesRuntime,
+    private val linuxFiles: LinuxFileAccess,
     private val context: Context,
     private val scope: CoroutineScope,
 ) {
@@ -270,7 +270,7 @@ internal class ChatAttachmentDelegate(
         try {
             if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
                 if (hermesRuntime.hostFileForGuestPath(path)?.isFile != true) return@withContext null
-                return@withContext DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), path)
+                return@withContext linuxFiles.documentUri(path)
             }
             val fetched = gatewayClient.fetchFile(resolveMediaUrl(path))
             val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }

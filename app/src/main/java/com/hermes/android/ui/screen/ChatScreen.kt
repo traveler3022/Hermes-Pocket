@@ -464,7 +464,7 @@ fun ChatScreen(
                         },
                         onFiles = {
                             closeDrawerThen {
-                                if (!openLinuxFiles(context)) {
+                                if (!openLinuxFiles(context, viewModel.linuxFiles)) {
                                     Toast.makeText(context, filesUnavailable, Toast.LENGTH_LONG).show()
                                 }
                             }

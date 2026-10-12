@@ -122,7 +122,7 @@ fun LinuxToolsScreen(
                     title = t("Files", "فایل‌ها"),
                     subtitle = t("Browse Linux files in Android's Files app", "مرور فایل‌های لینوکس در برنامهٔ Files اندروید"),
                     icon = Icons.Default.Folder,
-                    onClick = { if (!openLinuxFiles(context)) viewModel.showMessage(filesUnavailable) },
+                    onClick = { if (!openLinuxFiles(context, viewModel.linuxFiles)) viewModel.showMessage(filesUnavailable) },
                 )
                 GroupDivider()
                 SettingRow(
