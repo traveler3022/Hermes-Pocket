@@ -1,16 +1,19 @@
 package com.hermes.android.ui.screen
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +42,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -96,6 +103,9 @@ fun KanbanScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
     var creating by remember { mutableStateOf(false) }
+    var filterOpen by remember { mutableStateOf(false) }
+    var orchestrating by remember { mutableStateOf(false) }
+    var bulkAssigning by remember { mutableStateOf(false) }
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.watch() }
@@ -112,6 +122,25 @@ fun KanbanScreen(
         subtitle = t("Tasks your profiles work on", "کارهایی که پروفایل‌ها انجام می‌دهند"),
         onBack = onNavigateBack,
         actions = {
+            if (state.available) {
+                IconButton(onClick = {
+                    if (filterOpen) viewModel.clearFilter() else viewModel.loadAssignees()
+                    filterOpen = !filterOpen
+                }) {
+                    Icon(
+                        if (filterOpen) Icons.Default.Close else Icons.Default.Search,
+                        contentDescription = t("Filter", "فیلتر"),
+                        tint = if (state.filtering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = {
+                    viewModel.loadAssignees()
+                    viewModel.loadOrchestration()
+                    orchestrating = true
+                }) {
+                    Icon(Icons.Default.Settings, contentDescription = t("Orchestration", "هماهنگی خودکار"))
+                }
+            }
             if (state.available && state.board != null) {
                 BoardPicker(
                     boards = state.boards,
@@ -125,7 +154,7 @@ fun KanbanScreen(
         },
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
-            if (state.available) {
+            if (state.available && state.selected.isEmpty()) {
                 ExtendedFloatingActionButton(
                     onClick = {
                         viewModel.loadAssignees()
@@ -149,6 +178,15 @@ fun KanbanScreen(
                 )
                 return@Column
             }
+            if (filterOpen) {
+                FilterBar(
+                    query = state.query,
+                    assignee = state.assigneeFilter,
+                    assignees = (state.assignees + state.columns.values.flatten().mapNotNull { it.assignee }).distinct(),
+                    onQuery = viewModel::setQuery,
+                    onAssignee = viewModel::setAssigneeFilter,
+                )
+            }
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -157,7 +195,7 @@ fun KanbanScreen(
                 horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 COLUMNS.forEach { column ->
-                    val count = state.columns[column]?.size ?: 0
+                    val count = state.shown[column]?.size ?: 0
                     FilterChip(
                         selected = column == state.column,
                         onClick = { viewModel.selectColumn(column) },
@@ -165,7 +203,7 @@ fun KanbanScreen(
                     )
                 }
             }
-            val tasks = state.columns[state.column].orEmpty()
+            val tasks = state.shown[state.column].orEmpty()
             when {
                 state.isLoading -> Column(
                     Modifier.fillMaxSize(),
@@ -174,20 +212,68 @@ fun KanbanScreen(
                 ) { CircularProgressIndicator() }
 
                 tasks.isEmpty() -> Text(
-                    t("Nothing here.", "این‌جا خالی است."),
+                    if (state.filtering) t("No task matches the filter.", "کاری با این فیلتر پیدا نشد.") else t("Nothing here.", "این‌جا خالی است."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(HxSpace.screen),
                 )
 
                 else -> LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
                 ) {
-                    items(tasks, key = { it.id }) { task -> TaskCard(task) { viewModel.open(task) } }
+                    items(tasks, key = { it.id }) { task ->
+                        val selecting = state.selected.isNotEmpty()
+                        TaskCard(
+                            task = task,
+                            selected = task.id in state.selected,
+                            onClick = { if (selecting) viewModel.toggleSelected(task.id) else viewModel.open(task) },
+                            onLongClick = { viewModel.toggleSelected(task.id) },
+                        )
+                    }
                 }
             }
+            if (state.selected.isNotEmpty()) {
+                SelectionBar(
+                    count = state.selected.size,
+                    isBusy = state.isBusy,
+                    onReady = { viewModel.bulkMove("ready") },
+                    onDone = { viewModel.bulkMove("done") },
+                    onAssign = {
+                        viewModel.loadAssignees()
+                        bulkAssigning = true
+                    },
+                    onArchive = viewModel::bulkArchive,
+                    onSelectAll = viewModel::selectColumnTasks,
+                    onClear = viewModel::clearSelection,
+                )
+            }
         }
+    }
+
+    if (bulkAssigning) {
+        AlertDialog(
+            onDismissRequest = { bulkAssigning = false },
+            title = { Text(t("Assign ${state.selected.size} tasks to", "واگذاری ${state.selected.size} کار به")) },
+            text = {
+                AssigneePicker(current = "", assignees = state.assignees, enabled = !state.isBusy) { profile ->
+                    bulkAssigning = false
+                    viewModel.bulkAssign(profile)
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { bulkAssigning = false }) { Text(t("Cancel", "لغو")) } },
+        )
+    }
+    if (orchestrating) {
+        OrchestrationSheet(
+            settings = state.orchestration,
+            profiles = state.assignees,
+            isBusy = state.isBusy,
+            onSave = { settings -> viewModel.saveOrchestration(settings) { orchestrating = false } },
+            onDismiss = { orchestrating = false },
+        )
     }
 
     state.detail?.let { detail ->
@@ -216,6 +302,169 @@ fun KanbanScreen(
             onCreate = { title, body, assignee -> viewModel.create(title, body, assignee) { creating = false } },
             onDismiss = { creating = false },
         )
+    }
+}
+
+/** Words to look for and whose tasks to show. */
+@Composable
+private fun FilterBar(
+    query: String,
+    assignee: String?,
+    assignees: List<String>,
+    onQuery: (String) -> Unit,
+    onAssignee: (String?) -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = HxSpace.screen),
+        verticalArrangement = Arrangement.spacedBy(HxSpace.xs),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            placeholder = { Text(t("Search tasks", "جستجوی کارها")) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+            FilterChip(selected = assignee == null, onClick = { onAssignee(null) }, label = { Text(t("Everyone", "همه")) })
+            FilterChip(
+                selected = assignee == KanbanViewModel.UNASSIGNED,
+                onClick = { onAssignee(KanbanViewModel.UNASSIGNED) },
+                label = { Text(t("Unassigned", "بدون مسئول")) },
+            )
+            assignees.forEach { name ->
+                FilterChip(selected = assignee == name, onClick = { onAssignee(name) }, label = { Text("@$name") })
+            }
+        }
+    }
+}
+
+/** What can be done to every picked task at once. */
+@Composable
+private fun SelectionBar(
+    count: Int,
+    isBusy: Boolean,
+    onReady: () -> Unit,
+    onDone: () -> Unit,
+    onAssign: () -> Unit,
+    onArchive: () -> Unit,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t("$count selected", "$count انتخاب‌شده"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onSelectAll, enabled = !isBusy) { Text(t("Select column", "انتخاب ستون")) }
+                IconButton(onClick = onClear) { Icon(Icons.Default.Close, contentDescription = t("Cancel", "لغو")) }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                Button(onClick = onReady, enabled = !isBusy) { Text(t("Make ready", "آماده کن")) }
+                OutlinedButton(onClick = onDone, enabled = !isBusy) { Text(t("Done", "انجام‌شده")) }
+                OutlinedButton(onClick = onAssign, enabled = !isBusy) { Text(t("Assign", "واگذاری")) }
+                OutlinedButton(onClick = onArchive, enabled = !isBusy) { Text(t("Archive", "بایگانی")) }
+            }
+        }
+    }
+}
+
+/**
+ * The server's orchestration settings (`kanban:` in config.yaml): who splits a task without an
+ * assignee, who gets a step nobody fits, and whether splitting and starting the next steps happen
+ * on their own. Shared by every board.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OrchestrationSheet(
+    settings: KanbanRepository.Orchestration?,
+    profiles: List<String>,
+    isBusy: Boolean,
+    onSave: (KanbanRepository.Orchestration) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier.padding(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
+            verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
+        ) {
+            SheetHeader(t("Orchestration", "هماهنگی خودکار"), onBack = null)
+            if (settings == null) {
+                CircularProgressIndicator(Modifier.size(24.dp))
+                return@Column
+            }
+            var draft by remember(settings) { mutableStateOf(settings) }
+            SheetSection(t("Splits new tasks", "تقسیم‌کنندهٔ کارهای جدید"))
+            SheetHint(
+                t(
+                    "The profile that breaks a task with no assignee into steps.",
+                    "پروفایلی که کار بدون مسئول را به چند مرحله می‌شکند.",
+                )
+            )
+            ProfileChoice(draft.orchestratorProfile, profiles, draft.activeProfile, enabled = !isBusy) {
+                draft = draft.copy(orchestratorProfile = it)
+            }
+            SheetSection(t("Gets unmatched steps", "مسئول مرحله‌های بی‌صاحب"))
+            SheetHint(
+                t(
+                    "Who gets a step no profile's description fits.",
+                    "مرحله‌ای که توضیح هیچ پروفایلی به آن نمی‌خورد به چه کسی برسد.",
+                )
+            )
+            ProfileChoice(draft.defaultAssignee, profiles, draft.activeProfile, enabled = !isBusy) {
+                draft = draft.copy(defaultAssignee = it)
+            }
+            SettingSwitch(
+                title = t("Split on its own", "تقسیم خودکار"),
+                hint = t("New tasks without an assignee are split as they arrive.", "کارهای جدید بدون مسئول همان موقع تقسیم می‌شوند."),
+                checked = draft.autoDecompose,
+                enabled = !isBusy,
+            ) { draft = draft.copy(autoDecompose = it) }
+            SettingSwitch(
+                title = t("Start the next steps", "شروع مرحله‌های بعد"),
+                hint = t(
+                    "A step waiting on others becomes ready when they finish.",
+                    "مرحله‌ای که منتظر بقیه است، وقتی آن‌ها تمام شوند آماده می‌شود.",
+                ),
+                checked = draft.autoPromoteChildren,
+                enabled = !isBusy,
+            ) { draft = draft.copy(autoPromoteChildren = it) }
+            Button(
+                onClick = { onSave(draft) },
+                enabled = !isBusy && draft != settings,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(t("Save", "ذخیره"))
+            }
+        }
+    }
+}
+
+/** A profile, or "" for the server's choice (its active profile). */
+@Composable
+private fun ProfileChoice(current: String, profiles: List<String>, active: String, enabled: Boolean, onPick: (String) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+        FilterChip(
+            selected = current.isEmpty(),
+            onClick = { onPick("") },
+            enabled = enabled,
+            label = { Text(t("Active profile (@$active)", "پروفایل فعال (@$active)")) },
+        )
+        (profiles + current).filter { it.isNotEmpty() }.distinct().forEach { name ->
+            FilterChip(selected = current == name, onClick = { onPick(name) }, enabled = enabled, label = { Text("@$name") })
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitch(title: String, hint: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            SheetHint(hint)
+        }
+        Spacer(Modifier.width(HxSpace.sm))
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
 
@@ -297,12 +546,13 @@ private fun BoardPicker(
 private fun boardLabel(board: KanbanRepository.Board): String =
     listOf(board.icon, board.name).filter { it.isNotBlank() }.joinToString(" ")
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TaskCard(task: KanbanRepository.Task, onClick: () -> Unit) {
+private fun TaskCard(task: KanbanRepository.Task, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
             Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)

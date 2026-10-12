@@ -40,7 +40,33 @@ class KanbanViewModel @Inject constructor(
         val inspections: Map<Long, KanbanRepository.Inspection> = emptyMap(),
         val isBusy: Boolean = false,
         val error: String? = null,
-    )
+        /** Words the shown tasks must contain (title, details, hand-off note). */
+        val query: String = "",
+        /** Show one profile's tasks: a name, [UNASSIGNED], or null for everyone's. */
+        val assigneeFilter: String? = null,
+        /** Tasks picked for a change on all of them at once (long press). */
+        val selected: Set<String> = emptySet(),
+        val orchestration: KanbanRepository.Orchestration? = null,
+    ) {
+        val filtering: Boolean get() = query.isNotBlank() || assigneeFilter != null
+
+        /** [columns] narrowed to the tasks that pass the filter. */
+        val shown: Map<String, List<KanbanRepository.Task>>
+            get() = if (!filtering) columns else columns.mapValues { (_, tasks) -> tasks.filter(::passes) }
+
+        private fun passes(task: KanbanRepository.Task): Boolean {
+            val who = when (assigneeFilter) {
+                null -> true
+                UNASSIGNED -> task.assignee == null
+                else -> task.assignee == assigneeFilter
+            }
+            val words = query.trim()
+            return who && (
+                words.isEmpty() ||
+                    listOf(task.title, task.body, task.summary, task.id).any { it.contains(words, ignoreCase = true) }
+                )
+        }
+    }
 
     private val _uiState = MutableStateFlow(UiState(available = kanban.available))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -114,7 +140,10 @@ class KanbanViewModel @Inject constructor(
         if (slug == _uiState.value.board) return
         kanban.selectBoard(slug)
         _uiState.update {
-            it.copy(board = slug, columns = emptyMap(), isLoading = true, detail = null, log = null, inspections = emptyMap())
+            it.copy(
+                board = slug, columns = emptyMap(), isLoading = true, detail = null, log = null,
+                inspections = emptyMap(), selected = emptySet(), assigneeFilter = null,
+            )
         }
         viewModelScope.launch { refresh() }
     }
@@ -157,6 +186,56 @@ class KanbanViewModel @Inject constructor(
     }
 
     fun selectColumn(column: String) = _uiState.update { it.copy(column = column) }
+
+    fun setQuery(query: String) = _uiState.update { it.copy(query = query) }
+
+    fun setAssigneeFilter(assignee: String?) = _uiState.update { it.copy(assigneeFilter = assignee) }
+
+    fun clearFilter() = _uiState.update { it.copy(query = "", assigneeFilter = null) }
+
+    fun toggleSelected(id: String) = _uiState.update {
+        it.copy(selected = if (id in it.selected) it.selected - id else it.selected + id)
+    }
+
+    fun clearSelection() = _uiState.update { it.copy(selected = emptySet()) }
+
+    /** Picks every shown task of the open column. */
+    fun selectColumnTasks() = _uiState.update { state ->
+        state.copy(selected = state.selected + state.shown[state.column].orEmpty().map { it.id })
+    }
+
+    fun bulkMove(status: String) = bulk { ids -> kanban.bulk(ids, status = status) }
+
+    fun bulkArchive() = bulk { ids -> kanban.bulk(ids, archive = true) }
+
+    /** [profile] null: nobody. */
+    fun bulkAssign(profile: String?) = bulk { ids -> kanban.bulk(ids, assignee = profile.orEmpty()) }
+
+    /** Runs a change on the picked tasks; refused ones stay picked, with the first reason shown. */
+    private fun bulk(change: suspend (Set<String>) -> Map<String, String>) {
+        val ids = _uiState.value.selected.ifEmpty { return }
+        act {
+            val refused = change(ids)
+            _uiState.update { it.copy(selected = refused.keys.intersect(ids)) }
+            // Not thrown: the others did change, and the board is re-read after a change that returns.
+            if (refused.isNotEmpty()) {
+                _uiState.update { it.copy(error = "${refused.size}/${ids.size}: ${refused.values.first()}") }
+            }
+        }
+    }
+
+    fun loadOrchestration() {
+        viewModelScope.launch {
+            runCatching { kanban.orchestration() }
+                .onSuccess { found -> _uiState.update { it.copy(orchestration = found) } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun saveOrchestration(settings: KanbanRepository.Orchestration, onDone: () -> Unit) = act(onDone) {
+        val saved = kanban.saveOrchestration(settings)
+        _uiState.update { it.copy(orchestration = saved) }
+    }
 
     fun loadAssignees() {
         viewModelScope.launch {
@@ -240,10 +319,13 @@ class KanbanViewModel @Inject constructor(
     private fun firstBusy(columns: Map<String, List<KanbanRepository.Task>>): String? =
         listOf("running", "review", "blocked", "ready", "triage", "todo").firstOrNull { !columns[it].isNullOrEmpty() }
 
-    private companion object {
-        const val POLL_MS = 10_000L
-        const val LIVE_POLL_MS = 60_000L
-        const val STREAM_RETRY_MS = 2_000L
-        const val MAX_STREAM_RETRY_MS = 30_000L
+    companion object {
+        /** [UiState.assigneeFilter] for tasks nobody is assigned to. */
+        const val UNASSIGNED = "\u0000unassigned"
+
+        private const val POLL_MS = 10_000L
+        private const val LIVE_POLL_MS = 60_000L
+        private const val STREAM_RETRY_MS = 2_000L
+        private const val MAX_STREAM_RETRY_MS = 30_000L
     }
 }
