@@ -129,6 +129,14 @@ interface GatewayClient {
      */
     suspend fun downloadFile(url: String): ByteArray
 
+    /**
+     * The file at [url] (a resolved gateway download link) as a file on this disk, for what
+     * must not hold it all in memory: saving, sharing, large files. The real client fetches it
+     * through [RemoteFiles] (cached, resumed when cut); this default only serves test fakes.
+     */
+    suspend fun fetchFile(url: String): java.io.File =
+        java.io.File.createTempFile("fetch", ".tmp").apply { writeBytes(downloadFile(url)) }
+
     companion object {
         /**
          * Default WebSocket URL — Hermes dashboard server (running in Termux).

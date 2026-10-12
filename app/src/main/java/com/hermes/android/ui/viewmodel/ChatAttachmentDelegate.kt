@@ -244,7 +244,11 @@ internal class ChatAttachmentDelegate(
                     if (!local.isFile || local.length() > maxPreviewBytes) return@withContext null
                     local.readBytes()
                 }
-                url.startsWith("http") -> gatewayClient.downloadFile(url)
+                url.startsWith("http") -> {
+                    val file = gatewayClient.fetchFile(url)
+                    if (file.length() > maxPreviewBytes) return@withContext null
+                    file.readBytes()
+                }
                 else -> return@withContext null
             }
             if (bytes.size > maxPreviewBytes || bytes.contains(0.toByte())) null else bytes.toString(Charsets.UTF_8)
@@ -268,9 +272,10 @@ internal class ChatAttachmentDelegate(
                 if (hermesRuntime.hostFileForGuestPath(path)?.isFile != true) return@withContext null
                 return@withContext DocumentsContract.buildDocumentUri(LinuxFilesProvider.authority(context), path)
             }
-            val bytes = gatewayClient.downloadFile(resolveMediaUrl(path))
+            val fetched = gatewayClient.fetchFile(resolveMediaUrl(path))
             val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
-            val copy = java.io.File(dir, path.substringAfterLast('/')).apply { writeBytes(bytes) }
+            val copy = java.io.File(dir, path.substringAfterLast('/'))
+            fetched.copyTo(copy, overwrite = true)
             FileProvider.getUriForFile(context, "${context.packageName}.shared", copy)
         } catch (e: Exception) {
             Timber.w(e, "[Chat] Preview file can't be shared: $path")
@@ -294,7 +299,7 @@ internal class ChatAttachmentDelegate(
     fun downloadFile(state: MutableStateFlow<ChatUiState>, url: String, filename: String) {
         scope.launch {
             try {
-                val savedAs = downloadStorage.save(url, filename) { gatewayClient.downloadFile(it) }
+                val savedAs = downloadStorage.save(url, filename) { gatewayClient.fetchFile(it) }
                 Timber.i("[Chat] Downloaded ${redactCredentials(url)} -> $savedAs")
                 state.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to $savedAs")) }
             } catch (e: Exception) {

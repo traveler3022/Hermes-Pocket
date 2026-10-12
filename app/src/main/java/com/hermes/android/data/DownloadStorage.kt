@@ -37,9 +37,10 @@ class DownloadStorage(private val context: Context) {
 
     /**
      * Saves the file at [url] under [name]. A file of the built-in Linux (file://) is copied
-     * on disk; anything else is fetched with [fetch]. Returns where it went, for the user.
+     * on disk; anything else is fetched with [fetch] to a file on this disk first, and copied
+     * from there (never held in memory whole). Returns where it went, for the user.
      */
-    suspend fun save(url: String, name: String, fetch: suspend (String) -> ByteArray): String =
+    suspend fun save(url: String, name: String, fetch: suspend (String) -> File): String =
         withContext(Dispatchers.IO) {
             val fileName = downloadFileName(url, name)
             val dir = linuxDir()
@@ -52,9 +53,8 @@ class DownloadStorage(private val context: Context) {
             val target = if (source != null) {
                 freeTarget(dir, fileName) { sameFile(it, source) }.also { if (!it.exists()) copy(source, it) }
             } else {
-                val bytes = fetch(url)
-                freeTarget(dir, fileName) { it.length() == bytes.size.toLong() && it.readBytes().contentEquals(bytes) }
-                    .also { if (!it.exists()) writeAtomically(it) { out -> out.writeBytes(bytes) } }
+                val fetched = fetch(url)
+                freeTarget(dir, fileName) { sameFile(it, fetched) }.also { if (!it.exists()) copy(fetched, it) }
             }
             LinuxFilesProvider.notifyChildrenChanged(context, GUEST_DIR)
             "$GUEST_DIR/${target.name}"
@@ -93,7 +93,7 @@ class DownloadStorage(private val context: Context) {
         }
     }
 
-    private fun saveToPhoneDownloads(fileName: String, bytes: ByteArray) {
+    private fun saveToPhoneDownloads(fileName: String, source: File) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, fileName)
@@ -102,7 +102,7 @@ class DownloadStorage(private val context: Context) {
         }
         val itemUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: throw IOException("Could not create download entry")
-        resolver.openOutputStream(itemUri)?.use { out -> out.write(bytes) }
+        resolver.openOutputStream(itemUri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
             ?: throw IOException("Could not open output stream")
         values.clear()
         values.put(MediaStore.Downloads.IS_PENDING, 0)

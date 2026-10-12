@@ -181,7 +181,7 @@ class GroupChatViewModel @Inject constructor(
     fun downloadFile(url: String, name: String) {
         viewModelScope.launch {
             try {
-                val savedAs = downloads.save(url, name) { gatewayClient.downloadFile(it) }
+                val savedAs = downloads.save(url, name) { gatewayClient.fetchFile(it) }
                 _uiState.update { it.copy(notice = "Saved to $savedAs") }
             } catch (e: Exception) {
                 // A remote gateway's link carries its token.

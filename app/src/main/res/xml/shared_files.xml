@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Files copied from a remote gateway so another app can receive them through Share. -->
+<!-- Files of a remote gateway handed to another app (Share, open with): copies made for
+     sharing, and RemoteFiles' copies on disk. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <cache-path name="server" path="server-files/" />
 </paths>

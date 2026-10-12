@@ -101,6 +101,14 @@ import androidx.media3.ui.compose.material3.indicator.ProgressSlider
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.RemoteFiles
+import com.hermes.android.service.MediaStreams
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import timber.log.Timber
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.ProotEnvironment
@@ -132,6 +140,8 @@ import javax.inject.Inject
 class FileViewerActivity : ComponentActivity() {
 
     @Inject lateinit var gatewayClient: GatewayClient
+    @Inject lateinit var remoteFiles: RemoteFiles
+    @Inject lateinit var mediaStreams: MediaStreams
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -149,6 +159,13 @@ class FileViewerActivity : ComponentActivity() {
         val mime = intent.type?.takeUnless { external } ?: if (source.scheme == "content") contentResolver.getType(source) else null
         val kind = fileKindOf(name, mime).takeIf { it != FileKind.OTHER } ?: fileKindOf(uri.toString())
         if (kind == FileKind.OTHER) {
+            if (!external && remoteFiles.isServerFile(uri.toString())) {
+                lifecycleScope.launch {
+                    openServerFileOutside(uri.toString(), name)
+                    finish()
+                }
+                return
+            }
             if (!external) openUrlExternally(this, uri.toString())
             finish()
             return
@@ -169,7 +186,14 @@ class FileViewerActivity : ComponentActivity() {
                     FileViewerScreen(
                         uri = uri, name = name, kind = kind,
                         readBytes = ::readBytes,
-                        openExternally = { openUrlExternally(this, uri.toString()) },
+                        newPlayer = mediaStreams::playerBuilder,
+                        openExternally = {
+                            if (remoteFiles.isServerFile(uri.toString())) {
+                                lifecycleScope.launch { openServerFileOutside(uri.toString(), name) }
+                            } else {
+                                openUrlExternally(this, uri.toString())
+                            }
+                        },
                         onBack = ::finish,
                     )
                 }
@@ -205,7 +229,34 @@ class FileViewerActivity : ComponentActivity() {
             }
             "content" -> contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: throw IOException("Could not open the file")
-            else -> gatewayClient.downloadFile(uri.toString())
+            else -> {
+                val file = gatewayClient.fetchFile(uri.toString())
+                if (file.length() > MAX_TEXT_BYTES) throw IOException("File too large to show")
+                file.readBytes()
+            }
+        }
+    }
+
+    /**
+     * Another app can't reach the Hermes server (no sign-in, no Tailscale route): it gets the
+     * file from this app's copy on disk, through the FileProvider, with a read grant for it.
+     */
+    private suspend fun openServerFileOutside(url: String, name: String) {
+        try {
+            val file = gatewayClient.fetchFile(url)
+            val shared = FileProvider.getUriForFile(this, "$packageName.shared", file)
+            val type = MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(name.ifBlank { file.name }.substringAfterLast('.', "").lowercase())
+                ?: "*/*"
+            startActivity(
+                Intent(Intent.ACTION_VIEW).setDataAndType(shared, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+            )
+        } catch (e: android.content.ActivityNotFoundException) {
+            Toast.makeText(this, "No app can open this file", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Timber.w(e, "[Viewer] Could not fetch the file to open it elsewhere")
+            Toast.makeText(this, "Could not get the file: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -247,6 +298,7 @@ private fun FileViewerScreen(
     name: String,
     kind: FileKind,
     readBytes: suspend (Uri) -> ByteArray,
+    newPlayer: (Context) -> ExoPlayer.Builder,
     openExternally: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -271,7 +323,7 @@ private fun FileViewerScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
                 FileKind.AUDIO -> BackgroundAudio(uri, name) { player -> AudioControls(player, name) }
-                FileKind.VIDEO -> MediaViewer(uri) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
+                FileKind.VIDEO -> MediaViewer(uri, newPlayer) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
                 FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes, openExternally)
                 FileKind.HTML -> HtmlViewer(uri, readBytes, openExternally)
                 FileKind.IMAGE -> ImageViewer(uri)
@@ -287,10 +339,10 @@ private fun FileViewerScreen(
  * keeps playing after back.
  */
 @Composable
-private fun MediaViewer(uri: Uri, content: @Composable (ExoPlayer) -> Unit) {
+private fun MediaViewer(uri: Uri, newPlayer: (Context) -> ExoPlayer.Builder, content: @Composable (ExoPlayer) -> Unit) {
     val context = LocalContext.current
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
+        newPlayer(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
             prepare()
             playWhenReady = true

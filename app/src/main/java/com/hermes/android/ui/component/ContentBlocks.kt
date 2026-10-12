@@ -186,6 +186,19 @@ private fun parseParagraphs(segment: String, out: MutableList<ContentBlock>) {
     if (rest.isNotBlank()) parseProse(rest, out)
 }
 
+/**
+ * The file a markdown target names through Hermes' tag: the agent may wrap it in image or link
+ * syntax, `![fox](MEDIA:/root/fox.png)`. The tag decides, as in Hermes' desktop (which reads
+ * every `MEDIA:` before markdown): the file is the path, and its kind comes from it, so a
+ * video in image syntax still plays. Null for a target without the tag.
+ */
+private fun mediaTagTarget(target: String): String? {
+    val tag = mediaPrefixRegex.find(target) ?: return null
+    val path = target.substring(tag.range.last + 1).trim()
+        .removeSurrounding("\"").removeSurrounding("'").removeSurrounding("`")
+    return path.takeIf { it.startsWith("/") || it.startsWith("~/") || it.startsWith("file://") }
+}
+
 /** A link target that is a file the agent made, rather than a web page. */
 private fun isLocalArtifact(target: String): Boolean =
     (target.startsWith("/") || target.startsWith("~/") || target.startsWith("file://")) &&
@@ -212,15 +225,23 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
         // no file extension (common for web images, e.g. picsum.photos/200
         // or a query-only CDN link). Only bare paths are classified by ext.
         val alt = match.groupValues[1]
-        // The agent may put Hermes' tag inside the image syntax: ![fox](MEDIA:/root/fox.png).
-        // The tag is not part of the address; kept, the image never resolved to the file.
-        val url = match.groupValues[2].replaceFirst(mediaPrefixRegex, "")
-        candidates += match.range to ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url)
+        val url = match.groupValues[2]
+        val tagged = mediaTagTarget(url)
+        candidates += match.range to if (tagged != null) {
+            classifyUrl(tagged, alt = alt)
+        } else {
+            ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url)
+        }
     }
     for (match in links) {
         if (codeSpans.any { inside(match.range, it) }) continue
         val target = match.groupValues[2]
-        if (isLocalArtifact(target)) candidates += match.range to classifyUrl(target, alt = match.groupValues[1])
+        val tagged = mediaTagTarget(target)
+        if (tagged != null) {
+            candidates += match.range to classifyUrl(tagged, alt = match.groupValues[1])
+        } else if (isLocalArtifact(target)) {
+            candidates += match.range to classifyUrl(target, alt = match.groupValues[1])
+        }
     }
     for (tag in mediaTagRegex.findAll(segment)) {
         if (codeSpans.any { inside(tag.range, it) }) continue

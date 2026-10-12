@@ -32,6 +32,16 @@ class ContentBlocksTest {
     }
 
     @Test
+    fun `MEDIA tag inside markdown syntax takes the kind of its file`() {
+        val video = parseContentBlocks("![clip](MEDIA:/root/out/clip.mp4)")
+        assertEquals(listOf(ContentBlock.Video(url = "/root/out/clip.mp4", name = "clip")), video)
+        val file = parseContentBlocks("See [the report](MEDIA:/root/out/report.pdf).")
+        val ref = file.filterIsInstance<ContentBlock.FileRef>().single()
+        assertEquals("/root/out/report.pdf", ref.url)
+        assertTrue(file.filterIsInstance<ContentBlock.Text>().none { "MEDIA" in it.markdown || "](" in it.markdown })
+    }
+
+    @Test
     fun `markdown image with extensionless web url is still an image`() {
         val blocks = parseContentBlocks("![random](https://picsum.photos/400)")
         val img = blocks.filterIsInstance<ContentBlock.Image>().single()

@@ -6,10 +6,9 @@ import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
+import com.hermes.android.gateway.RemoteFiles
+import com.hermes.android.ui.component.ServerImageFetcher
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -35,7 +34,7 @@ class HermesApplication : Application(), Configuration.Provider, ImageLoaderFact
     lateinit var connectionJournal: com.hermes.android.diagnostics.ConnectionJournal
 
     @Inject
-    lateinit var httpClient: dagger.Lazy<OkHttpClient>
+    lateinit var remoteFiles: dagger.Lazy<RemoteFiles>
 
     override fun onCreate() {
         super.onCreate()
@@ -140,20 +139,18 @@ class HermesApplication : Application(), Configuration.Provider, ImageLoaderFact
     }
 
     /**
-     * Chat images load through the app's own client, so a remote server's file link gets the
-     * sign-in (Bearer header) and the Tailscale route like every other call. Coil's own client
-     * had neither, and the server answered 401. The read timeout replaces the socket's "none".
-     * HTTP/1.1: on HTTP/2 the shared 15 s ping fails the whole connection when its pong queues
-     * behind a large image on a slow link (OkHttp: "stream was reset: PROTOCOL_ERROR").
+     * Images on the Hermes server load through [RemoteFiles] ([ServerImageFetcher]): fetched
+     * with the server sign-in and the Tailscale route, kept on disk. Coil's own client had
+     * neither, and the server answered 401. Web images use the same client for its read
+     * timeout and HTTP/1.1 (the shared one has no read timeout, for the WebSocket).
      */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient {
-            httpClient.get().newBuilder()
-                .protocols(listOf(Protocol.HTTP_1_1))
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
-        }
-        .build()
+    override fun newImageLoader(): ImageLoader {
+        val files = remoteFiles.get()
+        return ImageLoader.Builder(this)
+            .okHttpClient { files.client }
+            .components { add(ServerImageFetcher.Factory(files)) }
+            .build()
+    }
 
     /**
      * WorkManager configuration — uses HiltWorkerFactory so @HiltWorker

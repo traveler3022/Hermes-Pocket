@@ -64,6 +64,7 @@ class OkHttpGatewayClient @Inject constructor(
     private val stdioHub: StdioGatewayHub,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val profileScope: ProfileScope = ProfileScope(appContext),
+    private val remoteFiles: RemoteFiles = RemoteFiles(appContext, httpClient),
 ) : GatewayClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -471,16 +472,17 @@ class OkHttpGatewayClient @Inject constructor(
                 throw GatewayException("Download failed: ${e.message}")
             }
         }
+        if (remoteFiles.isServerFile(url)) {
+            return@withContext try {
+                remoteFiles.fetch(url).readBytes()
+            } catch (e: IOException) {
+                throw GatewayException("Download failed: ${e.message}")
+            }
+        }
         val request = Request.Builder().url(url).get().build()
-        // Create a client with a read timeout for downloads (the shared httpClient
-        // has readTimeout=0 for WebSocket, which is wrong for one-shot downloads).
-        // HTTP/1.1: on HTTP/2 the shared 15 s ping fails the whole connection when its
-        // pong queues behind a large file on a slow link ("stream was reset: PROTOCOL_ERROR").
-        val downloadClient = httpClient.newBuilder()
-            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
-            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-        downloadClient.newCall(request).execute().use { response ->
+        // Not a server file (a web link): RemoteFiles' client still, for its read timeout
+        // and HTTP/1.1 (the shared client has no read timeout, for the WebSocket).
+        remoteFiles.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw GatewayException("Download failed: HTTP ${response.code}")
             }
@@ -508,6 +510,17 @@ class OkHttpGatewayClient @Inject constructor(
             }
         }
     }
+
+    override suspend fun fetchFile(url: String): java.io.File =
+        if (remoteFiles.isServerFile(url)) {
+            try {
+                remoteFiles.fetch(url)
+            } catch (e: IOException) {
+                throw GatewayException("Download failed: ${e.message}")
+            }
+        } else {
+            super.fetchFile(url)
+        }
 
     // ── Reconnection ───────────────────────────────────────────────────────
 
