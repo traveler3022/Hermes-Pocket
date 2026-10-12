@@ -145,7 +145,7 @@ fun ChangesSheet(
 
 @Composable
 private fun DiffView(
-    diff: com.hermes.android.data.CheckpointDiff,
+    diff: CheckpointDiff,
     hash: String,
     isRestoring: Boolean,
     onBack: () -> Unit,
