@@ -7,7 +7,10 @@ import com.hermes.android.runtime.KanbanSwitch
 import com.hermes.android.runtime.remote.RemoteServerSettings
 import com.hermes.android.runtime.remote.remoteHttpBase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -20,6 +23,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -40,7 +46,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class KanbanRepository @Inject constructor(
-    http: OkHttpClient,
+    private val http: OkHttpClient,
     private val json: Json,
     private val runtime: HermesRuntime,
     private val remote: RemoteServerSettings,
@@ -116,6 +122,39 @@ class KanbanRepository @Inject constructor(
     val switchedOn: StateFlow<Boolean> get() = switch.on
 
     private val onPhone: Boolean get() = runtime.type == RuntimeType.PROOT_LINUX
+
+    /** A remote server streams board changes ([changes]); the phone's own gateway has no socket for it. */
+    val hasLiveChanges: Boolean get() = !onPhone && base() != null
+
+    /**
+     * The server's Kanban event stream (`/events`, a WebSocket of `task_events` rows): emits once
+     * when it opens and once per batch of changes. Without a cursor the server starts at the
+     * current tail, so nothing old is replayed. Ends with an [IOException] when the socket drops.
+     */
+    fun changes(): Flow<Unit> = callbackFlow {
+        val base = base() ?: throw IOException("Kanban needs a connected server.")
+        val url = base.replaceFirst("https://", "wss://") + API + "/events"
+        // The shared client: sign-in ticket (RemoteAuthInterceptor), Tailscale route, ping.
+        val socket = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                trySend(Unit)
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                trySend(Unit)
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)
+                close(IOException("Kanban stream closed ($code)"))
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                close(IOException("Kanban stream failed: ${t.message}", t))
+            }
+        })
+        awaitClose { socket.cancel() }
+    }
 
     /** The board, column name → tasks, in the server's column order. */
     suspend fun board(): Map<String, List<Task>> {

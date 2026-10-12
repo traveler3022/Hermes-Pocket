@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.KanbanRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,12 +41,46 @@ class KanbanViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(UiState(available = kanban.available))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Re-reads the board while the screen is in front; workers move cards on their own. */
-    suspend fun watch() {
-        if (!kanban.available) return
+    /** Whether the server's event stream is open; the board is then re-read on each change. */
+    @Volatile
+    private var live = false
+
+    /**
+     * Re-reads the board while the screen is in front; workers move cards on their own. A remote
+     * server says when something changed (its event stream), and the timer only backs that up;
+     * the phone's own gateway has no stream, so it is read on the timer alone.
+     */
+    suspend fun watch() = coroutineScope {
+        if (!kanban.available) return@coroutineScope
+        if (kanban.hasLiveChanges) launch { followChanges() }
         while (true) {
             refresh()
-            delay(POLL_MS)
+            delay(if (live) LIVE_POLL_MS else POLL_MS)
+        }
+    }
+
+    private suspend fun followChanges() {
+        var retry = 0
+        try {
+            while (true) {
+                try {
+                    // A burst of events while a read is on collapses into one more read.
+                    kanban.changes().conflate().collect {
+                        live = true
+                        retry = 0
+                        refresh()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w("[Kanban] event stream: ${e.message}")
+                }
+                live = false
+                delay((STREAM_RETRY_MS shl retry.coerceAtMost(4)).coerceAtMost(MAX_STREAM_RETRY_MS))
+                retry++
+            }
+        } finally {
+            live = false
         }
     }
 
@@ -161,5 +198,8 @@ class KanbanViewModel @Inject constructor(
 
     private companion object {
         const val POLL_MS = 10_000L
+        const val LIVE_POLL_MS = 60_000L
+        const val STREAM_RETRY_MS = 2_000L
+        const val MAX_STREAM_RETRY_MS = 30_000L
     }
 }

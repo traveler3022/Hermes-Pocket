@@ -8,8 +8,9 @@ import javax.inject.Singleton
 /**
  * Puts the server sign-in on every request to the signed-in server, and only there:
  *
- * - The gateway WebSocket (`…/api/ws`) gets a brand-new single-use ticket on EVERY dial — the
- *   first connect and each reconnect alike — so the socket URL never holds anything that works twice.
+ * - The gateway WebSocket (`…/api/ws`) and the Kanban event stream (`…/api/plugins/kanban/events`)
+ *   get a brand-new single-use ticket on EVERY dial — the first connect and each reconnect alike — so
+ *   the socket URL never holds anything that works twice. Both read the credential from the URL only.
  * - Plain HTTP calls carry the access token as a Bearer header (never in the URL). When the server
  *   says it expired, it is refreshed once and the call retried.
  *
@@ -25,7 +26,7 @@ class RemoteAuthInterceptor @Inject constructor(
         val tokens = auth.tokensFor(request.url) ?: return chain.proceed(request)
         val url = request.url.newBuilder().removeAllQueryParameters("token").build()
 
-        if (url.encodedPath.endsWith("/api/ws")) {
+        if (TICKET_PATHS.any { url.encodedPath.endsWith(it) }) {
             val ticket = auth.mintTicketBlocking(tokens)
             val withTicket = url.newBuilder()
                 .removeAllQueryParameters("ticket")
@@ -42,5 +43,9 @@ class RemoteAuthInterceptor @Inject constructor(
         val fresh = auth.refreshBlocking(access) ?: return response
         response.close()
         return chain.proceed(authed.newBuilder().header("Authorization", "Bearer ${fresh.accessToken}").build())
+    }
+
+    private companion object {
+        val TICKET_PATHS = listOf("/api/ws", "/api/plugins/kanban/events")
     }
 }

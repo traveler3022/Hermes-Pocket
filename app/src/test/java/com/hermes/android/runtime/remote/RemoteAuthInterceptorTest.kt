@@ -51,6 +51,15 @@ class RemoteAuthInterceptorTest {
     }
 
     @Test
+    fun `the Kanban event stream gets a ticket too, not a header`() {
+        get(client, "$base/api/plugins/kanban/events")
+
+        val call = server.requests.single { it.path == "/api/plugins/kanban/events" }
+        assertEquals("ticket=t1", call.query)
+        assertFalse(call.headers.containsKey("authorization"))
+    }
+
+    @Test
     fun `plain calls carry the sign-in as a header, never in the URL`() {
         get(client, "$base/api/status?token=old")
 
