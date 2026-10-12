@@ -1,14 +1,18 @@
 package com.hermes.android.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.KanbanRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -18,17 +22,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
+import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 
 /** The server's Kanban board: one column at a time, a task's detail, and the moves a person makes. */
 @HiltViewModel
 class KanbanViewModel @Inject constructor(
     private val kanban: KanbanRepository,
-    gatewayClient: GatewayClient,
+    private val gatewayClient: GatewayClient,
     hermesRuntime: HermesRuntime,
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    private val downloads by lazy { DownloadStorage(context) }
 
     /** Turns a server path into what the file viewer reads, per runtime, as for chat files. */
     private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, context, viewModelScope)
@@ -59,6 +69,18 @@ class KanbanViewModel @Inject constructor(
         val orchestration: KanbanRepository.Orchestration? = null,
         /** The open task is being written out by the server's model (specify). */
         val isSpecifying: Boolean = false,
+        /** Something done that the user should hear about (a file saved, a board imported). */
+        val notice: String? = null,
+        /** The `archived` column is read and shown too. */
+        val showArchived: Boolean = false,
+        /** Tasks on the board with trouble, worst first. */
+        val diagnostics: List<KanbanRepository.TaskDiagnostics> = emptyList(),
+        /** The open task's estimate, once asked for. */
+        val estimate: KanbanRepository.Estimate? = null,
+        val isEstimating: Boolean = false,
+        val modelOptions: List<KanbanRepository.ModelProvider> = emptyList(),
+        /** The open task's home channels; null until read. */
+        val homeChannels: List<KanbanRepository.HomeChannel>? = null,
     ) {
         val filtering: Boolean get() = query.isNotBlank() || assigneeFilter != null
 
@@ -94,7 +116,8 @@ class KanbanViewModel @Inject constructor(
      */
     suspend fun watch() = coroutineScope {
         if (!kanban.available) return@coroutineScope
-        launch { loadBoards() }
+        // First, so the board kept from last time is the one read and followed.
+        loadBoards()
         if (kanban.hasLiveChanges) launch { followChanges() }
         while (true) {
             refresh()
@@ -132,9 +155,15 @@ class KanbanViewModel @Inject constructor(
         }
     }
 
+    private var boardRestored = false
+
     private suspend fun loadBoards() {
         runCatching { kanban.boards() }
             .onSuccess { boards ->
+                if (!boardRestored) {
+                    boardRestored = true
+                    kanban.restoreBoard(boards)
+                }
                 _uiState.update { state ->
                     state.copy(boards = boards, board = kanban.selectedBoard.value ?: boards.firstOrNull { it.isCurrent }?.slug)
                 }
@@ -154,7 +183,7 @@ class KanbanViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 board = slug, columns = emptyMap(), isLoading = true, detail = null, log = null,
-                inspections = emptyMap(), selected = emptySet(), assigneeFilter = null,
+                inspections = emptyMap(), selected = emptySet(), assigneeFilter = null, diagnostics = emptyList(),
             )
         }
         viewModelScope.launch { refresh() }
@@ -169,13 +198,17 @@ class KanbanViewModel @Inject constructor(
     private suspend fun refresh() {
         try {
             val board = kanban.selectedBoard.value
-            val columns = kanban.board()
+            val columns = kanban.board(includeArchived = _uiState.value.showArchived)
             // A read that began on the board the user just left must not overwrite the new one.
             if (kanban.selectedBoard.value != board) return
             _uiState.update { state ->
                 // Open on the first column with work in it, until the user picks one.
                 val column = if (state.isLoading) firstBusy(columns) ?: state.column else state.column
                 state.copy(columns = columns, column = column, isLoading = false)
+            }
+            // An older server has no diagnostics; that must not fail the board.
+            runCatching { kanban.diagnostics() }.onSuccess { found ->
+                if (kanban.selectedBoard.value == board) _uiState.update { it.copy(diagnostics = found) }
             }
             _uiState.value.detail?.let { open ->
                 val detail = kanban.task(open.task.id)
@@ -286,17 +319,126 @@ class KanbanViewModel @Inject constructor(
         }
     }
 
-    fun open(task: KanbanRepository.Task) {
+    fun open(task: KanbanRepository.Task) = open(task.id)
+
+    fun open(id: String) {
         viewModelScope.launch {
-            runCatching { kanban.task(task.id) }
+            runCatching { kanban.task(id) }
                 .onSuccess { detail ->
-                    _uiState.update { it.copy(detail = detail, log = null, isLogLoading = false, inspections = emptyMap()) }
+                    _uiState.update {
+                        it.copy(
+                            detail = detail, log = null, isLogLoading = false, inspections = emptyMap(),
+                            estimate = null, isEstimating = false, homeChannels = null,
+                        )
+                    }
+                    loadHomeChannels(id)
                 }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
-    fun close() = _uiState.update { it.copy(detail = null, log = null, isLogLoading = false, inspections = emptyMap()) }
+    fun close() = _uiState.update {
+        it.copy(detail = null, log = null, isLogLoading = false, inspections = emptyMap(), estimate = null, homeChannels = null)
+    }
+
+    fun clearNotice() = _uiState.update { it.copy(notice = null) }
+
+    fun setShowArchived(show: Boolean) {
+        _uiState.update { it.copy(showArchived = show, column = if (show) "archived" else if (it.column == "archived") "done" else it.column) }
+        viewModelScope.launch { refresh() }
+    }
+
+    /** Adds the file at [uri] (picked on the phone) to the open task. */
+    fun upload(uri: Uri) {
+        val id = _uiState.value.detail?.task?.id ?: return
+        act {
+            val (file, name, mime) = copyToCache(uri)
+            try {
+                kanban.upload(id, file, name, mime)
+            } finally {
+                file.delete()
+            }
+            _uiState.update { it.copy(notice = "Added $name") }
+        }
+    }
+
+    fun deleteAttachment(id: Long) = act { kanban.deleteAttachment(id) }
+
+    fun estimate(id: String) {
+        if (_uiState.value.isEstimating) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isEstimating = true, error = null) }
+            runCatching { kanban.estimate(id) }
+                .onSuccess { found -> _uiState.update { if (it.detail?.task?.id == id) it.copy(estimate = found) else it } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+            _uiState.update { it.copy(isEstimating = false) }
+        }
+    }
+
+    fun loadModelOptions() {
+        if (_uiState.value.modelOptions.isNotEmpty()) return
+        viewModelScope.launch {
+            runCatching { kanban.modelOptions() }
+                .onSuccess { found -> _uiState.update { it.copy(modelOptions = found) } }
+                .onFailure { e -> Timber.w(e, "[Kanban] model options failed") }
+        }
+    }
+
+    fun setRunSettings(id: String, model: String?, provider: String?, effort: String?) =
+        act { kanban.setRunSettings(id, model, provider, effort) }
+
+    private suspend fun loadHomeChannels(id: String) {
+        runCatching { kanban.homeChannels(id) }
+            .onSuccess { found -> _uiState.update { if (it.detail?.task?.id == id) it.copy(homeChannels = found) else it } }
+            .onFailure { e -> Timber.w(e, "[Kanban] home channels failed") }
+    }
+
+    fun setHomeChannel(platform: String, on: Boolean) {
+        val id = _uiState.value.detail?.task?.id ?: return
+        act {
+            kanban.setHomeChannel(id, platform, on)
+            loadHomeChannels(id)
+        }
+    }
+
+    /** Writes the board on screen to an archive on the server and saves it on the phone. */
+    fun exportBoard() {
+        val slug = _uiState.value.board ?: return
+        act {
+            val serverPath = kanban.exportBoard(slug)
+            val name = serverPath.substringAfterLast('/')
+            val savedAs = downloads.save(media.resolveMediaUrl(serverPath), name) { gatewayClient.fetchFile(it) }
+            _uiState.update { it.copy(notice = "Saved to $savedAs") }
+        }
+    }
+
+    /** Imports the board archive at [uri] as a new board and shows it. */
+    fun importBoard(uri: Uri) {
+        act {
+            val (file, _, _) = copyToCache(uri)
+            val slug = try {
+                kanban.importBoard(file)
+            } finally {
+                file.delete()
+            }
+            loadBoards()
+            selectBoard(slug)
+            _uiState.update { it.copy(notice = "Imported board $slug") }
+        }
+    }
+
+    /** A picked file as a file in the app's cache, with its name and type. */
+    private suspend fun copyToCache(uri: Uri): Triple<File, String, String?> = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+        val dir = File(context.cacheDir, "kanban-uploads").apply { mkdirs() }
+        val file = File(dir, UUID.randomUUID().toString())
+        val input = resolver.openInputStream(uri) ?: throw IOException("Could not open $name")
+        input.use { source -> file.outputStream().use { source.copyTo(it) } }
+        Triple(file, name, resolver.getType(uri))
+    }
 
     fun loadLog(id: String) {
         if (_uiState.value.isLogLoading) return
