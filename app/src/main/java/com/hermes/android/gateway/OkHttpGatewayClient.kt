@@ -474,7 +474,10 @@ class OkHttpGatewayClient @Inject constructor(
         val request = Request.Builder().url(url).get().build()
         // Create a client with a read timeout for downloads (the shared httpClient
         // has readTimeout=0 for WebSocket, which is wrong for one-shot downloads).
+        // HTTP/1.1: on HTTP/2 the shared 15 s ping fails the whole connection when its
+        // pong queues behind a large file on a slow link ("stream was reset: PROTOCOL_ERROR").
         val downloadClient = httpClient.newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .build()
         downloadClient.newCall(request).execute().use { response ->
