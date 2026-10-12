@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,9 @@ class KanbanViewModel @Inject constructor(
 
     data class UiState(
         val available: Boolean = true,
+        val boards: List<KanbanRepository.Board> = emptyList(),
+        /** The board on screen; null until the server says which one is current. */
+        val board: String? = null,
         val columns: Map<String, List<KanbanRepository.Task>> = emptyMap(),
         val column: String = "ready",
         val isLoading: Boolean = true,
@@ -52,6 +56,7 @@ class KanbanViewModel @Inject constructor(
      */
     suspend fun watch() = coroutineScope {
         if (!kanban.available) return@coroutineScope
+        launch { loadBoards() }
         if (kanban.hasLiveChanges) launch { followChanges() }
         while (true) {
             refresh()
@@ -59,7 +64,12 @@ class KanbanViewModel @Inject constructor(
         }
     }
 
+    /** The stream is pinned to one board at the handshake, so a board change opens a new one. */
     private suspend fun followChanges() {
+        kanban.selectedBoard.collectLatest { followChanges(it) }
+    }
+
+    private suspend fun followChanges(board: String?) {
         var retry = 0
         try {
             while (true) {
@@ -68,7 +78,7 @@ class KanbanViewModel @Inject constructor(
                     kanban.changes().conflate().collect {
                         live = true
                         retry = 0
-                        refresh()
+                        if (kanban.selectedBoard.value == board) refresh()
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -84,9 +94,43 @@ class KanbanViewModel @Inject constructor(
         }
     }
 
+    private suspend fun loadBoards() {
+        runCatching { kanban.boards() }
+            .onSuccess { boards ->
+                _uiState.update { state ->
+                    state.copy(boards = boards, board = kanban.selectedBoard.value ?: boards.firstOrNull { it.isCurrent }?.slug)
+                }
+            }
+            .onFailure { e -> Timber.w(e, "[Kanban] boards read failed") }
+    }
+
+    /** Re-reads the boards and their counts, for the board menu as it opens. */
+    fun refreshBoards() {
+        viewModelScope.launch { loadBoards() }
+    }
+
+    /** Shows [slug]'s board: its columns are read fresh, the open task (another board's) closes. */
+    fun selectBoard(slug: String) {
+        if (slug == _uiState.value.board) return
+        kanban.selectBoard(slug)
+        _uiState.update {
+            it.copy(board = slug, columns = emptyMap(), isLoading = true, detail = null, log = null, inspections = emptyMap())
+        }
+        viewModelScope.launch { refresh() }
+    }
+
+    fun createBoard(name: String, onDone: () -> Unit) = act(onDone) {
+        val slug = kanban.createBoard(name)
+        loadBoards()
+        selectBoard(slug)
+    }
+
     private suspend fun refresh() {
         try {
+            val board = kanban.selectedBoard.value
             val columns = kanban.board()
+            // A read that began on the board the user just left must not overwrite the new one.
+            if (kanban.selectedBoard.value != board) return
             _uiState.update { state ->
                 // Open on the first column with work in it, until the user picks one.
                 val column = if (state.isLoading) firstBusy(columns) ?: state.column else state.column

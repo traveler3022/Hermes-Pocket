@@ -3,6 +3,7 @@ package com.hermes.android.ui.screen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,9 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -58,6 +62,7 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.icons.filled.ExpandMore
 import com.hermes.android.ui.icons.filled.Inventory2
 import com.hermes.android.ui.viewmodel.KanbanViewModel
 
@@ -106,6 +111,18 @@ fun KanbanScreen(
         title = t("Kanban", "کانبان"),
         subtitle = t("Tasks your profiles work on", "کارهایی که پروفایل‌ها انجام می‌دهند"),
         onBack = onNavigateBack,
+        actions = {
+            if (state.available && state.board != null) {
+                BoardPicker(
+                    boards = state.boards,
+                    selected = state.board,
+                    isBusy = state.isBusy,
+                    onOpen = viewModel::refreshBoards,
+                    onSelect = viewModel::selectBoard,
+                    onCreate = viewModel::createBoard,
+                )
+            }
+        },
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
             if (state.available) {
@@ -201,6 +218,84 @@ fun KanbanScreen(
         )
     }
 }
+
+/** The board on screen, and a menu of the others plus "New board". */
+@Composable
+private fun BoardPicker(
+    boards: List<KanbanRepository.Board>,
+    selected: String?,
+    isBusy: Boolean,
+    onOpen: () -> Unit,
+    onSelect: (String) -> Unit,
+    onCreate: (name: String, onDone: () -> Unit) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    val current = boards.firstOrNull { it.slug == selected }
+    Box {
+        TextButton(onClick = {
+            onOpen()
+            open = true
+        }) {
+            Text(
+                current?.let { boardLabel(it) } ?: selected.orEmpty(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(end = HxSpace.xs),
+            )
+            Icon(Icons.Default.ExpandMore, contentDescription = t("Boards", "تابلوها"), modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            boards.forEach { board ->
+                DropdownMenuItem(
+                    text = { Text(if (board.total > 0) "${boardLabel(board)} · ${board.total}" else boardLabel(board)) },
+                    leadingIcon = {
+                        if (board.slug == selected) Icon(Icons.Default.Check, contentDescription = null)
+                        else Box(Modifier.size(24.dp))
+                    },
+                    onClick = {
+                        open = false
+                        onSelect(board.slug)
+                    },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(t("New board", "تابلوی جدید")) },
+                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                onClick = {
+                    open = false
+                    creating = true
+                },
+            )
+        }
+    }
+    if (creating) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { creating = false },
+            title = { Text(t("New board", "تابلوی جدید")) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(t("Name", "نام")) },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = name.isNotBlank() && !isBusy,
+                    onClick = { onCreate(name) { creating = false } },
+                ) { Text(t("Create", "ساختن")) }
+            },
+            dismissButton = { TextButton(onClick = { creating = false }) { Text(t("Cancel", "انصراف")) } },
+        )
+    }
+}
+
+private fun boardLabel(board: KanbanRepository.Board): String =
+    listOf(board.icon, board.name).filter { it.isNotBlank() }.joinToString(" ")
 
 @Composable
 private fun TaskCard(task: KanbanRepository.Task, onClick: () -> Unit) {

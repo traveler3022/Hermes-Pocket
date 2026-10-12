@@ -9,7 +9,9 @@ import com.hermes.android.runtime.remote.remoteHttpBase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -70,6 +72,9 @@ class KanbanRepository @Inject constructor(
         val progress: Pair<Int, Int>?,
     )
 
+    /** One of the server's boards (each its own database; the dispatcher runs them all). */
+    data class Board(val slug: String, val name: String, val icon: String, val total: Int, val isCurrent: Boolean)
+
     data class Comment(val author: String, val body: String, val createdAt: Long)
 
     /** One attempt at a task: opened when a worker claims it, closed when it ends. */
@@ -123,6 +128,41 @@ class KanbanRepository @Inject constructor(
 
     private val onPhone: Boolean get() = runtime.type == RuntimeType.PROOT_LINUX
 
+    private val _selectedBoard = MutableStateFlow<String?>(null)
+
+    /**
+     * The board this app reads and writes, as the dashboard does per tab (`?board=`); null is the
+     * server's current board. Kept for this run of the app only.
+     */
+    val selectedBoard: StateFlow<String?> = _selectedBoard.asStateFlow()
+
+    fun selectBoard(slug: String?) {
+        _selectedBoard.value = slug
+    }
+
+    /** Every live board, with its open-task count and which one the server calls current. */
+    suspend fun boards(): List<Board> {
+        val root = call("GET", "/boards") as? JsonObject ?: return emptyList()
+        return (root["boards"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
+            val slug = row.str("slug").ifEmpty { return@mapNotNull null }
+            Board(
+                slug = slug,
+                name = row.str("name").ifBlank { slug },
+                icon = row.str("icon"),
+                total = row.long("total").toInt(),
+                isCurrent = row.bool("is_current"),
+            )
+        }
+    }
+
+    /** Adds a board named [name] and returns its slug (the server's id: lowercase latin only). */
+    suspend fun createBoard(name: String): String {
+        val slug = boardSlug(name)
+        val payload = JsonObject(mapOf("slug" to JsonPrimitive(slug), "name" to JsonPrimitive(name.trim())))
+        val created = call("POST", "/boards", payload) as? JsonObject
+        return (created?.get("board") as? JsonObject)?.str("slug")?.ifEmpty { null } ?: slug
+    }
+
     /** A remote server streams board changes ([changes]); the phone's own gateway has no socket for it. */
     val hasLiveChanges: Boolean get() = !onPhone && base() != null
 
@@ -133,7 +173,7 @@ class KanbanRepository @Inject constructor(
      */
     fun changes(): Flow<Unit> = callbackFlow {
         val base = base() ?: throw IOException("Kanban needs a connected server.")
-        val url = base.replaceFirst("https://", "wss://") + API + "/events"
+        val url = base.replaceFirst("https://", "wss://") + API + scoped("/events")
         // The shared client: sign-in ticket (RemoteAuthInterceptor), Tailscale route, ping.
         val socket = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -283,8 +323,16 @@ class KanbanRepository @Inject constructor(
 
     private fun base(): String? = remoteHttpBase(remote.config.value.serverUrl)?.takeIf { it.startsWith("https://") }
 
-    private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement =
-        if (onPhone) callOnPhone(method, path, body) else callServer(method, path, body)
+    private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement {
+        val scopedPath = if (path.startsWith("/boards")) path else scoped(path)
+        return if (onPhone) callOnPhone(method, scopedPath, body) else callServer(method, scopedPath, body)
+    }
+
+    /** [path] on the selected board; the server's current board when none is selected. */
+    private fun scoped(path: String): String {
+        val slug = _selectedBoard.value ?: return path
+        return path + (if ('?' in path) "&" else "?") + "board=" + slug.urlPart()
+    }
 
     /** The phone's gateway runs the same plugin router in-process (`android.kanban`). */
     private suspend fun callOnPhone(method: String, path: String, body: JsonObject?): JsonElement {
@@ -331,6 +379,17 @@ class KanbanRepository @Inject constructor(
         const val LOG_TAIL_BYTES = 64 * 1024
         val JSON_TYPE = "application/json".toMediaType()
     }
+}
+
+/**
+ * A board slug for [name]: lowercase latin letters, digits and hyphens, as the server requires
+ * (1-64 chars, not starting with `-`). A name with none of those (Persian, say) gets a random one;
+ * the name itself is kept as the board's display name.
+ */
+internal fun boardSlug(name: String): String {
+    val latin = name.lowercase().map { if (it in 'a'..'z' || it in '0'..'9') it else '-' }.joinToString("")
+        .split('-').filter { it.isNotEmpty() }.joinToString("-").take(48).trimEnd('-')
+    return latin.ifEmpty { "board-" + UUID.randomUUID().toString().take(8) }
 }
 
 private fun String.urlPart(): String = java.net.URLEncoder.encode(this, "UTF-8").replace("+", "%20")
