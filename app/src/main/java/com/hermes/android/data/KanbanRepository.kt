@@ -75,6 +75,22 @@ class KanbanRepository @Inject constructor(
     /** One of the server's boards (each its own database; the dispatcher runs them all). */
     data class Board(val slug: String, val name: String, val icon: String, val total: Int, val isCurrent: Boolean)
 
+    /**
+     * How the server splits and hands out work (`kanban:` in its config.yaml). Empty profile
+     * names mean "not set": the server then uses [activeProfile].
+     */
+    data class Orchestration(
+        /** The profile that splits a triage task into steps. */
+        val orchestratorProfile: String,
+        /** Who gets a step the split could not match to a profile. */
+        val defaultAssignee: String,
+        /** Split new triage tasks on their own. */
+        val autoDecompose: Boolean,
+        /** Start the next steps when the ones they wait on finish. */
+        val autoPromoteChildren: Boolean,
+        val activeProfile: String,
+    )
+
     data class Comment(val author: String, val body: String, val createdAt: Long)
 
     /** One attempt at a task: opened when a worker claims it, closed when it ends. */
@@ -316,6 +332,52 @@ class KanbanRepository @Inject constructor(
         call("DELETE", "/tasks/${id.urlPart()}")
     }
 
+    /**
+     * The same change on several tasks: a new [status] (`ready`, `done`), [archive], or a new
+     * [assignee] ("" for nobody; null leaves it). Each task is changed on its own, so some can be
+     * refused; returns those as id → the server's reason.
+     */
+    suspend fun bulk(
+        ids: Collection<String>,
+        status: String? = null,
+        assignee: String? = null,
+        archive: Boolean = false,
+    ): Map<String, String> {
+        val payload = buildMap<String, JsonElement> {
+            put("ids", JsonArray(ids.map { JsonPrimitive(it) }))
+            if (status != null) put("status", JsonPrimitive(status))
+            // The server refuses to finish a task without a result or summary to show for it.
+            if (status == "done") put("summary", JsonPrimitive("Marked done from the Hermes app"))
+            if (assignee != null) put("assignee", JsonPrimitive(assignee))
+            if (archive) put("archive", JsonPrimitive(true))
+        }
+        val root = call("POST", "/tasks/bulk", JsonObject(payload)) as? JsonObject
+        val refused = (root?.get("results") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            .filter { !it.bool("ok") }
+            .associate { it.str("id") to it.str("error").ifEmpty { "refused" } }
+        if (status == "ready" || !assignee.isNullOrEmpty()) dispatchNow()
+        return refused
+    }
+
+    suspend fun orchestration(): Orchestration {
+        val root = call("GET", "/orchestration") as? JsonObject ?: throw IOException("No orchestration settings")
+        return root.toOrchestration()
+    }
+
+    /** Saves all four settings; the server refuses a profile that doesn't exist. */
+    suspend fun saveOrchestration(settings: Orchestration): Orchestration {
+        val payload = JsonObject(
+            mapOf(
+                "orchestrator_profile" to JsonPrimitive(settings.orchestratorProfile),
+                "default_assignee" to JsonPrimitive(settings.defaultAssignee),
+                "auto_decompose" to JsonPrimitive(settings.autoDecompose),
+                "auto_promote_children" to JsonPrimitive(settings.autoPromoteChildren),
+            )
+        )
+        val root = call("PUT", "/orchestration", payload) as? JsonObject ?: return settings
+        return root.toOrchestration()
+    }
+
     /** Asks the dispatcher to start ready tasks now instead of at its next 60 s tick. */
     private suspend fun dispatchNow() {
         runCatching { call("POST", "/dispatch") }
@@ -399,6 +461,14 @@ private fun JsonObject.str(key: String): String = (this[key] as? JsonPrimitive)?
 private fun JsonObject.long(key: String): Long = (this[key] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong() ?: 0
 
 private fun JsonObject.bool(key: String): Boolean = (this[key] as? JsonPrimitive)?.contentOrNull == "true"
+
+private fun JsonObject.toOrchestration() = KanbanRepository.Orchestration(
+    orchestratorProfile = str("orchestrator_profile"),
+    defaultAssignee = str("default_assignee"),
+    autoDecompose = bool("auto_decompose"),
+    autoPromoteChildren = bool("auto_promote_children"),
+    activeProfile = str("active_profile").ifEmpty { "default" },
+)
 
 private fun JsonObject.toRun(): KanbanRepository.Run? {
     val id = str("id").toDoubleOrNull()?.toLong() ?: return null
