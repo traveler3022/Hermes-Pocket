@@ -24,6 +24,14 @@ class ContentBlocksTest {
     }
 
     @Test
+    fun `MEDIA tag inside markdown image syntax is the file path`() {
+        val blocks = parseContentBlocks("![fox](MEDIA:/root/.hermes/cache/generated/images/fox_1.png)")
+        val img = blocks.filterIsInstance<ContentBlock.Image>().single()
+        assertEquals("/root/.hermes/cache/generated/images/fox_1.png", img.url)
+        assertEquals("fox", img.alt)
+    }
+
+    @Test
     fun `markdown image with extensionless web url is still an image`() {
         val blocks = parseContentBlocks("![random](https://picsum.photos/400)")
         val img = blocks.filterIsInstance<ContentBlock.Image>().single()

@@ -41,6 +41,7 @@ private val fenceRegex = Regex("```([A-Za-z0-9+_.-]*)[ \\t]*\\n([\\s\\S]*?)(?:``
 private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
 private val mdLinkRegex = Regex("""(?<!!)\[([^\]]*)]\(([^)\s]+)\)""")
 private val inlineCodeRegex = Regex("`[^`\n]+`")
+private val mediaPrefixRegex = Regex("""^MEDIA:\s*""", RegexOption.IGNORE_CASE)
 
 // Bare path/URL to a media artifact the agent wrote or linked, e.g.
 // "Saved to ~/.hermes/images/plot.png" or "file:///.../page.html".
@@ -211,7 +212,9 @@ private fun parseProse(segment: String, out: MutableList<ContentBlock>) {
         // no file extension (common for web images, e.g. picsum.photos/200
         // or a query-only CDN link). Only bare paths are classified by ext.
         val alt = match.groupValues[1]
-        val url = match.groupValues[2]
+        // The agent may put Hermes' tag inside the image syntax: ![fox](MEDIA:/root/fox.png).
+        // The tag is not part of the address; kept, the image never resolved to the file.
+        val url = match.groupValues[2].replaceFirst(mediaPrefixRegex, "")
         candidates += match.range to ContentBlock.Image(alt = alt.ifBlank { url.substringAfterLast('/').substringBefore('?') }, url = url)
     }
     for (match in links) {
