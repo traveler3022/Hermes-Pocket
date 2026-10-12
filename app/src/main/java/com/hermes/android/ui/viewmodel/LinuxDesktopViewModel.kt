@@ -2,7 +2,9 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.runtime.linux.LinuxDesktop
+import com.hermes.android.runtime.DesktopSettings
+import com.hermes.android.runtime.DesktopState
+import com.hermes.android.runtime.LinuxDesktopControl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,14 +27,14 @@ data class LinuxDesktopUiState(
 /** Browser & desktop (VNC) settings and viewer — Aether's Alpine Chrome page. */
 @HiltViewModel
 class LinuxDesktopViewModel @Inject constructor(
-    private val desktop: LinuxDesktop,
+    private val desktop: LinuxDesktopControl,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LinuxDesktopUiState())
     val ui: StateFlow<LinuxDesktopUiState> = _ui.asStateFlow()
 
-    val state: StateFlow<LinuxDesktop.State> = desktop.state
-    val settings: StateFlow<LinuxDesktop.Settings> = desktop.settings
+    val state: StateFlow<DesktopState> = desktop.state
+    val settings: StateFlow<DesktopSettings> = desktop.settings
 
     val viewerUrl: String get() = desktop.viewerUrl
 
@@ -73,7 +75,7 @@ class LinuxDesktopViewModel @Inject constructor(
         _ui.update { it.copy(restartPending = false) }
     }
 
-    fun update(transform: (LinuxDesktop.Settings) -> LinuxDesktop.Settings) = busy {
+    fun update(transform: (DesktopSettings) -> DesktopSettings) = busy {
         if (desktop.update(transform(desktop.settings.value))) {
             _ui.update { it.copy(restartPending = true) }
         }

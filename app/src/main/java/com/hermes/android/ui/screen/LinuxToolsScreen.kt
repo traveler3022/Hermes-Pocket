@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.runtime.LinuxTools
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.SectionHeader
@@ -133,7 +134,7 @@ fun LinuxToolsScreen(
                     ),
                     icon = Icons.Default.DesktopWindows,
                     onClick = {
-                        if (state.installed[LinuxToolsViewModel.DesktopProfileId] == false) {
+                        if (state.installed[LinuxTools.DesktopProfileId] == false) {
                             viewModel.showMessage(desktopNotInstalled)
                         } else {
                             onOpenDesktop()

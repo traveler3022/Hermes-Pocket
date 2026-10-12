@@ -46,7 +46,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.runtime.linux.LinuxDesktop
+import com.hermes.android.runtime.DefaultDesktopHomepage
+import com.hermes.android.runtime.DesktopResolution
+import com.hermes.android.runtime.DesktopState
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.SectionHeader
@@ -223,7 +225,7 @@ fun LinuxDesktopScreen(
             keyboardType = KeyboardType.Uri,
             onDismiss = { dialog = null },
             onSave = { value ->
-                viewModel.update { it.copy(homepage = value.trim().ifBlank { LinuxDesktop.DefaultHomepage }) }
+                viewModel.update { it.copy(homepage = value.trim().ifBlank { DefaultDesktopHomepage }) }
                 dialog = null
             },
         )
@@ -250,7 +252,7 @@ fun LinuxDesktopScreen(
             title = { Text(t("Screen size", "اندازهٔ صفحه")) },
             text = {
                 Column {
-                    LinuxDesktop.Resolution.values().forEach { option ->
+                    DesktopResolution.values().forEach { option ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth(),
@@ -297,7 +299,7 @@ private enum class DesktopDialog { Homepage, Password, PasswordToShare, Resoluti
 
 @Composable
 private fun StatusCard(
-    state: LinuxDesktop.State,
+    state: DesktopState,
     busy: Boolean,
     restartPending: Boolean,
     onOpen: () -> Unit,
@@ -306,22 +308,22 @@ private fun StatusCard(
     onRestart: () -> Unit,
 ) {
     val (label, color) = when (state) {
-        LinuxDesktop.State.Running -> t("Running", "روشن") to Color(0xFF22C55E)
-        LinuxDesktop.State.Starting -> t("Starting…", "در حال روشن شدن…") to Color(0xFFF59E0B)
-        LinuxDesktop.State.Stopped -> t("Stopped", "خاموش") to MaterialTheme.colorScheme.outline
-        is LinuxDesktop.State.Error -> t("Failed", "خطا") to MaterialTheme.colorScheme.error
+        DesktopState.Running -> t("Running", "روشن") to Color(0xFF22C55E)
+        DesktopState.Starting -> t("Starting…", "در حال روشن شدن…") to Color(0xFFF59E0B)
+        DesktopState.Stopped -> t("Stopped", "خاموش") to MaterialTheme.colorScheme.outline
+        is DesktopState.Error -> t("Failed", "خطا") to MaterialTheme.colorScheme.error
     }
     SettingsGroup {
         SettingRow(
             title = t("Desktop", "دسکتاپ"),
             subtitle = when {
-                state is LinuxDesktop.State.Error -> state.message.lines().first()
+                state is DesktopState.Error -> state.message.lines().first()
                 restartPending -> t("Restart to apply the new settings", "برای اعمال تنظیمات جدید، دوباره روشن کنید")
                 else -> t("Chromium on a VNC display inside the built-in Linux", "Chromium روی یک نمایشگر VNC داخل لینوکس داخلی")
             },
             icon = Icons.Default.DesktopWindows,
             trailing = {
-                if (busy || state == LinuxDesktop.State.Starting) {
+                if (busy || state == DesktopState.Starting) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
                     StatusChip(label = label, color = color)
@@ -338,14 +340,14 @@ private fun StatusCard(
                 Text(t("Open viewer", "باز کردن نمایشگر"))
             }
             when {
-                state == LinuxDesktop.State.Running && restartPending ->
+                state == DesktopState.Running && restartPending ->
                     OutlinedButton(onClick = onRestart, enabled = !busy) { Text(t("Restart", "راه‌اندازی دوباره")) }
-                state == LinuxDesktop.State.Running ->
+                state == DesktopState.Running ->
                     OutlinedButton(onClick = onStop, enabled = !busy) { Text(t("Stop", "توقف")) }
                 else ->
                     OutlinedButton(
                         onClick = onStart,
-                        enabled = !busy && state != LinuxDesktop.State.Starting,
+                        enabled = !busy && state != DesktopState.Starting,
                     ) { Text(t("Start", "روشن کردن")) }
             }
         }

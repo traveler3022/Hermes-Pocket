@@ -4,19 +4,19 @@
 set -u
 UI=app/src/main/java/com/hermes/android/ui
 
-# The built-in Linux's files, the file gate, uploads and the terminal: only through runtime/ interfaces.
-# Sessions: only through domain/session/ interfaces.
-BLOCK='rootfsDir|runtime\.linux\.(GuestFiles|LinuxFilesProvider|ProotEnvironment\.rootfsDir|FileGate|FileGateNotifier|LinuxUploads|TerminalLaunchSpec)\b|ProotEnvironment\.TerminalLaunchSpec|data\.SessionRepository\b'
-# Not moved yet: the rest of the built-in Linux, and repositories without an interface.
-REPORT='import com\.hermes\.android\.(runtime\.linux\.[A-Za-z]+|data\.[A-Za-z]*Repository)$'
+# The built-in Linux: only through the interfaces in runtime/ (LinuxFileAccess, LinuxFileGate,
+# LinuxTools, LinuxDesktopControl). Sessions: only through domain/session/.
+BLOCK='runtime\.linux\.|rootfsDir|data\.SessionRepository\b'
+# Not moved yet: repositories without an interface.
+REPORT='import com\.hermes\.android\.data\.[A-Za-z]*Repository$'
 
 status=0
 if blocked=$(grep -rnE "$BLOCK" "$UI"); then
-    echo "::error::ui/ reaches into the built-in Linux directly; use the interfaces in runtime/ and domain/:"
+    echo "::error::ui/ reaches past its interfaces; use the ones in runtime/ and domain/:"
     echo "$blocked"
     status=1
 fi
 reported=$(grep -rnoE "$REPORT" "$UI" | sed 's#^.*/android/ui/##')
-echo "Layer report: $(printf '%s' "$reported" | grep -c .) direct imports of runtime.linux / repositories in ui/"
+echo "Layer report: $(printf '%s' "$reported" | grep -c .) direct imports of repositories in ui/"
 [ -n "$reported" ] && echo "$reported"
 exit $status

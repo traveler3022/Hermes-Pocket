@@ -3,9 +3,13 @@ package com.hermes.android.di
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
 import com.hermes.android.runtime.LinuxFileAccess
+import com.hermes.android.runtime.LinuxDesktopControl
 import com.hermes.android.runtime.LinuxFileGate
+import com.hermes.android.runtime.LinuxTools
 import com.hermes.android.runtime.SwitchableHermesRuntime
 import com.hermes.android.runtime.linux.FileGate
+import com.hermes.android.runtime.linux.LinuxDesktop
+import com.hermes.android.runtime.linux.LinuxPackages
 import com.hermes.android.runtime.linux.RootfsFileAccess
 import com.hermes.android.runtime.remote.TailnetRoute
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
@@ -44,6 +48,12 @@ object RuntimeModule {
     /** The same [FileGate] the Files provider asks, so an approval holds on both ways out. */
     @Provides
     fun provideLinuxFileGate(gate: FileGate): LinuxFileGate = gate
+
+    @Provides
+    fun provideLinuxDesktop(desktop: LinuxDesktop): LinuxDesktopControl = desktop
+
+    @Provides
+    fun provideLinuxTools(packages: LinuxPackages): LinuxTools = packages
 
     /** Tailnet hosts are reached through the in-app Tailscale node. */
     @Provides

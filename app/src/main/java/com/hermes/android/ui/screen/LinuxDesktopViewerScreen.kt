@@ -53,7 +53,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.runtime.linux.LinuxDesktop
+import com.hermes.android.runtime.DesktopState
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.LinuxDesktopViewModel
 import kotlinx.coroutines.Dispatchers
@@ -157,7 +157,7 @@ fun LinuxDesktopViewerScreen(
         }
 
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (desktopState == LinuxDesktop.State.Running) {
+            if (desktopState == DesktopState.Running) {
                 DesktopPage(
                     page = page,
                     touchMode = touchMode,
@@ -175,8 +175,8 @@ fun LinuxDesktopViewerScreen(
                 )
             }
             when {
-                connecting || desktopState == LinuxDesktop.State.Starting -> CircularProgressIndicator(color = Color.White)
-                desktopState != LinuxDesktop.State.Running -> Text(
+                connecting || desktopState == DesktopState.Starting -> CircularProgressIndicator(color = Color.White)
+                desktopState != DesktopState.Running -> Text(
                     text = failure ?: t("The desktop is not running.", "دسکتاپ روشن نیست."),
                     color = Color(0xFFBDBDBD),
                     style = MaterialTheme.typography.bodySmall,

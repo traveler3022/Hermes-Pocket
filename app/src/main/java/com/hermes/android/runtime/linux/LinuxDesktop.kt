@@ -3,6 +3,11 @@ package com.hermes.android.runtime.linux
 import android.content.Context
 import com.hermes.android.R
 import com.hermes.android.gateway.StdioGatewayHub
+import com.hermes.android.runtime.DefaultDesktopHomepage
+import com.hermes.android.runtime.DesktopResolution
+import com.hermes.android.runtime.DesktopSettings
+import com.hermes.android.runtime.DesktopState
+import com.hermes.android.runtime.LinuxDesktopControl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -55,40 +60,7 @@ class LinuxDesktop @Inject constructor(
     @ApplicationContext private val context: Context,
     private val environment: ProotEnvironment,
     private val stdioHub: StdioGatewayHub,
-) {
-    /** [pageWidth]: how wide Chromium lays pages out (CSS px), drawn scaled into [width] pixels. */
-    enum class Resolution(
-        val width: Int,
-        val height: Int,
-        val titleEn: String,
-        val titleFa: String,
-        val pageWidth: Int = width,
-    ) {
-        // Not the phone's full 1080x2040: every frame is drawn on the CPU and sent over VNC, and
-        // half the pixels gave ~4x the frames on the server mock; the viewer scales it up. Pages
-        // still lay out 1080 wide: at 720, desktop sites (Google…) overflowed and overlapped.
-        PHONE(720, 1360, "Phone (portrait)", "گوشی (عمودی)", pageWidth = 1080),
-        TABLET(1600, 1000, "Tablet (landscape)", "تبلت (افقی)"),
-        DESKTOP(1920, 1080, "Desktop (1080p)", "دسکتاپ (1080p)"),
-    }
-
-    data class Settings(
-        /** Hermes' browser tools use this Chromium (`browser.cdp_url`); it starts on demand ([beforeHermesStarts]). */
-        val agentBrowser: Boolean = true,
-        val resolution: Resolution = Resolution.PHONE,
-        val homepage: String = DefaultHomepage,
-        /** Serve VNC on the local network (port [VncPort]) with [vncPassword]. */
-        val vncLan: Boolean = false,
-        val vncPassword: String = "",
-    )
-
-    sealed interface State {
-        data object Stopped : State
-        data object Starting : State
-        data object Running : State
-        data class Error(val message: String) : State
-    }
-
+) : LinuxDesktopControl {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val mutex = Mutex()
     private val http = OkHttpClient.Builder()
@@ -105,11 +77,11 @@ class LinuxDesktop @Inject constructor(
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _state = MutableStateFlow<State>(State.Stopped)
-    val state: StateFlow<State> = _state.asStateFlow()
+    private val _state = MutableStateFlow<DesktopState>(DesktopState.Stopped)
+    override val state: StateFlow<DesktopState> = _state.asStateFlow()
 
     private val _settings = MutableStateFlow(loadSettings())
-    val settings: StateFlow<Settings> = _settings.asStateFlow()
+    override val settings: StateFlow<DesktopSettings> = _settings.asStateFlow()
 
     private val _viewing = MutableStateFlow(false)
 
@@ -124,7 +96,7 @@ class LinuxDesktop @Inject constructor(
      * noVNC's page for the in-app viewer; carries the VNC password, which is never empty.
      * Load it only after [startViewer] succeeds: that is what proves the port is ours.
      */
-    val viewerUrl: String
+    override val viewerUrl: String
         get() {
             val password = URLEncoder.encode(_settings.value.effectiveVncPassword, "UTF-8")
             return "http://127.0.0.1:$viewerPort/vnc_lite.html?autoconnect=true&scale=true&show_dot=true" +
@@ -150,7 +122,7 @@ class LinuxDesktop @Inject constructor(
      * installed app full view and control of this desktop, including whatever the user is
      * signed into in its Chromium. `-localhost` does not help: it only excludes the LAN.
      */
-    private val Settings.effectiveVncPassword: String
+    private val DesktopSettings.effectiveVncPassword: String
         get() = if (vncLan && vncPassword.isNotEmpty()) vncPassword else localVncSecret
 
     /** Per-install VNC secret, so the desktop is never reachable without one. */
@@ -173,26 +145,26 @@ class LinuxDesktop @Inject constructor(
         ByteArray(bytes).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
 
     /** Chromium, the X server, noVNC, agent-browser and the CDP proxy's python3 are all present. */
-    suspend fun isInstalled(): Boolean =
+    override suspend fun isInstalled(): Boolean =
         environment.isRootfsInstalled && runCatching { environment.run(VerifyCommand).ok }.getOrDefault(false)
 
     /** Re-reads whether the desktop runs (it may have been started or stopped by the agent). */
-    suspend fun refresh() {
-        if (_state.value is State.Starting) return
+    override suspend fun refresh() {
+        if (_state.value is DesktopState.Starting) return
         val up = isUp()
         _state.value = when {
-            up -> State.Running
-            _state.value is State.Error -> _state.value
-            else -> State.Stopped
+            up -> DesktopState.Running
+            _state.value is DesktopState.Error -> _state.value
+            else -> DesktopState.Stopped
         }
     }
 
-    suspend fun start(): Result<Unit> = mutex.withLock {
+    override suspend fun start(): Result<Unit> = mutex.withLock {
         if (isUp()) {
-            _state.value = State.Running
+            _state.value = DesktopState.Running
             return@withLock Result.success(Unit)
         }
-        _state.value = State.Starting
+        _state.value = DesktopState.Starting
         runCatching {
             check(environment.isRootfsInstalled) { "Install the built-in Linux runtime first." }
             withContext(Dispatchers.IO) { writeGuestFiles() }
@@ -204,16 +176,16 @@ class LinuxDesktop @Inject constructor(
             }
             process = started
             waitUntilUp(started)
-            _state.value = State.Running
+            _state.value = DesktopState.Running
         }.onFailure { error ->
             if (error is CancellationException) throw error
             Timber.w(error, "[Desktop] Start failed")
             stopLocked()
-            _state.value = State.Error(error.message ?: "The desktop did not start.")
+            _state.value = DesktopState.Error(error.message ?: "The desktop did not start.")
         }
     }
 
-    suspend fun stop() = mutex.withLock { stopLocked() }
+    override suspend fun stop() = mutex.withLock { stopLocked() }
 
     /**
      * Brings up the VNC bridge the user watches through, starting the desktop first if the
@@ -221,7 +193,7 @@ class LinuxDesktop @Inject constructor(
      * Chromium on the X display, not a live feed of it, so websockify only costs memory while
      * somebody is actually looking — and nothing is streamable until the user asks.
      */
-    suspend fun startViewer(): Result<Unit> {
+    override suspend fun startViewer(): Result<Unit> {
         start().onFailure { return Result.failure(it) }
         return withContext(Dispatchers.IO) {
             if (viewerProcess?.isAlive == true && portOpen(viewerPort)) {
@@ -260,7 +232,7 @@ class LinuxDesktop @Inject constructor(
      * own scope is already cancelled by the time its onDispose runs, which would have left
      * the bridge up exactly when the user walked away from it.
      */
-    fun stopViewerAsync() {
+    override fun stopViewerAsync() {
         appScope.launch { stopViewer() }
     }
 
@@ -285,7 +257,7 @@ class LinuxDesktop @Inject constructor(
         return false
     }
 
-    suspend fun restart(): Result<Unit> {
+    override suspend fun restart(): Result<Unit> {
         stop()
         return start()
     }
@@ -294,7 +266,7 @@ class LinuxDesktop @Inject constructor(
      * Saves [next], rewrites the guest config and points Hermes' browser tools at (or away
      * from) this Chromium. Returns true when a running desktop must restart to apply it.
      */
-    suspend fun update(next: Settings): Boolean {
+    override suspend fun update(next: DesktopSettings): Boolean {
         val previous = _settings.value
         _settings.value = next
         prefs.edit()
@@ -309,7 +281,7 @@ class LinuxDesktop @Inject constructor(
         val needsRestart = previous.resolution != next.resolution ||
             previous.vncLan != next.vncLan ||
             (next.vncLan && previous.vncPassword != next.vncPassword)
-        return needsRestart && _state.value == State.Running
+        return needsRestart && _state.value == DesktopState.Running
     }
 
     /**
@@ -344,14 +316,14 @@ class LinuxDesktop @Inject constructor(
     }.onFailure { Timber.w(it, "[Desktop] Could not update browser.cdp_url") }
 
     /** Deletes Chromium's profile (cookies, logins, history). The desktop must be stopped. */
-    suspend fun clearBrowserData(): Result<Unit> = runCatching {
+    override suspend fun clearBrowserData(): Result<Unit> = runCatching {
         stop()
         val result = environment.run("rm -rf $ProfileDir")
         check(result.ok) { result.output }
     }
 
     /** Wi-Fi address other devices can reach VNC on, when LAN access is on. */
-    fun lanAddress(): String? = runCatching {
+    override fun lanAddress(): String? = runCatching {
         NetworkInterface.getNetworkInterfaces().toList()
             .filter { it.isUp && !it.isLoopback }
             .flatMap { it.inetAddresses.toList() }
@@ -364,7 +336,7 @@ class LinuxDesktop @Inject constructor(
      * Whether the page's focused element takes text — Aether's `shouldShowKeyboardAfterClick`,
      * so a tap on a text field in the viewer brings up the phone's keyboard.
      */
-    suspend fun focusedElementIsEditable(y: Int): Boolean {
+    override suspend fun focusedElementIsEditable(y: Int): Boolean {
         if (y in BrowserUiTop..BrowserUiBottom) return true
         delay(140)
         return runCatching { evaluate(FocusedEditableScript) == true }.getOrDefault(false)
@@ -383,7 +355,7 @@ class LinuxDesktop @Inject constructor(
         process = null
         withContext(Dispatchers.IO) { stopViewerProcess() }
         _viewing.value = false
-        _state.value = State.Stopped
+        _state.value = DesktopState.Stopped
     }
 
     private suspend fun waitUntilUp(started: Process) {
@@ -445,7 +417,7 @@ class LinuxDesktop @Inject constructor(
                 appendLine("PAGE_W=${resolution.pageWidth}")
                 appendLine("PAGE_H=${resolution.height * resolution.pageWidth / resolution.width}")
                 appendLine("SCALE=${"%.4f".format(java.util.Locale.ROOT, resolution.width.toFloat() / resolution.pageWidth)}")
-                appendLine("HOMEPAGE=${shellQuote(current.homepage.ifBlank { DefaultHomepage })}")
+                appendLine("HOMEPAGE=${shellQuote(current.homepage.ifBlank { DefaultDesktopHomepage })}")
                 // VNC_LAN only decides whether the VNC server also listens off-device; the password
                 // below is enforced either way.
                 appendLine("VNC_LAN=${if (onLan) 1 else 0}")
@@ -528,12 +500,12 @@ class LinuxDesktop @Inject constructor(
         }
     }
 
-    private fun loadSettings() = Settings(
+    private fun loadSettings() = DesktopSettings(
         agentBrowser = prefs.getBoolean(KEY_AGENT_BROWSER, true),
         resolution = prefs.getString(KEY_RESOLUTION, null)
-            ?.let { name -> Resolution.values().firstOrNull { it.name == name } }
-            ?: Resolution.PHONE,
-        homepage = prefs.getString(KEY_HOMEPAGE, null) ?: DefaultHomepage,
+            ?.let { name -> DesktopResolution.values().firstOrNull { it.name == name } }
+            ?: DesktopResolution.PHONE,
+        homepage = prefs.getString(KEY_HOMEPAGE, null) ?: DefaultDesktopHomepage,
         vncLan = prefs.getBoolean(KEY_VNC_LAN, false),
         vncPassword = prefs.getString(KEY_VNC_PASSWORD, null).orEmpty(),
     )
@@ -542,7 +514,6 @@ class LinuxDesktop @Inject constructor(
         const val CdpPort = 9222
         const val VncPort = 5900
         const val NoVncPort = 6080
-        const val DefaultHomepage = "https://duckduckgo.com"
         const val AgentBrowserSpec = "agent-browser@^0.26.0"
 
         /**
