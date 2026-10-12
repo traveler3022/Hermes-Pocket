@@ -46,17 +46,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.ui.component.ContentBlock
+import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
+import com.hermes.android.ui.component.ImageGallery
+import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
@@ -65,6 +74,7 @@ import com.hermes.android.ui.viewmodel.GroupChatViewModel
 import com.hermes.android.ui.viewmodel.GroupMentions
 import com.hermes.android.ui.viewmodel.GroupNote
 import com.hermes.android.ui.viewmodel.GroupRow
+import com.hermes.android.ui.viewer.FileViewerActivity
 
 /**
  * One Group Chat. Everything here is read from the room log on the gateway, so what
@@ -82,6 +92,8 @@ fun GroupChatScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
+    val clipboardManager = LocalClipboardManager.current
 
     // Read the room only while the screen is in front: the log is durable, so
     // whatever happens meanwhile is there on the next read.
@@ -93,6 +105,12 @@ fun GroupChatScreen(
         state.error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearNotice()
         }
     }
     LaunchedEffect(state.rows.size) {
@@ -158,7 +176,14 @@ fun GroupChatScreen(
                 items(state.rows, key = { it.key }) { row ->
                     when (row) {
                         is GroupRow.User -> UserRow(row.text)
-                        is GroupRow.Member -> MemberRow(row.name, row.text)
+                        is GroupRow.Member -> MemberRow(
+                            name = row.name,
+                            text = row.text,
+                            resolveUrl = viewModel::resolveMediaUrl,
+                            onImageClick = { fullscreenImageUrl = it },
+                            onDownloadFile = viewModel::downloadFile,
+                            onCopyCode = { clipboardManager.setText(AnnotatedString(it)) },
+                        )
                         is GroupRow.Note -> NoteRow(row.note)
                     }
                 }
@@ -279,6 +304,26 @@ fun GroupChatScreen(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) } },
         )
     }
+    fullscreenImageUrl?.let { imageUrl ->
+        // Every image the members sent, in order, so the viewer can page through them.
+        val images = remember(imageUrl) {
+            state.rows.filterIsInstance<GroupRow.Member>().flatMap { row ->
+                parseContentBlocks(row.text).filterIsInstance<ContentBlock.Image>()
+                    .map { viewModel.resolveMediaUrl(it.url) }
+            }.distinct().let { if (imageUrl in it) it else listOf(imageUrl) }
+        }
+        Dialog(
+            onDismissRequest = { fullscreenImageUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            ImageGallery(
+                images = images,
+                initialPage = images.indexOf(imageUrl),
+                onDismiss = { fullscreenImageUrl = null },
+                onSave = { viewModel.downloadFile(it, "") },
+            )
+        }
+    }
 }
 
 @Composable
@@ -297,7 +342,14 @@ private fun UserRow(text: String) {
 }
 
 @Composable
-private fun MemberRow(name: String, text: String) {
+private fun MemberRow(
+    name: String,
+    text: String,
+    resolveUrl: (String) -> String,
+    onImageClick: (String) -> Unit,
+    onDownloadFile: (url: String, name: String) -> Unit,
+    onCopyCode: (String) -> Unit,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
         ProfileAvatar(name, size = 30)
         Column(Modifier.weight(1f)) {
@@ -309,7 +361,92 @@ private fun MemberRow(name: String, text: String) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            HermesMarkdown(markdown = text)
+            MemberContent(text, resolveUrl, onImageClick, onDownloadFile, onCopyCode)
+        }
+    }
+}
+
+/**
+ * A member's reply split into blocks the way a chat reply is, so images, code and the
+ * files a Bot sends (`MEDIA:` paths) show as they do in a chat instead of raw text.
+ */
+@Composable
+private fun MemberContent(
+    text: String,
+    resolveUrl: (String) -> String,
+    onImageClick: (String) -> Unit,
+    onDownloadFile: (url: String, name: String) -> Unit,
+    onCopyCode: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val blocks = remember(text) {
+        parseContentBlocks(text).map { block ->
+            when (block) {
+                is ContentBlock.Image -> block.copy(url = resolveUrl(block.url))
+                is ContentBlock.Video -> block.copy(url = resolveUrl(block.url))
+                is ContentBlock.Audio -> block.copy(url = resolveUrl(block.url))
+                is ContentBlock.Html -> block.copy(url = resolveUrl(block.url))
+                is ContentBlock.FileRef -> block.copy(url = resolveUrl(block.url))
+                else -> block
+            }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        blocks.forEach { block ->
+            when (block) {
+                is ContentBlock.Text -> HermesMarkdown(markdown = block.markdown)
+                is ContentBlock.Image -> InlineImageBlock(
+                    alt = block.alt, url = block.url,
+                    onImageClick = onImageClick,
+                    onSave = { onDownloadFile(block.url, block.alt) },
+                )
+                is ContentBlock.Code -> CodeBlockCard(
+                    language = block.language, code = block.code, onCopyCode = onCopyCode,
+                )
+                is ContentBlock.Mermaid -> MermaidBlockCard(code = block.code, onCopyCode = onCopyCode)
+                is ContentBlock.Html -> HtmlBlockCard(
+                    url = block.url, name = block.name,
+                    onOpen = { FileViewerActivity.open(context, block.url, block.name) },
+                )
+                // A room has no chat folder to read a `::preview` page from: open the file instead.
+                is ContentBlock.Preview -> {
+                    val url = resolveUrl(block.file)
+                    val name = block.file.substringAfterLast('/')
+                    ArtifactCard(
+                        emoji = "\uD83D\uDCC4", name = name,
+                        actionLabel = t("Open", "باز کردن"),
+                        onAction = { FileViewerActivity.open(context, url, name) },
+                        onDownload = { onDownloadFile(url, name) },
+                    )
+                }
+                is ContentBlock.Video -> ArtifactCard(
+                    emoji = "\uD83C\uDFAC", name = block.name,
+                    actionLabel = t("Play", "پخش"),
+                    onAction = { FileViewerActivity.open(context, block.url, block.name) },
+                    onDownload = { onDownloadFile(block.url, block.name) },
+                )
+                is ContentBlock.Audio -> ArtifactCard(
+                    emoji = "\uD83C\uDFB5", name = block.name,
+                    actionLabel = t("Play", "پخش"),
+                    onAction = { FileViewerActivity.open(context, block.url, block.name) },
+                    onDownload = { onDownloadFile(block.url, block.name) },
+                )
+                is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
+                    ArtifactCard(
+                        emoji = "\uD83D\uDCC4", name = block.name,
+                        actionLabel = t("Download", "دانلود"),
+                        onAction = { onDownloadFile(block.url, block.name) },
+                        onDownload = null,
+                    )
+                } else {
+                    ArtifactCard(
+                        emoji = "\uD83D\uDCC4", name = block.name,
+                        actionLabel = t("Open", "باز کردن"),
+                        onAction = { FileViewerActivity.open(context, block.url, block.name) },
+                        onDownload = { onDownloadFile(block.url, block.name) },
+                    )
+                }
+            }
         }
     }
 }

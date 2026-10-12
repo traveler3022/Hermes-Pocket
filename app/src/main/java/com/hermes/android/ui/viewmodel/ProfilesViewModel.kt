@@ -55,14 +55,17 @@ class ProfilesViewModel @Inject constructor(
         repository.select(if (profile.isDefault) null else profile.name)
     }
 
-    /** Creates [name] (a copy of the open profile when [copyCurrent]) and switches to it. */
-    fun create(name: String, description: String, copyCurrent: Boolean, onDone: () -> Unit) {
+    /**
+     * Creates [name] (a copy of the open profile when [copyCurrent]) and switches to it.
+     * [copyKeys] false: the main profile's API keys are not copied in.
+     */
+    fun create(name: String, description: String, copyCurrent: Boolean, copyKeys: Boolean, onDone: () -> Unit) {
         if (_uiState.value.isCreating) return
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true, error = null) }
             try {
                 val current = active.value ?: _uiState.value.profiles.firstOrNull { it.isDefault }?.name
-                repository.create(name, description, copyFrom = current.takeIf { copyCurrent })
+                repository.create(name, description, copyFrom = current.takeIf { copyCurrent }, copyKeys = copyKeys)
                 repository.select(name)
                 _uiState.update { it.copy(isCreating = false) }
                 onDone()

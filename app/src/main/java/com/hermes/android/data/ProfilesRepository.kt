@@ -71,13 +71,16 @@ class ProfilesRepository @Inject constructor(
      * Creates profile [name]. With [copyFrom] the new profile starts with that one's
      * config (model, toolsets) and skills; without it, a fresh config and the bundled
      * skills. Either way the server copies the launch profile's provider keys, so the
-     * new agent can answer at once (`mirror_credentials`, on by default).
+     * new agent can answer at once (`mirror_credentials`, on by default). [copyKeys] false
+     * turns that copy off; a [copyFrom] copy still brings that profile's `.env` keys,
+     * because the server copies `.env` with the settings.
      */
-    suspend fun create(name: String, description: String, copyFrom: String?) {
+    suspend fun create(name: String, description: String, copyFrom: String?, copyKeys: Boolean = true) {
         val params = buildMap<String, JsonElement> {
             put("name", JsonPrimitive(name))
             if (description.isNotBlank()) put("description", JsonPrimitive(description.trim()))
             if (copyFrom != null) put("clone_from", JsonPrimitive(copyFrom))
+            if (!copyKeys) put("mirror_credentials", JsonPrimitive(false))
         }
         gatewayClient.request(GatewayMethods.PROFILES_CREATE, params, trackSession = false)
     }

@@ -1138,8 +1138,8 @@ fun ChatScreen(
                 profilesViewModel.select(profile)
                 scope.launch { drawerState.close() }
             },
-            onCreate = { name, description, copyCurrent ->
-                profilesViewModel.create(name, description, copyCurrent) {
+            onCreate = { name, description, copyCurrent, copyKeys ->
+                profilesViewModel.create(name, description, copyCurrent, copyKeys) {
                     showProfiles = false
                     scope.launch { drawerState.close() }
                 }

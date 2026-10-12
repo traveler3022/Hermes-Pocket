@@ -1,11 +1,17 @@
 package com.hermes.android.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
+import com.hermes.android.gateway.redactCredentials
+import com.hermes.android.runtime.HermesRuntime
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +31,9 @@ import javax.inject.Inject
 @HiltViewModel
 class GroupChatViewModel @Inject constructor(
     private val groups: GroupsRepository,
+    private val gatewayClient: GatewayClient,
+    hermesRuntime: HermesRuntime,
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -41,12 +50,18 @@ class GroupChatViewModel @Inject constructor(
         val isSending: Boolean = false,
         val isLoading: Boolean = true,
         val error: String? = null,
+        /** A one-line result to show once, like where a download was saved. */
+        val notice: String? = null,
         /** The group was deleted (here or elsewhere): the screen leaves. */
         val gone: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    /** Members' files resolve and download the way a chat reply's do. */
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, context, viewModelScope)
+    private val downloads by lazy { DownloadStorage(context) }
 
     private val events = mutableListOf<GroupsRepository.Event>()
     private var lastSeq = 0L
@@ -158,6 +173,23 @@ class GroupChatViewModel @Inject constructor(
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }
+
+    fun clearNotice() = _uiState.update { it.copy(notice = null) }
+
+    fun resolveMediaUrl(raw: String): String = media.resolveMediaUrl(raw)
+
+    fun downloadFile(url: String, name: String) {
+        viewModelScope.launch {
+            try {
+                val savedAs = downloads.save(url, name) { gatewayClient.downloadFile(it) }
+                _uiState.update { it.copy(notice = "Saved to $savedAs") }
+            } catch (e: Exception) {
+                // A remote gateway's link carries its token.
+                Timber.e(e, "[Group] Download failed: ${redactCredentials(url)}")
+                _uiState.update { it.copy(error = e.userMessage()) }
+            }
+        }
+    }
 
     private fun act(action: suspend () -> Unit) {
         viewModelScope.launch {

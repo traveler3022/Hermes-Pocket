@@ -3,6 +3,7 @@ package com.hermes.android.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -58,7 +59,7 @@ internal fun ProfilePickerSheet(
     state: ProfilesViewModel.UiState,
     active: String?,
     onSelect: (ProfilesRepository.Profile) -> Unit,
-    onCreate: (name: String, description: String, copyCurrent: Boolean) -> Unit,
+    onCreate: (name: String, description: String, copyCurrent: Boolean, copyKeys: Boolean) -> Unit,
     onEdit: (ProfilesRepository.Profile) -> Unit,
     onSave: (name: String, newName: String, description: String, soul: String, onDone: () -> Unit) -> Unit,
     onDelete: (name: String, onDone: () -> Unit) -> Unit,
@@ -205,12 +206,13 @@ internal fun ProfileAvatar(title: String, size: Int = 36) {
 @Composable
 private fun NewProfileForm(
     state: ProfilesViewModel.UiState,
-    onCreate: (name: String, description: String, copyCurrent: Boolean) -> Unit,
+    onCreate: (name: String, description: String, copyCurrent: Boolean, copyKeys: Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var copyCurrent by remember { mutableStateOf(true) }
+    var copyKeys by remember { mutableStateOf(true) }
     val valid = ProfilesRepository.isValidName(name)
 
     LazyColumn(
@@ -262,12 +264,48 @@ private fun NewProfileForm(
                 Switch(checked = copyCurrent, onCheckedChange = { copyCurrent = it })
             }
         }
+        item {
+            // A settings copy brings that profile's .env, keys included: the server copies
+            // it with config.yaml and has no option to leave it out.
+            val keysLocked = copyCurrent
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !keysLocked) { copyKeys = !copyKeys }
+                    .padding(vertical = HxSpace.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("Copy API keys", "کپی کلیدهای API"))
+                    Text(
+                        if (keysLocked) {
+                            t(
+                                "Copying settings brings this profile's keys too.",
+                                "کپی تنظیمات، کلیدهای این پروفایل را هم می‌آورد.",
+                            )
+                        } else {
+                            t(
+                                "From the main profile. Off: the new profile starts with no keys.",
+                                "از پروفایل اصلی. خاموش: پروفایل جدید بدون کلید شروع می‌شود.",
+                            )
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = keysLocked || copyKeys,
+                    onCheckedChange = { copyKeys = it },
+                    enabled = !keysLocked,
+                )
+            }
+        }
         state.error?.let { error ->
             item { Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
         item {
             Button(
-                onClick = { onCreate(name, description, copyCurrent) },
+                onClick = { onCreate(name, description, copyCurrent, copyCurrent || copyKeys) },
                 enabled = valid && !state.isCreating,
                 modifier = Modifier.fillMaxWidth(),
             ) {
