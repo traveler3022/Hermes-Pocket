@@ -2,10 +2,10 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.DefaultModelResult
-import com.hermes.android.data.ProviderSetupRepository
-import com.hermes.android.data.SetupProvider
-import com.hermes.android.data.SetupState
+import com.hermes.android.domain.setup.DefaultModelResult
+import com.hermes.android.domain.setup.ProviderSetup
+import com.hermes.android.domain.setup.SetupProvider
+import com.hermes.android.domain.setup.SetupProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,8 +37,8 @@ data class SetupUiState(
 /** First-run setup like Aether's: welcome → runtime → provider → API key → model. */
 @HiltViewModel
 class SetupViewModel @Inject constructor(
-    private val repository: ProviderSetupRepository,
-    private val setupState: SetupState,
+    private val repository: ProviderSetup,
+    private val setupState: SetupProgress,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SetupUiState(providers = repository.providers))

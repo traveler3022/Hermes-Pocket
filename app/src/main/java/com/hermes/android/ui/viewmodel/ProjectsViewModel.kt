@@ -2,7 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.ProjectsRepository
+import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.session.ChatSessions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,14 +14,14 @@ import javax.inject.Inject
 /** Project browser with session creation support. */
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
-    private val repository: ProjectsRepository,
+    private val repository: Projects,
     private val sessionRepository: ChatSessions,
 ) : ViewModel() {
 
     data class ProjectsUiState(
-        val projects: List<ProjectsRepository.ProjectSummary> = emptyList(),
+        val projects: List<Projects.ProjectSummary> = emptyList(),
         val isLoading: Boolean = false,
-        val selectedProject: ProjectsRepository.ProjectDetail? = null,
+        val selectedProject: Projects.ProjectDetail? = null,
         val selectedProjectPath: String? = null,
         val isLoadingDetail: Boolean = false,
         val facts: String? = null,
@@ -47,7 +47,7 @@ class ProjectsViewModel @Inject constructor(
         }
     }
 
-    fun openProject(project: ProjectsRepository.ProjectSummary) {
+    fun openProject(project: Projects.ProjectSummary) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingDetail = true, facts = null)
             try {

@@ -1,5 +1,9 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.projects.Projects
+import com.hermes.android.domain.projects.Projects.ProjectSummary
+import com.hermes.android.domain.projects.Projects.ProjectSession
+import com.hermes.android.domain.projects.Projects.ProjectDetail
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.serialization.json.JsonArray
@@ -29,30 +33,9 @@ import kotlinx.serialization.json.contentOrNull
 @Singleton
 class ProjectsRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
-) {
-    data class ProjectSummary(
-        val id: String,
-        val label: String,
-        val path: String,
-        val sessionCount: Int,
-        val lastActive: Double,
-    )
-
-    data class ProjectSession(
-        val id: String,
-        val title: String,
-        val preview: String,
-        val lastActive: Double,
-    )
-
-    data class ProjectDetail(
-        val id: String,
-        val label: String,
-        val sessions: List<ProjectSession>,
-    )
-
+) : Projects {
     /** Top-level project list for the browser screen. */
-    suspend fun projectTree(): List<ProjectSummary> {
+    override suspend fun projectTree(): List<ProjectSummary> {
         val result = gatewayClient.request(GatewayMethods.PROJECTS_TREE) as? JsonObject
             ?: return emptyList()
         val rows = result["projects"] as? JsonArray ?: return emptyList()
@@ -68,7 +51,7 @@ class ProjectsRepository @Inject constructor(
     }
 
     /** Fully hydrated session list for one project (drill-in). */
-    suspend fun projectSessions(projectId: String): ProjectDetail? {
+    override suspend fun projectSessions(projectId: String): ProjectDetail? {
         val result = gatewayClient.request(
             GatewayMethods.PROJECTS_PROJECT_SESSIONS,
             buildJsonObject { put("project_id", projectId) }.toElementMap(),
@@ -98,7 +81,7 @@ class ProjectsRepository @Inject constructor(
     }
 
     /** Structured facts (manifests, package manager, verify commands) for a cwd. */
-    suspend fun projectFacts(cwd: String): String? {
+    override suspend fun projectFacts(cwd: String): String? {
         val result = gatewayClient.request(
             GatewayMethods.PROJECT_FACTS,
             buildJsonObject { put("cwd", cwd) }.toElementMap(),

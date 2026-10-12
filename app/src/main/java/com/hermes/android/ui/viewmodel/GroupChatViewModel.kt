@@ -5,7 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.data.DownloadStorage
-import com.hermes.android.data.GroupsRepository
+import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.redactCredentials
@@ -31,7 +31,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class GroupChatViewModel @Inject constructor(
-    private val groups: GroupsRepository,
+    private val groups: GroupRooms,
     private val gatewayClient: GatewayClient,
     hermesRuntime: HermesRuntime,
     linuxFiles: LinuxFileAccess,
@@ -42,11 +42,11 @@ class GroupChatViewModel @Inject constructor(
     val roomId: String = checkNotNull(savedStateHandle["roomId"])
 
     data class UiState(
-        val room: GroupsRepository.Room? = null,
+        val room: GroupRooms.Room? = null,
         val rows: List<GroupRow> = emptyList(),
         /** The members are answering the newest message. */
         val discussing: Boolean = false,
-        val approvals: List<GroupsRepository.Approval> = emptyList(),
+        val approvals: List<GroupRooms.Approval> = emptyList(),
         val retryTaskIds: List<String> = emptyList(),
         val input: String = "",
         val isSending: Boolean = false,
@@ -65,7 +65,7 @@ class GroupChatViewModel @Inject constructor(
     private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope)
     private val downloads by lazy { DownloadStorage(context) }
 
-    private val events = mutableListOf<GroupsRepository.Event>()
+    private val events = mutableListOf<GroupRooms.Event>()
     private var lastSeq = 0L
 
     /** One log read at a time: the poll and a send's follow-up read must not both append a page. */
@@ -148,7 +148,7 @@ class GroupChatViewModel @Inject constructor(
 
     fun stop() = act { groups.stop(roomId) }
 
-    fun answer(approval: GroupsRepository.Approval, allow: Boolean) = act {
+    fun answer(approval: GroupRooms.Approval, allow: Boolean) = act {
         groups.approve(roomId, approval, allow)
     }
 

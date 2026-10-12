@@ -32,9 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.AppRelease
-import com.hermes.android.data.AppReleaseRepository
-import com.hermes.android.data.UpdateCheck
+import com.hermes.android.domain.updates.AppRelease
+import com.hermes.android.domain.updates.AppUpdates
+import com.hermes.android.domain.updates.UpdateCheck
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxRadius
@@ -82,7 +82,7 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                 title = t("Source code", "کد منبع"),
                 subtitle = t("Open the project on GitHub", "باز کردن پروژه در گیت‌هاب"),
                 icon = HxIcons.ExternalLink,
-                onClick = { uriHandler.openUri(AppReleaseRepository.PROJECT_URL) },
+                onClick = { uriHandler.openUri(AppUpdates.PROJECT_URL) },
             )
         }
 

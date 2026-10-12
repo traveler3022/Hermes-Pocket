@@ -5,10 +5,10 @@ set -u
 UI=app/src/main/java/com/hermes/android/ui
 
 # The built-in Linux: only through the interfaces in runtime/ (LinuxFileAccess, LinuxFileGate,
-# LinuxTools, LinuxDesktopControl). Sessions: only through domain/session/.
-BLOCK='runtime\.linux\.|rootfsDir|data\.SessionRepository\b'
-# Not moved yet: repositories without an interface.
-REPORT='import com\.hermes\.android\.data\.[A-Za-z]*Repository$'
+# LinuxTools, LinuxDesktopControl). Repositories: only through their interfaces in domain/.
+BLOCK='runtime\.linux\.|rootfsDir|data\.(Session|Groups|Profiles|Projects|ProviderSetup|AppRelease)Repository\b|data\.SetupState\b'
+# Not moved yet: Kanban (in progress on its own branch).
+REPORT='com\.hermes\.android\.data\.[A-Za-z]*Repository\b'
 
 status=0
 if blocked=$(grep -rnE "$BLOCK" "$UI"); then

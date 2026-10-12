@@ -2,11 +2,11 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.DeviceCode
-import com.hermes.android.data.DeviceSignInException
-import com.hermes.android.data.OAuthProvider
-import com.hermes.android.data.ProviderSetupRepository
-import com.hermes.android.data.SetupProvider
+import com.hermes.android.domain.setup.DeviceCode
+import com.hermes.android.domain.setup.DeviceSignInException
+import com.hermes.android.domain.setup.OAuthProvider
+import com.hermes.android.domain.setup.ProviderSetup
+import com.hermes.android.domain.setup.SetupProvider
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -80,12 +80,12 @@ data class ProvidersUiState(
  * Settings → Models → Providers: Hermes' own providers, connected with an API key or an account,
  * like the desktop's Providers page. Keys go through the gateway (`model.save_key`,
  * `model.disconnect`); accounts through the dashboard's OAuth routes, or the same code run as a
- * script on the built-in Linux, which has no web server ([ProviderSetupRepository]).
+ * script on the built-in Linux, which has no web server ([ProviderSetup]).
  */
 @HiltViewModel
 class ProvidersViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
-    private val setup: ProviderSetupRepository,
+    private val setup: ProviderSetup,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProvidersUiState())

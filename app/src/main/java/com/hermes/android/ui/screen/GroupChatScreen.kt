@@ -60,7 +60,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.hermes.android.data.GroupsRepository
+import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
@@ -496,7 +496,7 @@ private fun ActionStrip(text: String, action: String, onAction: () -> Unit, prog
 /** A member wants to run a command; it waits until the user answers here. */
 @Composable
 private fun ApprovalCard(
-    approval: GroupsRepository.Approval,
+    approval: GroupRooms.Approval,
     memberName: String,
     onAnswer: (allow: Boolean) -> Unit,
 ) {

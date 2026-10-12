@@ -2,8 +2,8 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.AppReleaseRepository
-import com.hermes.android.data.UpdateCheck
+import com.hermes.android.domain.updates.AppUpdates
+import com.hermes.android.domain.updates.UpdateCheck
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallResult
 import com.hermes.android.runtime.RuntimeState
@@ -36,7 +36,7 @@ sealed class HermesUpdate {
 
 @HiltViewModel
 class AboutViewModel @Inject constructor(
-    private val releases: AppReleaseRepository,
+    private val releases: AppUpdates,
     private val runtime: HermesRuntime,
 ) : ViewModel() {
 

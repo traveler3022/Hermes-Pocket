@@ -44,7 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.hermes.android.data.ProfilesRepository
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ProfilesViewModel
@@ -58,9 +58,9 @@ import com.hermes.android.ui.viewmodel.ProfilesViewModel
 internal fun ProfilePickerSheet(
     state: ProfilesViewModel.UiState,
     active: String?,
-    onSelect: (ProfilesRepository.Profile) -> Unit,
+    onSelect: (HermesProfiles.Profile) -> Unit,
     onCreate: (name: String, description: String, copyCurrent: Boolean, copyKeys: Boolean) -> Unit,
-    onEdit: (ProfilesRepository.Profile) -> Unit,
+    onEdit: (HermesProfiles.Profile) -> Unit,
     onSave: (name: String, newName: String, description: String, soul: String, onDone: () -> Unit) -> Unit,
     onDelete: (name: String, onDone: () -> Unit) -> Unit,
     onCloseEditor: () -> Unit,
@@ -68,7 +68,7 @@ internal fun ProfilePickerSheet(
     onDismiss: () -> Unit,
 ) {
     var creating by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<ProfilesRepository.Profile?>(null) }
+    var editing by remember { mutableStateOf<HermesProfiles.Profile?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -147,7 +147,7 @@ internal fun ProfilePickerSheet(
 
 @Composable
 private fun ProfileRow(
-    profile: ProfilesRepository.Profile,
+    profile: HermesProfiles.Profile,
     selected: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -213,7 +213,7 @@ private fun NewProfileForm(
     var description by remember { mutableStateOf("") }
     var copyCurrent by remember { mutableStateOf(true) }
     var copyKeys by remember { mutableStateOf(true) }
-    val valid = ProfilesRepository.isValidName(name)
+    val valid = HermesProfiles.isValidName(name)
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -326,7 +326,7 @@ private fun NewProfileForm(
  */
 @Composable
 private fun ProfileEditor(
-    profile: ProfilesRepository.Profile,
+    profile: HermesProfiles.Profile,
     state: ProfilesViewModel.UiState,
     isActive: Boolean,
     onSave: (name: String, newName: String, description: String, soul: String) -> Unit,
@@ -339,7 +339,7 @@ private fun ProfileEditor(
     var description by remember(details) { mutableStateOf(details?.description.orEmpty()) }
     var soul by remember(details) { mutableStateOf(details?.soul.orEmpty()) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val nameValid = if (profile.isDefault) newName.isNotBlank() else ProfilesRepository.isValidName(newName)
+    val nameValid = if (profile.isDefault) newName.isNotBlank() else HermesProfiles.isValidName(newName)
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),

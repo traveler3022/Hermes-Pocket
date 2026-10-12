@@ -2,8 +2,8 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.GroupsRepository
-import com.hermes.android.data.ProfilesRepository
+import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.gateway.GatewayException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,17 +17,17 @@ import javax.inject.Inject
 /** The list of Group Chats and making a new one. */
 @HiltViewModel
 class GroupsViewModel @Inject constructor(
-    private val groups: GroupsRepository,
-    private val profiles: ProfilesRepository,
+    private val groups: GroupRooms,
+    private val profiles: HermesProfiles,
 ) : ViewModel() {
 
     data class UiState(
-        val rooms: List<GroupsRepository.Room> = emptyList(),
+        val rooms: List<GroupRooms.Room> = emptyList(),
         val isLoading: Boolean = true,
         /** False when this gateway does not drive rooms; null until asked. */
         val available: Boolean? = null,
         /** Profiles a new group can seat, loaded when the create sheet opens. */
-        val profiles: List<ProfilesRepository.Profile> = emptyList(),
+        val profiles: List<HermesProfiles.Profile> = emptyList(),
         val isCreating: Boolean = false,
         val error: String? = null,
     )
@@ -61,7 +61,7 @@ class GroupsViewModel @Inject constructor(
     }
 
     /** Creates the group and hands its id to [onCreated] (the screen opens it). */
-    fun create(name: String, members: List<ProfilesRepository.Profile>, onCreated: (String) -> Unit) {
+    fun create(name: String, members: List<HermesProfiles.Profile>, onCreated: (String) -> Unit) {
         if (_uiState.value.isCreating) return
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true, error = null) }

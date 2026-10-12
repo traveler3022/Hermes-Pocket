@@ -1,5 +1,13 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.groups.GroupRooms.Member
+import com.hermes.android.domain.groups.GroupRooms.Room
+import com.hermes.android.domain.groups.GroupRooms.Event
+import com.hermes.android.domain.groups.GroupRooms.LogPage
+import com.hermes.android.domain.groups.GroupRooms.Approval
+import com.hermes.android.domain.groups.GroupRooms.Status
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.serialization.json.JsonArray
@@ -25,65 +33,17 @@ import javax.inject.Singleton
 @Singleton
 class GroupsRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
-) {
-    data class Member(
-        val memberId: String,
-        val profile: String,
-        /** What `@` mentions match in the room. */
-        val handle: String,
-        val displayName: String,
-    ) {
-        val title: String get() = displayName.ifBlank { handle }
-    }
-
-    data class Room(
-        val roomId: String,
-        val name: String,
-        val members: List<Member>,
-        val latestSeq: Long,
-        val updatedAt: Double,
-    )
-
-    /** One row of the room log, as the server wrote it. */
-    data class Event(
-        val seq: Long,
-        val kind: String,
-        val actorKind: String,
-        val actorId: String,
-        val payload: JsonObject,
-        val createdAt: Double,
-    )
-
-    data class LogPage(val events: List<Event>, val latestSeq: Long)
-
-    /** A command a member wants to run, held until the user allows or denies it. */
-    data class Approval(
-        val memberId: String,
-        val taskId: String,
-        val executionGeneration: Int,
-        val requestId: String,
-        val command: String,
-        val description: String,
-    )
-
-    /** What the room's worker is doing now (`groups.state` → `driver_status`). */
-    data class Status(
-        val working: Boolean,
-        val approvals: List<Approval>,
-        /** Turns whose outcome is unknown (the worker restarted mid-turn): the user may run them again. */
-        val retryTaskIds: List<String>,
-    )
-
+) : GroupRooms {
     /**
      * Whether this gateway drives rooms. False on a gateway without the room worker:
      * an older Hermes, or one started without it.
      */
-    suspend fun available(): Boolean {
+    override suspend fun available(): Boolean {
         val result = gatewayClient.request(GatewayMethods.GROUPS_CAPABILITIES, trackSession = false) as? JsonObject
         return result?.bool("driver") == true
     }
 
-    suspend fun list(): List<Room> {
+    override suspend fun list(): List<Room> {
         val result = gatewayClient.request(GatewayMethods.GROUPS_LIST, trackSession = false) as? JsonObject
             ?: return emptyList()
         return (result["rooms"] as? JsonArray).orEmpty()
@@ -91,7 +51,7 @@ class GroupsRepository @Inject constructor(
             .sortedByDescending { it.updatedAt }
     }
 
-    suspend fun room(roomId: String): Room? {
+    override suspend fun room(roomId: String): Room? {
         val result = gatewayClient.request(
             GatewayMethods.GROUPS_STATE,
             mapOf("room_id" to JsonPrimitive(roomId)),
@@ -101,13 +61,13 @@ class GroupsRepository @Inject constructor(
     }
 
     /** Seats [profiles] (2 to 6) in a new room called [name]. */
-    suspend fun create(name: String, profiles: List<ProfilesRepository.Profile>): Room {
+    override suspend fun create(name: String, profiles: List<HermesProfiles.Profile>): Room {
         val members = profiles.map { profile ->
             JsonObject(
                 mapOf(
                     "member_id" to JsonPrimitive("m-${profile.name}"),
                     "profile" to JsonPrimitive(profile.name),
-                    "handle" to JsonPrimitive(handleFor(profile)),
+                    "handle" to JsonPrimitive(GroupRooms.handleFor(profile)),
                     "display_name" to JsonPrimitive(profile.title.take(MAX_LABEL_CHARS)),
                 ),
             )
@@ -129,14 +89,14 @@ class GroupsRepository @Inject constructor(
      * Posts the user's [text]. [clientId] makes a resend of the same message a no-op on
      * the server, so a send retried after a dropped connection is not posted twice.
      */
-    suspend fun send(roomId: String, text: String, clientId: String) {
+    override suspend fun send(roomId: String, text: String, clientId: String) {
         gatewayClient.request(
             GatewayMethods.GROUPS_SEND,
             mapOf(
                 "room_id" to JsonPrimitive(roomId),
                 "event_id" to JsonPrimitive(clientId),
                 "payload" to JsonObject(
-                    mapOf("text" to JsonPrimitive(text), "thread_id" to JsonPrimitive(MAIN_THREAD)),
+                    mapOf("text" to JsonPrimitive(text), "thread_id" to JsonPrimitive(GroupRooms.MAIN_THREAD)),
                 ),
             ),
             trackSession = false,
@@ -144,7 +104,7 @@ class GroupsRepository @Inject constructor(
     }
 
     /** The room log after [sinceSeq], all pages of it. */
-    suspend fun log(roomId: String, sinceSeq: Long): LogPage {
+    override suspend fun log(roomId: String, sinceSeq: Long): LogPage {
         val events = mutableListOf<Event>()
         var cursor = sinceSeq
         var latest = sinceSeq
@@ -167,7 +127,7 @@ class GroupsRepository @Inject constructor(
         return LogPage(events, latest)
     }
 
-    suspend fun status(roomId: String): Status? {
+    override suspend fun status(roomId: String): Status? {
         val result = gatewayClient.request(
             GatewayMethods.GROUPS_STATE,
             mapOf("room_id" to JsonPrimitive(roomId)),
@@ -183,7 +143,7 @@ class GroupsRepository @Inject constructor(
     }
 
     /** Cancels the turns queued or running in the room; what was said stays. */
-    suspend fun stop(roomId: String) {
+    override suspend fun stop(roomId: String) {
         gatewayClient.request(
             GatewayMethods.GROUPS_STOP,
             mapOf("room_id" to JsonPrimitive(roomId), "cancel_id" to JsonPrimitive("app-stop-${UUID.randomUUID()}")),
@@ -192,7 +152,7 @@ class GroupsRepository @Inject constructor(
     }
 
     /** Answers a member's held command once: [allow] runs it this one time, otherwise it is refused. */
-    suspend fun approve(roomId: String, approval: Approval, allow: Boolean) {
+    override suspend fun approve(roomId: String, approval: Approval, allow: Boolean) {
         gatewayClient.request(
             GatewayMethods.GROUPS_APPROVE,
             mapOf(
@@ -208,7 +168,7 @@ class GroupsRepository @Inject constructor(
         )
     }
 
-    suspend fun retry(roomId: String, taskId: String) {
+    override suspend fun retry(roomId: String, taskId: String) {
         gatewayClient.request(
             GatewayMethods.GROUPS_RETRY,
             mapOf("room_id" to JsonPrimitive(roomId), "task_id" to JsonPrimitive(taskId)),
@@ -216,7 +176,7 @@ class GroupsRepository @Inject constructor(
         )
     }
 
-    suspend fun rename(roomId: String, name: String) {
+    override suspend fun rename(roomId: String, name: String) {
         gatewayClient.request(
             GatewayMethods.GROUPS_RENAME,
             mapOf(
@@ -229,7 +189,7 @@ class GroupsRepository @Inject constructor(
     }
 
     /** Ends the room for good: running turns stop and the room and its log are gone. */
-    suspend fun delete(roomId: String) {
+    override suspend fun delete(roomId: String) {
         gatewayClient.request(
             GatewayMethods.GROUPS_DISBAND,
             mapOf("room_id" to JsonPrimitive(roomId)),
@@ -237,21 +197,10 @@ class GroupsRepository @Inject constructor(
         )
     }
 
-    companion object {
-        /** The app keeps one conversation per room; the server supports several threads. */
-        const val MAIN_THREAD = "main"
-        const val MIN_MEMBERS = 2
-        const val MAX_MEMBERS = 6
-        private const val LOG_PAGE = 200
-        private const val MAX_ROOM_NAME_CHARS = 200
-        private const val MAX_LABEL_CHARS = 200
-
-        /**
-         * The `@` handle a profile answers to in rooms. The main profile is `@hermes`, as in
-         * Hermes' own Bot Mode; no other profile can take that name (it is reserved).
-         */
-        fun handleFor(profile: ProfilesRepository.Profile): String =
-            if (profile.isDefault) "hermes" else profile.name
+    private companion object {
+        const val LOG_PAGE = 200
+        const val MAX_ROOM_NAME_CHARS = 200
+        const val MAX_LABEL_CHARS = 200
     }
 }
 
@@ -261,19 +210,19 @@ private fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?
 
 private fun JsonObject.bool(key: String): Boolean? = (this[key] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
 
-private fun JsonObject.toRoom(): GroupsRepository.Room? {
+private fun JsonObject.toRoom(): GroupRooms.Room? {
     val id = str("room_id").ifEmpty { return null }
     if ((this["disbanded_at"] as? JsonPrimitive)?.contentOrNull != null) return null
     val members = (this["members"] as? JsonArray).orEmpty().mapNotNull { element ->
         val member = element as? JsonObject ?: return@mapNotNull null
-        GroupsRepository.Member(
+        GroupRooms.Member(
             memberId = member.str("member_id"),
             profile = member.str("profile"),
             handle = member.str("handle"),
             displayName = member.str("display_name"),
         ).takeIf { it.memberId.isNotEmpty() }
     }
-    return GroupsRepository.Room(
+    return GroupRooms.Room(
         roomId = id,
         name = str("name").ifBlank { id },
         members = members,
@@ -282,10 +231,10 @@ private fun JsonObject.toRoom(): GroupsRepository.Room? {
     )
 }
 
-private fun JsonObject.toEvent(): GroupsRepository.Event? {
+private fun JsonObject.toEvent(): GroupRooms.Event? {
     val seq = long("seq") ?: return null
     val actor = this["actor"] as? JsonObject
-    return GroupsRepository.Event(
+    return GroupRooms.Event(
         seq = seq,
         kind = str("kind"),
         actorKind = actor?.str("kind").orEmpty(),
@@ -295,11 +244,11 @@ private fun JsonObject.toEvent(): GroupsRepository.Event? {
     )
 }
 
-private fun JsonObject.toApproval(): GroupsRepository.Approval? {
+private fun JsonObject.toApproval(): GroupRooms.Approval? {
     val approval = this["approval"] as? JsonObject
     val requestId = str("request_id").ifEmpty { approval?.str("request_id").orEmpty() }
     if (requestId.isEmpty()) return null
-    return GroupsRepository.Approval(
+    return GroupRooms.Approval(
         memberId = str("member_id"),
         taskId = str("task_id"),
         executionGeneration = long("execution_generation")?.toInt() ?: 0,

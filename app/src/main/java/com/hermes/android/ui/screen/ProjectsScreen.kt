@@ -30,7 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.ProjectsRepository
+import com.hermes.android.domain.projects.Projects
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
@@ -142,7 +142,7 @@ fun ProjectsScreen(
 @Composable
 private fun ProjectDetailList(
     padding: PaddingValues,
-    detail: ProjectsRepository.ProjectDetail,
+    detail: Projects.ProjectDetail,
     facts: String?,
     isLoading: Boolean,
     onOpenSession: (String) -> Unit,

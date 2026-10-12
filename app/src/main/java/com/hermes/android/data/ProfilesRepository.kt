@@ -1,5 +1,8 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.profiles.HermesProfiles
+import com.hermes.android.domain.profiles.HermesProfiles.Profile
+import com.hermes.android.domain.profiles.HermesProfiles.Details
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.ProfileScope
@@ -21,29 +24,18 @@ import javax.inject.Singleton
 class ProfilesRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val scope: ProfileScope,
-) {
-    data class Profile(
-        val name: String,
-        val displayName: String,
-        val description: String,
-        val model: String,
-        val isDefault: Boolean,
-    ) {
-        /** The default profile is the app's own agent until the user names it. */
-        val title: String get() = displayName.ifBlank { if (isDefault) "Hermes" else name }
-    }
-
+) : HermesProfiles {
     /** The selected profile's name; null is the profile the gateway was started with. */
-    val active: StateFlow<String?> get() = scope.active
+    override val active: StateFlow<String?> get() = scope.active
 
     /** Fires when another profile is picked or the open one is gone; not on a rename. */
-    val switches: SharedFlow<String?> get() = scope.switches
+    override val switches: SharedFlow<String?> get() = scope.switches
 
     /**
      * Every profile the user can talk to. Rows with a backend `role` (the setup
      * profile the onboarding flow uses) are internal and left out.
      */
-    suspend fun list(): List<Profile> {
+    override suspend fun list(): List<Profile> {
         val result = gatewayClient.request(
             GatewayMethods.PROFILES_LIST,
             mapOf("include_sessions" to JsonPrimitive(false)),
@@ -75,7 +67,7 @@ class ProfilesRepository @Inject constructor(
      * turns that copy off; a [copyFrom] copy still brings that profile's `.env` keys,
      * because the server copies `.env` with the settings.
      */
-    suspend fun create(name: String, description: String, copyFrom: String?, copyKeys: Boolean = true) {
+    override suspend fun create(name: String, description: String, copyFrom: String?, copyKeys: Boolean) {
         val params = buildMap<String, JsonElement> {
             put("name", JsonPrimitive(name))
             if (description.isNotBlank()) put("description", JsonPrimitive(description.trim()))
@@ -85,16 +77,7 @@ class ProfilesRepository @Inject constructor(
         gatewayClient.request(GatewayMethods.PROFILES_CREATE, params, trackSession = false)
     }
 
-    /** What the editor shows: everything here is the profile's own, not the selection's. */
-    data class Details(
-        val name: String,
-        val description: String,
-        val soul: String,
-        val model: String,
-        val provider: String,
-    )
-
-    suspend fun describe(name: String): Details {
+    override suspend fun describe(name: String): Details {
         val result = gatewayClient.request(
             GatewayMethods.PROFILES_DESCRIBE,
             mapOf("name" to JsonPrimitive(name)),
@@ -111,7 +94,7 @@ class ProfilesRepository @Inject constructor(
     }
 
     /** Writes [description] and [soul] (SOUL.md, the agent's persona) of profile [name]. */
-    suspend fun save(name: String, description: String, soul: String) {
+    override suspend fun save(name: String, description: String, soul: String) {
         val result = gatewayClient.request(
             GatewayMethods.PROFILES_CONFIGURE,
             mapOf(
@@ -132,7 +115,7 @@ class ProfilesRepository @Inject constructor(
      * (`hermes profile rename`), so it runs through `cli.exec` on the gateway's host —
      * the same way in every runtime.
      */
-    suspend fun rename(old: String, new: String) {
+    override suspend fun rename(old: String, new: String) {
         cli("profile", "rename", old, new)
         if (old != "default") scope.renamed(old, new)
     }
@@ -141,7 +124,7 @@ class ProfilesRepository @Inject constructor(
      * Deletes profile [name] with its config, skills, memory and chats. The open profile
      * is left first, so nothing is still talking to it while its folder goes.
      */
-    suspend fun delete(name: String) {
+    override suspend fun delete(name: String) {
         if (scope.active.value == name) scope.select(null)
         cli("profile", "delete", name, "--yes")
         scope.forget(name)
@@ -168,14 +151,7 @@ class ProfilesRepository @Inject constructor(
     }
 
     /** Talk to [name] from now on; null goes back to the gateway's own profile. */
-    fun select(name: String?) = scope.select(name)
-
-    companion object {
-        /** `hermes_cli/profiles.py::_PROFILE_ID_RE`: the id is also a folder and a command name. */
-        private val NAME = Regex("^[a-z0-9][a-z0-9_-]{0,63}$")
-
-        fun isValidName(name: String): Boolean = NAME.matches(name)
-    }
+    override fun select(name: String?) = scope.select(name)
 
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.contentOrNull ?: ""

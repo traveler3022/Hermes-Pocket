@@ -1,6 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.GroupsRepository
+import com.hermes.android.domain.groups.GroupRooms
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -44,7 +44,7 @@ sealed interface GroupNote {
  */
 internal object GroupTranscript {
 
-    fun rows(events: List<GroupsRepository.Event>, members: List<GroupsRepository.Member>): List<GroupRow> {
+    fun rows(events: List<GroupRooms.Event>, members: List<GroupRooms.Member>): List<GroupRow> {
         val names = members.associate { it.memberId to it.title }
         fun nameOf(payload: JsonObject) = payload.str("member_id").let { names[it] ?: it }
         return events.sortedBy { it.seq }.mapNotNull { event ->
@@ -66,7 +66,7 @@ internal object GroupTranscript {
      * Whether the newest user message is still being discussed: the room writes a
      * `room.activity` (settled or capped) when a discussion ends, and a stop ends it too.
      */
-    fun awaitingReplies(events: List<GroupsRepository.Event>): Boolean {
+    fun awaitingReplies(events: List<GroupRooms.Event>): Boolean {
         val lastUser = events.lastOrNull { it.kind == "message.user" } ?: return false
         return events.none {
             it.seq > lastUser.seq && (it.kind == "room.activity" || it.kind == "room.stop_requested")
@@ -86,7 +86,7 @@ internal object GroupMentions {
     }
 
     /** Handles to offer for [query]: matching members, then `all` (everyone answers). */
-    fun suggestions(query: String, members: List<GroupsRepository.Member>): List<String> {
+    fun suggestions(query: String, members: List<GroupRooms.Member>): List<String> {
         val q = query.lowercase()
         val matching = members.filter { it.handle.lowercase().startsWith(q) || it.title.lowercase().contains(q) }
             .map { it.handle }

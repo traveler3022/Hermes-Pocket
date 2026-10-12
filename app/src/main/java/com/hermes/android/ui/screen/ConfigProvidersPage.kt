@@ -47,7 +47,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.OAuthProvider
+import com.hermes.android.domain.setup.OAuthProvider
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace

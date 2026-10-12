@@ -49,7 +49,7 @@ class ChatViewModel @Inject constructor(
     private val foregroundState: com.hermes.android.service.AppForegroundState,
     @ApplicationContext private val context: Context,
     val linuxFiles: com.hermes.android.runtime.LinuxFileAccess,
-    private val profiles: com.hermes.android.data.ProfilesRepository? = null,
+    private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
     private val kanban: com.hermes.android.data.KanbanRepository? = null,
 ) : ViewModel() {
 

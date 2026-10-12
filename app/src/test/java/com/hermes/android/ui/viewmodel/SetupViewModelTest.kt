@@ -1,10 +1,10 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.DefaultModelResult
-import com.hermes.android.data.KeyCheck
-import com.hermes.android.data.ProviderSetupRepository
-import com.hermes.android.data.SetupProvider
-import com.hermes.android.data.SetupState
+import com.hermes.android.domain.setup.DefaultModelResult
+import com.hermes.android.domain.setup.KeyCheck
+import com.hermes.android.domain.setup.ProviderSetup
+import com.hermes.android.domain.setup.SetupProvider
+import com.hermes.android.domain.setup.SetupProgress
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,8 +29,8 @@ class SetupViewModelTest {
 
     private val openRouter = SetupProvider("openrouter", "OpenRouter", "OPENROUTER_API_KEY", "https://openrouter.ai/keys")
     private val custom = SetupProvider("custom", "Custom", "OPENAI_BASE_URL", "", needsBaseUrl = true)
-    private val repository = mockk<ProviderSetupRepository>(relaxed = true)
-    private val setupState = mockk<SetupState>(relaxed = true)
+    private val repository = mockk<ProviderSetup>(relaxed = true)
+    private val setupState = mockk<SetupProgress>(relaxed = true)
 
     @Before
     fun setUp() {

@@ -2,7 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.ProfilesRepository
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.gateway.GatewayException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,16 +16,16 @@ import javax.inject.Inject
 /** The profile picker: which agent the app talks to, and making a new one. */
 @HiltViewModel
 class ProfilesViewModel @Inject constructor(
-    private val repository: ProfilesRepository,
+    private val repository: HermesProfiles,
 ) : ViewModel() {
 
     data class UiState(
-        val profiles: List<ProfilesRepository.Profile> = emptyList(),
+        val profiles: List<HermesProfiles.Profile> = emptyList(),
         val isLoading: Boolean = false,
         val isCreating: Boolean = false,
         val error: String? = null,
         /** The editor's snapshot; null while it loads or when no editor is open. */
-        val editing: ProfilesRepository.Details? = null,
+        val editing: HermesProfiles.Details? = null,
         val isLoadingEditor: Boolean = false,
         /** Saving, renaming or deleting: the editor's buttons wait. */
         val isBusy: Boolean = false,
@@ -50,7 +50,7 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
-    fun select(profile: ProfilesRepository.Profile) {
+    fun select(profile: HermesProfiles.Profile) {
         // The default row stands for the gateway's own profile: no param at all.
         repository.select(if (profile.isDefault) null else profile.name)
     }
@@ -77,7 +77,7 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
-    fun openEditor(profile: ProfilesRepository.Profile) {
+    fun openEditor(profile: HermesProfiles.Profile) {
         viewModelScope.launch {
             _uiState.update { it.copy(editing = null, isLoadingEditor = true, error = null) }
             try {

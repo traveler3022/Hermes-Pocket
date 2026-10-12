@@ -1,6 +1,9 @@
 package com.hermes.android.data
 
 import com.hermes.android.BuildConfig
+import com.hermes.android.domain.updates.AppRelease
+import com.hermes.android.domain.updates.AppUpdates
+import com.hermes.android.domain.updates.UpdateCheck
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -16,24 +19,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.contentOrNull
 
-/** A published build of the app, as GitHub describes it. */
-data class AppRelease(
-    val versionName: String,
-    val title: String,
-    val notes: String,
-    val pageUrl: String,
-    val publishedAt: String?,
-)
-
-/** What a check found. */
-sealed interface UpdateCheck {
-    data object UpToDate : UpdateCheck
-    data class Available(val release: AppRelease) : UpdateCheck
-
-    /** Checked and could not answer. [reason] is safe to show a user. */
-    data class Failed(val reason: String) : UpdateCheck
-}
-
 /**
  * Looks up the newest published build on GitHub.
  *
@@ -46,7 +31,7 @@ sealed interface UpdateCheck {
  * which is a permission worth more than the taps it saves.
  */
 @Singleton
-class AppReleaseRepository @Inject constructor() {
+class AppReleaseRepository @Inject constructor() : AppUpdates {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -56,9 +41,9 @@ class AppReleaseRepository @Inject constructor() {
     private val json = Json { ignoreUnknownKeys = true }
 
     /** The running build, without the `-debug` suffix a debug build carries. */
-    val installedVersion: String = BuildConfig.VERSION_NAME.substringBefore('-')
+    override val installedVersion: String = BuildConfig.VERSION_NAME.substringBefore('-')
 
-    suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
+    override suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
         val release = fetchLatest() ?: return@withContext UpdateCheck.Failed(FAILED_REACH)
         if (isNewer(release.versionName, installedVersion)) {
             UpdateCheck.Available(release)
@@ -105,7 +90,7 @@ class AppReleaseRepository @Inject constructor() {
             versionName = tag.removePrefix("v"),
             title = string("name")?.takeIf { it.isNotBlank() } ?: tag,
             notes = string("body").orEmpty().trim(),
-            pageUrl = string("html_url") ?: PROJECT_URL,
+            pageUrl = string("html_url") ?: AppUpdates.PROJECT_URL,
             publishedAt = string("published_at")?.take(10),
         )
     }
@@ -117,7 +102,6 @@ class AppReleaseRepository @Inject constructor() {
         (this[key] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: false
 
     companion object {
-        const val PROJECT_URL = "https://github.com/traveler3022/Hermes-Pocket"
         private const val RELEASES_URL =
             "https://api.github.com/repos/traveler3022/Hermes-Pocket/releases?per_page=20"
         private const val REQUEST_TIMEOUT_SECONDS = 15L

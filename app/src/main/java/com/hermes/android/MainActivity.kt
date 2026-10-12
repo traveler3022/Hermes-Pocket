@@ -40,7 +40,7 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @javax.inject.Inject
-    lateinit var setupState: com.hermes.android.data.SetupState
+    lateinit var setupState: com.hermes.android.domain.setup.SetupProgress
 
     @javax.inject.Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection

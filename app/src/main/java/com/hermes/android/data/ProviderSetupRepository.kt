@@ -1,6 +1,14 @@
 package com.hermes.android.data
 
 import android.content.Context
+import com.hermes.android.domain.setup.DefaultModelResult
+import com.hermes.android.domain.setup.DeviceCode
+import com.hermes.android.domain.setup.DeviceSignInException
+import com.hermes.android.domain.setup.KeyCheck
+import com.hermes.android.domain.setup.OAuthProvider
+import com.hermes.android.domain.setup.ProviderSetup
+import com.hermes.android.domain.setup.SetupProgress
+import com.hermes.android.domain.setup.SetupProvider
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
@@ -31,44 +39,6 @@ import javax.inject.Singleton
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-
-/** A provider offered in first-run setup; [envVar] is where Hermes reads its key. */
-data class SetupProvider(
-    val slug: String,
-    val name: String,
-    val envVar: String,
-    val keyUrl: String,
-    val needsBaseUrl: Boolean = false,
-)
-
-data class KeyCheck(val ok: Boolean, val reachable: Boolean, val message: String, val models: List<String> = emptyList())
-
-sealed interface DefaultModelResult {
-    data object Applied : DefaultModelResult
-    data class NeedsConfirm(val message: String) : DefaultModelResult
-}
-
-/**
- * A sign-in (OAuth) provider, one row of the dashboard's GET /api/providers/oauth — the list the
- * desktop's Accounts page shows. [flow] is `device_code` (code + link, Hermes polls) or `external`
- * (the provider's own CLI signs in); [cliCommand] is the terminal command that signs in either way.
- */
-data class OAuthProvider(
-    val id: String,
-    val name: String,
-    val flow: String,
-    val cliCommand: String,
-    val docsUrl: String,
-    val loggedIn: Boolean,
-    val disconnectable: Boolean,
-    val disconnectHint: String?,
-)
-
-/** A device-code sign-in waiting for the user: confirm [userCode] at [url] (some links carry it already). */
-data class DeviceCode(val userCode: String, val url: String)
-
-/** A device-code sign-in that ended without approval; [status] is Hermes' session status (expired, denied, error…). */
-class DeviceSignInException(val status: String, message: String) : IOException(message)
 
 /** Parses GET /api/providers/oauth (or the setup script's `oauth_list`, which prints the same shape). */
 internal fun parseOAuthProviders(result: JsonObject): List<OAuthProvider> =
@@ -104,13 +74,13 @@ class ProviderSetupRepository @Inject constructor(
     okHttpClient: OkHttpClient,
     private val gateway: GatewayClient,
     private val linux: ProotEnvironment,
-) {
+) : ProviderSetup {
     private val viaStdio: Boolean get() = StdioGatewayHub.handles(runtime.getWebSocketUrl())
 
     private val http = okHttpClient.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
     private val json = Json { ignoreUnknownKeys = true }
 
-    val providers: List<SetupProvider> = listOf(
+    override val providers: List<SetupProvider> = listOf(
         SetupProvider("openrouter", "OpenRouter", "OPENROUTER_API_KEY", "https://openrouter.ai/keys"),
         SetupProvider("anthropic", "Anthropic", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
         SetupProvider("openai-api", "OpenAI", "OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
@@ -125,7 +95,7 @@ class ProviderSetupRepository @Inject constructor(
     )
 
     /** Live-probes the key (or, for custom endpoints, the base URL) before it is saved. */
-    suspend fun checkKey(provider: SetupProvider, apiKey: String, baseUrl: String = ""): KeyCheck {
+    override suspend fun checkKey(provider: SetupProvider, apiKey: String, baseUrl: String): KeyCheck {
         if (viaStdio) return probeKey(provider, apiKey, baseUrl)
         val body = if (provider.needsBaseUrl) {
             buildJsonObject { put("key", "OPENAI_BASE_URL"); put("value", baseUrl); put("api_key", apiKey) }
@@ -142,7 +112,7 @@ class ProviderSetupRepository @Inject constructor(
     }
 
     /** Custom endpoints store their key with the model assignment instead of in .env. */
-    suspend fun saveKey(provider: SetupProvider, apiKey: String) {
+    override suspend fun saveKey(provider: SetupProvider, apiKey: String) {
         if (provider.needsBaseUrl) return
         if (viaStdio) {
             // Same write as the dashboard's PUT /api/env (model.save_key rejects registry-less
@@ -156,7 +126,7 @@ class ProviderSetupRepository @Inject constructor(
     }
 
     /** Removes an env-var key everywhere Hermes keeps it, as the dashboard's DELETE /api/env. */
-    suspend fun removeKey(envVar: String) {
+    override suspend fun removeKey(envVar: String) {
         if (viaStdio) {
             val removed = runSetupScript("remove_key", buildJsonObject { put("env_var", envVar) })
             if (!removed.bool("ok")) throw IOException(removed.text("detail") ?: "Could not remove the key")
@@ -170,14 +140,14 @@ class ProviderSetupRepository @Inject constructor(
      * Sign-in providers and their status, as the dashboard's GET /api/providers/oauth. The gateway has
      * no RPC for these, and the built-in Linux has no web server, so there the same functions run in a script.
      */
-    suspend fun oauthProviders(): List<OAuthProvider> {
+    override suspend fun oauthProviders(): List<OAuthProvider> {
         val result = if (viaStdio) runSetupScript("oauth_list", buildJsonObject {}) else call("GET", "/api/providers/oauth", null)
         if (viaStdio && !result.bool("ok")) throw IOException(result.text("detail") ?: "Could not list sign-in providers")
         return parseOAuthProviders(result)
     }
 
     /** Signs out of provider [id], as the dashboard's DELETE /api/providers/oauth/{id}. */
-    suspend fun disconnectOAuth(id: String) {
+    override suspend fun disconnectOAuth(id: String) {
         if (viaStdio) {
             val result = runSetupScript("oauth_disconnect", buildJsonObject { put("provider", id) })
             if (!result.bool("ok")) throw IOException(result.text("detail") ?: "Could not sign out")
@@ -191,7 +161,7 @@ class ProviderSetupRepository @Inject constructor(
      * the page to confirm it on, then this returns once the sign-in is approved, or throws
      * [DeviceSignInException]. Cancelling the caller abandons the sign-in.
      */
-    suspend fun deviceSignIn(id: String, onCode: (DeviceCode) -> Unit) {
+    override suspend fun deviceSignIn(id: String, onCode: (DeviceCode) -> Unit) {
         fun code(event: JsonObject) = DeviceCode(event.text("user_code").orEmpty(), event.text("verification_url").orEmpty())
         if (viaStdio) {
             // One process runs the whole sign-in; killing it (on cancel) abandons the code.
@@ -226,7 +196,7 @@ class ProviderSetupRepository @Inject constructor(
         }
     }
 
-    suspend fun models(provider: SetupProvider): List<String> {
+    override suspend fun models(provider: SetupProvider): List<String> {
         val result = if (viaStdio) rpc("model.options", buildJsonObject {}) else call("GET", "/api/model/options", null)
         val row = (result["providers"] as? JsonArray)
             ?.mapNotNull { it as? JsonObject }
@@ -235,12 +205,12 @@ class ProviderSetupRepository @Inject constructor(
         return (row["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
     }
 
-    suspend fun setDefaultModel(
+    override suspend fun setDefaultModel(
         provider: SetupProvider,
         model: String,
-        apiKey: String = "",
-        baseUrl: String = "",
-        confirmed: Boolean = false,
+        apiKey: String,
+        baseUrl: String,
+        confirmed: Boolean,
     ): DefaultModelResult {
         if (viaStdio) {
             val args = buildJsonObject {
@@ -274,7 +244,7 @@ class ProviderSetupRepository @Inject constructor(
     }
 
     /** True once config.yaml names a concrete provider (i.e. setup already happened elsewhere). */
-    suspend fun hasConfiguredModel(): Boolean {
+    override suspend fun hasConfiguredModel(): Boolean {
         if (viaStdio) return runSetupScript("has_model", buildJsonObject {}).bool("configured")
         val info = call("GET", "/api/model/info", null)
         val provider = info.text("provider")
@@ -507,15 +477,15 @@ class ProviderSetupRepository @Inject constructor(
 @Singleton
 class SetupState @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : SetupProgress {
     private val prefs = context.getSharedPreferences("hermes_setup", Context.MODE_PRIVATE)
 
     // Users who already set Hermes up through Termux shouldn't be sent back through setup.
-    val isComplete: Boolean
+    override val isComplete: Boolean
         get() = prefs.getBoolean(KEY_COMPLETE, false) ||
             context.getSharedPreferences("hermes_runtime", Context.MODE_PRIVATE).getBoolean("installed", false)
 
-    fun markComplete() = prefs.edit().putBoolean(KEY_COMPLETE, true).apply()
+    override fun markComplete() = prefs.edit().putBoolean(KEY_COMPLETE, true).apply()
 
     private companion object {
         const val KEY_COMPLETE = "complete"

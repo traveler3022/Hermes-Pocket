@@ -1,6 +1,6 @@
 package com.hermes.android.ui.viewmodel
 
-import com.hermes.android.data.GroupsRepository
+import com.hermes.android.domain.groups.GroupRooms
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -13,11 +13,11 @@ import org.junit.Test
 class GroupTranscriptTest {
 
     private val members = listOf(
-        GroupsRepository.Member("m-default", "default", "hermes", "Hermes"),
-        GroupsRepository.Member("m-critic", "critic", "critic", ""),
+        GroupRooms.Member("m-default", "default", "hermes", "Hermes"),
+        GroupRooms.Member("m-critic", "critic", "critic", ""),
     )
 
-    private fun event(seq: Long, kind: String, vararg payload: Pair<String, Any?>) = GroupsRepository.Event(
+    private fun event(seq: Long, kind: String, vararg payload: Pair<String, Any?>) = GroupRooms.Event(
         seq = seq,
         kind = kind,
         actorKind = "",

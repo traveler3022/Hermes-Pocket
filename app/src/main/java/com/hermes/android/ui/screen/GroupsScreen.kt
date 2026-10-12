@@ -40,8 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.GroupsRepository
-import com.hermes.android.data.ProfilesRepository
+import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
@@ -151,7 +151,7 @@ fun GroupsScreen(
 }
 
 @Composable
-private fun GroupRowItem(room: GroupsRepository.Room, onClick: () -> Unit) {
+private fun GroupRowItem(room: GroupRooms.Room, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -170,16 +170,16 @@ private fun GroupRowItem(room: GroupsRepository.Room, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewGroupSheet(
-    profiles: List<ProfilesRepository.Profile>,
+    profiles: List<HermesProfiles.Profile>,
     isCreating: Boolean,
     error: String?,
-    onCreate: (name: String, members: List<ProfilesRepository.Profile>) -> Unit,
+    onCreate: (name: String, members: List<HermesProfiles.Profile>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf(emptySet<String>()) }
     val members = profiles.filter { it.name in picked }
-    val sizeOk = members.size in GroupsRepository.MIN_MEMBERS..GroupsRepository.MAX_MEMBERS
+    val sizeOk = members.size in GroupRooms.MIN_MEMBERS..GroupRooms.MAX_MEMBERS
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -207,7 +207,7 @@ private fun NewGroupSheet(
             }
             if (profiles.isEmpty()) {
                 item { CircularProgressIndicator(Modifier.padding(HxSpace.sm)) }
-            } else if (profiles.size < GroupsRepository.MIN_MEMBERS) {
+            } else if (profiles.size < GroupRooms.MIN_MEMBERS) {
                 item {
                     SheetHint(
                         t(
@@ -220,7 +220,7 @@ private fun NewGroupSheet(
             items(profiles, key = { it.name }) { profile ->
                 val checked = profile.name in picked
                 // A seventh pick is refused rather than silently dropping one of the six.
-                val enabled = checked || picked.size < GroupsRepository.MAX_MEMBERS
+                val enabled = checked || picked.size < GroupRooms.MAX_MEMBERS
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -236,7 +236,7 @@ private fun NewGroupSheet(
                     Column(Modifier.weight(1f)) {
                         Text(profile.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            "@" + GroupsRepository.handleFor(profile),
+                            "@" + GroupRooms.handleFor(profile),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
