@@ -2,6 +2,7 @@ package com.hermes.android.runtime.linux
 
 import android.content.Context
 import android.system.Os
+import com.hermes.android.runtime.TerminalLaunchSpec
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -186,13 +187,6 @@ class ProotEnvironment @Inject constructor(
 
     private fun isReadable(file: File): Boolean =
         runCatching { file.inputStream().use { it.read() } }.isSuccess
-
-    class TerminalLaunchSpec(
-        val executable: String,
-        val arguments: Array<String>,
-        val environment: Array<String>,
-        val workingDirectory: String,
-    )
 
     data class CommandResult(val exitCode: Int, val output: String) {
         val ok: Boolean get() = exitCode == 0

@@ -3,7 +3,9 @@ package com.hermes.android.di
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.InstallProgress
 import com.hermes.android.runtime.LinuxFileAccess
+import com.hermes.android.runtime.LinuxFileGate
 import com.hermes.android.runtime.SwitchableHermesRuntime
+import com.hermes.android.runtime.linux.FileGate
 import com.hermes.android.runtime.linux.RootfsFileAccess
 import com.hermes.android.runtime.remote.TailnetRoute
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
@@ -38,6 +40,10 @@ object RuntimeModule {
     @Provides
     @Singleton
     fun provideLinuxFileAccess(rootfs: RootfsFileAccess): LinuxFileAccess = rootfs
+
+    /** The same [FileGate] the Files provider asks, so an approval holds on both ways out. */
+    @Provides
+    fun provideLinuxFileGate(gate: FileGate): LinuxFileGate = gate
 
     /** Tailnet hosts are reached through the in-app Tailscale node. */
     @Provides

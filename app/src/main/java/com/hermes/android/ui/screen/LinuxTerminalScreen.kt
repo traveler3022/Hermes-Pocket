@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.hermes.android.runtime.linux.ProotEnvironment
+import com.hermes.android.runtime.TerminalLaunchSpec
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.i18n.t
 import com.termux.terminal.TerminalColors
@@ -68,11 +68,11 @@ internal class LinuxTerminalSessionHolder : ViewModel() {
 /** A shell in the built-in Linux, drawn by Termux's terminal-view library. */
 @Composable
 fun LinuxTerminalScreen(
-    createLaunchSpec: suspend () -> Result<ProotEnvironment.TerminalLaunchSpec>,
+    createLaunchSpec: suspend () -> Result<TerminalLaunchSpec>,
     onNavigateBack: () -> Unit,
 ) {
     val holder: LinuxTerminalSessionHolder = viewModel()
-    val spec by produceState<Result<ProotEnvironment.TerminalLaunchSpec>?>(null) { value = createLaunchSpec() }
+    val spec by produceState<Result<TerminalLaunchSpec>?>(null) { value = createLaunchSpec() }
     var title by remember { mutableStateOf("Linux") }
     val modifiers = remember { StickyModifiers() }
     var terminal by remember { mutableStateOf<TerminalView?>(null) }
@@ -105,7 +105,7 @@ fun LinuxTerminalScreen(
 
 @Composable
 private fun TerminalPane(
-    spec: ProotEnvironment.TerminalLaunchSpec,
+    spec: TerminalLaunchSpec,
     holder: LinuxTerminalSessionHolder,
     modifiers: StickyModifiers,
     onTitle: (String) -> Unit,

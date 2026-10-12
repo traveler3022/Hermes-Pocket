@@ -19,7 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
 import com.hermes.android.runtime.LinuxFileAccess
-import com.hermes.android.runtime.linux.FileGate
+import com.hermes.android.runtime.LinuxFileGate
 import com.hermes.android.service.HermesNotifications
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.LocalAppLanguage
@@ -36,14 +36,14 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Asks before a program of the built-in Linux leaves for the phone ([FileGate]); a program
+ * Asks before a program of the built-in Linux leaves for the phone ([LinuxFileGate]); a program
  * named like a photo or document is only reported. Opened by "Open with another app" (then
  * opens the file) and by the notification the Files provider posts when it held a file back.
  */
 @AndroidEntryPoint
 class FileGateActivity : ComponentActivity() {
 
-    @Inject lateinit var fileGate: FileGate
+    @Inject lateinit var fileGate: LinuxFileGate
     @Inject lateinit var linuxFiles: LinuxFileAccess
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,7 +74,7 @@ class FileGateActivity : ComponentActivity() {
         }
     }
 
-    private fun ask(file: File, risk: FileGate.Risk, open: Boolean) {
+    private fun ask(file: File, risk: LinuxFileGate.Risk, open: Boolean) {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
@@ -86,7 +86,7 @@ class FileGateActivity : ComponentActivity() {
                     appFont = themeModeState.appFont,
                     fontScalePct = themeModeState.fontScalePct,
                 ) {
-                    if (risk == FileGate.Risk.DISGUISED) {
+                    if (risk == LinuxFileGate.Risk.DISGUISED) {
                         AlertDialog(
                             onDismissRequest = ::finish,
                             title = { Text(t("Blocked: a disguised program", "بسته شد: برنامهٔ پنهان")) },
@@ -164,7 +164,7 @@ class FileGateActivity : ComponentActivity() {
                 .apply { if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
 
         /** Another app (a copy in the Files app) tried to read [file]; the tap opens the dialog. */
-        fun notifyHeldBack(context: Context, file: File, risk: FileGate.Risk) {
+        fun notifyHeldBack(context: Context, file: File, risk: LinuxFileGate.Risk) {
             HermesNotifications.ensureChannel(
                 context,
                 NotificationChannel(
@@ -180,7 +180,7 @@ class FileGateActivity : ComponentActivity() {
                 intent(context, file, open = false),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            val title = if (risk == FileGate.Risk.DISGUISED) {
+            val title = if (risk == LinuxFileGate.Risk.DISGUISED) {
                 tForContext(context, "Hermes blocked a disguised program", "Hermes یک برنامهٔ پنهان را بست")
             } else {
                 tForContext(context, "Hermes held back a program", "Hermes جلوی بیرون رفتن یک برنامه را گرفت")

@@ -1,5 +1,7 @@
 package com.hermes.android.runtime.linux
 
+import com.hermes.android.runtime.LinuxFileGate
+import com.hermes.android.runtime.LinuxFileGate.Risk
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
@@ -15,9 +17,7 @@ import javax.inject.Singleton
  * Decided by the file's bytes, not its name.
  */
 @Singleton
-class FileGate @Inject constructor() {
-
-    enum class Risk { SAFE, PROGRAM, DISGUISED }
+class FileGate @Inject constructor() : LinuxFileGate {
 
     private val approvals = ConcurrentHashMap<String, Long>()
 
@@ -28,7 +28,7 @@ class FileGate @Inject constructor() {
     }
 
     /** The user confirmed [file]: other apps may read it for a while, as long as it is unchanged. */
-    fun approve(file: File, now: Long = System.currentTimeMillis()) {
+    override fun approve(file: File, now: Long) {
         approvals[key(file)] = now + APPROVAL_MILLIS
     }
 
@@ -42,7 +42,7 @@ class FileGate @Inject constructor() {
      * program only while the user's confirmation lasts, a disguised program never. The one
      * rule every way out of the Linux (the Files app, "Open with another app") applies.
      */
-    fun heldBack(file: File, now: Long = System.currentTimeMillis()): Risk? {
+    override fun heldBack(file: File, now: Long): Risk? {
         val risk = riskOf(file)
         return risk.takeUnless { it == Risk.SAFE || (it == Risk.PROGRAM && isApproved(file, now)) }
     }

@@ -29,4 +29,10 @@ interface LinuxFileAccess {
 
     /** True when [file] (canonical) lies inside the Linux. */
     fun contains(file: File): Boolean
+
+    /**
+     * A picked file as a guest path the Linux can open: a document of the Linux itself is
+     * already there, anything else is copied into its uploads folder. Throws IOException.
+     */
+    fun upload(uri: Uri, name: String): String
 }

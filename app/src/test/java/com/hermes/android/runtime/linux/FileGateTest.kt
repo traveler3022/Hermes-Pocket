@@ -1,5 +1,7 @@
 package com.hermes.android.runtime.linux
 
+import com.hermes.android.runtime.FileGateNotifier
+import com.hermes.android.runtime.LinuxFileGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -35,26 +37,26 @@ class FileGateTest {
 
     @Test
     fun `photos, text and office documents pass`() {
-        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("a.jpg", byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()))))
-        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("notes.txt", "MZ is just text here".toByteArray())))
-        assertEquals(FileGate.Risk.SAFE, gate.riskOf(zip("report.docx", "[Content_Types].xml", "word/document.xml")))
-        assertEquals(FileGate.Risk.SAFE, gate.riskOf(file("empty.bin", ByteArray(0))))
+        assertEquals(LinuxFileGate.Risk.SAFE, gate.riskOf(file("a.jpg", byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()))))
+        assertEquals(LinuxFileGate.Risk.SAFE, gate.riskOf(file("notes.txt", "MZ is just text here".toByteArray())))
+        assertEquals(LinuxFileGate.Risk.SAFE, gate.riskOf(zip("report.docx", "[Content_Types].xml", "word/document.xml")))
+        assertEquals(LinuxFileGate.Risk.SAFE, gate.riskOf(file("empty.bin", ByteArray(0))))
     }
 
     @Test
     fun `programs under their own names ask first`() {
-        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("app.apk", "AndroidManifest.xml", "classes.dex")))
-        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("bundle.xapk", "base.apk", "manifest.json")))
-        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(zip("stuff.zip", "inside/game.apk")))
-        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(file("tool", elf)))
-        assertEquals(FileGate.Risk.PROGRAM, gate.riskOf(file("setup.exe", windowsProgram())))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.riskOf(zip("app.apk", "AndroidManifest.xml", "classes.dex")))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.riskOf(zip("bundle.xapk", "base.apk", "manifest.json")))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.riskOf(zip("stuff.zip", "inside/game.apk")))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.riskOf(file("tool", elf)))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.riskOf(file("setup.exe", windowsProgram())))
     }
 
     @Test
     fun `a program named like a photo or video is disguised`() {
-        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(zip("photo.jpg", "AndroidManifest.xml")))
-        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(file("movie.MP4", elf)))
-        assertEquals(FileGate.Risk.DISGUISED, gate.riskOf(file("invoice.pdf", windowsProgram())))
+        assertEquals(LinuxFileGate.Risk.DISGUISED, gate.riskOf(zip("photo.jpg", "AndroidManifest.xml")))
+        assertEquals(LinuxFileGate.Risk.DISGUISED, gate.riskOf(file("movie.MP4", elf)))
+        assertEquals(LinuxFileGate.Risk.DISGUISED, gate.riskOf(file("invoice.pdf", windowsProgram())))
     }
 
     @Test
@@ -75,27 +77,27 @@ class FileGateTest {
         assertNull(gate.heldBack(file("notes.txt", "hello".toByteArray())))
 
         val apk = zip("app.apk", "AndroidManifest.xml")
-        assertEquals(FileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L))
         gate.approve(apk, now = 1_000L)
         assertNull(gate.heldBack(apk, now = 2_000L))
-        assertEquals(FileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L + 11 * 60 * 1000L))
+        assertEquals(LinuxFileGate.Risk.PROGRAM, gate.heldBack(apk, now = 1_000L + 11 * 60 * 1000L))
 
         val disguised = zip("photo.jpg", "AndroidManifest.xml")
         gate.approve(disguised, now = 1_000L)
-        assertEquals(FileGate.Risk.DISGUISED, gate.heldBack(disguised, now = 2_000L))
+        assertEquals(LinuxFileGate.Risk.DISGUISED, gate.heldBack(disguised, now = 2_000L))
     }
 
     @Test
     fun `file gate notifier dispatches file and risk`() {
         var notifiedFile: File? = null
-        var notifiedRisk: FileGate.Risk? = null
+        var notifiedRisk: LinuxFileGate.Risk? = null
         val notifier = FileGateNotifier { f, r ->
             notifiedFile = f
             notifiedRisk = r
         }
         val testFile = file("test.apk", "test".toByteArray())
-        notifier.notifyHeldBack(testFile, FileGate.Risk.PROGRAM)
+        notifier.notifyHeldBack(testFile, LinuxFileGate.Risk.PROGRAM)
         assertEquals(testFile, notifiedFile)
-        assertEquals(FileGate.Risk.PROGRAM, notifiedRisk)
+        assertEquals(LinuxFileGate.Risk.PROGRAM, notifiedRisk)
     }
 }

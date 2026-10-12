@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.runtime.LinuxFileAccess
+import com.hermes.android.runtime.TerminalLaunchSpec
 import com.hermes.android.runtime.linux.LinuxDesktop
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -115,7 +116,7 @@ class LinuxToolsViewModel @Inject constructor(
 
     fun showMessage(message: String) = _state.update { it.copy(error = message) }
 
-    suspend fun terminalLaunchSpec(): Result<ProotEnvironment.TerminalLaunchSpec> = withContext(Dispatchers.IO) {
+    suspend fun terminalLaunchSpec(): Result<TerminalLaunchSpec> = withContext(Dispatchers.IO) {
         runCatching {
             check(environment.isRootfsInstalled) { "Install the built-in Linux runtime first." }
             environment.terminalLaunchSpec()

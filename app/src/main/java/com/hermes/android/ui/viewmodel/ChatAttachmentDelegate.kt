@@ -14,7 +14,6 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.LinuxFileAccess
-import com.hermes.android.runtime.linux.LinuxUploads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +36,6 @@ internal class ChatAttachmentDelegate(
 ) {
     private val maxAttachBytes = 25 * 1024 * 1024
     private val attachChunkSize = 1024 * 1024
-    private val linuxUploads by lazy { LinuxUploads(context) }
 
     fun attachFromUri(state: MutableStateFlow<ChatUiState>, uri: Uri) {
         val sessionId = state.value.activeSessionId ?: return
@@ -68,7 +66,7 @@ internal class ChatAttachmentDelegate(
                 // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
                 // Termux and remote gateways can't see the file, so they get the bytes.
                 val guestPath = if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
-                    linuxUploads.guestPath(source, name)
+                    linuxFiles.upload(source, name)
                 } else null
                 val b64 = if (guestPath == null) readBase64(source) else ""
 

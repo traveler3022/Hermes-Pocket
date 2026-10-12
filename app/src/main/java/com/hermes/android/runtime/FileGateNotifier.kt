@@ -1,4 +1,4 @@
-package com.hermes.android.runtime.linux
+package com.hermes.android.runtime
 
 import java.io.File
 
@@ -7,5 +7,5 @@ import java.io.File
  * being read by an external Android application until confirmed.
  */
 fun interface FileGateNotifier {
-    fun notifyHeldBack(file: File, risk: FileGate.Risk)
+    fun notifyHeldBack(file: File, risk: LinuxFileGate.Risk)
 }

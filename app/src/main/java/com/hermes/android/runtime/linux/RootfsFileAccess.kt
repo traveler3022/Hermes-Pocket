@@ -17,6 +17,8 @@ class RootfsFileAccess @Inject constructor(
 
     private val rootfs: File get() = ProotEnvironment.rootfsDir(context)
 
+    private val uploads by lazy { LinuxUploads(context) }
+
     override val documentsAuthority: String get() = LinuxFilesProvider.authority(context)
 
     override val homeFolderUri: Uri get() = DocumentsContract.buildDocumentUri(documentsAuthority, HERMES_HOME_DIR)
@@ -31,6 +33,8 @@ class RootfsFileAccess @Inject constructor(
     override fun documentUri(guestPath: String): Uri = DocumentsContract.buildDocumentUri(documentsAuthority, guestPath)
 
     override fun contains(file: File): Boolean = file.path.startsWith(rootfs.canonicalPath + File.separator)
+
+    override fun upload(uri: Uri, name: String): String = uploads.guestPath(uri, name)
 
     private companion object {
         /** Where Hermes works and leaves the files it makes: the gateway's working directory. */
