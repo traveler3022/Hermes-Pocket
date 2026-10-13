@@ -154,20 +154,25 @@ internal fun ToolsetsSection(
         return
     }
 
+    // Tapping a toolset opens its backend and keys (switching it stays on the row).
+    var setupFor by remember { mutableStateOf<String?>(null) }
+    setupFor?.let { name -> ToolsetSetupSheet(toolset = name, onDismiss = { setupFor = null }) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(state.availableTools, key = { it.name }) { tool ->
-            ToolRow(tool, viewModel)
+            ToolRow(tool, viewModel, onClick = { setupFor = tool.name })
         }
     }
 }
 
 @Composable
-internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel) {
+internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,

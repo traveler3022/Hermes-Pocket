@@ -7,6 +7,7 @@ import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
 import com.hermes.android.data.ProviderSetupRepository
+import com.hermes.android.data.ToolsetSetupRepository
 import com.hermes.android.data.ServerKanbanRepository
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.SetupState
@@ -16,6 +17,7 @@ import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.tools.ToolsetSetup
 import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.domain.notify.AppVisibility
@@ -77,6 +79,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindProviderSetup(impl: ProviderSetupRepository): ProviderSetup
+
+    @Binds
+    abstract fun bindToolsetSetup(impl: ToolsetSetupRepository): ToolsetSetup
 
     @Binds
     abstract fun bindSetupProgress(impl: SetupState): SetupProgress
