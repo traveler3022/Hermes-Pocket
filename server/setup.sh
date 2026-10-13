@@ -10,7 +10,9 @@
 #   3. runs the dashboard as the systemd service hermes-dashboard, on 127.0.0.1 only, so it
 #      starts again after every reboot,
 #   4. shares it inside your tailnet with `tailscale serve` (HTTPS). Never Funnel: nothing on
-#      this server is opened to the internet.
+#      this server is opened to the internet,
+#   5. opens a pairing door for 15 minutes, so the server's own Tailscale account's next phone
+#      signs in by itself (once); see start_pairing below.
 #
 # Options (when piping, put them after `bash -s --`):
 #   --new-password   make a new password and secret; every signed-in device has to sign in again
@@ -27,7 +29,7 @@ hermes_setup() {
     exec </dev/null
 
     local service=hermes-dashboard
-    local port=9119 login_name=admin username_given=0 new_password=0 run_user=""
+    local port=9119 login_name=admin username_given=0 new_password=0 run_user="" pair_seconds=900
 
     say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
     fail() { printf '\n\033[1;31mStopped:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -207,14 +209,193 @@ EOF
         fail "Tailscale Funnel is on for $name, which puts it on the internet, so the dashboard was stopped. Turn Funnel off (sudo tailscale funnel --https=443 off), then run this again."
     fi
 
+    # --- Pairing: the owner's next phone gets the login by itself, once ----------------------
+    # A tiny door behind Tailscale Serve hands the Hermes login to the first device that asks
+    # while signed in to Tailscale as this server's own account. Serve itself sets that identity
+    # (Tailscale-User-Login) and drops any copy the caller sent; Funnel and tagged devices get
+    # none. After one hand-over or $pair_seconds seconds the door stops, removes its Serve path
+    # and its files, and nothing starts it again at boot.
+    note() { printf '\nNote: %s\n' "$*" >&2; }
+    start_pairing() {
+        local pair_service=hermes-pocket-pair pair_path=/hermes-pocket-pair pair_dir=/run/hermes-pocket-pair
+        local ts owner py="" candidate tailscale_bin
+        tailscale_bin=$(command -v tailscale)
+        # A door left open by an earlier run closes first (that also removes its files).
+        systemctl stop "$pair_service" >/dev/null 2>&1 || true
+
+        ts=$(ts_json)
+        if grep -q '"Tags":' <<<"$ts"; then
+            note "This server is a tagged Tailscale device, so the app can't sign in by itself. Enter the login in the app."
+            return 1
+        fi
+        owner=$(sed -n 's/^ *"LoginName": *"\([^"]*\)".*/\1/p' <<<"$ts")
+        owner=${owner%%$'\n'*}
+        if [ -z "$owner" ]; then
+            note "Tailscale did not say which account this server belongs to, so the app can't sign in by itself. Enter the login in the app."
+            return 1
+        fi
+        for candidate in "$(command -v python3 || true)" /usr/local/lib/hermes-agent/venv/bin/python3 "$run_home/.hermes/hermes-agent/venv/bin/python3"; do
+            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+                py=$candidate
+                break
+            fi
+        done
+        if [ -z "$py" ]; then
+            note "No python3 found, so the app can't sign in by itself. Enter the login in the app."
+            return 1
+        fi
+
+        rm -rf "$pair_dir"
+        mkdir -m 700 "$pair_dir" || return 1
+        printf '%s\n' "$owner" >"$pair_dir/owner" || return 1
+        cat >"$pair_dir/pair.py" <<'PY' || return 1
+"""Hermes Pocket pairing door, started by setup.sh; see the comment there."""
+import json
+import os
+import socketserver
+import sys
+import time
+from email.header import decode_header, make_header
+from http.server import BaseHTTPRequestHandler
+
+sock_path, env_path, owner_path, seconds = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+
+
+def read_env(path):
+    values = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            key, sep, value = line.rstrip("\n").partition("=")
+            if sep:
+                values[key] = value
+    return values
+
+
+def login_of(value):
+    # Serve sends ASCII as is and anything else RFC 2047 encoded.
+    try:
+        return str(make_header(decode_header(value))).strip().lower()
+    except Exception:
+        return ""
+
+
+with open(owner_path, encoding="utf-8") as f:
+    OWNER = f.read().strip().lower()
+ENV = read_env(env_path)
+LOGIN = {
+    "username": ENV.get("HERMES_DASHBOARD_BASIC_AUTH_USERNAME", ""),
+    "password": ENV.get("HERMES_DASHBOARD_BASIC_AUTH_PASSWORD", ""),
+}
+paired = False
+
+
+class Door(BaseHTTPRequestHandler):
+    timeout = 5  # a caller that never finishes its request can't hold the door
+
+    def do_POST(self):
+        global paired
+        funnel = self.headers.get("Tailscale-Funnel-Request")
+        if funnel or not OWNER or login_of(self.headers.get("Tailscale-User-Login", "")) != OWNER:
+            self.log_message("refused a device that is not signed in as this server's account")
+            self.answer(403, {"error": "not_owner"})
+            return
+        if not LOGIN["username"] or not LOGIN["password"]:
+            self.answer(503, {"error": "no_login"})
+            return
+        self.answer(200, LOGIN)
+        paired = True
+        self.log_message("gave the login to this server's account; closing")
+
+    def do_GET(self):
+        self.answer(405, {"error": "use_post"})
+
+    def answer(self, code, body):
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def address_string(self):
+        return "tailscale-serve"
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("hermes-pocket-pair: " + (fmt % args) + "\n")
+
+
+os.umask(0o077)
+if os.path.exists(sock_path):
+    os.unlink(sock_path)
+deadline = time.monotonic() + seconds
+with socketserver.UnixStreamServer(sock_path, Door) as server:
+    while not paired:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        server.timeout = left
+        server.handle_request()
+PY
+        cat >"/etc/systemd/system/$pair_service.service" <<EOF || return 1
+[Unit]
+Description=Hermes Pocket pairing: the server's own Tailscale account gets the Hermes login once, then this stops
+After=network.target tailscaled.service
+
+[Service]
+ExecStart=$py -I $pair_dir/pair.py $pair_dir/pair.sock $env_file $pair_dir/owner $pair_seconds
+ExecStopPost=-+$tailscale_bin serve --set-path $pair_path off
+ExecStopPost=+/bin/rm -rf $pair_dir
+RuntimeMaxSec=$((pair_seconds + 60))
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$pair_dir
+EOF
+        systemctl daemon-reload
+        if ! systemctl start "$pair_service"; then
+            note "The pairing door did not start (journalctl -u $pair_service). Enter the login in the app."
+            return 1
+        fi
+        for _ in $(seq 1 20); do
+            [ -S "$pair_dir/pair.sock" ] && break
+            sleep 0.5
+        done
+        if [ ! -S "$pair_dir/pair.sock" ] || ! "$tailscale_bin" serve --bg --set-path "$pair_path" "unix:$pair_dir/pair.sock" >/dev/null; then
+            systemctl stop "$pair_service" >/dev/null 2>&1 || true
+            note "The pairing door could not be shared through Tailscale (journalctl -u $pair_service). Enter the login in the app."
+            return 1
+        fi
+    }
+    local pairing=0
+    if start_pairing; then
+        pairing=1
+    fi
+
     say "Done. Hermes listens only on 127.0.0.1; only your own Tailscale devices can reach it."
-    cat <<EOF
+    if [ "$pairing" = 1 ]; then
+        cat <<EOF
+
+In the Hermes app: Settings → Server
+  1. Sign in to Tailscale with the same account as this server.
+  2. Tap ${name%%.*} in the list. The app signs in to Hermes by itself.
+     This works for one phone, within $((pair_seconds / 60)) minutes. Later, or for another phone,
+     run this command again, or enter the Hermes login by hand:
+       Username: $login_name
+       Password: $password
+EOF
+    else
+        cat <<EOF
 
 In the Hermes app: Settings → Server
   1. Sign in to Tailscale with the same account as this server, then tap ${name%%.*} in the list.
   2. Enter the Hermes login:
        Username: $login_name
        Password: $password
+EOF
+    fi
+    cat <<EOF
 
 Server address: $url
 Hermes: $hermes (user $run_user)

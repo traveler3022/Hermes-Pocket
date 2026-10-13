@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.i18n.tForContext
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
 import com.hermes.android.runtime.InstallAction
@@ -15,6 +16,7 @@ import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.remote.PairResult
 import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
@@ -261,11 +263,44 @@ class RuntimeViewModel @Inject constructor(
         viewModelScope.launch { tailscale.logout() }
     }
 
-    /** Uses [device] as the Hermes server. */
+    /**
+     * Uses [device] as the Hermes server and, unless already signed in there, signs in by itself
+     * through the server's pairing door ([RemoteAuth.pairAndSignIn]). Without an open door the
+     * typed login stays the way in.
+     */
     fun chooseServer(device: TailnetDeviceUi) {
-        viewModelScope.launch {
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
             _errorMessage.value = null
             remoteServerSettings.save(device.address, "")
+            if (remoteAuth.isSignedInTo(device.address)) return@launch
+            _signingIn.value = true
+            try {
+                if (!remoteAuth.probe(device.address).nativeSignIn) {
+                    _errorMessage.value = "This server's Hermes is too old for app sign-in. Update it."
+                    return@launch
+                }
+                when (remoteAuth.pairAndSignIn(device.address)) {
+                    is PairResult.Paired -> connectRemote()
+                    PairResult.NotOwner -> _errorMessage.value = tForContext(
+                        context,
+                        "This phone's Tailscale account is not the server's. Sign in to Tailscale with the server's account, or enter the Hermes login below.",
+                        "حساب Tailscale این گوشی با حساب سرور یکی نیست. با حساب سرور وارد Tailscale شوید یا نام کاربری و رمز هرمس را پایین وارد کنید.",
+                    )
+                    PairResult.Closed -> _errorMessage.value = tForContext(
+                        context,
+                        "The server is not waiting for a phone. Run the setup command on the server again, then tap the server; or enter the Hermes login below.",
+                        "سرور منتظر اتصال گوشی نیست. دستور نصب را دوباره روی سرور اجرا کنید و بعد روی سرور بزنید، یا نام کاربری و رمز هرمس را پایین وارد کنید.",
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Pairing failed")
+                _errorMessage.value = e.message ?: "Sign-in failed"
+            } finally {
+                _signingIn.value = false
+            }
         }
     }
 

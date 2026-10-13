@@ -133,6 +133,47 @@ class RemoteAuth @Inject constructor(
         }
     }
 
+    /**
+     * Signs in without asking: the server's pairing door (opened by server/setup.sh for a short
+     * while) hands its Hermes login to a device signed in to Tailscale as the server's own account,
+     * once. Tailscale Serve sets that identity itself, so only the in-app tailnet connection can
+     * prove it. The login is then used and kept exactly like a typed one.
+     */
+    suspend fun pairAndSignIn(serverUrl: String): PairResult {
+        val base = encryptedBase(serverUrl)
+        tailnet.ensureUp(base.toHttpUrl().host)
+        return withContext(Dispatchers.IO) {
+            try {
+                // A login the door already handed over (the sign-in after it may have failed): the
+                // door is closed by now, so this is the only way to it.
+                store.loadCredentials()?.takeIf { it.serverUrl == base }?.let { kept ->
+                    try {
+                        return@withContext PairResult.Paired(passwordLoginBlocking(base, kept.username, kept.password))
+                    } catch (e: WrongLoginException) {
+                        // A new password on the server (setup.sh --new-password): the door has it.
+                        Timber.w("[RemoteAuth] The kept login no longer works; asking the pairing door")
+                    }
+                }
+                val request = Request.Builder().url("$base$PAIR_PATH").post("{}".toRequestBody(JSON)).build()
+                val login = http.newCall(request).execute().use { response ->
+                    val o = runCatching { Json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }.getOrNull()
+                    when {
+                        response.code == 200 && o != null -> RemoteCredentials(base, o.str("username"), o.str("password"))
+                        response.code == 403 && o?.str("error") == "not_owner" -> return@withContext PairResult.NotOwner
+                        // No door (closed, used, or a server set up before pairing existed): Hermes answers.
+                        else -> return@withContext PairResult.Closed
+                    }
+                }
+                if (login.username.isEmpty() || login.password.isEmpty()) return@withContext PairResult.Closed
+                // Kept before signing in: the door gives it only once.
+                store.saveCredentials(login)
+                PairResult.Paired(passwordLoginBlocking(base, login.username, login.password))
+            } catch (e: IOException) {
+                throw reachError(base, e)
+            }
+        }
+    }
+
     /** Forgets the sign-in and the kept login on this phone. */
     fun signOut() {
         store.clear()
@@ -370,7 +411,22 @@ class RemoteAuth @Inject constructor(
 
         /** RFC 8252 loopback redirect the server requires; nothing listens on it (see [passwordLoginBlocking]). */
         const val LOOPBACK_REDIRECT = "http://127.0.0.1:47123/callback"
+
+        /** Where server/setup.sh shares its pairing door through Tailscale Serve. */
+        const val PAIR_PATH = "/hermes-pocket-pair"
     }
+}
+
+/** What the server's pairing door answered ([RemoteAuth.pairAndSignIn]). */
+sealed interface PairResult {
+    /** Got the login and signed in with it. */
+    data class Paired(val tokens: RemoteTokens) : PairResult
+
+    /** The door is open, but this phone's Tailscale account is not the server's. */
+    data object NotOwner : PairResult
+
+    /** No open door: already used, timed out, or the server was set up before pairing existed. */
+    data object Closed : PairResult
 }
 
 /** The server said the username or password is wrong. */
