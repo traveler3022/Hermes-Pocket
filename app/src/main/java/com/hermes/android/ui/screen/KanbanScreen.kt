@@ -1,6 +1,9 @@
 package com.hermes.android.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +26,9 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,12 +74,18 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.icons.filled.AttachFile
+import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.ExpandMore
 import com.hermes.android.ui.icons.filled.Inventory2
+import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.KanbanViewModel
 
 /** The columns a person reads, in the board's order (`plugin_api.py` BOARD_COLUMNS). */
 private val COLUMNS = listOf("triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done")
+
+/** The thinking levels a task can be set to (`hermes_constants.VALID_REASONING_EFFORTS` plus off). */
+private val EFFORTS = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
 @Composable
 private fun columnLabel(column: String): String = when (column) {
@@ -86,6 +97,7 @@ private fun columnLabel(column: String): String = when (column) {
     "blocked" -> t("Blocked", "متوقف")
     "review" -> t("Review", "بازبینی")
     "done" -> t("Done", "انجام‌شده")
+    "archived" -> t("Archived", "بایگانی")
     else -> column
 }
 
@@ -102,13 +114,25 @@ fun KanbanScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     var creating by remember { mutableStateOf(false) }
     var filterOpen by remember { mutableStateOf(false) }
     var orchestrating by remember { mutableStateOf(false) }
     var bulkAssigning by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var showingHealth by remember { mutableStateOf(false) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::importBoard)
+    }
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { viewModel.watch() }
+    }
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearNotice()
+        }
     }
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -133,13 +157,6 @@ fun KanbanScreen(
                         tint = if (state.filtering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconButton(onClick = {
-                    viewModel.loadAssignees()
-                    viewModel.loadOrchestration()
-                    orchestrating = true
-                }) {
-                    Icon(Icons.Default.Settings, contentDescription = t("Orchestration", "هماهنگی خودکار"))
-                }
             }
             if (state.available && state.board != null) {
                 BoardPicker(
@@ -150,6 +167,52 @@ fun KanbanScreen(
                     onSelect = viewModel::selectBoard,
                     onCreate = viewModel::createBoard,
                 )
+            }
+            if (state.available) {
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = t("More", "بیشتر"))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(t("Show archived", "نمایش بایگانی‌شده‌ها")) },
+                            leadingIcon = {
+                                if (state.showArchived) Icon(Icons.Default.Check, contentDescription = null) else Box(Modifier.size(24.dp))
+                            },
+                            onClick = {
+                                menuOpen = false
+                                viewModel.setShowArchived(!state.showArchived)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(t("Orchestration", "هماهنگی خودکار")) },
+                            onClick = {
+                                menuOpen = false
+                                viewModel.loadAssignees()
+                                viewModel.loadOrchestration()
+                                orchestrating = true
+                            },
+                        )
+                        if (state.board != null) {
+                            DropdownMenuItem(
+                                text = { Text(t("Export this board", "خروجی گرفتن از این تابلو")) },
+                                enabled = !state.isBusy,
+                                onClick = {
+                                    menuOpen = false
+                                    viewModel.exportBoard()
+                                },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(t("Import a board", "وارد کردن تابلو")) },
+                            enabled = !state.isBusy,
+                            onClick = {
+                                menuOpen = false
+                                importLauncher.launch(arrayOf("application/gzip", "application/x-gzip", "application/x-tar", "application/octet-stream"))
+                            },
+                        )
+                    }
+                }
             }
         },
         snackbarHostState = snackbarHostState,
@@ -178,6 +241,25 @@ fun KanbanScreen(
                 )
                 return@Column
             }
+            if (state.diagnostics.isNotEmpty()) {
+                val worst = state.diagnostics.first().diagnostics.firstOrNull()?.severity
+                TextButton(
+                    onClick = { showingHealth = true },
+                    modifier = Modifier.padding(horizontal = HxSpace.screen),
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = severityColor(worst),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(HxSpace.sm))
+                    Text(
+                        t("${state.diagnostics.size} tasks need attention", "${state.diagnostics.size} کار نیاز به توجه دارد"),
+                        color = severityColor(worst),
+                    )
+                }
+            }
             if (filterOpen) {
                 FilterBar(
                     query = state.query,
@@ -194,7 +276,7 @@ fun KanbanScreen(
                     .padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
                 horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
-                COLUMNS.forEach { column ->
+                (if (state.showArchived) COLUMNS + "archived" else COLUMNS).forEach { column ->
                     val count = state.shown[column]?.size ?: 0
                     FilterChip(
                         selected = column == state.column,
@@ -266,6 +348,16 @@ fun KanbanScreen(
             dismissButton = { TextButton(onClick = { bulkAssigning = false }) { Text(t("Cancel", "لغو")) } },
         )
     }
+    if (showingHealth) {
+        HealthSheet(
+            diagnostics = state.diagnostics,
+            onOpen = { id ->
+                showingHealth = false
+                viewModel.open(id)
+            },
+            onDismiss = { showingHealth = false },
+        )
+    }
     if (orchestrating) {
         OrchestrationSheet(
             settings = state.orchestration,
@@ -293,6 +385,22 @@ fun KanbanScreen(
             onComment = { text, done -> viewModel.comment(detail.task.id, text, done) },
             onDelete = { viewModel.delete(detail.task.id) },
             onDismiss = viewModel::close,
+            boardTasks = state.columns.values.flatten(),
+            isSpecifying = state.isSpecifying,
+            onSpecify = { viewModel.specify(detail.task.id) },
+            onOpenAttachment = { file -> FileViewerActivity.open(context, viewModel.attachmentUrl(file), file.filename) },
+            onAddParent = viewModel::addParent,
+            onUnlink = viewModel::unlink,
+            onUpload = viewModel::upload,
+            onDeleteAttachment = viewModel::deleteAttachment,
+            estimate = state.estimate,
+            isEstimating = state.isEstimating,
+            onEstimate = { viewModel.estimate(detail.task.id) },
+            modelOptions = state.modelOptions,
+            onLoadModelOptions = viewModel::loadModelOptions,
+            onRunSettings = { model, provider, effort -> viewModel.setRunSettings(detail.task.id, model, provider, effort) },
+            homeChannels = state.homeChannels,
+            onHomeChannel = viewModel::setHomeChannel,
         )
     }
     if (creating) {
@@ -594,8 +702,28 @@ private fun TaskSheet(
     onComment: (text: String, onDone: () -> Unit) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    boardTasks: List<KanbanRepository.Task>,
+    isSpecifying: Boolean,
+    onSpecify: () -> Unit,
+    onOpenAttachment: (KanbanRepository.Attachment) -> Unit,
+    onAddParent: (parentId: String) -> Unit,
+    onUnlink: (parentId: String, childId: String) -> Unit,
+    onUpload: (android.net.Uri) -> Unit,
+    onDeleteAttachment: (Long) -> Unit,
+    estimate: KanbanRepository.Estimate?,
+    isEstimating: Boolean,
+    onEstimate: () -> Unit,
+    modelOptions: List<KanbanRepository.ModelProvider>,
+    onLoadModelOptions: () -> Unit,
+    onRunSettings: (model: String?, provider: String?, effort: String?) -> Unit,
+    homeChannels: List<KanbanRepository.HomeChannel>?,
+    onHomeChannel: (platform: String, on: Boolean) -> Unit,
 ) {
     val task = detail.task
+    var pickingParent by remember { mutableStateOf(false) }
+    var editingRun by remember { mutableStateOf(false) }
+    var deletingFile by remember { mutableStateOf<KanbanRepository.Attachment?>(null) }
+    val uploadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(onUpload) }
     var comment by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmReclaim by remember { mutableStateOf(false) }
@@ -615,6 +743,30 @@ private fun TaskSheet(
                 )
             }
             if (task.body.isNotBlank()) item { HermesMarkdown(markdown = task.body) }
+            if (task.status == "triage") {
+                item {
+                    OutlinedButton(onClick = onSpecify, enabled = !isSpecifying && !isBusy) {
+                        if (isSpecifying) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(HxSpace.sm))
+                        Text(
+                            if (isSpecifying) t("Writing it out…", "در حال نوشتن…")
+                            else t("Write out the details with AI", "نوشتن جزئیات با هوش مصنوعی")
+                        )
+                    }
+                }
+                item {
+                    SheetHint(
+                        t(
+                            "The server's model writes a full title and details, then the task joins the queue.",
+                            "مدل سرور عنوان و جزئیات کامل را می‌نویسد، بعد کار به صف می‌رود.",
+                        )
+                    )
+                }
+            }
             if (task.lastError.isNotBlank()) {
                 item { Text(task.lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
@@ -624,7 +776,93 @@ private fun TaskSheet(
                 item { HermesMarkdown(markdown = report) }
             }
             item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t("Files", "فایل‌ها"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { uploadLauncher.launch("*/*") }, enabled = !isBusy) { Text(t("Add file", "افزودن فایل")) }
+                }
+            }
+            items(detail.attachments, key = { "file-${it.id}" }) { file ->
+                AttachmentRow(file, onOpen = { onOpenAttachment(file) }, onDelete = { deletingFile = file })
+            }
+            item {
                 TaskActions(task.status, isBusy, onMove, onStopWorker = { confirmReclaim = true }) { confirmDelete = true }
+            }
+            item { HorizontalDivider() }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t("Model and thinking", "مدل و میزان فکر"), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            listOf(
+                                task.modelOverride?.let { m -> task.providerOverride?.let { "$it/$m" } ?: m } ?: t("Profile's model", "مدل پروفایل"),
+                                task.reasoningEffort?.let { effortLabel(it) } ?: t("profile's level", "سطح پروفایل"),
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (task.status != "done" && task.status != "archived") {
+                        TextButton(onClick = {
+                            onLoadModelOptions()
+                            editingRun = true
+                        }, enabled = !isBusy) { Text(t("Change", "تغییر")) }
+                    }
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t("Estimate", "تخمین"), style = MaterialTheme.typography.titleSmall)
+                        estimate?.let { found ->
+                            Text(
+                                listOfNotNull(
+                                    found.complexity?.let { t("Size $it", "اندازه $it") },
+                                    t("~${found.tokens} tokens", "حدود ${found.tokens} توکن"),
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            if (found.rationale.isNotBlank()) {
+                                Text(found.rationale, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    TextButton(onClick = onEstimate, enabled = !isEstimating) {
+                        if (isEstimating) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text(if (estimate == null) t("Estimate", "تخمین بزن") else t("Again", "دوباره"))
+                    }
+                }
+            }
+            if (!homeChannels.isNullOrEmpty()) {
+                item { SheetSection(t("Send news to", "ارسال خبرها به")) }
+                items(homeChannels, key = { "home-${it.platform}" }) { home ->
+                    SettingSwitch(
+                        title = "${home.platform.replaceFirstChar { it.uppercase() }} · ${home.name}",
+                        hint = t("Updates on this task go to this home channel.", "خبرهای این کار به این کانال خانه می‌رود."),
+                        checked = home.subscribed,
+                        enabled = !isBusy,
+                    ) { on -> onHomeChannel(home.platform, on) }
+                }
+            }
+            item { HorizontalDivider() }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t("Waits on", "منتظر این کارها"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    if (task.status != "done" && task.status != "archived") {
+                        TextButton(onClick = { pickingParent = true }, enabled = !isBusy) { Text(t("Add", "افزودن")) }
+                    }
+                }
+            }
+            if (detail.parents.isEmpty()) {
+                item { SheetHint(t("Starts without waiting for another task.", "بدون منتظر ماندن برای کار دیگری شروع می‌شود.")) }
+            }
+            items(detail.parents, key = { "parent-${it.id}" }) { parent ->
+                LinkRow(parent, isBusy) { onUnlink(parent.id, task.id) }
+            }
+            if (detail.children.isNotEmpty()) {
+                item { SheetSection(t("Waiting on this", "منتظر این کار")) }
+                items(detail.children, key = { "child-${it.id}" }) { child ->
+                    LinkRow(child, isBusy) { onUnlink(task.id, child.id) }
+                }
             }
             if (task.status != "done" && task.status != "archived") {
                 item {
@@ -701,6 +939,64 @@ private fun TaskSheet(
             }
         }
     }
+    deletingFile?.let { file ->
+        AlertDialog(
+            onDismissRequest = { deletingFile = null },
+            title = { Text(t("Remove ${file.filename}?", "${file.filename} حذف شود؟")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingFile = null
+                    onDeleteAttachment(file.id)
+                }) { Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deletingFile = null }) { Text(t("Cancel", "لغو")) } },
+        )
+    }
+    if (editingRun) {
+        RunSettingsDialog(
+            model = task.modelOverride,
+            provider = task.providerOverride,
+            effort = task.reasoningEffort,
+            options = modelOptions,
+            onSave = { model, provider, effort ->
+                editingRun = false
+                onRunSettings(model, provider, effort)
+            },
+            onDismiss = { editingRun = false },
+        )
+    }
+    if (pickingParent) {
+        val linked = detail.parents.map { it.id }.toSet() + detail.children.map { it.id } + task.id
+        val choices = boardTasks.filter { it.id !in linked && it.status != "archived" }
+        AlertDialog(
+            onDismissRequest = { pickingParent = false },
+            title = { Text(t("Wait for which task?", "منتظر کدام کار بماند؟")) },
+            text = {
+                if (choices.isEmpty()) {
+                    Text(t("No other task on this board.", "کار دیگری در این تابلو نیست."))
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth()) {
+                        items(choices, key = { it.id }) { choice ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pickingParent = false
+                                        onAddParent(choice.id)
+                                    }
+                                    .padding(vertical = HxSpace.sm),
+                            ) {
+                                Text(choice.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(columnLabel(choice.status), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pickingParent = false }) { Text(t("Cancel", "لغو")) } },
+        )
+    }
     if (confirmReclaim) {
         AlertDialog(
             onDismissRequest = { confirmReclaim = false },
@@ -734,6 +1030,177 @@ private fun TaskSheet(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) } },
         )
+    }
+}
+
+@Composable
+private fun effortLabel(effort: String): String = when (effort) {
+    "none" -> t("thinking off", "بدون فکر")
+    else -> t("thinking: $effort", "فکر: $effort")
+}
+
+@Composable
+private fun severityColor(severity: String?) = when (severity) {
+    "critical", "error" -> MaterialTheme.colorScheme.error
+    else -> MaterialTheme.colorScheme.tertiary
+}
+
+/** The board's tasks with trouble and what is wrong with each; a tap opens the task. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HealthSheet(
+    diagnostics: List<KanbanRepository.TaskDiagnostics>,
+    onOpen: (taskId: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        LazyColumn(
+            contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
+            verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
+        ) {
+            item { SheetHeader(t("Board health", "سلامت تابلو"), onBack = null) }
+            items(diagnostics, key = { it.taskId }) { row ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth().clickable { onOpen(row.taskId) },
+                ) {
+                    Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
+                        Text(row.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (row.status.isNotEmpty()) {
+                            Text(columnLabel(row.status), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        row.diagnostics.forEach { d ->
+                            Text(d.title, style = MaterialTheme.typography.bodyMedium, color = severityColor(d.severity))
+                            if (d.detail.isNotBlank()) Text(d.detail, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The model a task runs on and how hard it thinks, instead of its profile's. The models are the
+ * server's own list (`/model-options`); with none, the model is typed.
+ */
+@Composable
+private fun RunSettingsDialog(
+    model: String?,
+    provider: String?,
+    effort: String?,
+    options: List<KanbanRepository.ModelProvider>,
+    onSave: (model: String?, provider: String?, effort: String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var pickedProvider by remember { mutableStateOf(provider) }
+    var pickedModel by remember { mutableStateOf(model.orEmpty()) }
+    var pickedEffort by remember { mutableStateOf(effort) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Model and thinking", "مدل و میزان فکر")) },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                item { SheetSection(t("Model", "مدل")) }
+                item {
+                    FilterChip(
+                        selected = pickedModel.isBlank(),
+                        onClick = {
+                            pickedModel = ""
+                            pickedProvider = null
+                        },
+                        label = { Text(t("Profile's model", "مدل پروفایل")) },
+                    )
+                }
+                if (options.isEmpty()) {
+                    item {
+                        OutlinedTextField(
+                            value = pickedModel,
+                            onValueChange = { pickedModel = it },
+                            label = { Text(t("Model name", "نام مدل")) },
+                            singleLine = true,
+                        )
+                    }
+                } else {
+                    options.forEach { group ->
+                        item { Text(group.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+                        item {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                                group.models.forEach { name ->
+                                    FilterChip(
+                                        selected = pickedModel == name && pickedProvider == group.slug,
+                                        onClick = {
+                                            pickedModel = name
+                                            pickedProvider = group.slug
+                                        },
+                                        label = { Text(name) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                item { SheetSection(t("Thinking", "میزان فکر")) }
+                item {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+                        FilterChip(selected = pickedEffort == null, onClick = { pickedEffort = null }, label = { Text(t("Profile's", "پروفایل")) })
+                        EFFORTS.forEach { level ->
+                            FilterChip(selected = pickedEffort == level, onClick = { pickedEffort = level }, label = { Text(level) })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val chosen = pickedModel.trim().ifEmpty { null }
+                onSave(chosen, if (chosen == null) null else pickedProvider, pickedEffort)
+            }) { Text(t("Save", "ذخیره")) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) } },
+    )
+}
+
+/** A file on the task: its name and size; a tap opens it in the app's viewer. */
+@Composable
+private fun AttachmentRow(file: KanbanRepository.Attachment, onOpen: () -> Unit, onDelete: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+    ) {
+        Row(Modifier.padding(HxSpace.sm), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(HxSpace.sm))
+            Text(file.filename, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(fileSize(file.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, contentDescription = t("Remove", "حذف"), modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+private fun fileSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> "%.1f MB".format(bytes / (1024.0 * 1024))
+}
+
+/** A linked task by title and column, with a button that removes the link. */
+@Composable
+private fun LinkRow(linked: KanbanRepository.LinkedTask, isBusy: Boolean, onUnlink: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(linked.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (linked.status.isNotEmpty()) {
+                Text(columnLabel(linked.status), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        IconButton(onClick = onUnlink, enabled = !isBusy) {
+            Icon(Icons.Default.Close, contentDescription = t("Remove link", "حذف پیوند"))
+        }
     }
 }
 

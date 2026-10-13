@@ -727,9 +727,16 @@ class ProotLinuxRuntime @Inject constructor(
                         return state["client"]
                 def handle(rid, params):
                     try:
-                        response = client().request(
-                            str(params.get("method") or "GET").upper(), str(params.get("path") or "/"),
-                            json=params.get("body"))
+                        method = str(params.get("method") or "GET").upper()
+                        path = str(params.get("path") or "/")
+                        upload = params.get("file_path")
+                        if upload:
+                            with open(str(upload), "rb") as fh:
+                                response = client().request(
+                                    method, path, data={"uploaded_by": "app"},
+                                    files={"file": (str(params.get("file_name") or os.path.basename(str(upload))), fh)})
+                        else:
+                            response = client().request(method, path, json=params.get("body"))
                         return server._ok(rid, {"status": response.status_code, "body": response.json() if response.content else None})
                     except Exception as exc:
                         log.exception("kanban call failed")

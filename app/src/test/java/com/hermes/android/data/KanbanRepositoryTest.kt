@@ -1,5 +1,6 @@
 package com.hermes.android.data
 
+import android.content.Context
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
@@ -67,7 +68,9 @@ class KanbanRepositoryTest {
             every { config } returns MutableStateFlow(RemoteServerConfig("https://box.tail1234.ts.net"))
         }
         val switch = mockk<KanbanSwitch> { every { on } returns MutableStateFlow(switchedOn) }
-        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings, gateway, switch)
+        // Relaxed: the kept board pick reads and writes SharedPreferences, which need no answers here.
+        val context = mockk<Context>(relaxed = true)
+        return KanbanRepository(http, Json { ignoreUnknownKeys = true }, runtime, settings, gateway, switch, context)
     }
 
     @Test
