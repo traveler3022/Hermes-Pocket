@@ -9,6 +9,7 @@ import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
 import com.hermes.android.data.ProviderSetupRepository
+import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
 import com.hermes.android.data.ToolsetSetupRepository
 import com.hermes.android.data.ServerKanbanRepository
@@ -21,6 +22,7 @@ import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
 import com.hermes.android.domain.tools.ToolsetSetup
 import com.hermes.android.domain.kanban.KanbanRepository
@@ -91,6 +93,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindTelegramSetup(impl: TelegramSetupRepository): TelegramSetup
+
+    @Binds
+    abstract fun bindMessagingPairing(impl: PairingRepository): MessagingPairing
 
     @Binds
     abstract fun bindSetupProgress(impl: SetupState): SetupProgress
