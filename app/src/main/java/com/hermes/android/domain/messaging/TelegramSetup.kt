@@ -1,37 +1,20 @@
 package com.hermes.android.domain.messaging
 
-/** A started pairing: open [deepLink] in Telegram to create the bot. */
-data class TelegramPairing(
-    val pairingId: String,
-    val suggestedUsername: String,
-    val deepLink: String,
-    // ISO time, UTC; empty when the server sent none.
-    val expiresAt: String,
-)
-
-sealed interface TelegramPairingStatus {
-    data object Waiting : TelegramPairingStatus
-    /** The bot exists; [ownerUserId] is the Telegram user who made it, when known. */
-    data class Ready(val botUsername: String?, val ownerUserId: String?) : TelegramPairingStatus
-}
-
 /** What saving the bot did to the messaging gateway. */
-sealed interface TelegramApplyResult {
-    data object Done : TelegramApplyResult
-    data object Restarting : TelegramApplyResult
-    data class NeedsRestart(val reason: String?) : TelegramApplyResult
+sealed interface TelegramSaveResult {
+    /** A running gateway picked the new token up by itself. */
+    data object Live : TelegramSaveResult
+    data object Restarting : TelegramSaveResult
+    data class NeedsRestart(val reason: String?) : TelegramSaveResult
 }
 
-/** The dashboard's Telegram wizard: make a bot from Telegram, then allow users and save it. */
+/**
+ * Connects the user's own Telegram bot: the token they got from @BotFather and the numeric
+ * user ids allowed to talk to it, written to the server's `.env` like the dashboard's Telegram card.
+ */
 interface TelegramSetup {
     /** False on the built-in Linux: it runs no messaging gateway for the bot to live in. */
     val available: Boolean
 
-    suspend fun start(): TelegramPairing
-
-    suspend fun status(pairingId: String): TelegramPairingStatus
-
-    suspend fun apply(pairingId: String, allowedUserIds: List<String>): TelegramApplyResult
-
-    suspend fun cancel(pairingId: String)
+    suspend fun save(botToken: String, allowedUserIds: List<String>): TelegramSaveResult
 }

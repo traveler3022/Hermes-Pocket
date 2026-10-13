@@ -170,27 +170,30 @@ private fun PlatformCard(
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(t("Set up step by step", "راه‌اندازی قدم‌به‌قدم"))
+                    Text(t("Connect your bot", "وصل کردن ربات خودت"))
                 }
             }
 
-            OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                label = { Text(t("Bot Token", "توکن بات")) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(HxRadius.sm),
-            )
+            // The wizard replaces the old token field, which never reached the server.
+            if (onWizard == null) {
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(t("Bot Token", "توکن بات")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    shape = RoundedCornerShape(HxRadius.sm),
+                )
 
-            Button(
-                onClick = { viewModel.saveToken(platform.type, token) },
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(t("Save Token", "ذخیره توکن"))
+                Button(
+                    onClick = { viewModel.saveToken(platform.type, token) },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(t("Save Token", "ذخیره توکن"))
+                }
             }
         }
     }
