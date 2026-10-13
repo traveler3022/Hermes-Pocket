@@ -22,10 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import android.graphics.Canvas
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -64,7 +63,7 @@ import java.io.File
 class ReadmeScreenshotsTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private val outDir = File(System.getProperty("readmeShotsDir") ?: "build/readme-shots")
 
@@ -108,7 +107,10 @@ class ReadmeScreenshotsTest {
             }
         }
         composeRule.mainClock.advanceTimeBy(3_000)
-        val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
+        // A software draw of the window: captureToImage's PixelCopy times out under Robolectric.
+        val root = composeRule.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        composeRule.runOnUiThread { root.draw(Canvas(bitmap)) }
         File(outDir, "$name.png").outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
