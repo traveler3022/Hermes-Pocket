@@ -23,8 +23,10 @@
 <p align="center">
   <table>
     <tr>
-      <td><img src="screenshots/chat.jpg" width="280"></td>
-      <td><img src="screenshots/control-center.jpg" width="280"></td>
+      <td><img src="screenshots/chat-fa.png" width="200"></td>
+      <td><img src="screenshots/drawer-fa.png" width="200"></td>
+      <td><img src="screenshots/control-center-fa.png" width="200"></td>
+      <td><img src="screenshots/runtime-fa.png" width="200"></td>
     </tr>
   </table>
 </p>
