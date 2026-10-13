@@ -671,6 +671,9 @@ class ProotLinuxRuntime @Inject constructor(
         //
         // Plus Kanban when the user turned it on (KanbanSwitch, LinuxKanban): a stand-in for the
         // dashboard API and the gateway dispatcher, which this runtime has neither of.
+        //
+        // Plus android.dashboard: the few dashboard routes the app calls on every runtime
+        // (data/DashboardApi), served in-process.
         private val GATEWAY_SCRIPT = """
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
@@ -756,6 +759,38 @@ class ProotLinuxRuntime @Inject constructor(
                 threading.Thread(target=dispatch, name="android-kanban", daemon=True).start()
             if os.environ.get("HERMES_ANDROID_KANBAN") == "1":
                 install_kanban(os.environ["HERMES_PYTHON_SRC_ROOT"])
+            # Dashboard routes the app needs and this runtime has no web server for (cron
+            # blueprints, memory providers): android.dashboard hands the request to the same
+            # dashboard routers in this process. Only those paths; the routers load on first use.
+            def install_dashboard():
+                log = logging.getLogger("android-dashboard")
+                lock, state = threading.Lock(), {}
+                allowed = ("/api/cron/blueprints", "/api/memory")
+                def client():
+                    with lock:
+                        if "client" not in state:
+                            from fastapi import FastAPI
+                            from fastapi.testclient import TestClient
+                            from hermes_cli.web_routers import cron, memory_providers, ops
+                            app = FastAPI()
+                            for module in (cron, memory_providers, ops):
+                                app.include_router(module.router)
+                            state["client"] = TestClient(app)
+                        return state["client"]
+                def handle(rid, params):
+                    try:
+                        method = str(params.get("method") or "GET").upper()
+                        path = str(params.get("path") or "/")
+                        if ".." in path or not path.split("?")[0].startswith(allowed):
+                            return server._err(rid, 4004, "not available here: " + path)
+                        response = client().request(method, path, json=params.get("body"))
+                        return server._ok(rid, {"status": response.status_code, "body": response.json() if response.content else None})
+                    except Exception as exc:
+                        log.exception("dashboard call failed")
+                        return server._err(rid, 5901, f"dashboard: {exc}")
+                server._methods["android.dashboard"] = handle
+                server._LONG_HANDLERS = server._LONG_HANDLERS | {"android.dashboard"}
+            install_dashboard()
             entry.main()
             '
         """.trimIndent()

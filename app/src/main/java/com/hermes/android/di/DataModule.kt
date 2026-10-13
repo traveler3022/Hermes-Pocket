@@ -1,6 +1,7 @@
 package com.hermes.android.di
 
 import com.hermes.android.data.AppReleaseRepository
+import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.PrefsTaskRegistry
@@ -13,6 +14,7 @@ import com.hermes.android.data.SetupState
 import com.hermes.android.data.StorageCleaner
 import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
+import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
@@ -86,6 +88,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindKanban(impl: ServerKanbanRepository): KanbanRepository
+
+    @Binds
+    abstract fun bindCronBlueprints(impl: CronBlueprintsRepository): CronBlueprints
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

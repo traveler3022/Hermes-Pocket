@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -86,6 +87,11 @@ fun CronScreen(
             )
         },
         onBack = onNavigateBack,
+        actions = {
+            IconButton(onClick = { viewModel.openBlueprints() }) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = t("Ready-made jobs", "کارهای آماده"))
+            }
+        },
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
             // Mockup-H shape: the create action is a FAB, not a top-bar icon.
@@ -113,7 +119,7 @@ fun CronScreen(
                 )
             }
 
-            uiState.jobs.isEmpty() -> Column(modifier = Modifier.padding(padding)) {
+            uiState.jobs.isEmpty() -> Column(modifier = Modifier.padding(padding).fillMaxSize()) {
                 HermesEmptyState(
                     icon = Icons.Default.Schedule,
                     title = t("No scheduled jobs", "هنوز کاری زمان‌بندی نشده"),
@@ -123,7 +129,14 @@ fun CronScreen(
                     ),
                     actionLabel = t("Create a job", "ساخت کار جدید"),
                     onAction = { viewModel.showCreateDialog() },
+                    modifier = Modifier.weight(1f),
                 )
+                TextButton(
+                    onClick = { viewModel.openBlueprints() },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = HxSpace.xl),
+                ) { Text(t("Or start from a ready-made job", "یا از یک کار آماده شروع کن")) }
             }
 
             else -> LazyColumn(
@@ -147,6 +160,23 @@ fun CronScreen(
         }
         uiState.editingJob?.let { job ->
             CreateJobDialog(viewModel, existingJob = job)
+        }
+        if (uiState.showBlueprints) {
+            BlueprintSheet(
+                state = uiState,
+                onPick = { viewModel.pickBlueprint(it) },
+                onRetry = viewModel::loadBlueprints,
+                onDismiss = viewModel::closeBlueprints,
+            )
+        }
+        uiState.activeBlueprint?.let { blueprint ->
+            BlueprintForm(
+                blueprint = blueprint,
+                creating = uiState.creatingFromBlueprint,
+                error = uiState.blueprintError,
+                onCreate = { values -> viewModel.createFromBlueprint(blueprint.key, values) },
+                onDismiss = { viewModel.pickBlueprint(null) },
+            )
         }
     }
 }
@@ -425,7 +455,7 @@ private fun weekNames(): List<String> = listOf(
 
 /** Five-minute steps: the interesting minutes of an hour, without 60 chips to scroll. */
 @Composable
-private fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
+internal fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
