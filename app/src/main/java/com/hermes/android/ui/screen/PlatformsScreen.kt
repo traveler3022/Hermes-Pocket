@@ -38,7 +38,9 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PlatformConfig
+import com.hermes.android.ui.viewmodel.PlatformType
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
+import com.hermes.android.ui.viewmodel.TelegramSetupViewModel
 
 /**
  * Messaging Platforms — configure Telegram/Discord/Slack bot tokens.
@@ -52,8 +54,11 @@ import com.hermes.android.ui.viewmodel.PlatformsViewModel
 fun PlatformsScreen(
     onNavigateBack: () -> Unit = {},
     viewModel: PlatformsViewModel = hiltViewModel(),
+    telegramSetup: TelegramSetupViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val telegramState by telegramSetup.uiState.collectAsStateWithLifecycle()
+    TelegramSetupDialog(telegramState, telegramSetup)
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -100,7 +105,16 @@ fun PlatformsScreen(
                 verticalArrangement = Arrangement.spacedBy(HxSpace.group),
             ) {
                 items(uiState.platforms, key = { it.type.name }) { platform ->
-                    PlatformCard(platform, viewModel)
+                    PlatformCard(
+                        platform,
+                        viewModel,
+                        // The wizard needs the messaging gateway, which the built-in Linux doesn't run.
+                        onWizard = if (platform.type == PlatformType.TELEGRAM && telegramSetup.available) {
+                            { telegramSetup.start() }
+                        } else {
+                            null
+                        },
+                    )
                 }
             }
         }
@@ -111,6 +125,7 @@ fun PlatformsScreen(
 private fun PlatformCard(
     platform: PlatformConfig,
     viewModel: PlatformsViewModel,
+    onWizard: (() -> Unit)? = null,
 ) {
     var token by remember(platform.type) { mutableStateOf(platform.botToken) }
 
@@ -147,6 +162,16 @@ private fun PlatformCard(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+            }
+
+            onWizard?.let { start ->
+                Button(
+                    onClick = start,
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(t("Set up step by step", "راه‌اندازی قدم‌به‌قدم"))
+                }
             }
 
             OutlinedTextField(
