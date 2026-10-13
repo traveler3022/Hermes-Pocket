@@ -43,7 +43,7 @@ class KanbanViewModel @Inject constructor(
     private val downloads by lazy { DownloadStorage(context) }
 
     /** Turns a server path into what the file viewer reads, per runtime, as for chat files. */
-    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope)
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope)
 
     data class UiState(
         val available: Boolean = true,

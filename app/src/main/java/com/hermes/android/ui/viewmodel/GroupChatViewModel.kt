@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.DownloadStorage
+import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
@@ -36,6 +36,7 @@ class GroupChatViewModel @Inject constructor(
     hermesRuntime: HermesRuntime,
     linuxFiles: LinuxFileAccess,
     @ApplicationContext private val context: Context,
+    private val downloads: Downloads,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -62,8 +63,7 @@ class GroupChatViewModel @Inject constructor(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     /** Members' files resolve and download the way a chat reply's do. */
-    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope)
-    private val downloads by lazy { DownloadStorage(context) }
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope)
 
     private val events = mutableListOf<GroupRooms.Event>()
     private var lastSeq = 0L

@@ -1,5 +1,6 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.storage.FileArea
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

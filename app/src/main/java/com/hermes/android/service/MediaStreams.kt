@@ -11,6 +11,7 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.gateway.RemoteFiles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -29,7 +30,7 @@ import javax.inject.Singleton
 class MediaStreams @Inject constructor(
     @ApplicationContext private val context: Context,
     private val files: RemoteFiles,
-) {
+) : MediaPlayers {
     // One SimpleCache per folder for the whole process (a second one on it throws).
     private val cache by lazy {
         SimpleCache(
@@ -55,7 +56,7 @@ class MediaStreams @Inject constructor(
     }
 
     /** An ExoPlayer builder whose player reads through these sources (its own source factory). */
-    fun playerBuilder(context: Context): ExoPlayer.Builder =
+    override fun playerBuilder(context: Context): ExoPlayer.Builder =
         ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
 
     private companion object {

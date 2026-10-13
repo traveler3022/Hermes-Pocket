@@ -8,10 +8,9 @@ import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import android.util.Base64
 import android.webkit.MimeTypeMap
-import com.hermes.android.data.DownloadStorage
+import com.hermes.android.domain.files.Downloads
 import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.LinuxFileAccess
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +31,7 @@ internal class ChatAttachmentDelegate(
     private val hermesRuntime: HermesRuntime,
     private val linuxFiles: LinuxFileAccess,
     private val context: Context,
+    private val downloads: Downloads,
     private val scope: CoroutineScope,
 ) {
     private val maxAttachBytes = 25 * 1024 * 1024
@@ -65,7 +65,7 @@ internal class ChatAttachmentDelegate(
 
                 // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
                 // Termux and remote gateways can't see the file, so they get the bytes.
-                val guestPath = if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
+                val guestPath = if (GatewayClient.isStdio(hermesRuntime.getWebSocketUrl())) {
                     linuxFiles.upload(source, name)
                 } else null
                 val b64 = if (guestPath == null) readBase64(source) else ""
@@ -214,7 +214,7 @@ internal class ChatAttachmentDelegate(
         if (!path.startsWith("/") && !path.startsWith("~")) return raw
         val ws = hermesRuntime.getWebSocketUrl()
         // The built-in runtime has no web server: its files are read straight from the rootfs.
-        if (StdioGatewayHub.handles(ws)) {
+        if (GatewayClient.isStdio(ws)) {
             return hermesRuntime.hostFileForGuestPath(path)?.let { Uri.fromFile(it).toString() } ?: raw
         }
         val base = ws.replaceFirst("ws://", "http://").replaceFirst("wss://", "https://")
@@ -266,7 +266,7 @@ internal class ChatAttachmentDelegate(
         val path = previewPath(file, cwd)?.removePrefix("file://")
             ?.replaceFirst(Regex("^~(?=/|$)"), "/root") ?: return@withContext null
         try {
-            if (StdioGatewayHub.handles(hermesRuntime.getWebSocketUrl())) {
+            if (GatewayClient.isStdio(hermesRuntime.getWebSocketUrl())) {
                 if (hermesRuntime.hostFileForGuestPath(path)?.isFile != true) return@withContext null
                 return@withContext linuxFiles.documentUri(path)
             }
@@ -292,12 +292,10 @@ internal class ChatAttachmentDelegate(
         }
     }
 
-    private val downloadStorage by lazy { DownloadStorage(context) }
-
     fun downloadFile(state: MutableStateFlow<ChatUiState>, url: String, filename: String) {
         scope.launch {
             try {
-                val savedAs = downloadStorage.save(url, filename) { gatewayClient.fetchFile(it) }
+                val savedAs = downloads.save(url, filename) { gatewayClient.fetchFile(it) }
                 Timber.i("[Chat] Downloaded ${redactCredentials(url)} -> $savedAs")
                 state.update { it.copy(errorEvent = ErrorEvent.Warning("Saved to $savedAs")) }
             } catch (e: Exception) {

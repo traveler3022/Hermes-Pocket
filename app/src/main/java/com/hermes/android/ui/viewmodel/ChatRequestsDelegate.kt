@@ -1,11 +1,11 @@
 package com.hermes.android.ui.viewmodel
 
+import com.hermes.android.domain.notify.AppVisibility
+import com.hermes.android.domain.notify.ApprovalAlerts
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
-import com.hermes.android.service.AppForegroundState
-import com.hermes.android.service.ApprovalNotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -24,8 +24,8 @@ import timber.log.Timber
  */
 internal class ChatRequestsDelegate(
     private val gatewayClient: GatewayClient,
-    private val approvalNotificationManager: ApprovalNotificationManager,
-    private val foregroundState: AppForegroundState,
+    private val approvalNotificationManager: ApprovalAlerts,
+    private val foregroundState: AppVisibility,
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatUiState>,
 ) {

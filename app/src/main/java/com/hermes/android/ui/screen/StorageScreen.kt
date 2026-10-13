@@ -92,7 +92,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.data.JunkKind
+import com.hermes.android.domain.storage.JunkKind
 import com.hermes.android.ui.component.CacheChart
 import com.hermes.android.ui.component.CacheChartColors
 import com.hermes.android.ui.component.CacheChartSegment

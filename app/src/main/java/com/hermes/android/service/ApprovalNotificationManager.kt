@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.hermes.android.R
+import com.hermes.android.domain.notify.ApprovalAlerts
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.hermes.android.i18n.tForContext
 import timber.log.Timber
@@ -30,7 +31,7 @@ import javax.inject.Singleton
 @Singleton
 class ApprovalNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : ApprovalAlerts {
 
     init {
         createNotificationChannel()
@@ -46,13 +47,13 @@ class ApprovalNotificationManager @Inject constructor(
      * @param allowPermanent whether the "Always" choice may be offered
      *   (gateway sends allow_permanent=false for security-capped commands)
      */
-    fun showApprovalRequest(
+    override fun showApprovalRequest(
         requestId: String,
         sessionId: String?,
         toolName: String,
         command: String,
         description: String,
-        allowPermanent: Boolean = true,
+        allowPermanent: Boolean,
     ) {
         Timber.i("[Approval] Showing approval notification for $toolName (request=$requestId, session=$sessionId)")
 
@@ -103,7 +104,7 @@ class ApprovalNotificationManager @Inject constructor(
     /**
      * Cancel an approval notification (e.g. after user responds or timeout).
      */
-    fun cancelApproval(requestId: String) {
+    override fun cancelApproval(requestId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(requestId.hashCode())
     }

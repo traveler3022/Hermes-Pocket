@@ -75,10 +75,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.hermes.android.data.FileArea
-import com.hermes.android.data.FoundFile
-import com.hermes.android.data.FoundFolder
-import com.hermes.android.data.FoundKind
+import com.hermes.android.domain.storage.FileArea
+import com.hermes.android.domain.storage.FoundFile
+import com.hermes.android.domain.storage.FoundFolder
+import com.hermes.android.domain.storage.FoundKind
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.MusicNote

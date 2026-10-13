@@ -151,6 +151,9 @@ interface GatewayClient {
          *   rather than this constant directly.
          */
         const val DEFAULT_URL = "ws://127.0.0.1:9119/api/ws"
+
+        /** Whether [url] is the built-in Linux's gateway, spoken to over stdio, not a socket. */
+        fun isStdio(url: String): Boolean = url.startsWith("stdio://")
     }
 }
 

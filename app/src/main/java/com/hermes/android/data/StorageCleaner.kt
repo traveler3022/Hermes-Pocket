@@ -5,6 +5,9 @@ import android.content.Context
 import android.os.Environment
 import android.os.Process
 import android.os.StatFs
+import com.hermes.android.domain.storage.JunkCleaner
+import com.hermes.android.domain.storage.JunkKind
+import com.hermes.android.domain.storage.StorageScan
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -24,25 +27,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The kinds of leftovers the Storage screen shows, in the chart's colour order (Telegram's
- * CacheControlActivity sections). Each is something that is made again on its own when needed.
- */
-enum class JunkKind {
-    Photos, Videos, Documents, Audio, Temp, Browser, Packages, AppCache, Other, Logs,
-}
-
-/** One pass over the app's storage: what each kind of leftover takes, and the phone around it. */
-data class StorageScan(
-    val sizes: Map<JunkKind, Long>,
-    /** Everything the app keeps (code, data, cache, the built-in Linux); -1 when Android won't say. */
-    val appBytes: Long,
-    val deviceTotal: Long,
-    val deviceFree: Long,
-) {
-    val junkBytes: Long get() = sizes.values.sum()
-}
-
-/**
  * Finds and clears leftovers across the whole app: its Android cache, the built-in Linux's temp
  * folders and package caches, Hermes' media caches, browser caches, and logs.
  *
@@ -54,9 +38,9 @@ data class StorageScan(
 class StorageCleaner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val environment: ProotEnvironment,
-) {
+) : JunkCleaner {
 
-    suspend fun scan(): StorageScan = withContext(Dispatchers.IO) {
+    override suspend fun scan(): StorageScan = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val sizes = sources().mapValues { (_, list) -> list.sumOf { JunkFiles.measure(it, now) } }
         val stat = runCatching { StatFs(Environment.getDataDirectory().path) }.getOrNull()
@@ -69,7 +53,7 @@ class StorageCleaner @Inject constructor(
     }
 
     /** Clears [kinds]; [onProgress] gets 0..1 as sources finish. Returns the bytes freed. */
-    suspend fun clear(kinds: Set<JunkKind>, onProgress: (Float) -> Unit): Long = withContext(Dispatchers.IO) {
+    override suspend fun clear(kinds: Set<JunkKind>, onProgress: (Float) -> Unit): Long = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val chosen = sources().filterKeys { it in kinds }.values.flatten()
         var freed = 0L

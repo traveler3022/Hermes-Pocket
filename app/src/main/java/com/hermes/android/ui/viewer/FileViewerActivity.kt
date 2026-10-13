@@ -100,9 +100,9 @@ import androidx.media3.ui.compose.material3.indicator.PositionText
 import androidx.media3.ui.compose.material3.indicator.ProgressSlider
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
+import com.hermes.android.domain.files.ServerFiles
+import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.RemoteFiles
-import com.hermes.android.service.MediaStreams
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -138,8 +138,8 @@ import javax.inject.Inject
 class FileViewerActivity : ComponentActivity() {
 
     @Inject lateinit var gatewayClient: GatewayClient
-    @Inject lateinit var remoteFiles: RemoteFiles
-    @Inject lateinit var mediaStreams: MediaStreams
+    @Inject lateinit var remoteFiles: ServerFiles
+    @Inject lateinit var mediaStreams: MediaPlayers
     @Inject lateinit var linuxFiles: LinuxFileAccess
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,5 +1,11 @@
 package com.hermes.android.data
 
+import com.hermes.android.domain.storage.FileArea
+import com.hermes.android.domain.storage.FileCleaner
+import com.hermes.android.domain.storage.FileScan
+import com.hermes.android.domain.storage.FoundFile
+import com.hermes.android.domain.storage.FoundFolder
+import com.hermes.android.domain.storage.FoundKind
 import com.hermes.android.runtime.linux.ProotEnvironment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,47 +21,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** What a found file is, for the Media / Files / Music tabs of the Storage page. */
-enum class FoundKind { Image, Video, Audio, Other }
-
-/** The places whose files may go, and what the Folders tab calls a folder's root. */
-enum class FileArea { Home, Temp, HermesCache }
-
-data class FoundFile(
-    val path: String,
-    val name: String,
-    val size: Long,
-    val modified: Long,
-    val kind: FoundKind,
-    /** The folder it sits in, inside the Linux (/root/Downloads). */
-    val guestDir: String,
-    /** Host path of the folder it is counted under. */
-    val folder: String,
-    /** In the file tabs; files under hidden folders or dependency trees only count in their folder. */
-    val listed: Boolean,
-)
-
-data class FoundFolder(
-    val path: String,
-    /** The folder inside the Linux, e.g. /root/Downloads. */
-    val guestPath: String,
-    /** Its path below the area ("Downloads", "projects/app"); empty for the area itself. */
-    val relative: String,
-    val area: FileArea,
-    val size: Long,
-    val count: Int,
-)
-
-/** Telegram's CacheModel for this app: folders instead of chats, then the files by kind. */
-data class FileScan(
-    val folders: List<FoundFolder>,
-    val media: List<FoundFile>,
-    val documents: List<FoundFile>,
-    val music: List<FoundFile>,
-    /** Every file of each folder (listed or not), for deleting a whole folder. */
-    val filesByFolder: Map<String, List<FoundFile>>,
-)
-
 /**
  * The user's own files and the temporary and cached ones, file by file, for the tabs under the
  * Storage chart. Only three kinds of place are looked at: the home folder (without its hidden
@@ -67,7 +32,7 @@ data class FileScan(
 @Singleton
 class StorageFiles @Inject constructor(
     private val environment: ProotEnvironment,
-) {
+) : FileCleaner {
 
     private fun areas(): List<Pair<FileArea, File>> =
         listOf(
@@ -76,12 +41,11 @@ class StorageFiles @Inject constructor(
             FileArea.Temp to environment.guestFile("/var/tmp"),
         ) + HERMES_MEDIA_CACHES.map { FileArea.HermesCache to environment.guestFile("/root/.hermes/$it") }
 
-    suspend fun scan(): FileScan = withContext(Dispatchers.IO) {
+    override suspend fun scan(): FileScan = withContext(Dispatchers.IO) {
         FoundFiles.scan(areas(), environment.rootfsDir)
     }
 
-    /** Deletes [paths] (from a [scan]); returns the bytes freed. */
-    suspend fun delete(paths: Collection<String>, onProgress: (Float) -> Unit): Long = withContext(Dispatchers.IO) {
+    override suspend fun delete(paths: Collection<String>, onProgress: (Float) -> Unit): Long = withContext(Dispatchers.IO) {
         FoundFiles.delete(paths, areas(), onProgress)
     }
 

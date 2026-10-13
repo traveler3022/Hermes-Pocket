@@ -2,13 +2,13 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.data.FileScan
-import com.hermes.android.data.FoundFile
-import com.hermes.android.data.FoundFolder
-import com.hermes.android.data.JunkKind
-import com.hermes.android.data.StorageCleaner
-import com.hermes.android.data.StorageFiles
-import com.hermes.android.data.StorageScan
+import com.hermes.android.domain.storage.FileCleaner
+import com.hermes.android.domain.storage.FileScan
+import com.hermes.android.domain.storage.FoundFile
+import com.hermes.android.domain.storage.FoundFolder
+import com.hermes.android.domain.storage.JunkCleaner
+import com.hermes.android.domain.storage.JunkKind
+import com.hermes.android.domain.storage.StorageScan
 import com.hermes.android.runtime.HermesRuntime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -67,8 +67,8 @@ sealed interface StorageEvent {
 
 @HiltViewModel
 class StorageViewModel @Inject constructor(
-    private val cleaner: StorageCleaner,
-    private val storageFiles: StorageFiles,
+    private val cleaner: JunkCleaner,
+    private val storageFiles: FileCleaner,
     private val runtime: HermesRuntime,
 ) : ViewModel() {
 

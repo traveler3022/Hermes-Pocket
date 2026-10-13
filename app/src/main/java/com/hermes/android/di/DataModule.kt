@@ -1,6 +1,7 @@
 package com.hermes.android.di
 
 import com.hermes.android.data.AppReleaseRepository
+import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
@@ -8,8 +9,15 @@ import com.hermes.android.data.ProjectsRepository
 import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.SetupState
+import com.hermes.android.data.StorageCleaner
+import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
+import com.hermes.android.domain.files.Downloads
+import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.media.MediaPlayers
+import com.hermes.android.domain.notify.AppVisibility
+import com.hermes.android.domain.notify.ApprovalAlerts
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.session.AgentTasks
@@ -18,7 +26,13 @@ import com.hermes.android.domain.session.SessionCheckpoints
 import com.hermes.android.domain.session.SessionContext
 import com.hermes.android.domain.setup.ProviderSetup
 import com.hermes.android.domain.setup.SetupProgress
+import com.hermes.android.domain.storage.FileCleaner
+import com.hermes.android.domain.storage.JunkCleaner
 import com.hermes.android.domain.updates.AppUpdates
+import com.hermes.android.gateway.RemoteFiles
+import com.hermes.android.service.AppForegroundState
+import com.hermes.android.service.ApprovalNotificationManager
+import com.hermes.android.service.MediaStreams
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -67,4 +81,26 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindAppUpdates(impl: AppReleaseRepository): AppUpdates
+
+    // Files, storage, media and notifications, behind the interfaces the screens use.
+    @Binds
+    abstract fun bindJunkCleaner(impl: StorageCleaner): JunkCleaner
+
+    @Binds
+    abstract fun bindFileCleaner(impl: StorageFiles): FileCleaner
+
+    @Binds
+    abstract fun bindDownloads(impl: DownloadStorage): Downloads
+
+    @Binds
+    abstract fun bindServerFiles(impl: RemoteFiles): ServerFiles
+
+    @Binds
+    abstract fun bindMediaPlayers(impl: MediaStreams): MediaPlayers
+
+    @Binds
+    abstract fun bindApprovalAlerts(impl: ApprovalNotificationManager): ApprovalAlerts
+
+    @Binds
+    abstract fun bindAppVisibility(impl: AppForegroundState): AppVisibility
 }

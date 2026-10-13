@@ -191,6 +191,6 @@ class StdioGatewayHub @Inject constructor() {
         const val URL = "stdio://hermes-linux"
         private const val PLACEHOLDER_HTTP_URL = "http://127.0.0.1/stdio"
 
-        fun handles(url: String): Boolean = url.startsWith("stdio://")
+        fun handles(url: String): Boolean = GatewayClient.isStdio(url)
     }
 }

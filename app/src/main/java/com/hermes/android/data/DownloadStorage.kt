@@ -3,15 +3,19 @@ package com.hermes.android.data
 import android.content.ContentValues
 import android.content.Context
 import android.provider.MediaStore
+import com.hermes.android.domain.files.Downloads
 import com.hermes.android.runtime.linux.GuestFiles
 import com.hermes.android.runtime.linux.LinuxFilesProvider
 import com.hermes.android.runtime.linux.ProotEnvironment
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.net.URI
 import java.net.URLDecoder
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Where the chat's Download button puts files — the only place that decides it.
@@ -27,7 +31,8 @@ import java.net.URLDecoder
  * Names are kept; a different file under a taken name becomes "name (1).ext", and the same
  * file downloaded again is not written twice.
  */
-class DownloadStorage(private val context: Context) {
+@Singleton
+class DownloadStorage @Inject constructor(@ApplicationContext private val context: Context) : Downloads {
 
     private val rootfs = ProotEnvironment.rootfsDir(context)
     private val guestFiles = GuestFiles(rootfs)
@@ -40,7 +45,7 @@ class DownloadStorage(private val context: Context) {
      * on disk; anything else is fetched with [fetch] to a file on this disk first, and copied
      * from there (never held in memory whole). Returns where it went, for the user.
      */
-    suspend fun save(url: String, name: String, fetch: suspend (String) -> File): String =
+    override suspend fun save(url: String, name: String, fetch: suspend (String) -> File): String =
         withContext(Dispatchers.IO) {
             val fileName = downloadFileName(url, name)
             val dir = linuxDir()

@@ -3,6 +3,7 @@ package com.hermes.android.service
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import com.hermes.android.domain.notify.AppVisibility
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,11 +21,11 @@ import javax.inject.Singleton
  * onStart fires before the old one's onStop.
  */
 @Singleton
-class AppForegroundState @Inject constructor() : Application.ActivityLifecycleCallbacks {
+class AppForegroundState @Inject constructor() : Application.ActivityLifecycleCallbacks, AppVisibility {
 
     private val startedCount = AtomicInteger(0)
 
-    val isForeground: Boolean
+    override val isForeground: Boolean
         get() = startedCount.get() > 0
 
     private val _visible = MutableStateFlow(false)

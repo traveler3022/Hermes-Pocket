@@ -1,6 +1,7 @@
 package com.hermes.android.gateway
 
 import android.content.Context
+import com.hermes.android.domain.files.ServerFiles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -47,7 +48,7 @@ import kotlin.coroutines.coroutineContext
 class RemoteFiles @Inject constructor(
     @ApplicationContext private val context: Context,
     shared: OkHttpClient,
-) {
+) : ServerFiles {
     val client: OkHttpClient = shared.newBuilder()
         .protocols(listOf(Protocol.HTTP_1_1))
         .readTimeout(30, TimeUnit.SECONDS)
@@ -57,13 +58,13 @@ class RemoteFiles @Inject constructor(
     private val locks = ConcurrentHashMap<String, Mutex>()
 
     /** Whether [url] is a file on the Hermes server (its download endpoint), not a web page. */
-    fun isServerFile(url: String): Boolean = serverFileUrl(url) != null
+    override fun isServerFile(url: String): Boolean = serverFileUrl(url) != null
 
     /**
      * The server file at [url] as a file on this disk, fetched or checked against the server.
      * When the server can't be reached, a copy fetched before is returned as it is.
      */
-    suspend fun fetch(url: String): File = withContext(Dispatchers.IO) {
+    override suspend fun fetch(url: String): File = withContext(Dispatchers.IO) {
         val httpUrl = serverFileUrl(url) ?: throw IOException("Not a file on the Hermes server")
         val key = cacheKey(httpUrl)
         locks.getOrPut(key) { Mutex() }.withLock { fetchLocked(httpUrl, File(root, key)) }

@@ -11,7 +11,6 @@ import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayEventHelpers
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.asText
-import com.hermes.android.service.ApprovalNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -45,10 +44,11 @@ class ChatViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val sessionRepository: ChatSessions,
     private val hermesRuntime: com.hermes.android.runtime.HermesRuntime,
-    private val approvalNotificationManager: ApprovalNotificationManager,
-    private val foregroundState: com.hermes.android.service.AppForegroundState,
+    private val approvalNotificationManager: com.hermes.android.domain.notify.ApprovalAlerts,
+    private val foregroundState: com.hermes.android.domain.notify.AppVisibility,
     @ApplicationContext private val context: Context,
     val linuxFiles: com.hermes.android.runtime.LinuxFileAccess,
+    downloads: com.hermes.android.domain.files.Downloads,
     private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
     private val kanban: com.hermes.android.data.KanbanRepository? = null,
 ) : ViewModel() {
@@ -102,7 +102,7 @@ class ChatViewModel @Inject constructor(
     private var autoPickJob: Job? = null
 
     private val attachmentDelegate = ChatAttachmentDelegate(
-        gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope,
+        gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope,
     )
 
     private val drawerDelegate = ChatDrawerDelegate(
