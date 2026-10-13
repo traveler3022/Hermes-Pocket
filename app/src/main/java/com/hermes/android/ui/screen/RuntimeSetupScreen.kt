@@ -115,8 +115,8 @@ fun RuntimeSetupScreen(
     val installing by viewModel.installing.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
-    val isRemote = viewModel.isRemoteRuntime
     val runtimeChoice by viewModel.runtimeChoice.collectAsStateWithLifecycle()
+    val isRemote = runtimeChoice == RuntimeChoiceUi.RemoteServer
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -157,6 +157,13 @@ fun RuntimeSetupScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (isRemote) {
+                // Same switch as on-device mode, or the user is stuck on the server once picked.
+                RuntimeChoiceRow(
+                    selected = runtimeChoice,
+                    enabled = !installing,
+                    onSelect = { viewModel.selectRuntime(it) },
+                    showServer = true,
+                )
                 RemoteServerSetupContent(viewModel = viewModel, showDiagnostics = true)
             } else {
                 // ── On-device flow: built-in Linux or Termux ───────────────
