@@ -50,7 +50,7 @@ class ChatViewModel @Inject constructor(
     val linuxFiles: com.hermes.android.runtime.LinuxFileAccess,
     downloads: com.hermes.android.domain.files.Downloads,
     private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
-    private val kanban: com.hermes.android.data.KanbanRepository? = null,
+    private val kanban: com.hermes.android.domain.kanban.KanbanRepository? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
 import com.hermes.android.data.ProviderSetupRepository
+import com.hermes.android.data.ServerKanbanRepository
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.SetupState
 import com.hermes.android.data.StorageCleaner
@@ -15,6 +16,7 @@ import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.domain.notify.AppVisibility
 import com.hermes.android.domain.notify.ApprovalAlerts
@@ -81,6 +83,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindAppUpdates(impl: AppReleaseRepository): AppUpdates
+
+    @Binds
+    abstract fun bindKanban(impl: ServerKanbanRepository): KanbanRepository
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

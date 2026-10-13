@@ -1,6 +1,22 @@
 package com.hermes.android.data
 
 import android.content.Context
+import com.hermes.android.domain.kanban.KanbanRepository
+import com.hermes.android.domain.kanban.KanbanRepository.Attachment
+import com.hermes.android.domain.kanban.KanbanRepository.Board
+import com.hermes.android.domain.kanban.KanbanRepository.Comment
+import com.hermes.android.domain.kanban.KanbanRepository.Detail
+import com.hermes.android.domain.kanban.KanbanRepository.Diagnostic
+import com.hermes.android.domain.kanban.KanbanRepository.Estimate
+import com.hermes.android.domain.kanban.KanbanRepository.HomeChannel
+import com.hermes.android.domain.kanban.KanbanRepository.Inspection
+import com.hermes.android.domain.kanban.KanbanRepository.LinkedTask
+import com.hermes.android.domain.kanban.KanbanRepository.Log
+import com.hermes.android.domain.kanban.KanbanRepository.ModelProvider
+import com.hermes.android.domain.kanban.KanbanRepository.Orchestration
+import com.hermes.android.domain.kanban.KanbanRepository.Run
+import com.hermes.android.domain.kanban.KanbanRepository.Task
+import com.hermes.android.domain.kanban.KanbanRepository.TaskDiagnostics
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
@@ -53,7 +69,7 @@ import javax.inject.Singleton
  * in-app Tailscale node, as for the chat connection itself.
  */
 @Singleton
-class KanbanRepository @Inject constructor(
+class ServerKanbanRepository @Inject constructor(
     private val http: OkHttpClient,
     private val json: Json,
     private val runtime: HermesRuntime,
@@ -61,108 +77,7 @@ class KanbanRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val switch: KanbanSwitch,
     @ApplicationContext context: Context,
-) {
-    data class Task(
-        val id: String,
-        val title: String,
-        val body: String,
-        val assignee: String?,
-        val status: String,
-        val priority: Int,
-        val createdAt: Long,
-        /** The worker's latest hand-off note (a preview on the board, in full on the task). */
-        val summary: String,
-        val result: String,
-        val lastError: String,
-        val commentCount: Int,
-        /** Done / all of the tasks this one was split into; null when it has none. */
-        val progress: Pair<Int, Int>?,
-        /** The model this task runs on instead of its profile's; null: the profile's. */
-        val modelOverride: String? = null,
-        val providerOverride: String? = null,
-        /** How hard the worker thinks (`none`, `low` … `ultra`); null: the profile's level. */
-        val reasoningEffort: String? = null,
-    )
-
-    /** A rough guess by the server's model of what a task will take. */
-    data class Estimate(val tokens: Long, val complexity: String?, val rationale: String)
-
-    /** A provider and the models a task can be set to run on. */
-    data class ModelProvider(val slug: String, val label: String, val models: List<String>)
-
-    /** One sign of trouble on a task (a worker that keeps dying, a stuck claim…). */
-    data class Diagnostic(val severity: String, val title: String, val detail: String)
-
-    /** A task with trouble, and what the server sees wrong with it, worst first. */
-    data class TaskDiagnostics(val taskId: String, val title: String, val status: String, val diagnostics: List<Diagnostic>)
-
-    /** A messenger's home channel (Telegram, Discord…) that can get this task's news. */
-    data class HomeChannel(val platform: String, val name: String, val subscribed: Boolean)
-
-    /** One of the server's boards (each its own database; the dispatcher runs them all). */
-    data class Board(val slug: String, val name: String, val icon: String, val total: Int, val isCurrent: Boolean)
-
-    /**
-     * How the server splits and hands out work (`kanban:` in its config.yaml). Empty profile
-     * names mean "not set": the server then uses [activeProfile].
-     */
-    data class Orchestration(
-        /** The profile that splits a triage task into steps. */
-        val orchestratorProfile: String,
-        /** Who gets a step the split could not match to a profile. */
-        val defaultAssignee: String,
-        /** Split new triage tasks on their own. */
-        val autoDecompose: Boolean,
-        /** Start the next steps when the ones they wait on finish. */
-        val autoPromoteChildren: Boolean,
-        val activeProfile: String,
-    )
-
-    data class Comment(val author: String, val body: String, val createdAt: Long)
-
-    /** One attempt at a task: opened when a worker claims it, closed when it ends. */
-    data class Run(
-        val id: Long,
-        val profile: String?,
-        val status: String,
-        val outcome: String?,
-        val startedAt: Long,
-        /** Null while the worker is still on it. */
-        val endedAt: Long?,
-        val summary: String,
-        val error: String,
-    )
-
-    /** A file on the task: the worker's full report is often one (the hand-off note only points to it). */
-    data class Attachment(val id: Long, val filename: String, val size: Long, val storedPath: String)
-
-    /** A task this one is linked to, by its title. */
-    data class LinkedTask(val id: String, val title: String, val status: String)
-
-    data class Detail(
-        val task: Task,
-        val comments: List<Comment>,
-        val runs: List<Run> = emptyList(),
-        val attachments: List<Attachment> = emptyList(),
-        /** Tasks this one waits on: it starts once they are done. */
-        val parents: List<LinkedTask> = emptyList(),
-        /** Tasks that wait on this one. */
-        val children: List<LinkedTask> = emptyList(),
-    )
-
-    /** The end of the worker's stdout/stderr; [exists] is false until a worker has started. */
-    data class Log(val text: String, val exists: Boolean, val truncated: Boolean)
-
-    /** The live worker process of an open run, as the server sees it right now. */
-    data class Inspection(
-        val alive: Boolean,
-        val pid: Long?,
-        val cpuPercent: Double?,
-        val memoryBytes: Long?,
-        /** Why there are no numbers (run ended, process gone, no access). */
-        val reason: String,
-    )
-
+) : KanbanRepository {
     /** The app's client (sign-in, Tailscale route) with a deadline: it has none for its WebSocket. */
     private val rest = http.newBuilder()
         .readTimeout(30, TimeUnit.SECONDS)
@@ -180,7 +95,7 @@ class KanbanRepository @Inject constructor(
      * server over https (its dashboard), or the built-in Linux, whose gateway then answers
      * `android.kanban` (runtime/linux/LinuxKanban). Termux has neither.
      */
-    val available: Boolean
+    override val available: Boolean
         get() = switch.on.value && when (runtime.type) {
             RuntimeType.REMOTE -> base() != null
             RuntimeType.PROOT_LINUX -> true
@@ -188,7 +103,7 @@ class KanbanRepository @Inject constructor(
         }
 
     /** The Settings › General switch, for screens that must follow it live. */
-    val switchedOn: StateFlow<Boolean> get() = switch.on
+    override val switchedOn: StateFlow<Boolean> get() = switch.on
 
     private val onPhone: Boolean get() = runtime.type == RuntimeType.PROOT_LINUX
 
@@ -204,9 +119,9 @@ class KanbanRepository @Inject constructor(
      * The board this app reads and writes, as the dashboard does per tab (`?board=`); null is the
      * server's current board. Kept across restarts, per server ([restoreBoard]).
      */
-    val selectedBoard: StateFlow<String?> = _selectedBoard.asStateFlow()
+    override val selectedBoard: StateFlow<String?> = _selectedBoard.asStateFlow()
 
-    fun selectBoard(slug: String?) {
+    override fun selectBoard(slug: String?) {
         _selectedBoard.value = slug
         prefs.edit().apply { if (slug == null) remove(boardKey) else putString(boardKey, slug) }.apply()
     }
@@ -215,7 +130,7 @@ class KanbanRepository @Inject constructor(
      * Picks up the board last chosen for the server now connected. One that is gone from
      * [boards] is forgotten (the server would answer 404 for it).
      */
-    fun restoreBoard(boards: List<Board>) {
+    override fun restoreBoard(boards: List<Board>) {
         val saved = prefs.getString(boardKey, null)
         val slug = saved?.takeIf { s -> boards.any { it.slug == s } }
         if (saved != null && slug == null) prefs.edit().remove(boardKey).apply()
@@ -223,7 +138,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Every live board, with its open-task count and which one the server calls current. */
-    suspend fun boards(): List<Board> {
+    override suspend fun boards(): List<Board> {
         val root = call("GET", "/boards") as? JsonObject ?: return emptyList()
         return (root["boards"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
             val slug = row.str("slug").ifEmpty { return@mapNotNull null }
@@ -238,7 +153,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Adds a board named [name] and returns its slug (the server's id: lowercase latin only). */
-    suspend fun createBoard(name: String): String {
+    override suspend fun createBoard(name: String): String {
         val slug = boardSlug(name)
         val payload = JsonObject(mapOf("slug" to JsonPrimitive(slug), "name" to JsonPrimitive(name.trim())))
         val created = call("POST", "/boards", payload) as? JsonObject
@@ -246,14 +161,14 @@ class KanbanRepository @Inject constructor(
     }
 
     /** A remote server streams board changes ([changes]); the phone's own gateway has no socket for it. */
-    val hasLiveChanges: Boolean get() = !onPhone && base() != null
+    override val hasLiveChanges: Boolean get() = !onPhone && base() != null
 
     /**
      * The server's Kanban event stream (`/events`, a WebSocket of `task_events` rows): emits once
      * when it opens and once per batch of changes. Without a cursor the server starts at the
      * current tail, so nothing old is replayed. Ends with an [IOException] when the socket drops.
      */
-    fun changes(): Flow<Unit> = callbackFlow {
+    override fun changes(): Flow<Unit> = callbackFlow {
         val base = base() ?: throw IOException("Kanban needs a connected server.")
         val url = base.replaceFirst("https://", "wss://") + API + scoped("/events")
         // The shared client: sign-in ticket (RemoteAuthInterceptor), Tailscale route, ping.
@@ -280,7 +195,7 @@ class KanbanRepository @Inject constructor(
 
     /** The board, column name → tasks, in the server's column order. */
     /** With [includeArchived], an `archived` column comes too. */
-    suspend fun board(includeArchived: Boolean = false): Map<String, List<Task>> {
+    override suspend fun board(includeArchived: Boolean): Map<String, List<Task>> {
         val root = call("GET", if (includeArchived) "/board?include_archived=true" else "/board") as? JsonObject
             ?: return emptyMap()
         return (root["columns"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.associate { column ->
@@ -288,7 +203,7 @@ class KanbanRepository @Inject constructor(
         }
     }
 
-    suspend fun task(id: String): Detail {
+    override suspend fun task(id: String): Detail {
         val root = call("GET", "/tasks/${id.urlPart()}") as? JsonObject ?: throw IOException("No task $id")
         val task = (root["task"] as? JsonObject)?.toTask() ?: throw IOException("No task $id")
         val comments = (root["comments"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map {
@@ -314,7 +229,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** The last [LOG_TAIL_BYTES] of the task's worker log (the server keeps up to 2 MiB). */
-    suspend fun log(id: String): Log {
+    override suspend fun log(id: String): Log {
         val root = call("GET", "/tasks/${id.urlPart()}/log?tail=$LOG_TAIL_BYTES") as? JsonObject
             ?: return Log("", exists = false, truncated = false)
         return Log(
@@ -325,7 +240,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** CPU and memory of the worker behind an open run. */
-    suspend fun inspect(runId: Long): Inspection {
+    override suspend fun inspect(runId: Long): Inspection {
         val root = call("GET", "/runs/$runId/inspect") as? JsonObject ?: throw IOException("No run $runId")
         return Inspection(
             alive = root.bool("alive") && root.str("error").isEmpty(),
@@ -341,7 +256,7 @@ class KanbanRepository @Inject constructor(
      * came from (usually ready) with a fresh retry budget, so the dispatcher starts it again.
      * The server refuses a task that isn't running.
      */
-    suspend fun reclaim(id: String, reason: String) {
+    override suspend fun reclaim(id: String, reason: String) {
         call("POST", "/tasks/${id.urlPart()}/reclaim", JsonObject(mapOf("reason" to JsonPrimitive(reason))))
         dispatchNow()
     }
@@ -350,7 +265,7 @@ class KanbanRepository @Inject constructor(
      * Gives the task to [profile] (null: nobody). A running task is refused unless
      * [stopWorker] first releases it from the current worker.
      */
-    suspend fun reassign(id: String, profile: String?, stopWorker: Boolean) {
+    override suspend fun reassign(id: String, profile: String?, stopWorker: Boolean) {
         val payload = buildMap<String, JsonElement> {
             put("profile", profile?.let { JsonPrimitive(it) } ?: JsonNull)
             put("reclaim_first", JsonPrimitive(stopWorker))
@@ -361,7 +276,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Profiles a task can go to: every profile on the server plus any already used on the board. */
-    suspend fun assignees(): List<String> {
+    override suspend fun assignees(): List<String> {
         val root = call("GET", "/assignees") as? JsonObject ?: return emptyList()
         // Rows are `{name, on_disk, counts}`; a bare name is accepted too.
         return (root["assignees"] as? JsonArray).orEmpty().mapNotNull { row ->
@@ -374,7 +289,7 @@ class KanbanRepository @Inject constructor(
      * to triage, where the server's decomposer splits it into tasks for the right profiles
      * (`kanban.auto_decompose`, on by default).
      */
-    suspend fun create(title: String, body: String, assignee: String?) {
+    override suspend fun create(title: String, body: String, assignee: String?) {
         val payload = buildMap<String, JsonElement> {
             put("title", JsonPrimitive(title.trim()))
             if (body.isNotBlank()) put("body", JsonPrimitive(body.trim()))
@@ -398,7 +313,7 @@ class KanbanRepository @Inject constructor(
      * Moves a task: `ready` (also unblocks and reopens a review), `blocked` with [reason],
      * `done`, `archived`. The server refuses moves its rules forbid and says why.
      */
-    suspend fun move(id: String, status: String, reason: String? = null) {
+    override suspend fun move(id: String, status: String, reason: String?) {
         val payload = buildMap<String, JsonElement> {
             put("status", JsonPrimitive(status))
             if (reason != null) put("block_reason", JsonPrimitive(reason))
@@ -407,11 +322,11 @@ class KanbanRepository @Inject constructor(
         if (status == "ready") dispatchNow()
     }
 
-    suspend fun comment(id: String, text: String) {
+    override suspend fun comment(id: String, text: String) {
         call("POST", "/tasks/${id.urlPart()}/comments", JsonObject(mapOf("body" to JsonPrimitive(text.trim()), "author" to JsonPrimitive("app"))))
     }
 
-    suspend fun delete(id: String) {
+    override suspend fun delete(id: String) {
         call("DELETE", "/tasks/${id.urlPart()}")
     }
 
@@ -420,11 +335,11 @@ class KanbanRepository @Inject constructor(
      * [assignee] ("" for nobody; null leaves it). Each task is changed on its own, so some can be
      * refused; returns those as id → the server's reason.
      */
-    suspend fun bulk(
+    override suspend fun bulk(
         ids: Collection<String>,
-        status: String? = null,
-        assignee: String? = null,
-        archive: Boolean = false,
+        status: String?,
+        assignee: String?,
+        archive: Boolean,
     ): Map<String, String> {
         val payload = buildMap<String, JsonElement> {
             put("ids", JsonArray(ids.map { JsonPrimitive(it) }))
@@ -442,13 +357,13 @@ class KanbanRepository @Inject constructor(
         return refused
     }
 
-    suspend fun orchestration(): Orchestration {
+    override suspend fun orchestration(): Orchestration {
         val root = call("GET", "/orchestration") as? JsonObject ?: throw IOException("No orchestration settings")
         return root.toOrchestration()
     }
 
     /** Saves all four settings; the server refuses a profile that doesn't exist. */
-    suspend fun saveOrchestration(settings: Orchestration): Orchestration {
+    override suspend fun saveOrchestration(settings: Orchestration): Orchestration {
         val payload = JsonObject(
             mapOf(
                 "orchestrator_profile" to JsonPrimitive(settings.orchestratorProfile),
@@ -462,7 +377,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Adds [file] to the task under [name]; the worker reads it from the server's disk. */
-    suspend fun upload(taskId: String, file: File, name: String, mimeType: String?) {
+    override suspend fun upload(taskId: String, file: File, name: String, mimeType: String?) {
         val path = scoped("/tasks/${taskId.urlPart()}/attachments")
         if (onPhone) {
             // The phone's gateway reads the file from the built-in Linux.
@@ -483,12 +398,12 @@ class KanbanRepository @Inject constructor(
         send(path, Request.Builder().post(body), modelCalls)
     }
 
-    suspend fun deleteAttachment(id: Long) {
+    override suspend fun deleteAttachment(id: Long) {
         call("DELETE", "/attachments/$id")
     }
 
     /** The server model's guess of what the task will take; fails with the server's reason. */
-    suspend fun estimate(id: String): Estimate {
+    override suspend fun estimate(id: String): Estimate {
         val root = call("POST", "/tasks/${id.urlPart()}/estimate", slow = true) as? JsonObject
             ?: throw IOException("No answer")
         if (!root.bool("ok")) throw IOException(root.str("reason").ifEmpty { "No estimate" })
@@ -500,7 +415,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Providers and models the server can run a task on (the dashboard's override list). */
-    suspend fun modelOptions(): List<ModelProvider> {
+    override suspend fun modelOptions(): List<ModelProvider> {
         val root = call("GET", "/model-options") as? JsonObject ?: return emptyList()
         return (root["providers"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
             val slug = row.str("slug").ifEmpty { return@mapNotNull null }
@@ -515,7 +430,7 @@ class KanbanRepository @Inject constructor(
      * Sets what the task runs on: [model] on [provider] (null model: back to the profile's), and
      * [effort] (null: back to the profile's level; "none" turns thinking off).
      */
-    suspend fun setRunSettings(id: String, model: String?, provider: String?, effort: String?) {
+    override suspend fun setRunSettings(id: String, model: String?, provider: String?, effort: String?) {
         val payload = buildMap<String, JsonElement> {
             if (model == null) put("clear_model_override", JsonPrimitive(true))
             else {
@@ -529,7 +444,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Tasks on the board with trouble, worst first. */
-    suspend fun diagnostics(): List<TaskDiagnostics> {
+    override suspend fun diagnostics(): List<TaskDiagnostics> {
         val root = call("GET", "/diagnostics") as? JsonObject ?: return emptyList()
         return (root["diagnostics"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
             val id = row.str("task_id").ifEmpty { return@mapNotNull null }
@@ -545,7 +460,7 @@ class KanbanRepository @Inject constructor(
     }
 
     /** The messengers with a home channel, and whether this task's news goes to each. */
-    suspend fun homeChannels(taskId: String): List<HomeChannel> {
+    override suspend fun homeChannels(taskId: String): List<HomeChannel> {
         val root = call("GET", "/home-channels?task_id=${taskId.urlPart()}") as? JsonObject ?: return emptyList()
         return (root["home_channels"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { row ->
             val platform = row.str("platform").ifEmpty { return@mapNotNull null }
@@ -553,12 +468,12 @@ class KanbanRepository @Inject constructor(
         }
     }
 
-    suspend fun setHomeChannel(taskId: String, platform: String, on: Boolean) {
+    override suspend fun setHomeChannel(taskId: String, platform: String, on: Boolean) {
         call(if (on) "POST" else "DELETE", "/tasks/${taskId.urlPart()}/home-subscribe/${platform.urlPart()}")
     }
 
     /** Writes [slug] to an archive on the server (with its files) and returns that server path. */
-    suspend fun exportBoard(slug: String): String {
+    override suspend fun exportBoard(slug: String): String {
         val root = call("POST", "/boards/${slug.urlPart()}/export", JsonObject(mapOf("attachments" to JsonPrimitive(true))), slow = true)
             as? JsonObject ?: throw IOException("No answer")
         return root.str("archive").ifEmpty { throw IOException("The server wrote no archive") }
@@ -568,7 +483,7 @@ class KanbanRepository @Inject constructor(
      * Puts the board archive [file] on the server and imports it as a new board; returns its slug.
      * The server imports from its own disk, so the file goes there first.
      */
-    suspend fun importBoard(file: File): String {
+    override suspend fun importBoard(file: File): String {
         val name = "import-${UUID.randomUUID().toString().take(8)}.tar.gz"
         var serverPath: String
         if (onPhone) {
@@ -593,11 +508,11 @@ class KanbanRepository @Inject constructor(
     }
 
     /** Makes [childId] wait on [parentId]: it starts once that one is done. The server refuses a cycle. */
-    suspend fun link(parentId: String, childId: String) {
+    override suspend fun link(parentId: String, childId: String) {
         call("POST", "/links", JsonObject(mapOf("parent_id" to JsonPrimitive(parentId), "child_id" to JsonPrimitive(childId))))
     }
 
-    suspend fun unlink(parentId: String, childId: String) {
+    override suspend fun unlink(parentId: String, childId: String) {
         call("DELETE", "/links?parent_id=${parentId.urlPart()}&child_id=${childId.urlPart()}")
         dispatchNow()
     }
@@ -606,7 +521,7 @@ class KanbanRepository @Inject constructor(
      * Has the server's model write a triage task out in full (title, details) and move it to
      * the queue. Takes a while: it waits on the model. Null when done, else the server's reason.
      */
-    suspend fun specify(id: String): String? {
+    override suspend fun specify(id: String): String? {
         val root = call("POST", "/tasks/${id.urlPart()}/specify", JsonObject(mapOf("author" to JsonPrimitive("app"))), slow = true) as? JsonObject
             ?: return "No answer"
         return if (root.bool("ok")) null else root.str("reason").ifEmpty { "Refused" }

@@ -68,7 +68,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.hermes.android.data.KanbanRepository
+import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
