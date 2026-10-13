@@ -9,6 +9,7 @@ import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.KanbanRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
+import com.hermes.android.runtime.LinuxFileAccess
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -35,13 +36,14 @@ class KanbanViewModel @Inject constructor(
     private val kanban: KanbanRepository,
     private val gatewayClient: GatewayClient,
     hermesRuntime: HermesRuntime,
+    linuxFiles: LinuxFileAccess,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val downloads by lazy { DownloadStorage(context) }
 
     /** Turns a server path into what the file viewer reads, per runtime, as for chat files. */
-    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, context, viewModelScope)
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, viewModelScope)
 
     data class UiState(
         val available: Boolean = true,
