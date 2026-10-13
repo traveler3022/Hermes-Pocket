@@ -324,7 +324,8 @@ class SessionsViewModel @Inject constructor(
                 val cutoff = (kind as? CleanupKind.OlderThan)?.let { System.currentTimeMillis() - it.days * DAY_MS }
                 val ids = parseSessionList(sessionRepository.storedChats(limit = CLEANUP_LIST_LIMIT))
                     .filter { it.id.isNotEmpty() && it.id !in pinned }
-                    .filter { if (cutoff == null) it.messageCount == 0 else it.updatedAt < cutoff }
+                    // started_at 0 means the server doesn't know; such a chat is never "old".
+                    .filter { if (cutoff == null) it.messageCount == 0 else it.updatedAt in 1 until cutoff }
                     .map { it.id }
                 if (ids.isEmpty()) {
                     _uiState.update { it.copy(errorMessage = tForContext(context, "Nothing to delete", "چیزی برای حذف نیست")) }
