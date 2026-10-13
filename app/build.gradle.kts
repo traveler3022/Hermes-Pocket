@@ -34,8 +34,8 @@ android {
         applicationId = "com.hermes.android"
         minSdk = 29    // Android 10 per ADR-012
         targetSdk = 35 // Latest Stable per ADR-012
-        versionCode = 30
-        versionName = "3.0.0"
+        versionCode = 31
+        versionName = "3.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
