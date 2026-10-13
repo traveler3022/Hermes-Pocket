@@ -171,7 +171,9 @@ class SessionRepository @Inject constructor(
     }
 
     /** The server's stored chats, as session.list sends them. */
-    override suspend fun storedChats(): JsonElement = gatewayClient.request(GatewayMethods.SESSION_LIST)
+    override suspend fun storedChats(limit: Int?): JsonElement =
+        if (limit == null) gatewayClient.request(GatewayMethods.SESSION_LIST)
+        else gatewayClient.request(GatewayMethods.SESSION_LIST, buildJsonObject { put("limit", limit) }.toElementMap())
 
     /** The transcript of a LIVE session as the server stores it, row ids included. */
     override suspend fun history(liveId: String): JsonElement =

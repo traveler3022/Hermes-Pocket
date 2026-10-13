@@ -760,20 +760,20 @@ class ProotLinuxRuntime @Inject constructor(
             if os.environ.get("HERMES_ANDROID_KANBAN") == "1":
                 install_kanban(os.environ["HERMES_PYTHON_SRC_ROOT"])
             # Dashboard routes the app needs and this runtime has no web server for (cron
-            # blueprints, memory providers): android.dashboard hands the request to the same
+            # blueprints, memory providers, toolset keys, messaging setup): android.dashboard hands the request to the same
             # dashboard routers in this process. Only those paths; the routers load on first use.
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/memory")
+                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/messaging")
                 def client():
                     with lock:
                         if "client" not in state:
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
-                            from hermes_cli.web_routers import cron, memory_providers, ops
+                            from hermes_cli.web_routers import config_env, cron, memory_providers, messaging, ops, tools
                             app = FastAPI()
-                            for module in (cron, memory_providers, ops):
+                            for module in (cron, memory_providers, ops, tools, config_env, messaging):
                                 app.include_router(module.router)
                             state["client"] = TestClient(app)
                         return state["client"]
