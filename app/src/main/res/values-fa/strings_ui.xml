@@ -75,6 +75,7 @@
     <string name="b">%1$s بایت</string>
     <string name="back">بازگشت</string>
     <string name="back_2">برگشت</string>
+    <string name="back_3">قبلی</string>
     <string name="base_url">آدرس</string>
     <string name="base_url_2">آدرس سرور</string>
     <string name="base_url_3">آدرس پایه</string>
@@ -83,8 +84,8 @@
     <string name="blocked_a_disguised_program">بسته شد: برنامهٔ پنهان</string>
     <string name="board_health">سلامت تابلو</string>
     <string name="boards">تابلوها</string>
-    <string name="bot_made">بات ساخته شد: ‎@%1$s</string>
     <string name="bot_token">توکن بات</string>
+    <string name="bot_token_2">توکن ربات</string>
     <string name="both">هر دو</string>
     <string name="branch_conversation">شاخه‌زدن گفتگو</string>
     <string name="browse_and_manage_skills">مرور و مدیریت مهارت‌ها</string>
@@ -153,6 +154,7 @@
     <string name="connect_2">اتصال %1$s</string>
     <string name="connect_a_vnc_client_to">با یک برنامهٔ VNC به %1$s وصل شوید</string>
     <string name="connect_to_your_hermes_server">اتصال به سرور هرمس</string>
+    <string name="connect_your_bot">وصل کردن ربات خودت</string>
     <string name="connected">● متصل</string>
     <string name="connected_2">متصل</string>
     <string name="connected_3">%1$s وصل: %2$s</string>
@@ -184,7 +186,6 @@
     <string name="copy">کپی</string>
     <string name="copy_api_keys">کپی کلیدهای API</string>
     <string name="copy_code">کپی کد</string>
-    <string name="copy_link">کپی لینک</string>
     <string name="copy_settings_and_skills_from_this">کپی تنظیمات و مهارت‌ها از پروفایل فعلی</string>
     <string name="copy_text">کپی متن</string>
     <string name="copying_settings_brings_this_profiles">کپی تنظیمات، کلیدهای این پروفایل را هم می‌آورد.</string>
@@ -362,6 +363,7 @@
     <string name="image">تصویر</string>
     <string name="image_couldnt_load_tap_save_to_download">تصویر لود نشد — «ذخیره» رو بزن تا دانلود شه</string>
     <string name="import_a_board">وارد کردن تابلو</string>
+    <string name="in_telegram_message_botfather_send">در تلگرام به ‎@BotFather پیام بده، ‎/newbot را بفرست و مراحلش را برو. توکنی که می‌دهد را اینجا بزن.</string>
     <string name="in_text">ورودی</string>
     <string name="in_use">در حال استفاده</string>
     <string name="in_use_2">در حال استفاده</string>
@@ -384,8 +386,6 @@
     <string name="installing_hermes">در حال نصب Hermes...</string>
     <string name="interrupt">توقف</string>
     <string name="is_named_like_a_photo_or_document_but_it">«%1$s» از روی اسمش عکس یا سند به نظر می‌رسد، ولی در واقع برنامه است. این‌جور فایل‌ها برای فریب ساخته می‌شوند، پس از Hermes بیرون نمی‌رود.</string>
-    <string name="is_saved">%1$s ذخیره شد.</string>
-    <string name="is_saved_and_the_messaging_gateway_is">%1$s ذخیره شد و گیت‌وی پیام‌رسان دوباره راه می‌افتد. چند لحظه بعد به بات پیام بده.</string>
     <string name="it_installs_tailscale_if_needed_and">اگر لازم باشد Tailscale را نصب می‌کند و یک لینک ورود نشان می‌دهد: با همان حسابی که در این اپ داری وارد شو. اگر Tailscale خواست HTTPS را روشن کنی، آن لینک را هم باز کن. آخر کار نام کاربری و رمز هرمس را نشان می‌دهد.</string>
     <string name="it_needs_packages_installed_on_the">اول باید چند بسته روی دستگاه هرمس نصب شود.</string>
     <string name="its_api_keys_are_removed_from_hermes">کلیدهای API آن از هرمس پاک می‌شوند.</string>
@@ -534,6 +534,7 @@
     <string name="nothing_connected_yet_add_a_provider">هنوز چیزی وصل نیست. از بالا یک پرووایدر اضافه کن.</string>
     <string name="nothing_here">این‌جا خالی است.</string>
     <string name="nothing_to_set_for_this_one">این یکی تنظیمی ندارد.</string>
+    <string name="numeric_user_id">شناسهٔ عددی</string>
     <string name="oauth_chatgpt_nous_portal_xai_grok">OAuth: ChatGPT، Nous Portal، xAI Grok و…</string>
     <string name="of_active">%1$s از %2$s فعال</string>
     <string name="of_enabled">%1$s از %2$s فعال</string>
@@ -550,14 +551,14 @@
     <string name="oldest_first">قدیمی‌ترین</string>
     <string name="only_files_that_come_back_on_their_own">فقط چیزهایی پاک می‌شوند که خودشان دوباره ساخته می‌شوند: کش‌ها، فایل‌های موقت و لاگ‌ها. گفتگوها، حافظه، کلیدها، ابزارهای نصب‌شده و فایل‌های خودتان دست نمی‌خورند. فایل‌هایی که در یک ساعت اخیر استفاده شده‌اند می‌مانند.</string>
     <string name="only_memory_md">فقط MEMORY.md</string>
-    <string name="only_these_telegram_user_ids_may_talk_to">فقط این شناسه‌های کاربری تلگرام می‌توانند با ایجنت حرف بزنند. سازندهٔ بات از قبل اضافه شده.</string>
+    <string name="only_these_numeric_telegram_user_ids_may">فقط این شناسه‌های عددی تلگرام می‌توانند با ایجنت حرف بزنند. هر چندتا خواستی اضافه کن (شناسهٔ خودت: به ‎@userinfobot پیام بده).</string>
     <string name="only_user_md">فقط USER.md</string>
     <string name="open">باز کردن</string>
     <string name="open_anyway">باز شود</string>
+    <string name="open_botfather">باز کردن ‎@BotFather</string>
     <string name="open_file">باز کردن فایل</string>
     <string name="open_full_screen">باز کردن در صفحهٔ کامل</string>
     <string name="open_in_chat">باز کردن در چت</string>
-    <string name="open_telegram">باز کردن تلگرام</string>
     <string name="open_the_page_again">باز کردن دوبارهٔ صفحه</string>
     <string name="open_the_project_on_github">باز کردن پروژه در گیت‌هاب</string>
     <string name="open_the_release">باز کردن ریلیز</string>
@@ -664,7 +665,6 @@
     <string name="same_as_the_main_profile">مثل پروفایل اصلی</string>
     <string name="sat">شنبه</string>
     <string name="save">ذخیره</string>
-    <string name="save_and_restart">ذخیره و راه‌اندازی دوباره</string>
     <string name="save_and_use">ذخیره و استفاده</string>
     <string name="save_image">ذخیره تصویر</string>
     <string name="save_next">ذخیره و بعدی</string>
@@ -717,7 +717,6 @@
     <string name="set_primary">پرووایدر اصلی شود</string>
     <string name="set_type_to_replace">ذخیره شده — برای عوض کردن بنویس</string>
     <string name="set_up">تنظیم «%1$s»</string>
-    <string name="set_up_step_by_step">راه‌اندازی قدم‌به‌قدم</string>
     <string name="setup_wizard">راه‌اندازی اولیه</string>
     <string name="share">اشتراک‌گذاری</string>
     <string name="share_export">اشتراک‌گذاری / خروجی</string>
@@ -774,8 +773,8 @@
     <string name="stats">آمار</string>
     <string name="steer_the_agent">هدایت عامل</string>
     <string name="step">گام %1$s</string>
-    <string name="step_1_make_the_bot">قدم ۱: ساختن بات</string>
-    <string name="step_2_who_may_use_it">قدم ۲: چه کسانی استفاده کنند</string>
+    <string name="step_1_bot_token">قدم ۱: توکن ربات</string>
+    <string name="step_2_allowed_users">قدم ۲: کاربران مجاز</string>
     <string name="step_of_4">مرحله %1$s از ۴</string>
     <string name="stop">توقف</string>
     <string name="stop_and_retry">توقف و شروع دوباره</string>
@@ -804,13 +803,9 @@
     <string name="tasks_need_attention">%1$s کار نیاز به توجه دارد</string>
     <string name="tasks_you_delegate_show_up_here_once">تسک‌هایی که واگذار می‌کنی بعد از پایان اینجا میان</string>
     <string name="tasks_your_profiles_work_on">کارهایی که پروفایل‌ها انجام می‌دهند</string>
+    <string name="telegram_bot_saved_restart_failed">ربات ذخیره شد، ولی گیت‌وی پیام‌رسان دوباره راه نیفتاد%1$s. روی سرور `hermes gateway restart` را اجرا کن.</string>
     <string name="telegram_connected">تلگرام وصل شد</string>
     <string name="telegram_discord_slack">تلگرام، دیسکورد، اسلک</string>
-    <string name="telegram_open_and_create">تلگرام را باز کن و بات را آنجا بساز%1$s. بعد به اینجا برگرد؛ این صفحه خودش جلو می‌رود.</string>
-    <string name="telegram_saved_restart_failed">%1$s ذخیره شد، ولی گیت‌وی پیام‌رسان دوباره راه نیفتاد%2$s. روی سرور `hermes gateway restart` را اجرا کن.</string>
-    <string name="telegram_setup">راه‌اندازی تلگرام</string>
-    <string name="telegram_suggested_name">" (نام پیشنهادی: @%1$s)"</string>
-    <string name="telegram_user_id">شناسهٔ کاربری تلگرام</string>
     <string name="temporary_files">فایل‌های موقت</string>
     <string name="terminal">ترمینال</string>
     <string name="terminal_files_packages">ترمینال، فایل‌ها، بسته‌ها</string>
@@ -823,7 +818,8 @@
     <string name="the_agent_that_writes_the_replies_and">خود عامل که جواب‌ها را می‌نویسد و ابزارها را اجرا می‌کند. داخل Linux داخلی است و جدا از برنامه به‌روز می‌شود.</string>
     <string name="the_agents_persistent_voice_identity">هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم</string>
     <string name="the_app_goes_back_to_the_main_profile">اپ به پروفایل اصلی برمی‌گردد.</string>
-    <string name="the_bot">بات</string>
+    <string name="the_bot_is_saved_and_already_running">ربات ذخیره شد و همین حالا روشن است. در تلگرام به آن پیام بده.</string>
+    <string name="the_bot_is_saved_and_the_messaging">ربات ذخیره شد و گیت‌وی پیام‌رسان دوباره راه می‌افتد. چند لحظه بعد به آن پیام بده.</string>
     <string name="the_built_in_linux_runtime_is_not">محیط لینوکس داخلی هنوز نصب نشده است. آن را از «راه‌اندازی اولیه» نصب کنید.</string>
     <string name="the_chromium_the_agent_browses_with_on_a">همان Chromium که عامل با آن کار می‌کند، روی یک صفحهٔ VNC</string>
     <string name="the_core_was_already_the_newest_version">هسته از قبل جدیدترین نسخه بود.</string>
@@ -834,7 +830,6 @@
     <string name="the_profile_that_breaks_a_task_with_no">پروفایلی که کار بدون مسئول را به چند مرحله می‌شکند.</string>
     <string name="the_selected_chats_will_be_deleted_for">گفتگوهای انتخاب‌شده برای همیشه حذف می‌شوند.</string>
     <string name="the_servers_model_writes_a_full_title">مدل سرور عنوان و جزئیات کامل را می‌نویسد، بعد کار به صف می‌رود.</string>
-    <string name="the_setup_link_expired_before_the_bot">لینک راه‌اندازی قبل از ساخته شدن بات منقضی شد. دوباره شروع کن.</string>
     <string name="the_worker_process_is_ended_and_the_task">پردازش کارگزار بسته می‌شود و کار به صف برمی‌گردد تا از اول شروع شود.</string>
     <string name="theme">تم</string>
     <string name="thinking">فکر: %1$s</string>
@@ -910,7 +905,6 @@
     <string name="voice_input">ورودی صوتی</string>
     <string name="wait_for_which_task">منتظر کدام کار بماند؟</string>
     <string name="waiting_for_hermes">در انتظار آماده شدن Hermes…</string>
-    <string name="waiting_for_telegram">در انتظار تلگرام…</string>
     <string name="waiting_for_you_to_confirm">در انتظار تأیید تو…</string>
     <string name="waiting_on_this">منتظر این کار</string>
     <string name="waits_on">منتظر این کارها</string>
@@ -940,7 +934,6 @@
     <string name="write_to_the_group_everyone_answers_or">به گروه پیام بده. همه جواب می‌دهند، یا فقط عضوهایی که با @ صدا بزنی.</string>
     <string name="writing_it_out">در حال نوشتن…</string>
     <string name="you">شما</string>
-    <string name="you_2">%1$s (خودت)</string>
     <string name="you_are_on_the_newest_release">روی جدیدترین نسخه‌ای.</string>
     <string name="your_own_server">سرور خودت</string>
     <string name="your_servers">سرورهای شما</string>

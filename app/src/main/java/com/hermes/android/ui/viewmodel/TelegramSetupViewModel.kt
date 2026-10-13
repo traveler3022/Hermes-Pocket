@@ -2,47 +2,37 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.hermes.android.domain.messaging.TelegramApplyResult
-import com.hermes.android.domain.messaging.TelegramPairing
-import com.hermes.android.domain.messaging.TelegramPairingStatus
+import com.hermes.android.domain.messaging.TelegramSaveResult
 import com.hermes.android.domain.messaging.TelegramSetup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import javax.inject.Inject
 
 /** Where the Telegram wizard is. */
 sealed interface TelegramStep {
-    data object Idle : TelegramStep
-    data object Starting : TelegramStep
-    /** The bot is being made in Telegram; the app polls until it exists. */
-    data class Waiting(val pairing: TelegramPairing) : TelegramStep
-    data class Ready(val pairing: TelegramPairing, val botUsername: String?, val ownerUserId: String?) : TelegramStep
-    data class Saving(val pairing: TelegramPairing) : TelegramStep
-    data class Done(val result: TelegramApplyResult, val botUsername: String?) : TelegramStep
+    data object Closed : TelegramStep
+    /** Step 1: the token of the bot the user made with @BotFather. */
+    data object Token : TelegramStep
+    /** Step 2: the numeric user ids allowed to talk to it. */
+    data object Users : TelegramStep
+    data object Saving : TelegramStep
+    data class Done(val result: TelegramSaveResult) : TelegramStep
 }
 
 data class TelegramSetupUiState(
-    val step: TelegramStep = TelegramStep.Idle,
+    val step: TelegramStep = TelegramStep.Closed,
+    val token: String = "",
     val allowedIds: List<String> = emptyList(),
     val error: String? = null,
-    // The pairing ran out before the bot was made; a new one has to be started.
-    val expired: Boolean = false,
 )
 
-/** The step-by-step Telegram bot setup (Hy4ri/hermes-mobile's onboarding flow). */
+/** Connects the user's own Telegram bot in two steps: token, then allowed user ids. */
 @HiltViewModel
 class TelegramSetupViewModel @Inject constructor(
     private val setup: TelegramSetup,
@@ -50,56 +40,27 @@ class TelegramSetupViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(TelegramSetupUiState())
     val uiState: StateFlow<TelegramSetupUiState> = _uiState.asStateFlow()
-    private var job: Job? = null
 
     val available: Boolean get() = setup.available
 
     fun start() {
-        if (_uiState.value.step !is TelegramStep.Idle && _uiState.value.step !is TelegramStep.Done) return
-        _uiState.value = TelegramSetupUiState(step = TelegramStep.Starting)
-        job?.cancel()
-        job = viewModelScope.launch {
-            val pairing = try {
-                setup.start()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "[Telegram] start failed")
-                _uiState.update { it.copy(step = TelegramStep.Idle, error = e.message) }
-                return@launch
-            }
-            _uiState.update { it.copy(step = TelegramStep.Waiting(pairing)) }
-            poll(pairing)
-        }
+        _uiState.value = TelegramSetupUiState(step = TelegramStep.Token)
     }
 
-    private suspend fun poll(pairing: TelegramPairing) {
-        while (_uiState.value.step is TelegramStep.Waiting) {
-            delay(POLL_MS)
-            try {
-                val status = setup.status(pairing.pairingId)
-                if (status is TelegramPairingStatus.Ready) {
-                    _uiState.update {
-                        it.copy(
-                            step = TelegramStep.Ready(pairing, status.botUsername, status.ownerUserId),
-                            allowedIds = listOfNotNull(status.ownerUserId),
-                            error = null,
-                        )
-                    }
-                    return
-                }
-                _uiState.update { it.copy(error = null) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (isExpired(pairing.expiresAt)) {
-                    _uiState.update { it.copy(step = TelegramStep.Idle, error = null, expired = true) }
-                    return
-                }
-                Timber.w(e, "[Telegram] status poll failed")
-                _uiState.update { it.copy(error = e.message) }
-            }
-        }
+    fun setToken(token: String) {
+        _uiState.update { it.copy(token = token.trim(), error = null) }
+    }
+
+    /** A BotFather token is `<digits>:<secret>`; the server checks it in full when saving. */
+    fun tokenLooksRight(token: String): Boolean = TOKEN_SHAPE.matches(token.trim())
+
+    fun toUsers() {
+        if (!tokenLooksRight(_uiState.value.token)) return
+        _uiState.update { it.copy(step = TelegramStep.Users, error = null) }
+    }
+
+    fun backToToken() {
+        _uiState.update { it.copy(step = TelegramStep.Token, error = null) }
     }
 
     fun addAllowedId(raw: String): Boolean {
@@ -113,48 +74,32 @@ class TelegramSetupViewModel @Inject constructor(
         _uiState.update { it.copy(allowedIds = it.allowedIds - id) }
     }
 
-    fun apply() {
-        val ready = _uiState.value.step as? TelegramStep.Ready ?: return
-        val ids = _uiState.value.allowedIds
-        if (ids.isEmpty()) return
-        _uiState.update { it.copy(step = TelegramStep.Saving(ready.pairing), error = null) }
-        job = viewModelScope.launch {
+    fun save() {
+        val state = _uiState.value
+        if (state.step != TelegramStep.Users || state.allowedIds.isEmpty()) return
+        _uiState.update { it.copy(step = TelegramStep.Saving, error = null) }
+        viewModelScope.launch {
             try {
-                val result = setup.apply(ready.pairing.pairingId, ids)
-                _uiState.update { it.copy(step = TelegramStep.Done(result, ready.botUsername)) }
+                val result = setup.save(state.token, state.allowedIds)
+                // The token isn't kept once it's on the server.
+                _uiState.update { it.copy(step = TelegramStep.Done(result), token = "") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w(e, "[Telegram] apply failed")
-                _uiState.update { it.copy(step = ready, error = e.message) }
+                Timber.w("[Telegram] save failed: ${e.javaClass.simpleName}")
+                // The server's reason (e.g. a wrong token) belongs to step 1 or 2, so go back there.
+                val step = if (e.message?.contains("token", ignoreCase = true) == true) TelegramStep.Token else TelegramStep.Users
+                _uiState.update { it.copy(step = step, error = e.message) }
             }
         }
     }
 
-    /** Closes the wizard; a pairing still open on the server is cancelled there too. */
     fun close() {
-        val pairing = when (val step = _uiState.value.step) {
-            is TelegramStep.Waiting -> step.pairing
-            is TelegramStep.Ready -> step.pairing
-            else -> null
-        }
-        job?.cancel()
+        if (_uiState.value.step == TelegramStep.Saving) return
         _uiState.value = TelegramSetupUiState()
-        if (pairing != null) {
-            viewModelScope.launch {
-                withContext(NonCancellable) { runCatching { setup.cancel(pairing.pairingId) } }
-            }
-        }
     }
-
-    private fun isExpired(expiresAt: String): Boolean {
-        val at = runCatching { isoParser().parse(expiresAt.take(19))?.time }.getOrNull() ?: return false
-        return at < System.currentTimeMillis()
-    }
-
-    private fun isoParser() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
     private companion object {
-        const val POLL_MS = 2_000L
+        val TOKEN_SHAPE = Regex("^\\d{5,}:[A-Za-z0-9_-]{30,}$")
     }
 }

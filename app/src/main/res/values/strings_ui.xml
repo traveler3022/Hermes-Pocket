@@ -76,6 +76,7 @@
     <string name="b">%1$s B</string>
     <string name="back">Back</string>
     <string name="back_2">Back</string>
+    <string name="back_3">Back</string>
     <string name="base_url">Base URL</string>
     <string name="base_url_2">Base URL</string>
     <string name="base_url_3">Base URL</string>
@@ -84,8 +85,8 @@
     <string name="blocked_a_disguised_program">Blocked: a disguised program</string>
     <string name="board_health">Board health</string>
     <string name="boards">Boards</string>
-    <string name="bot_made">Bot made: @%1$s</string>
     <string name="bot_token">Bot Token</string>
+    <string name="bot_token_2">Bot token</string>
     <string name="both">Both</string>
     <string name="branch_conversation">Branch conversation</string>
     <string name="browse_and_manage_skills">Browse and manage skills</string>
@@ -154,6 +155,7 @@
     <string name="connect_2">Connect %1$s</string>
     <string name="connect_a_vnc_client_to">Connect a VNC client to %1$s</string>
     <string name="connect_to_your_hermes_server">Connect to your Hermes server</string>
+    <string name="connect_your_bot">Connect your bot</string>
     <string name="connected">● Connected</string>
     <string name="connected_2">Connected</string>
     <string name="connected_3">%1$s connected: %2$s</string>
@@ -185,7 +187,6 @@
     <string name="copy">Copy</string>
     <string name="copy_api_keys">Copy API keys</string>
     <string name="copy_code">Copy code</string>
-    <string name="copy_link">Copy link</string>
     <string name="copy_settings_and_skills_from_this">Copy settings and skills from this profile</string>
     <string name="copy_text">Copy text</string>
     <string name="copying_settings_brings_this_profiles">Copying settings brings this profile\'s keys too.</string>
@@ -363,6 +364,7 @@
     <string name="image">Image</string>
     <string name="image_couldnt_load_tap_save_to_download">Image couldn\'t load — tap Save to download it</string>
     <string name="import_a_board">Import a board</string>
+    <string name="in_telegram_message_botfather_send">In Telegram, message @BotFather, send /newbot and follow its steps. Paste the token it gives you here.</string>
     <string name="in_text">in</string>
     <string name="in_use">In use</string>
     <string name="in_use_2">in use</string>
@@ -385,8 +387,6 @@
     <string name="installing_hermes">Installing Hermes...</string>
     <string name="interrupt">Interrupt</string>
     <string name="is_named_like_a_photo_or_document_but_it">“%1$s” is named like a photo or document, but it is really a program. Files like this are made to trick people, so it can\'t leave Hermes.</string>
-    <string name="is_saved">%1$s is saved.</string>
-    <string name="is_saved_and_the_messaging_gateway_is">%1$s is saved and the messaging gateway is restarting. Message the bot in a moment.</string>
     <string name="it_installs_tailscale_if_needed_and">It installs Tailscale if needed and prints a sign-in link: log in with the account you use in this app. If Tailscale asks to turn on HTTPS, open that link too. At the end it prints your Hermes username and password.</string>
     <string name="it_needs_packages_installed_on_the">It needs packages installed on the Hermes machine first.</string>
     <string name="its_api_keys_are_removed_from_hermes">Its API keys are removed from Hermes.</string>
@@ -535,6 +535,7 @@
     <string name="nothing_connected_yet_add_a_provider">Nothing connected yet. Add a provider above.</string>
     <string name="nothing_here">Nothing here.</string>
     <string name="nothing_to_set_for_this_one">Nothing to set for this one.</string>
+    <string name="numeric_user_id">Numeric user id</string>
     <string name="oauth_chatgpt_nous_portal_xai_grok">OAuth: ChatGPT, Nous Portal, xAI Grok…</string>
     <string name="of_active">%1$s of %2$s active</string>
     <string name="of_enabled">%1$s of %2$s enabled</string>
@@ -551,14 +552,14 @@
     <string name="oldest_first">Oldest first</string>
     <string name="only_files_that_come_back_on_their_own">Only files that come back on their own are cleared: caches, temporary files and logs. Chats, memories, keys, installed tools and your own files stay. Files used in the last hour are kept.</string>
     <string name="only_memory_md">Only MEMORY.md</string>
-    <string name="only_these_telegram_user_ids_may_talk_to">Only these Telegram user ids may talk to the agent. The bot\'s maker is added already.</string>
+    <string name="only_these_numeric_telegram_user_ids_may">Only these numeric Telegram user ids may talk to the agent. Add as many as you want (your own id: message @userinfobot).</string>
     <string name="only_user_md">Only USER.md</string>
     <string name="open">Open</string>
     <string name="open_anyway">Open anyway</string>
+    <string name="open_botfather">Open @BotFather</string>
     <string name="open_file">Open file</string>
     <string name="open_full_screen">Open full screen</string>
     <string name="open_in_chat">Open in chat</string>
-    <string name="open_telegram">Open Telegram</string>
     <string name="open_the_page_again">Open the page again</string>
     <string name="open_the_project_on_github">Open the project on GitHub</string>
     <string name="open_the_release">Open the release</string>
@@ -665,7 +666,6 @@
     <string name="same_as_the_main_profile">Same as the main profile</string>
     <string name="sat">Sat</string>
     <string name="save">Save</string>
-    <string name="save_and_restart">Save and restart</string>
     <string name="save_and_use">Save and use</string>
     <string name="save_image">Save image</string>
     <string name="save_next">Save &amp; next</string>
@@ -718,7 +718,6 @@
     <string name="set_primary">Set primary</string>
     <string name="set_type_to_replace">Set — type to replace</string>
     <string name="set_up">Set up “%1$s”</string>
-    <string name="set_up_step_by_step">Set up step by step</string>
     <string name="setup_wizard">Setup wizard</string>
     <string name="share">Share</string>
     <string name="share_export">Share / Export</string>
@@ -775,8 +774,8 @@
     <string name="stats">Stats</string>
     <string name="steer_the_agent">Steer the agent</string>
     <string name="step">Step %1$s</string>
-    <string name="step_1_make_the_bot">Step 1: make the bot</string>
-    <string name="step_2_who_may_use_it">Step 2: who may use it</string>
+    <string name="step_1_bot_token">Step 1: bot token</string>
+    <string name="step_2_allowed_users">Step 2: allowed users</string>
     <string name="step_of_4">Step %1$s of 4</string>
     <string name="stop">Stop</string>
     <string name="stop_and_retry">Stop and retry</string>
@@ -805,13 +804,9 @@
     <string name="tasks_need_attention">%1$s tasks need attention</string>
     <string name="tasks_you_delegate_show_up_here_once">Tasks you delegate show up here once they finish</string>
     <string name="tasks_your_profiles_work_on">Tasks your profiles work on</string>
+    <string name="telegram_bot_saved_restart_failed">The bot is saved, but the messaging gateway could not restart%1$s. Run `hermes gateway restart` on the server.</string>
     <string name="telegram_connected">Telegram connected</string>
     <string name="telegram_discord_slack">Telegram, Discord, Slack</string>
-    <string name="telegram_open_and_create">Open Telegram and create the bot there%1$s. Come back here afterwards — this page moves on by itself.</string>
-    <string name="telegram_saved_restart_failed">%1$s is saved, but the messaging gateway could not restart%2$s. Run `hermes gateway restart` on the server.</string>
-    <string name="telegram_setup">Telegram setup</string>
-    <string name="telegram_suggested_name">" (suggested name: @%1$s)"</string>
-    <string name="telegram_user_id">Telegram user id</string>
     <string name="temporary_files">Temporary files</string>
     <string name="terminal">Terminal</string>
     <string name="terminal_files_packages">Terminal, files, packages</string>
@@ -825,7 +820,8 @@
     <string name="the_agent_that_writes_the_replies_and">The agent that writes the replies and runs the tools. It lives in the built-in Linux and updates separately from the app.</string>
     <string name="the_agents_persistent_voice_identity">The agent\'s persistent voice &amp; identity — first part of its system prompt</string>
     <string name="the_app_goes_back_to_the_main_profile">The app goes back to the main profile.</string>
-    <string name="the_bot">The bot</string>
+    <string name="the_bot_is_saved_and_already_running">The bot is saved and already running. Message it in Telegram.</string>
+    <string name="the_bot_is_saved_and_the_messaging">The bot is saved and the messaging gateway is restarting. Message it in a moment.</string>
     <string name="the_built_in_linux_runtime_is_not">The built-in Linux runtime is not installed yet. Install it from the setup wizard.</string>
     <string name="the_chromium_the_agent_browses_with_on_a">The Chromium the agent browses with, on a VNC screen</string>
     <string name="the_core_was_already_the_newest_version">The core was already the newest version.</string>
@@ -836,7 +832,6 @@
     <string name="the_profile_that_breaks_a_task_with_no">The profile that breaks a task with no assignee into steps.</string>
     <string name="the_selected_chats_will_be_deleted_for">The selected chats will be deleted for good.</string>
     <string name="the_servers_model_writes_a_full_title">The server\'s model writes a full title and details, then the task joins the queue.</string>
-    <string name="the_setup_link_expired_before_the_bot">The setup link expired before the bot was made. Start again.</string>
     <string name="the_worker_process_is_ended_and_the_task">The worker process is ended and the task goes back to the queue, so it starts over.</string>
     <string name="theme">Theme</string>
     <string name="thinking">thinking: %1$s</string>
@@ -912,7 +907,6 @@
     <string name="voice_input">Voice input</string>
     <string name="wait_for_which_task">Wait for which task?</string>
     <string name="waiting_for_hermes">Waiting for Hermes…</string>
-    <string name="waiting_for_telegram">Waiting for Telegram…</string>
     <string name="waiting_for_you_to_confirm">Waiting for you to confirm…</string>
     <string name="waiting_on_this">Waiting on this</string>
     <string name="waits_on">Waits on</string>
@@ -942,7 +936,6 @@
     <string name="write_to_the_group_everyone_answers_or">Write to the group. Everyone answers, or only the members you @mention.</string>
     <string name="writing_it_out">Writing it out…</string>
     <string name="you">You</string>
-    <string name="you_2">%1$s (you)</string>
     <string name="you_are_on_the_newest_release">You are on the newest release.</string>
     <string name="your_own_server">Your own server</string>
     <string name="your_servers">Your servers</string>

@@ -28,12 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.R
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
@@ -42,6 +40,8 @@ import com.hermes.android.ui.viewmodel.PlatformConfig
 import com.hermes.android.ui.viewmodel.PlatformType
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
 import com.hermes.android.ui.viewmodel.TelegramSetupViewModel
+import com.hermes.android.R
+import androidx.compose.ui.res.stringResource
 
 /**
  * Messaging Platforms — configure Telegram/Discord/Slack bot tokens.
@@ -168,27 +168,30 @@ private fun PlatformCard(
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(stringResource(R.string.set_up_step_by_step))
+                    Text(stringResource(R.string.connect_your_bot))
                 }
             }
 
-            OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                label = { Text(stringResource(R.string.bot_token)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(HxRadius.sm),
-            )
+            // The wizard replaces the old token field, which never reached the server.
+            if (onWizard == null) {
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(stringResource(R.string.bot_token)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    shape = RoundedCornerShape(HxRadius.sm),
+                )
 
-            Button(
-                onClick = { viewModel.saveToken(platform.type, token) },
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(stringResource(R.string.save_token))
+                Button(
+                    onClick = { viewModel.saveToken(platform.type, token) },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(stringResource(R.string.save_token))
+                }
             }
         }
     }
