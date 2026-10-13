@@ -227,7 +227,7 @@ internal fun AddProviderDialog(
                 AddProviderStep.MANUAL -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!probeError.isNullOrBlank()) {
                         Text(
-                            stringResource(R.string.couldnt_fetch_models, probeError),
+                            stringResource(R.string.couldnt_fetch_models, probeError.orEmpty()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
