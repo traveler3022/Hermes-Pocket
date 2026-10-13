@@ -486,10 +486,13 @@ class ServerKanbanRepository @Inject constructor(
     override suspend fun importBoard(file: File): String {
         val name = "import-${UUID.randomUUID().toString().take(8)}.tar.gz"
         var serverPath: String
+        // The copy put in the built-in Linux's /tmp, removed once the import is done.
+        var phoneCopy: File? = null
         if (onPhone) {
             serverPath = "/tmp/$name"
             val host = runtime.hostFileForGuestPath(serverPath) ?: throw IOException("The built-in Linux isn't ready")
             withContext(Dispatchers.IO) { file.copyTo(host, overwrite = true) }
+            phoneCopy = host
         } else {
             serverPath = "~/.hermes/kanban/board-imports/$name"
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
@@ -502,8 +505,12 @@ class ServerKanbanRepository @Inject constructor(
             // The server's own absolute path for it (`~` expanded).
             serverPath = stored?.str("path")?.ifEmpty { null } ?: serverPath
         }
-        val root = call("POST", "/boards/import", JsonObject(mapOf("archive" to JsonPrimitive(serverPath))), slow = true)
-            as? JsonObject ?: throw IOException("No answer")
+        val answer = try {
+            call("POST", "/boards/import", JsonObject(mapOf("archive" to JsonPrimitive(serverPath))), slow = true)
+        } finally {
+            phoneCopy?.delete()
+        }
+        val root = answer as? JsonObject ?: throw IOException("No answer")
         return root.str("board").ifEmpty { throw IOException("The server imported no board") }
     }
 
