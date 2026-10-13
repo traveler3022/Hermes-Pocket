@@ -198,6 +198,8 @@
     <string name="couldnt_load_them">"Couldn\'t load them: "</string>
     <string name="couldnt_reply">%1$s couldn\'t reply: %2$s</string>
     <string name="couldnt_share_the_file">Couldn\'t share the file</string>
+    <string name="count_selected">%1$s selected</string>
+    <string name="count_selected_2">%1$s selected</string>
     <string name="create">Create</string>
     <string name="create_2">Create</string>
     <string name="create_a_job">Create a job</string>
@@ -262,7 +264,6 @@
     <string name="empty">(empty)</string>
     <string name="empty_2">empty</string>
     <string name="empty_tap_edit">(empty — tap Edit)</string>
-    <string name="en">en</string>
     <string name="enable_or_disable_tools">Enable or disable tools</string>
     <string name="english_letters_numbers_and">English letters, numbers, - and _</string>
     <string name="english_letters_numbers_and_e_g_writer">English letters, numbers, - and _ (e.g. writer)</string>
@@ -699,8 +700,6 @@
     <string name="select_model_3">Select model</string>
     <string name="select_model_4">Select model</string>
     <string name="select_provider">Select provider</string>
-    <string name="selected">%1$s selected</string>
-    <string name="selected_2">%1$s selected</string>
     <string name="send">Send</string>
     <string name="send_back">Send back</string>
     <string name="send_news_to">Send news to</string>
@@ -880,6 +879,7 @@
     <string name="turn_off">Turn off</string>
     <string name="turned_off_built_in_memory_only">Turned off. Built-in memory only.</string>
     <string name="type_answer">Type answer...</string>
+    <string name="ui_language">en</string>
     <string name="unassigned">Unassigned</string>
     <string name="unassigned_2">unassigned</string>
     <string name="unavailable">unavailable</string>

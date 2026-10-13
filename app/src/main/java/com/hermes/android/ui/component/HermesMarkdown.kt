@@ -84,7 +84,7 @@ fun HermesMarkdown(
         color = MaterialTheme.colorScheme.onSurface,
     ),
     linkColor: Color = MaterialTheme.colorScheme.primary,
-    persianDigits: Boolean = stringResource(R.string.en) == "fa",
+    persianDigits: Boolean = stringResource(R.string.ui_language) == "fa",
 ) {
     val parser = remember { IncrementalMdParser() }
     val blocks = remember(markdown) { footnotesLast(parser.parse(markdown)) }

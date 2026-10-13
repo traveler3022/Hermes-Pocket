@@ -249,7 +249,7 @@ fun SessionsScreen(
             uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
                 ?: stringResource(R.string.session_history)
         } else if (uiState.isSelecting) {
-            stringResource(R.string.selected, uiState.selectedIds.size)
+            stringResource(R.string.count_selected, uiState.selectedIds.size)
         } else {
             stringResource(R.string.sessions)
         },

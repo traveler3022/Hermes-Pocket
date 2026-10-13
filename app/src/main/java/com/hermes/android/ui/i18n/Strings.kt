@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import java.util.Locale
 
@@ -59,18 +60,6 @@ fun ProvideAppLanguage(language: AppLanguage, content: @Composable () -> Unit) {
 
 @Composable
 @ReadOnlyComposable
-fun t(en: String, fa: String): String {
-    val override = LocalAppLanguage.current
-    if (override == AppLanguage.ENGLISH) return en
-    if (override == AppLanguage.FARSI) return fa
-
-    val config = LocalConfiguration.current
-    val language = if (android.os.Build.VERSION.SDK_INT >= 24) {
-        config.locales[0]?.language
-    } else {
-        @Suppress("DEPRECATION")
-        config.locale?.language
-    } ?: Locale.getDefault().language
-    // Only Persian: "iw" (also matched here once) is Java's old code for Hebrew.
-    return if (language.equals("fa", ignoreCase = true)) fa else en
-}
+fun t(en: String, fa: String): String =
+    // Same choice as stringResource (values-fa/), so leftover t() text never mixes languages.
+    if (LocalResources.current.getString(R.string.ui_language) == "fa") fa else en

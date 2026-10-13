@@ -1,6 +1,7 @@
 package com.hermes.android.data
 
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.ProfileScope
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
@@ -78,12 +79,18 @@ class DashboardApi @Inject constructor(
             put("path", JsonPrimitive(path))
             if (body != null) put("body", body)
         }
-        val result = gateway.request(
-            METHOD,
-            params,
-            timeoutMs = if (slow) 10 * 60_000L else 120_000L,
-            trackSession = false,
-        ) as? JsonObject ?: throw IOException("No answer from Hermes")
+        // Callers expect IOException (TelegramSetupRepository falls back on it), as over HTTP.
+        val reply = try {
+            gateway.request(
+                METHOD,
+                params,
+                timeoutMs = if (slow) 10 * 60_000L else 120_000L,
+                trackSession = false,
+            )
+        } catch (e: GatewayException) {
+            throw IOException(e.rpcMessage ?: e.message, e)
+        }
+        val result = reply as? JsonObject ?: throw IOException("No answer from Hermes")
         val status = (result["status"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
         val answer = result["body"] ?: JsonNull
         if (status !in 200..299) throw IOException(detailOf(answer) ?: "Hermes answered $status")

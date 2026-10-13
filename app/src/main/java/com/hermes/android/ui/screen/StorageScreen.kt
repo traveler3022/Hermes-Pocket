@@ -258,7 +258,7 @@ fun StorageScreen(
 
     HermesScaffold(
         title = when {
-            picking -> stringResource(R.string.selected_2, state.picked.size)
+            picking -> stringResource(R.string.count_selected_2, state.picked.size)
             showTitle -> stringResource(R.string.storage_usage)
             else -> ""
         },

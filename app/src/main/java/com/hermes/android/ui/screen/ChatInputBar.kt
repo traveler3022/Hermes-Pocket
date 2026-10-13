@@ -118,7 +118,7 @@ internal fun InputBar(
     }
     val commandList = slashCommands.ifEmpty { fallbackCommands }
     // Hermes describes its commands in English only; Persian comes from the app.
-    val persianDescriptions = stringResource(R.string.en) == "fa"
+    val persianDescriptions = stringResource(R.string.ui_language) == "fa"
     // Only while the command name is being typed: past the first space it is the argument.
     val showSuggestions = text.startsWith("/") && text.none { it == ' ' || it == '\n' } && !isSending
     val suggestions = remember(text, commandList) {

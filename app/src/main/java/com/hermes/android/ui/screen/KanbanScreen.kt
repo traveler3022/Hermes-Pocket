@@ -461,7 +461,7 @@ private fun SelectionBar(
     Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.selected, count), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.count_selected, count), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = onSelectAll, enabled = !isBusy) { Text(stringResource(R.string.select_column)) }
                 IconButton(onClick = onClear) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel)) }
             }

@@ -197,6 +197,8 @@
     <string name="couldnt_load_them">"بارگذاری نشد: "</string>
     <string name="couldnt_reply">%1$s نتوانست جواب بدهد: %2$s</string>
     <string name="couldnt_share_the_file">فایل قابل اشتراک نیست</string>
+    <string name="count_selected">%1$s انتخاب‌شده</string>
+    <string name="count_selected_2">%1$s مورد انتخاب شد</string>
     <string name="create">ساخت</string>
     <string name="create_2">ساختن</string>
     <string name="create_a_job">ساخت کار جدید</string>
@@ -261,7 +263,6 @@
     <string name="empty">(خالی)</string>
     <string name="empty_2">خالی</string>
     <string name="empty_tap_edit">(خالی — روی ویرایش بزنید)</string>
-    <string name="en">fa</string>
     <string name="enable_or_disable_tools">فعال/غیرفعال کردن ابزارها</string>
     <string name="english_letters_numbers_and">حروف انگلیسی، عدد، - و _</string>
     <string name="english_letters_numbers_and_e_g_writer">حروف انگلیسی، عدد، - و _ (مثلاً writer)</string>
@@ -698,8 +699,6 @@
     <string name="select_model_3">انتخاب مدل</string>
     <string name="select_model_4">مدل را انتخاب کنید</string>
     <string name="select_provider">پرووایدر را انتخاب کنید</string>
-    <string name="selected">%1$s انتخاب‌شده</string>
-    <string name="selected_2">%1$s مورد انتخاب شد</string>
     <string name="send">ارسال</string>
     <string name="send_back">برگرداندن</string>
     <string name="send_news_to">ارسال خبرها به</string>
@@ -878,6 +877,7 @@
     <string name="turn_off">خاموش کردن</string>
     <string name="turned_off_built_in_memory_only">خاموش شد. فقط حافظهٔ داخلی.</string>
     <string name="type_answer">جواب بنویسید...</string>
+    <string name="ui_language">fa</string>
     <string name="unassigned">بدون مسئول</string>
     <string name="unassigned_2">بدون مسئول</string>
     <string name="unavailable">در دسترس نیست</string>

@@ -55,7 +55,7 @@ internal fun BlueprintSheet(
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val persian = stringResource(R.string.en) == "fa"
+    val persian = stringResource(R.string.ui_language) == "fa"
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -150,7 +150,7 @@ internal fun BlueprintForm(
     onCreate: (Map<String, String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val persian = stringResource(R.string.en) == "fa"
+    val persian = stringResource(R.string.ui_language) == "fa"
     val values = remember(blueprint.key) {
         mutableStateMapOf<String, String>().apply { blueprint.fields.forEach { put(it.name, it.default) } }
     }
