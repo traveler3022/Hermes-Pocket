@@ -38,10 +38,13 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.PlatformConfig
 import com.hermes.android.ui.viewmodel.PlatformType
+import com.hermes.android.ui.viewmodel.PairingEvent
+import com.hermes.android.ui.viewmodel.PairingViewModel
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
 import com.hermes.android.ui.viewmodel.TelegramSetupViewModel
 import com.hermes.android.R
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
 
 /**
  * Messaging Platforms — configure Telegram/Discord/Slack bot tokens.
@@ -56,11 +59,28 @@ fun PlatformsScreen(
     onNavigateBack: () -> Unit = {},
     viewModel: PlatformsViewModel = hiltViewModel(),
     telegramSetup: TelegramSetupViewModel = hiltViewModel(),
+    pairing: PairingViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val telegramState by telegramSetup.uiState.collectAsStateWithLifecycle()
     TelegramSetupDialog(telegramState, telegramSetup)
+    val pairingState by pairing.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    // LocalResources follows the in-app language; LocalContext would use the device's.
+    val resources = LocalResources.current
+
+    LaunchedEffect(pairing, resources) {
+        pairing.events.collect { event ->
+            snackbarHostState.showSnackbar(
+                when (event) {
+                    is PairingEvent.Approved -> resources.getString(R.string.pairing_approved_done, event.who)
+                    is PairingEvent.Revoked -> resources.getString(R.string.pairing_revoked_done, event.who)
+                    PairingEvent.Cleared -> resources.getString(R.string.pairing_cleared)
+                    is PairingEvent.Failed -> event.message
+                },
+            )
+        }
+    }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -113,6 +133,10 @@ fun PlatformsScreen(
                             null
                         },
                     )
+                }
+                // Requests come from the messaging gateway, which the built-in Linux doesn't run.
+                if (pairing.available) {
+                    item(key = "pairing") { PairingSection(pairingState, pairing) }
                 }
             }
         }

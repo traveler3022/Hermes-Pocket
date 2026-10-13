@@ -937,4 +937,19 @@
     <string name="you_are_on_the_newest_release">روی جدیدترین نسخه‌ای.</string>
     <string name="your_own_server">سرور خودت</string>
     <string name="your_servers">سرورهای شما</string>
+    <string name="pairing_title">درخواست‌های دسترسی</string>
+    <string name="pairing_hint">وقتی کسی که در لیست مجاز ربات نیست به آن پیام بدهد، اینجا منتظر تأیید تو می‌ماند.</string>
+    <string name="pairing_pending">منتظر تأیید</string>
+    <string name="pairing_approved">مجاز</string>
+    <string name="pairing_none">هنوز نه درخواستی هست نه کاربر تأییدشده‌ای.</string>
+    <string name="pairing_approve">تأیید</string>
+    <string name="pairing_revoke">لغو دسترسی</string>
+    <string name="pairing_clear_all">پاک کردن درخواست‌ها</string>
+    <string name="pairing_minutes_ago">%1$d دقیقه پیش</string>
+    <string name="pairing_approved_done">%1$s حالا می‌تواند با ربات حرف بزند</string>
+    <string name="pairing_revoked_done">دسترسی %1$s لغو شد</string>
+    <string name="pairing_cleared">درخواست‌ها پاک شد</string>
+    <string name="pairing_revoke_confirm">دسترسی %1$s لغو شود؟</string>
+    <string name="pairing_clear_confirm">همه‌ی درخواست‌های منتظر پاک شوند؟</string>
+    <string name="pairing_needs_code">از نسخه‌ی قدیمی‌تر Hermes: با کدی که ربات برایش فرستاده تأییدش کن.</string>
 </resources>

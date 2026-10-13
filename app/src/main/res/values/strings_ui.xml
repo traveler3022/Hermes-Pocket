@@ -939,4 +939,19 @@
     <string name="you_are_on_the_newest_release">You are on the newest release.</string>
     <string name="your_own_server">Your own server</string>
     <string name="your_servers">Your servers</string>
+    <string name="pairing_title">Access requests</string>
+    <string name="pairing_hint">When someone who is not on a bot\'s allowed list messages it, they wait here until you approve them.</string>
+    <string name="pairing_pending">Waiting for approval</string>
+    <string name="pairing_approved">Allowed</string>
+    <string name="pairing_none">No requests and no approved users yet.</string>
+    <string name="pairing_approve">Approve</string>
+    <string name="pairing_revoke">Revoke</string>
+    <string name="pairing_clear_all">Clear requests</string>
+    <string name="pairing_minutes_ago">%1$d min ago</string>
+    <string name="pairing_approved_done">%1$s can now talk to the bot</string>
+    <string name="pairing_revoked_done">%1$s can no longer talk to the bot</string>
+    <string name="pairing_cleared">Requests cleared</string>
+    <string name="pairing_revoke_confirm">Revoke %1$s\'s access?</string>
+    <string name="pairing_clear_confirm">Clear every waiting request?</string>
+    <string name="pairing_needs_code">From an older Hermes: approve it with the code the bot sent them.</string>
 </resources>
