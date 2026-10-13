@@ -717,7 +717,10 @@ class ConfigViewModel @Inject constructor(
                 err = ''
                 for u in cands:
                     try:
-                        hdr = {'Authorization': 'Bearer ' + key} if key else {}
+                        # Cloudflare-fronted endpoints (Groq, Together, Cerebras...) answer
+                        # urllib's default Python-urllib agent with 403 (error 1010).
+                        hdr = {'User-Agent': 'HermesPocket'}
+                        if key: hdr['Authorization'] = 'Bearer ' + key
                         req = urllib.request.Request(u, headers=hdr)
                         with urllib.request.urlopen(req, timeout=20) as r:
                             body = r.read().decode('utf-8', 'replace')
@@ -797,7 +800,10 @@ class ConfigViewModel @Inject constructor(
                     err = ''
                     for u in cands:
                         try:
-                            hdr = {'Authorization': 'Bearer ' + key} if key else {}
+                            # Cloudflare-fronted endpoints (Groq, Together, Cerebras...) answer
+                            # urllib's default Python-urllib agent with 403 (error 1010).
+                            hdr = {'User-Agent': 'HermesPocket'}
+                            if key: hdr['Authorization'] = 'Bearer ' + key
                             req = urllib.request.Request(u, headers=hdr)
                             with urllib.request.urlopen(req, timeout=20) as r:
                                 body = r.read().decode('utf-8', 'replace')
