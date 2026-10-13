@@ -4,6 +4,7 @@ import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.data.MemoryProvidersRepository
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
@@ -20,6 +21,7 @@ import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.domain.media.MediaPlayers
+import com.hermes.android.domain.memory.MemoryProviders
 import com.hermes.android.domain.notify.AppVisibility
 import com.hermes.android.domain.notify.ApprovalAlerts
 import com.hermes.android.domain.profiles.HermesProfiles
@@ -91,6 +93,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindCronBlueprints(impl: CronBlueprintsRepository): CronBlueprints
+
+    @Binds
+    abstract fun bindMemoryProviders(impl: MemoryProvidersRepository): MemoryProviders
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

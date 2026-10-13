@@ -135,6 +135,7 @@ internal fun MemorySection(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         )
+        MemoryProvidersPanel(onBuiltInReset = { viewModel.loadMemory() })
     }
 }
 
