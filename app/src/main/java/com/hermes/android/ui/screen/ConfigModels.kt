@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Lightbulb
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -76,7 +78,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -97,10 +98,10 @@ internal fun ModelSwitchConfirmDialog(
 ) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("Switch model?", "مدل عوض شود؟")) },
+        title = { Text(stringResource(R.string.switch_model)) },
         text = { Text(confirm.message) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(t("Switch anyway", "عوض کن")) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.switch_anyway)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -118,7 +119,7 @@ internal fun ModelsTab(
     LaunchedEffect(Unit) { viewModel.loadModels() }
 
     if (state.isLoadingModels && state.availableModels.isEmpty()) {
-        LoadingIndicator(t("Loading models...", "در حال بارگذاری مدلها..."))
+        LoadingIndicator(stringResource(R.string.loading_models))
         return
     }
 
@@ -179,7 +180,7 @@ internal fun ModelsTab(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = t("Active model", "مدل فعال"),
+                        text = stringResource(R.string.active_model),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
@@ -187,7 +188,7 @@ internal fun ModelsTab(
                         text = if (state.activeModel != null) {
                             "${state.activeProvider ?: "?"} / ${state.activeModel}"
                         } else {
-                            t("No model selected", "مدلی انتخاب نشده")
+                            stringResource(R.string.no_model_selected)
                         },
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = FontFamily.Monospace,
@@ -209,11 +210,11 @@ internal fun ModelsTab(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = t("Select Model", "انتخاب مدل"),
+                    text = stringResource(R.string.select_model),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 TextButton(onClick = { viewModel.loadModels() }) {
-                    Text(t("Refresh", "بارگذاری مجدد"))
+                    Text(stringResource(R.string.refresh_2))
                 }
             }
         }
@@ -228,10 +229,7 @@ internal fun ModelsTab(
                 ) {
                     Text(
                         modifier = Modifier.padding(16.dp),
-                        text = t(
-                            "No models yet. Connect a provider under Providers below, or tap Refresh if Hermes was still starting.",
-                            "هنوز مدلی نیست. از «پرووایدرها» در پایین یک پرووایدر وصل کن، یا اگر هرمس داشت بالا می‌آمد بزن بارگذاری مجدد.",
-                        ),
+                        text = stringResource(R.string.no_models_yet_connect_a_provider_under),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -245,13 +243,13 @@ internal fun ModelsTab(
                     onValueChange = { modelSearch = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
-                        Text(t("Search all models…", "جستجو در همهٔ مدل‌ها…"))
+                        Text(stringResource(R.string.search_all_models))
                     },
                     singleLine = true,
                     trailingIcon = {
                         if (modelSearch.isNotEmpty()) {
                             TextButton(onClick = { modelSearch = "" }) {
-                                Text(t("Clear", "پاک کردن"))
+                                Text(stringResource(R.string.clear))
                             }
                         }
                     },
@@ -262,7 +260,7 @@ internal fun ModelsTab(
                 if (searchResults.isEmpty()) {
                     item(key = "__search_empty") {
                         Text(
-                            text = t("No matching models", "مدلی پیدا نشد"),
+                            text = stringResource(R.string.no_matching_models),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(8.dp),
@@ -347,7 +345,7 @@ internal fun ModelsTab(
         item(key = "__reasoning") {
             SettingsCardGroup {
                 SettingsNavRow(
-                    title = t("Reasoning depth", "عمق تفکر"),
+                    title = stringResource(R.string.reasoning_depth),
                     subtitle = state.reasoning,
                     icon = Icons.Default.Lightbulb,
                     onClick = { onOpen(SettingsSection.REASONING) },
@@ -360,14 +358,11 @@ internal fun ModelsTab(
             Box(modifier = Modifier.padding(top = 8.dp)) {
                 SettingsCardGroup {
                     SettingsNavRow(
-                        title = t("Providers", "پرووایدرها"),
+                        title = stringResource(R.string.providers),
                         subtitle = if (connectedNames.isEmpty()) {
-                            t("None connected yet", "هنوز وصل نشده")
+                            stringResource(R.string.none_connected_yet)
                         } else {
-                            t(
-                                "${connectedNames.size} connected: ${connectedNames.joinToString(" · ")}",
-                                "${connectedNames.size} وصل: ${connectedNames.joinToString(" · ")}",
-                            )
+                            stringResource(R.string.connected_3, connectedNames.size, connectedNames.joinToString(" · "))
                         },
                         icon = Icons.Default.Dns,
                         onClick = { onOpen(SettingsSection.PROVIDERS) },

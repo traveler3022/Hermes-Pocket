@@ -13,8 +13,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 
 @Composable
@@ -31,7 +32,7 @@ internal fun RuntimeChoiceRow(
             selected = selected == RuntimeChoiceUi.BuiltInLinux,
             enabled = enabled,
             onClick = { onSelect(RuntimeChoiceUi.BuiltInLinux) },
-            label = { Text(t("Built-in Linux", "لینوکس داخلی")) },
+            label = { Text(stringResource(R.string.built_in_linux)) },
         )
         FilterChip(
             selected = selected == RuntimeChoiceUi.Termux,
@@ -44,7 +45,7 @@ internal fun RuntimeChoiceRow(
                 selected = selected == RuntimeChoiceUi.RemoteServer,
                 enabled = enabled,
                 onClick = { onSelect(RuntimeChoiceUi.RemoteServer) },
-                label = { Text(t("Server", "سرور")) },
+                label = { Text(stringResource(R.string.server)) },
             )
         }
     }
@@ -64,23 +65,18 @@ internal fun BuiltInLinuxDetectedContent(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                t("Install Hermes inside the app", "نصب Hermes داخل خود اپ"),
+                stringResource(R.string.install_hermes_inside_the_app),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
-                t(
-                    "Linux is built into the app; Hermes Agent and its Python packages " +
-                        "are downloaded into it. Needs about 1 GB free and a stable connection.",
-                    "لینوکس داخل خود اپ است؛ Hermes Agent و پکیج‌های پایتونش داخل آن دانلود می‌شوند. " +
-                        "حدود ۱ گیگابایت فضای خالی و اینترنت پایدار لازم است.",
-                ),
+                stringResource(R.string.linux_is_built_into_the_app_hermes_agent),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             diskFreeBytes?.let {
                 Text(
-                    t("Free space: ${formatBytes(it)}", "فضای خالی: ${formatBytes(it)}"),
+                    stringResource(R.string.free_space, formatBytes(it)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -88,6 +84,6 @@ internal fun BuiltInLinuxDetectedContent(
         }
     }
     Button(onClick = onStartInstall, modifier = Modifier.fillMaxWidth()) {
-        Text(t("Install Hermes", "نصب Hermes"))
+        Text(stringResource(R.string.install_hermes))
     }
 }

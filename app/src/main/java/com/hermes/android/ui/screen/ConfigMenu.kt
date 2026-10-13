@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.DataUsage
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
@@ -30,7 +32,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.StatTile
-import com.hermes.android.ui.i18n.t
 
 /**
  * The Settings root, restructured as the Control Center (approved design E):
@@ -60,15 +61,15 @@ internal fun SettingsMenu(
     ) {
         val (connColor, connLabel) = when (connection.state) {
             com.hermes.android.ui.viewmodel.ChatConnectionState.Connected ->
-                MaterialTheme.colorScheme.primary to t("Connected", "متصل")
+                MaterialTheme.colorScheme.primary to stringResource(R.string.connected_2)
             com.hermes.android.ui.viewmodel.ChatConnectionState.Connecting ->
-                MaterialTheme.colorScheme.tertiary to t("Connecting\u2026", "در حال اتصال\u2026")
+                MaterialTheme.colorScheme.tertiary to stringResource(R.string.connecting_2)
             com.hermes.android.ui.viewmodel.ChatConnectionState.Reconnecting ->
-                MaterialTheme.colorScheme.tertiary to t("Reconnecting\u2026", "اتصال دوباره\u2026")
+                MaterialTheme.colorScheme.tertiary to stringResource(R.string.reconnecting_2)
             com.hermes.android.ui.viewmodel.ChatConnectionState.Failed ->
-                MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
+                MaterialTheme.colorScheme.error to stringResource(R.string.connection_failed_2)
             com.hermes.android.ui.viewmodel.ChatConnectionState.Disconnected ->
-                MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
+                MaterialTheme.colorScheme.onSurfaceVariant to stringResource(R.string.not_connected)
         }
         Spacer(Modifier.height(12.dp))
         com.hermes.android.ui.design.SettingsGroup {
@@ -81,13 +82,13 @@ internal fun SettingsMenu(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = serverUrl.ifBlank { t("No server configured", "سروری تنظیم نشده") },
+                        text = serverUrl.ifBlank { stringResource(R.string.no_server_configured) },
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = t("Server & connection settings", "تنظیمات سرور و اتصال"),
+                        text = stringResource(R.string.server_connection_settings),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -101,9 +102,9 @@ internal fun SettingsMenu(
                     .padding(horizontal = 16.dp, vertical = 13.dp),
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(t("Setup wizard", "راه‌اندازی اولیه"), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.setup_wizard), style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = t("Runtime, AI provider, API key and model", "محیط اجرا، ارائه‌دهنده، کلید API و مدل"),
+                        text = stringResource(R.string.runtime_ai_provider_api_key_and_model),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -119,79 +120,73 @@ internal fun SettingsMenu(
         ) {
             StatTile(
                 value = state.activeModel ?: "\u2014",
-                label = t("Active model", "مدل فعال"),
+                label = stringResource(R.string.active_model),
             )
             StatTile(
                 value = state.insights?.let { "${it.sessions}" } ?: "\u2014",
-                label = t("Sessions / 30d", "جلسه / ۳۰ روز"),
+                label = stringResource(R.string.sessions_30d),
             )
         }
 
         val tiles = listOf(
             DomainSpec(
-                title = t("General Settings", "تنظیمات عمومی"),
-                subtitle = t(
-                    "Approval, personality, platforms, advanced",
-                    "تأیید، شخصیت، پلتفرم\u200Cها، پیشرفته",
-                ),
+                title = stringResource(R.string.general_settings),
+                subtitle = stringResource(R.string.approval_personality_platforms_advanced),
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.GENERAL_SETTINGS) },
             ),
             DomainSpec(
-                title = t("Appearance", "ظاهر"),
-                subtitle = t("Language, theme, font", "زبان، تم، فونت"),
+                title = stringResource(R.string.appearance),
+                subtitle = stringResource(R.string.language_theme_font),
                 icon = Icons.Default.Palette,
                 onClick = { onOpen(SettingsSection.APPEARANCE) },
             ),
             DomainSpec(
-                title = t("Models", "مدل\u200Cها"),
+                title = stringResource(R.string.models),
                 subtitle = state.activeModel?.let { model ->
                     "${state.activeProvider ?: "?"} / $model"
-                } ?: t("Model, API keys", "مدل، کلید API"),
+                } ?: stringResource(R.string.model_api_keys),
                 icon = Icons.Default.SwapHoriz,
                 onClick = { onOpen(SettingsSection.MODELS) },
             ),
             DomainSpec(
-                title = t("Tools", "ابزارها"),
+                title = stringResource(R.string.tools),
                 subtitle = if (state.availableTools.isNotEmpty()) {
                     val enabled = state.availableTools.count { it.enabled }
-                    t(
-                        "$enabled of ${state.availableTools.size} toolsets on",
-                        "$enabled از ${state.availableTools.size} گروه فعال",
-                    )
+                    stringResource(R.string.of_toolsets_on, enabled, state.availableTools.size)
                 } else {
-                    t("Toolsets, plugins, skills", "ابزارها، افزونه\u200Cها، مهارت\u200Cها")
+                    stringResource(R.string.toolsets_plugins_skills)
                 },
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.TOOLS) },
             ),
             DomainSpec(
-                title = t("Linux", "لینوکس"),
-                subtitle = t("Terminal, files, packages", "ترمینال، فایل‌ها، بسته‌ها"),
+                title = stringResource(R.string.linux),
+                subtitle = stringResource(R.string.terminal_files_packages),
                 icon = Icons.Default.Terminal,
                 onClick = onNavigateToLinux,
             ),
             DomainSpec(
-                title = t("Scheduler", "زمان\u200Cبندی"),
-                subtitle = t("Scheduled agent jobs", "کارهای زمان\u200Cبندی\u200Cشده"),
+                title = stringResource(R.string.scheduler),
+                subtitle = stringResource(R.string.scheduled_agent_jobs),
                 icon = Icons.Default.Schedule,
                 onClick = onNavigateToCron,
             ),
             DomainSpec(
-                title = t("Projects", "پروژه\u200Cها"),
-                subtitle = t("Browse sessions by project", "مرور گفتگوها بر اساس پروژه"),
+                title = stringResource(R.string.projects),
+                subtitle = stringResource(R.string.browse_sessions_by_project),
                 icon = Icons.Default.Folder,
                 onClick = onNavigateToProjects,
             ),
             DomainSpec(
-                title = t("Updates", "به\u200Cروزرسانی"),
-                subtitle = t("App and Hermes core versions", "نسخهٔ برنامه و هستهٔ هرمس"),
+                title = stringResource(R.string.updates),
+                subtitle = stringResource(R.string.app_and_hermes_core_versions),
                 icon = Icons.Default.Info,
                 onClick = { onOpen(SettingsSection.ABOUT) },
             ),
             DomainSpec(
-                title = t("Storage", "فضای ذخیره\u200Cسازی"),
-                subtitle = t("Find and clear leftover files", "پیدا و پاک کردن فایل\u200Cهای اضافه"),
+                title = stringResource(R.string.storage),
+                subtitle = stringResource(R.string.find_and_clear_leftover_files),
                 icon = Icons.Default.DataUsage,
                 onClick = onNavigateToStorage,
             ),

@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -39,7 +40,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 
 /**
  * Native-Compose markdown renderer for Hermes assistant/tool output.
@@ -83,7 +84,7 @@ fun HermesMarkdown(
         color = MaterialTheme.colorScheme.onSurface,
     ),
     linkColor: Color = MaterialTheme.colorScheme.primary,
-    persianDigits: Boolean = t("en", "fa") == "fa",
+    persianDigits: Boolean = stringResource(R.string.ui_language) == "fa",
 ) {
     val parser = remember { IncrementalMdParser() }
     val blocks = remember(markdown) { footnotesLast(parser.parse(markdown)) }

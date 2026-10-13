@@ -42,11 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
@@ -106,20 +108,20 @@ fun McpScreen(
     var removing by remember { mutableStateOf<String?>(null) }
 
     HermesScaffold(
-        title = t("MCP Servers", "سرورهای MCP"),
+        title = stringResource(R.string.mcp_servers),
         subtitle = if (state.servers.isEmpty()) null else {
-            t("${state.servers.size} configured", "${state.servers.size} سرور")
+            stringResource(R.string.configured, state.servers.size)
         },
         onBack = onNavigateBack,
         actions = {
             IconButton(onClick = { viewModel.load(force = true) }, enabled = !state.isBusy) {
-                Icon(Icons.Default.Refresh, contentDescription = t("Refresh", "تازه‌سازی"))
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
             }
         },
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
             FloatingActionButton(onClick = { adding = true }) {
-                Icon(Icons.Default.Add, contentDescription = t("Add server", "افزودن سرور"))
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_server))
             }
         },
     ) { padding ->
@@ -139,14 +141,11 @@ fun McpScreen(
             state.signingIn?.let { name ->
                 item { SignInBanner(name, onCancel = viewModel::cancelSignIn) }
             }
-            item { SectionHeader(t("Your servers", "سرورهای شما")) }
+            item { SectionHeader(stringResource(R.string.your_servers)) }
             if (state.servers.isEmpty()) {
                 item {
                     Text(
-                        t(
-                            "No MCP servers yet. Add one from the catalog below or with +.",
-                            "هنوز سرور MCP نداری. از کاتالوگ پایین یا دکمهٔ + اضافه کن.",
-                        ),
+                        stringResource(R.string.no_mcp_servers_yet_add_one_from_the),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = HxSpace.screen),
@@ -174,7 +173,7 @@ fun McpScreen(
                 }
             }
             if (state.catalog.isNotEmpty()) {
-                item { SectionHeader(t("Catalog", "کاتالوگ")) }
+                item { SectionHeader(stringResource(R.string.catalog)) }
                 item {
                     SettingsGroup {
                         state.catalog.forEachIndexed { index, entry ->
@@ -187,7 +186,7 @@ fun McpScreen(
                                 trailing = {
                                     if (entry.installed) {
                                         Text(
-                                            t("Added", "اضافه شده"),
+                                            stringResource(R.string.added),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.outline,
                                         )
@@ -201,7 +200,7 @@ fun McpScreen(
                                                 }
                                             },
                                             enabled = !state.isBusy,
-                                        ) { Text(t("Add", "افزودن")) }
+                                        ) { Text(stringResource(R.string.add)) }
                                     }
                                 },
                             )
@@ -262,20 +261,17 @@ fun McpScreen(
     removing?.let { name ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text(t("Remove server?", "سرور حذف شود؟")) },
+            title = { Text(stringResource(R.string.remove_server)) },
             text = {
-                Text(t(
-                    "\"$name\" will be removed from config.yaml.",
-                    "«$name» از config.yaml حذف می‌شود.",
-                ))
+                Text(stringResource(R.string.will_be_removed_from_config_yaml, name))
             },
             confirmButton = {
                 TextButton(onClick = { removing = null; viewModel.remove(name) }) {
-                    Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { removing = null }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -291,14 +287,11 @@ private fun SignInBanner(name: String, onCancel: () -> Unit) {
         ) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             Text(
-                t(
-                    "Finish signing in to $name in your browser, then come back.",
-                    "ورود به $name رو توی مرورگر تموم کن و برگرد.",
-                ),
+                stringResource(R.string.finish_signing_in_to_in_your_browser, name),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onCancel) { Text(t("Cancel", "انصراف")) }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel_2)) }
         }
     }
 }
@@ -310,18 +303,18 @@ private fun statusText(server: McpServer, status: McpStatus, probe: McpProbe?): 
         val prompts = probe?.prompts ?: 0
         val resources = probe?.resources ?: 0
         buildList {
-            add(t("$tools tools", "$tools ابزار"))
-            if (prompts > 0) add(t("$prompts prompts", "$prompts پرامپت"))
-            if (resources > 0) add(t("$resources resources", "$resources منبع"))
-        }.joinToString(t(", ", "، "))
+            add(stringResource(R.string.tools_2, tools))
+            if (prompts > 0) add(stringResource(R.string.prompts, prompts))
+            if (resources > 0) add(stringResource(R.string.resources, resources))
+        }.joinToString(stringResource(R.string.text_2))
     }
-    McpStatus.PROBING -> t("Connecting…", "در حال اتصال…")
-    McpStatus.NEEDS_AUTH -> t("Sign-in needed", "نیاز به ورود")
-    McpStatus.ERROR -> t("Error", "خطا")
-    McpStatus.OFF -> t("Off", "خاموش")
+    McpStatus.PROBING -> stringResource(R.string.connecting_2)
+    McpStatus.NEEDS_AUTH -> stringResource(R.string.sign_in_needed)
+    McpStatus.ERROR -> stringResource(R.string.error)
+    McpStatus.OFF -> stringResource(R.string.off)
     McpStatus.UNKNOWN -> when (server.runtimeStatus) {
-        "connected" -> t("Loaded · ${server.runtimeTools ?: 0} tools", "لود شده · ${server.runtimeTools ?: 0} ابزار")
-        "failed" -> t("Failed to load", "لود نشد")
+        "connected" -> stringResource(R.string.loaded_tools, server.runtimeTools ?: 0)
+        "failed" -> stringResource(R.string.failed_to_load)
         else -> null
     }
 }
@@ -364,7 +357,7 @@ private fun ServerDialog(
                 }
                 server.plugin?.let {
                     Text(
-                        t("Provided by the plugin $it", "از افزونهٔ $it"),
+                        stringResource(R.string.provided_by_the_plugin, it),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -384,23 +377,23 @@ private fun ServerDialog(
                     onClick = onTest,
                     enabled = !busy && status != McpStatus.PROBING,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(t("Test connection", "تست اتصال")) }
+                ) { Text(stringResource(R.string.test_connection)) }
                 if (server.canSignIn(status) || (server.auth == "oauth" && server.plugin == null)) {
                     OutlinedButton(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Sign in", "ورود"))
+                        Text(stringResource(R.string.sign_in))
                     }
                 }
                 if (server.plugin == null) {
                     OutlinedButton(onClick = onApiKey, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Set API key", "تنظیم کلید API"))
+                        Text(stringResource(R.string.set_api_key))
                     }
                     OutlinedButton(onClick = onRemove, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(t("Close", "بستن")) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
     )
 }
 
@@ -418,20 +411,20 @@ private fun AddServerDialog(
     val valid = name.isNotBlank() && if (byUrl) url.isNotBlank() else command.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("Add MCP server", "افزودن سرور MCP")) },
+        title = { Text(stringResource(R.string.add_mcp_server)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                    FilterChip(selected = byUrl, onClick = { byUrl = true }, label = { Text(t("URL", "آدرس")) })
-                    FilterChip(selected = !byUrl, onClick = { byUrl = false }, label = { Text(t("Command", "فرمان")) })
+                    FilterChip(selected = byUrl, onClick = { byUrl = true }, label = { Text(stringResource(R.string.url)) })
+                    FilterChip(selected = !byUrl, onClick = { byUrl = false }, label = { Text(stringResource(R.string.command)) })
                 }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.replace(" ", "_") },
-                    label = { Text(t("Name", "نام")) },
+                    label = { Text(stringResource(R.string.name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -439,7 +432,7 @@ private fun AddServerDialog(
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
-                        label = { Text(t("Server URL", "آدرس سرور")) },
+                        label = { Text(stringResource(R.string.server_url)) },
                         placeholder = { Text("https://example.com/mcp") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -448,7 +441,7 @@ private fun AddServerDialog(
                     OutlinedTextField(
                         value = token,
                         onValueChange = { token = it },
-                        label = { Text(t("Bearer token (optional)", "توکن Bearer (اختیاری)")) },
+                        label = { Text(stringResource(R.string.bearer_token_optional)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -458,7 +451,7 @@ private fun AddServerDialog(
                     OutlinedTextField(
                         value = command,
                         onValueChange = { command = it },
-                        label = { Text(t("Command", "فرمان")) },
+                        label = { Text(stringResource(R.string.command)) },
                         placeholder = { Text("npx") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -466,7 +459,7 @@ private fun AddServerDialog(
                     OutlinedTextField(
                         value = args,
                         onValueChange = { args = it },
-                        label = { Text(t("Arguments", "آرگومان‌ها")) },
+                        label = { Text(stringResource(R.string.arguments)) },
                         placeholder = { Text("-y @modelcontextprotocol/server-memory") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -478,9 +471,9 @@ private fun AddServerDialog(
             TextButton(
                 onClick = { onAdd(name, if (byUrl) url else "", if (byUrl) "" else command, args, token) },
                 enabled = valid,
-            ) { Text(t("Add", "افزودن")) }
+            ) { Text(stringResource(R.string.add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "انصراف")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) } },
     )
 }
 
@@ -500,7 +493,7 @@ private fun CatalogKeysDialog(
                 verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 Text(
-                    t("This server needs these keys:", "این سرور این کلیدها رو لازم داره:"),
+                    stringResource(R.string.this_server_needs_these_keys),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 entry.requires.forEach { key ->
@@ -517,9 +510,9 @@ private fun CatalogKeysDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onAdd(values.toMap()) }) { Text(t("Add", "افزودن")) }
+            TextButton(onClick = { onAdd(values.toMap()) }) { Text(stringResource(R.string.add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "انصراف")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) } },
     )
 }
 
@@ -533,13 +526,13 @@ private fun ApiKeyDialog(
     var envVar by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("API key for $name", "کلید API برای $name")) },
+        title = { Text(stringResource(R.string.api_key_for_2, name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
-                    label = { Text(t("Key", "کلید")) },
+                    label = { Text(stringResource(R.string.key)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -548,7 +541,7 @@ private fun ApiKeyDialog(
                 OutlinedTextField(
                     value = envVar,
                     onValueChange = { envVar = it.uppercase().replace(' ', '_') },
-                    label = { Text(t("Variable name (optional)", "نام متغیر (اختیاری)")) },
+                    label = { Text(stringResource(R.string.variable_name_optional)) },
                     // Hermes' default name (mcp_config._env_key_for_server).
                     placeholder = { Text("MCP_${name.uppercase().replace(Regex("[^A-Za-z0-9_]"), "_").trim('_')}_API_KEY") },
                     singleLine = true,
@@ -558,9 +551,9 @@ private fun ApiKeyDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(value, envVar) }, enabled = value.isNotBlank()) {
-                Text(t("Save", "ذخیره"))
+                Text(stringResource(R.string.save))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "انصراف")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) } },
     )
 }

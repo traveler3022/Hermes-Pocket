@@ -30,9 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
@@ -67,15 +68,15 @@ internal fun AdvancedSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = t("Environment Variables (.env)", "متغیرهای محیطی (.env)"),
+                        text = stringResource(R.string.environment_variables_env),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     TextButton(onClick = { editingEnv = !editingEnv }) {
-                        Text(if (editingEnv) t("Close", "بستن") else t("Edit", "ویرایش"))
+                        Text(if (editingEnv) stringResource(R.string.close) else stringResource(R.string.edit))
                     }
                 }
                 Text(
-                    text = t("~/.hermes/.env — API keys and other env vars", "~/.hermes/.env — کلیدهای API و سایر متغیرها"),
+                    text = stringResource(R.string.hermes_env_api_keys_and_other_env_vars),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -91,10 +92,7 @@ internal fun AdvancedSection(
                 ) {
                     Text("\u26A0\uFE0F", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = t(
-                            "Advanced setting. If you don't know what this does, don't touch it — a bad edit here can break the agent or the whole system.",
-                            "تنظیمات پیشرفته. اگه نمی‌دونی این چیه، دستش نزن — یه ویرایش اشتباه اینجا می‌تونه ایجنت یا کل سیستم رو خراب کنه.",
-                        ),
+                        text = stringResource(R.string.advanced_setting_if_you_dont_know_what),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.weight(1f),
@@ -119,12 +117,12 @@ internal fun AdvancedSection(
                         OutlinedButton(
                             onClick = { viewModel.reloadEnv() },
                             modifier = Modifier.weight(1f),
-                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        ) { Text(stringResource(R.string.reload)) }
                         if (envText != state.envText) {
                             Button(
                                 onClick = { viewModel.saveEnvFile(envText) },
                                 modifier = Modifier.weight(1f),
-                            ) { Text(t("Save", "ذخیره")) }
+                            ) { Text(stringResource(R.string.save)) }
                         }
                     }
                 }
@@ -147,15 +145,15 @@ internal fun AdvancedSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = t("MCP Servers", "سرورهای MCP"),
+                        text = stringResource(R.string.mcp_servers),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     TextButton(onClick = { editingMcp = !editingMcp }) {
-                        Text(if (editingMcp) t("Close", "بستن") else t("Edit", "ویرایش"))
+                        Text(if (editingMcp) stringResource(R.string.close) else stringResource(R.string.edit))
                     }
                 }
                 Text(
-                    text = t("Raw JSON — config.yaml's mcp_servers section", "JSON خام — بخش mcp_servers فایل config.yaml"),
+                    text = stringResource(R.string.raw_json_config_yamls_mcp_servers),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -171,10 +169,7 @@ internal fun AdvancedSection(
                 ) {
                     Text("\u26A0\uFE0F", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = t(
-                            "Advanced setting. Invalid JSON here will fail to save; a wrong server entry can stop MCP tools from loading.",
-                            "تنظیمات پیشرفته. JSON نامعتبر ذخیره نمی‌شه؛ یه ورودی اشتباه می‌تونه باعث بشه ابزارهای MCP لود نشن.",
-                        ),
+                        text = stringResource(R.string.advanced_setting_invalid_json_here_will),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.weight(1f),
@@ -199,12 +194,12 @@ internal fun AdvancedSection(
                         OutlinedButton(
                             onClick = { viewModel.reloadMcp() },
                             modifier = Modifier.weight(1f),
-                        ) { Text(t("Reload", "بارگذاری مجدد")) }
+                        ) { Text(stringResource(R.string.reload)) }
                         if (mcpText != state.mcpServersText) {
                             Button(
                                 onClick = { viewModel.saveMcpServers(mcpText) },
                                 modifier = Modifier.weight(1f),
-                            ) { Text(t("Save", "ذخیره")) }
+                            ) { Text(stringResource(R.string.save)) }
                         }
                     }
                 }
@@ -213,7 +208,7 @@ internal fun AdvancedSection(
         }
 
         Text(
-            text = t("Command Console", "کنسول فرمان"),
+            text = stringResource(R.string.command_console),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -226,10 +221,7 @@ internal fun AdvancedSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = t(
-                        "Run one-off shell commands on the server — for diagnostics without SSH.",
-                        "اجرای فرمان‌های تکی روی سرور — برای عیب‌یابی بدون SSH.",
-                    ),
+                    text = stringResource(R.string.run_one_off_shell_commands_on_the_server),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -297,19 +289,19 @@ internal fun AdvancedSection(
                                 strokeWidth = 2.dp,
                             )
                         } else {
-                            Text(t("Run", "اجرا"))
+                            Text(stringResource(R.string.run))
                         }
                     }
                     OutlinedButton(
                         onClick = { viewModel.stopProcesses() },
                         modifier = Modifier.weight(1f),
-                    ) { Text(t("Stop processes", "توقف فرایندها")) }
+                    ) { Text(stringResource(R.string.stop_processes)) }
                 }
             }
         }
 
         Text(
-            text = t("Gateway Log", "لاگ گیت\u200Cوی"),
+            text = stringResource(R.string.gateway_log),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -322,16 +314,13 @@ internal fun AdvancedSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = t(
-                        "Live server stderr — fills in as events arrive while the app is open.",
-                        "stderr زندهٔ سرور — تا وقتی برنامه باز است با رسیدن رویدادها پر می‌شود.",
-                    ),
+                    text = stringResource(R.string.live_server_stderr_fills_in_as_events),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
                 if (state.gatewayLog.isEmpty()) {
                     Text(
-                        text = t("No log lines yet", "هنوز خطی نرسیده"),
+                        text = stringResource(R.string.no_log_lines_yet),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -352,7 +341,7 @@ internal fun AdvancedSection(
         }
 
         Text(
-            text = t("Connection Log", "لاگ اتصال"),
+            text = stringResource(R.string.connection_log),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -365,14 +354,7 @@ internal fun AdvancedSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = t(
-                        "Every connect, drop and retry, with what the phone was doing at the " +
-                            "time — kept on disk across restarts. Copy this when reporting a " +
-                            "dropped connection.",
-                        "هر اتصال، قطعی و تلاش دوباره، همراه با وضعیت گوشی در همان لحظه — روی " +
-                            "حافظه می‌ماند و با بسته شدن برنامه پاک نمی‌شود. موقع گزارش قطعی، " +
-                            "همین را کپی کنید.",
-                    ),
+                    text = stringResource(R.string.every_connect_drop_and_retry_with_what),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -400,21 +382,21 @@ internal fun AdvancedSection(
                         },
                         enabled = state.connectionJournal.isNotEmpty(),
                         modifier = Modifier.weight(1f),
-                    ) { Text(t("Copy", "کپی")) }
+                    ) { Text(stringResource(R.string.copy)) }
                     OutlinedButton(
                         onClick = { viewModel.loadConnectionJournal() },
                         modifier = Modifier.weight(1f),
-                    ) { Text(t("Refresh", "تازه‌سازی")) }
+                    ) { Text(stringResource(R.string.refresh)) }
                     OutlinedButton(
                         onClick = { viewModel.clearConnectionJournal() },
                         modifier = Modifier.weight(1f),
-                    ) { Text(t("Clear", "پاک کردن")) }
+                    ) { Text(stringResource(R.string.clear)) }
                 }
             }
         }
 
         Text(
-            text = t("Current Configuration", "پیکربندی فعلی"),
+            text = stringResource(R.string.current_configuration),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp),
         )

@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.Mic
 import com.hermes.android.ui.icons.filled.Stop
@@ -52,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxSoftShadow
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.i18n.SlashCommandDescriptions
@@ -81,8 +82,8 @@ internal fun InputBar(
     // microphone permission here. No language is asked for: the recognizer uses the
     // one the user set on the phone. What was said lands in the box to check before sending.
     val context = LocalContext.current
-    val speechPrompt = t("Speak", "صحبت کن")
-    val noSpeech = t("Speech recognition isn't available on this phone", "تشخیص گفتار روی این گوشی در دسترس نیست")
+    val speechPrompt = stringResource(R.string.speak)
+    val noSpeech = stringResource(R.string.speech_recognition_isnt_available_on)
     val voiceInput = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -117,7 +118,7 @@ internal fun InputBar(
     }
     val commandList = slashCommands.ifEmpty { fallbackCommands }
     // Hermes describes its commands in English only; Persian comes from the app.
-    val persianDescriptions = t("en", "fa") == "fa"
+    val persianDescriptions = stringResource(R.string.ui_language) == "fa"
     // Only while the command name is being typed: past the first space it is the argument.
     val showSuggestions = text.startsWith("/") && text.none { it == ' ' || it == '\n' } && !isSending
     val suggestions = remember(text, commandList) {
@@ -214,7 +215,7 @@ internal fun InputBar(
                 value = text,
                 onValueChange = onTextChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(t("Ask Hermes", "از هرمس بپرس")) },
+                placeholder = { Text(stringResource(R.string.ask_hermes)) },
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -240,7 +241,7 @@ internal fun InputBar(
                     } else {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = t("Attach file", "پیوست فایل"),
+                            contentDescription = stringResource(R.string.attach_file),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -273,7 +274,7 @@ internal fun InputBar(
                         ) {
                             Icon(
                                 HxIcons.GitBranch,
-                                contentDescription = t("Steer the agent", "هدایت عامل"),
+                                contentDescription = stringResource(R.string.steer_the_agent),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -283,7 +284,7 @@ internal fun InputBar(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
-                                contentDescription = t("Send now (interrupts current reply)", "ارسال الان (پاسخ فعلی رو قطع می‌کنه)"),
+                                contentDescription = stringResource(R.string.send_now_interrupts_current_reply),
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -294,7 +295,7 @@ internal fun InputBar(
                     ) {
                         Icon(
                             Icons.Default.Stop,
-                            contentDescription = t("Stop", "توقف"),
+                            contentDescription = stringResource(R.string.stop),
                             tint = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -305,7 +306,7 @@ internal fun InputBar(
                     ) {
                         Icon(
                             Icons.Default.Mic,
-                            contentDescription = t("Voice input", "ورودی صوتی"),
+                            contentDescription = stringResource(R.string.voice_input),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -320,7 +321,7 @@ internal fun InputBar(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
-                            contentDescription = t("Send", "ارسال"),
+                            contentDescription = stringResource(R.string.send),
                         )
                     }
                 }

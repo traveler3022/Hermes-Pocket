@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.ExpandLess
 import com.hermes.android.ui.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.hxSoftShadow
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @Composable
@@ -84,7 +85,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                 )
                 if (message.isRunning) {
                     Text(
-                        text = t("Running...", "در حال اجرا..."),
+                        text = stringResource(R.string.running_5),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
@@ -108,7 +109,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = t("Arguments", "آرگومان‌ها"),
+                        text = stringResource(R.string.arguments),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
@@ -155,7 +156,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (resultExpanded) t("Collapse", "جمع کردن") else t("Show more", "بیشتر"),
+                            text = if (resultExpanded) stringResource(R.string.collapse) else stringResource(R.string.show_more_2),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }

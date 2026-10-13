@@ -27,17 +27,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.session.CheckpointDiff
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChangesViewModel
 
 /**
@@ -84,11 +85,11 @@ fun ChangesSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(t("Changes", "تغییرات"), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.changes), style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = { viewModel.undoLastTurn() }) {
                     Icon(HxIcons.Undo, contentDescription = null, modifier = Modifier.height(18.dp))
                     Spacer(Modifier.height(0.dp))
-                    Text(t("Undo last turn", "واگرد آخرین نوبت"))
+                    Text(stringResource(R.string.undo_last_turn))
                 }
             }
 
@@ -105,11 +106,8 @@ fun ChangesSheet(
                 uiState.isLoading -> LoadingRow()
                 uiState.checkpoints.isEmpty() -> HermesEmptyState(
                     icon = HxIcons.Undo,
-                    title = t("No checkpoints yet", "هنوز هیچ چک‌پوینتی نیست"),
-                    caption = t(
-                        "Checkpoints appear here after the agent edits files",
-                        "بعد از این‌که ایجنت فایلی رو ویرایش کنه، چک‌پوینت‌ها اینجا میان",
-                    ),
+                    title = stringResource(R.string.no_checkpoints_yet),
+                    caption = stringResource(R.string.checkpoints_appear_here_after_the_agent),
                 )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
@@ -165,17 +163,17 @@ private fun DiffView(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = diff.rendered ?: diff.diff.ifBlank { t("No changes", "بدون تغییر") },
+                text = diff.rendered ?: diff.diff.ifBlank { stringResource(R.string.no_changes) },
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier.padding(HxSpace.md).heightIn(max = 320.dp),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-            TextButton(onClick = onBack) { Text(t("Back", "بازگشت")) }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
             TextButton(
                 onClick = { onRestore(hash) },
                 enabled = !isRestoring,
-            ) { Text(if (isRestoring) t("Restoring…", "در حال بازگردانی…") else t("Restore this version", "بازگردانی به این نسخه")) }
+            ) { Text(if (isRestoring) stringResource(R.string.restoring) else stringResource(R.string.restore_this_version)) }
         }
     }
 }

@@ -34,6 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.History
 import com.hermes.android.ui.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -71,7 +73,6 @@ import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxGradientActionPill
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SessionActivity
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.ui.viewmodel.TodoItemUi
@@ -99,7 +100,7 @@ internal fun AgentTodoCard(todos: List<TodoItemUi>) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = t("Tasks", "کارها") + " $done/${todos.size}",
+                    text = stringResource(R.string.tasks) + " $done/${todos.size}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )

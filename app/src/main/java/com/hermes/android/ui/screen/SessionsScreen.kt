@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
@@ -65,7 +67,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatTile
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.BulkDelete
 import com.hermes.android.ui.viewmodel.CleanupKind
 import com.hermes.android.ui.viewmodel.HistoryMessage
@@ -123,16 +124,16 @@ fun SessionsScreen(
     if (uiState.showDeleteConfirm != null) {
         AlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
-            title = { Text(t("Delete session", "حذف گفتگو")) },
-            text = { Text(t("Are you sure you want to delete this session?", "آیا از حذف این گفتگو مطمئنید؟")) },
+            title = { Text(stringResource(R.string.delete_session)) },
+            text = { Text(stringResource(R.string.are_you_sure_you_want_to_delete_this)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.executeDelete() }) {
-                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDelete() }) {
-                    Text(t("Cancel", "انصراف"))
+                    Text(stringResource(R.string.cancel_2))
                 }
             },
         )
@@ -142,13 +143,13 @@ fun SessionsScreen(
         var newTitle by remember(renameState) { mutableStateOf(renameState.currentTitle) }
         AlertDialog(
             onDismissRequest = { viewModel.hideRenameDialog() },
-            title = { Text(t("Rename session", "تغییر نام گفتگو")) },
+            title = { Text(stringResource(R.string.rename_session)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = newTitle,
                         onValueChange = { newTitle = it },
-                        label = { Text(t("Title", "عنوان")) },
+                        label = { Text(stringResource(R.string.title)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -160,7 +161,7 @@ fun SessionsScreen(
                                 }
                             },
                         ) {
-                            Text(t("Suggest title", "پیشنهاد عنوان"))
+                            Text(stringResource(R.string.suggest_title))
                         }
                     }
                 }
@@ -170,12 +171,12 @@ fun SessionsScreen(
                     onClick = { viewModel.renameSession(renameState.sessionId, newTitle) },
                     enabled = newTitle.isNotBlank(),
                 ) {
-                    Text(t("Save", "ذخیره"))
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideRenameDialog() }) {
-                    Text(t("Cancel", "انصراف"))
+                    Text(stringResource(R.string.cancel_2))
                 }
             },
         )
@@ -185,28 +186,25 @@ fun SessionsScreen(
         val count = pending.ids.size
         AlertDialog(
             onDismissRequest = { viewModel.cancelBulkDelete() },
-            title = { Text(t("Delete $count chats?", "$count گفتگو حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_chats, count)) },
             text = {
                 Text(
                     when (pending) {
-                        is BulkDelete.Selected -> t("The selected chats will be deleted for good.", "گفتگوهای انتخاب‌شده برای همیشه حذف می‌شوند.")
+                        is BulkDelete.Selected -> stringResource(R.string.the_selected_chats_will_be_deleted_for)
                         is BulkDelete.Cleanup -> when (val kind = pending.kind) {
-                            CleanupKind.Empty -> t("Chats with no messages will be deleted. Pinned chats stay.", "گفتگوهای بدون پیام حذف می‌شوند. گفتگوهای سنجاق‌شده می‌مانند.")
-                            is CleanupKind.OlderThan -> t(
-                                "Chats started more than ${kind.days} days ago will be deleted for good. Pinned chats stay.",
-                                "گفتگوهایی که بیش از ${kind.days} روز پیش شروع شده‌اند برای همیشه حذف می‌شوند. گفتگوهای سنجاق‌شده می‌مانند.",
-                            )
+                            CleanupKind.Empty -> stringResource(R.string.chats_with_no_messages_will_be_deleted)
+                            is CleanupKind.OlderThan -> stringResource(R.string.chats_started_more_than_days_ago_will_be, kind.days)
                         }
                     },
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.executeBulkDelete() }) {
-                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.cancelBulkDelete() }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { viewModel.cancelBulkDelete() }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -217,12 +215,12 @@ fun SessionsScreen(
         val valid = days.toIntOrNull()?.takeIf { it > 0 }
         AlertDialog(
             onDismissRequest = { askOlderThan = false },
-            title = { Text(t("Delete old chats", "حذف گفتگوهای قدیمی")) },
+            title = { Text(stringResource(R.string.delete_old_chats)) },
             text = {
                 OutlinedTextField(
                     value = days,
                     onValueChange = { value -> days = value.filter { it.isDigit() }.take(4) },
-                    label = { Text(t("Older than (days)", "قدیمی‌تر از (روز)")) },
+                    label = { Text(stringResource(R.string.older_than_days)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -232,10 +230,10 @@ fun SessionsScreen(
                 TextButton(
                     onClick = { valid?.let { viewModel.askCleanup(CleanupKind.OlderThan(it)) }; askOlderThan = false },
                     enabled = valid != null,
-                ) { Text(t("Next", "بعدی")) }
+                ) { Text(stringResource(R.string.next_2)) }
             },
             dismissButton = {
-                TextButton(onClick = { askOlderThan = false }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { askOlderThan = false }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -249,14 +247,14 @@ fun SessionsScreen(
     HermesScaffold(
         title = if (inHistoryDetail) {
             uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
-                ?: t("Session history", "تاریخچه گفتگو")
+                ?: stringResource(R.string.session_history)
         } else if (uiState.isSelecting) {
-            t("${uiState.selectedIds.size} selected", "${uiState.selectedIds.size} انتخاب‌شده")
+            stringResource(R.string.count_selected, uiState.selectedIds.size)
         } else {
-            t("Sessions", "گفتگوها")
+            stringResource(R.string.sessions)
         },
         subtitle = if (inHistoryDetail || uiState.isSelecting) null else {
-            t("${uiState.sessions.size} conversations", "${uiState.sessions.size} گفتگو")
+            stringResource(R.string.conversations, uiState.sessions.size)
         },
         onBack = {
             when {
@@ -270,10 +268,10 @@ fun SessionsScreen(
                 inHistoryDetail -> Unit
                 uiState.isSelecting -> {
                     TextButton(onClick = { viewModel.selectAll(visibleSessions(uiState).mapTo(linkedSetOf()) { it.id }) }) {
-                        Text(t("All", "همه"))
+                        Text(stringResource(R.string.all))
                     }
                     IconButton(onClick = { viewModel.askBulkDelete() }, enabled = uiState.selectedIds.isNotEmpty()) {
-                        Icon(Icons.Default.Delete, contentDescription = t("Delete selected", "حذف انتخاب‌شده‌ها"))
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_selected))
                     }
                 }
                 else -> SortMenu(uiState, viewModel, onDeleteOld = { askOlderThan = true })
@@ -312,17 +310,17 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDel
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.SwapVert, contentDescription = t("Sort", "مرتب‌سازی"))
+            Icon(Icons.Default.SwapVert, contentDescription = stringResource(R.string.sort))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text(t("Refresh sessions", "به‌روزرسانی گفتگوها")) },
+                text = { Text(stringResource(R.string.refresh_sessions)) },
                 onClick = { viewModel.loadSessions(); expanded = false },
             )
             listOf(
-                SessionSortOrder.NEWEST_FIRST to t("Newest first", "جدیدترین"),
-                SessionSortOrder.OLDEST_FIRST to t("Oldest first", "قدیمی‌ترین"),
-                SessionSortOrder.NAME_AZ to t("Name A-Z", "نام الف-ی"),
+                SessionSortOrder.NEWEST_FIRST to stringResource(R.string.newest_first),
+                SessionSortOrder.OLDEST_FIRST to stringResource(R.string.oldest_first),
+                SessionSortOrder.NAME_AZ to stringResource(R.string.name_a_z),
             ).forEach { (order, label) ->
                 DropdownMenuItem(
                     text = {
@@ -341,16 +339,16 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDel
             if (state.sessions.isNotEmpty()) {
                 HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text(t("Select chats", "انتخاب گفتگوها")) },
+                    text = { Text(stringResource(R.string.select_chats)) },
                     onClick = { viewModel.toggleSelecting(); expanded = false },
                 )
                 DropdownMenuItem(
-                    text = { Text(t("Delete empty chats", "حذف گفتگوهای خالی")) },
+                    text = { Text(stringResource(R.string.delete_empty_chats)) },
                     onClick = { viewModel.askCleanup(CleanupKind.Empty); expanded = false },
                     enabled = !state.isDeletingBulk,
                 )
                 DropdownMenuItem(
-                    text = { Text(t("Delete old chats…", "حذف گفتگوهای قدیمی…")) },
+                    text = { Text(stringResource(R.string.delete_old_chats_2)) },
                     onClick = { onDeleteOld(); expanded = false },
                     enabled = !state.isDeletingBulk,
                 )
@@ -364,17 +362,14 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDel
 @Composable
 private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
     if (state.isLoadingSessions) {
-        LoadingIndicator(t("Loading sessions...", "در حال بارگذاری گفتگوها..."))
+        LoadingIndicator(stringResource(R.string.loading_sessions))
         return
     }
     if (state.sessions.isEmpty()) {
         HermesEmptyState(
             icon = Icons.Default.Forum,
-            title = t("No sessions yet", "هنوز گفتگویی وجود ندارد"),
-            caption = t(
-                "Conversations you start with the agent will show up here",
-                "گفتگوهایی که با ایجنت شروع کنی اینجا نمایش داده می‌شن",
-            ),
+            title = stringResource(R.string.no_sessions_yet),
+            caption = stringResource(R.string.conversations_you_start_with_the_agent),
         )
         return
     }
@@ -389,12 +384,12 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
-            placeholder = { Text(t("Search sessions...", "جستجوی گفتگوها...")) },
+            placeholder = { Text(stringResource(R.string.search_sessions)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
             trailingIcon = {
                 if (state.searchQuery.isNotEmpty()) {
                     IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                        Icon(Icons.Default.Close, contentDescription = t("Clear", "پاک کردن"), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear), modifier = Modifier.size(18.dp))
                     }
                 }
             },
@@ -403,10 +398,7 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
         )
         if (state.searchQuery.isNotBlank()) {
             Text(
-                text = t(
-                    "${displaySessions.size} of ${state.sessions.size} sessions",
-                    "${displaySessions.size} از ${state.sessions.size} گفتگو",
-                ),
+                text = stringResource(R.string.of_sessions, displaySessions.size, state.sessions.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
@@ -423,9 +415,9 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
             state.insights?.let { ins ->
                 item(key = "insights") {
                     Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                        StatTile(value = "${ins.sessions}", label = t("sessions", "گفتگو"))
-                        StatTile(value = "${ins.messages}", label = t("messages", "پیام"))
-                        StatTile(value = "${ins.days}", label = t("days", "روز"))
+                        StatTile(value = "${ins.sessions}", label = stringResource(R.string.sessions_3))
+                        StatTile(value = "${ins.messages}", label = stringResource(R.string.messages))
+                        StatTile(value = "${ins.days}", label = stringResource(R.string.days_2))
                     }
                     Spacer(Modifier.height(HxSpace.xs))
                 }
@@ -508,7 +500,7 @@ private fun SessionRow(
                     if (isPinned) {
                         Icon(
                             Icons.Default.PushPin,
-                            contentDescription = t("Pinned", "سنجاق‌شده"),
+                            contentDescription = stringResource(R.string.pinned),
                             modifier = Modifier.size(13.dp).padding(end = 0.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -533,7 +525,7 @@ private fun SessionRow(
                     )
                 }
                 Text(
-                    text = "${session.messageCount} ${t("messages", "پیام")} · ${dateFormat.format(Date(session.updatedAt))}",
+                    text = "${session.messageCount} ${stringResource(R.string.messages)} · ${dateFormat.format(Date(session.updatedAt))}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 3.dp),
@@ -544,7 +536,7 @@ private fun SessionRow(
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         Icons.Default.MoreVert,
-                        contentDescription = t("Options", "گزینه‌ها"),
+                        contentDescription = stringResource(R.string.options),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp),
                     )
@@ -554,23 +546,23 @@ private fun SessionRow(
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text(t("View history", "مشاهده تاریخچه")) },
+                        text = { Text(stringResource(R.string.view_history)) },
                         onClick = { viewModel.loadSessionHistory(session.id); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (isPinned) t("Unpin", "برداشتن سنجاق") else t("Pin", "سنجاق")) },
+                        text = { Text(if (isPinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) },
                         onClick = { viewModel.togglePin(session.id); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Rename", "تغییر نام")) },
+                        text = { Text(stringResource(R.string.rename)) },
                         onClick = { viewModel.showRenameDialog(session.id, session.title); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Share / Export", "اشتراک‌گذاری / خروجی")) },
+                        text = { Text(stringResource(R.string.share_export)) },
                         onClick = { viewModel.shareSession(session.id); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = { viewModel.confirmDelete(session.id); menuExpanded = false },
                     )
                 }

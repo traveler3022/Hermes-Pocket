@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +61,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
@@ -69,7 +71,6 @@ import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.GroupChatViewModel
 import com.hermes.android.ui.viewmodel.GroupMentions
 import com.hermes.android.ui.viewmodel.GroupNote
@@ -119,25 +120,25 @@ fun GroupChatScreen(
 
     val members = state.room?.members.orEmpty()
     HermesScaffold(
-        title = state.room?.name ?: t("Group chat", "گفتگوی گروهی"),
+        title = state.room?.name ?: stringResource(R.string.group_chat),
         subtitle = members.takeIf { it.isNotEmpty() }?.joinToString("، ") { it.title },
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
         actions = {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = t("More", "بیشتر"))
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text(t("Rename group", "تغییر نام گروه")) },
+                        text = { Text(stringResource(R.string.rename_group)) },
                         onClick = {
                             menuOpen = false
                             renaming = true
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Delete group", "حذف گروه"), color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.delete_group), color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             menuOpen = false
                             confirmDelete = true
@@ -164,10 +165,7 @@ fun GroupChatScreen(
                 } else if (state.rows.isEmpty()) {
                     item {
                         Text(
-                            t(
-                                "Write to the group. Everyone answers, or only the members you @mention.",
-                                "به گروه پیام بده. همه جواب می‌دهند، یا فقط عضوهایی که با @ صدا بزنی.",
-                            ),
+                            stringResource(R.string.write_to_the_group_everyone_answers_or),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -198,18 +196,15 @@ fun GroupChatScreen(
             }
             state.retryTaskIds.firstOrNull()?.let { taskId ->
                 ActionStrip(
-                    text = t(
-                        "A reply was cut off before it finished. Run that turn again?",
-                        "یک جواب نیمه‌کاره ماند. آن نوبت دوباره اجرا شود؟",
-                    ),
-                    action = t("Try again", "دوباره"),
+                    text = stringResource(R.string.a_reply_was_cut_off_before_it_finished),
+                    action = stringResource(R.string.try_again),
                     onAction = { viewModel.retry(taskId) },
                 )
             }
             if (state.discussing) {
                 ActionStrip(
-                    text = t("The group is discussing…", "گروه در حال گفت‌وگو است…"),
-                    action = t("Stop", "توقف"),
+                    text = stringResource(R.string.the_group_is_discussing),
+                    action = stringResource(R.string.stop),
                     progress = true,
                     onAction = viewModel::stop,
                 )
@@ -246,7 +241,7 @@ fun GroupChatScreen(
                 OutlinedTextField(
                     value = state.input,
                     onValueChange = viewModel::updateInput,
-                    placeholder = { Text(t("Message the group", "پیام به گروه")) },
+                    placeholder = { Text(stringResource(R.string.message_the_group)) },
                     maxLines = 6,
                     shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.weight(1f),
@@ -258,7 +253,7 @@ fun GroupChatScreen(
                     if (state.isSending) {
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t("Send", "ارسال"))
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send))
                     }
                 }
             }
@@ -269,7 +264,7 @@ fun GroupChatScreen(
         var name by remember { mutableStateOf(state.room?.name.orEmpty()) }
         AlertDialog(
             onDismissRequest = { renaming = false },
-            title = { Text(t("Rename group", "تغییر نام گروه")) },
+            title = { Text(stringResource(R.string.rename_group)) },
             text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
             confirmButton = {
                 TextButton(
@@ -278,30 +273,27 @@ fun GroupChatScreen(
                         viewModel.rename(name)
                     },
                     enabled = name.isNotBlank(),
-                ) { Text(t("Save", "ذخیره")) }
+                ) { Text(stringResource(R.string.save)) }
             },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(t("Delete this group?", "این گروه حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_this_group)) },
             text = {
                 Text(
-                    t(
-                        "Its conversation is deleted from Hermes. The profiles themselves stay.",
-                        "گفتگوی آن از هرمس پاک می‌شود. خود پروفایل‌ها می‌مانند.",
-                    )
+                    stringResource(R.string.its_conversation_is_deleted_from_hermes)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.delete()
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     fullscreenImageUrl?.let { imageUrl ->
@@ -414,34 +406,34 @@ private fun MemberContent(
                     val name = block.file.substringAfterLast('/')
                     ArtifactCard(
                         emoji = "\uD83D\uDCC4", name = name,
-                        actionLabel = t("Open", "باز کردن"),
+                        actionLabel = stringResource(R.string.open),
                         onAction = { FileViewerActivity.open(context, url, name) },
                         onDownload = { onDownloadFile(url, name) },
                     )
                 }
                 is ContentBlock.Video -> ArtifactCard(
                     emoji = "\uD83C\uDFAC", name = block.name,
-                    actionLabel = t("Play", "پخش"),
+                    actionLabel = stringResource(R.string.play),
                     onAction = { FileViewerActivity.open(context, block.url, block.name) },
                     onDownload = { onDownloadFile(block.url, block.name) },
                 )
                 is ContentBlock.Audio -> ArtifactCard(
                     emoji = "\uD83C\uDFB5", name = block.name,
-                    actionLabel = t("Play", "پخش"),
+                    actionLabel = stringResource(R.string.play),
                     onAction = { FileViewerActivity.open(context, block.url, block.name) },
                     onDownload = { onDownloadFile(block.url, block.name) },
                 )
                 is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
                     ArtifactCard(
                         emoji = "\uD83D\uDCC4", name = block.name,
-                        actionLabel = t("Download", "دانلود"),
+                        actionLabel = stringResource(R.string.download),
                         onAction = { onDownloadFile(block.url, block.name) },
                         onDownload = null,
                     )
                 } else {
                     ArtifactCard(
                         emoji = "\uD83D\uDCC4", name = block.name,
-                        actionLabel = t("Open", "باز کردن"),
+                        actionLabel = stringResource(R.string.open),
                         onAction = { FileViewerActivity.open(context, block.url, block.name) },
                         onDownload = { onDownloadFile(block.url, block.name) },
                     )
@@ -454,16 +446,10 @@ private fun MemberContent(
 @Composable
 private fun NoteRow(note: GroupNote) {
     val text = when (note) {
-        is GroupNote.Failed -> t(
-            "${note.member} couldn't reply: ${note.error}",
-            "${note.member} نتوانست جواب بدهد: ${note.error}",
-        )
-        is GroupNote.Waiting -> t("${note.member}'s turn is on hold.", "نوبت ${note.member} معطل مانده.")
-        GroupNote.Stopped -> t("Stopped.", "متوقف شد.")
-        GroupNote.Capped -> t(
-            "That message reached the group's reply limit. Send another to continue.",
-            "این پیام به سقف جواب‌های گروه رسید. برای ادامه یک پیام دیگر بفرست.",
-        )
+        is GroupNote.Failed -> stringResource(R.string.couldnt_reply, note.member, note.error)
+        is GroupNote.Waiting -> stringResource(R.string.s_turn_is_on_hold, note.member)
+        GroupNote.Stopped -> stringResource(R.string.stopped)
+        GroupNote.Capped -> stringResource(R.string.that_message_reached_the_groups_reply)
     }
     Text(
         text,
@@ -509,7 +495,7 @@ private fun ApprovalCard(
     ) {
         Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
             Text(
-                t("$memberName wants to run:", "$memberName می‌خواهد این را اجرا کند:"),
+                stringResource(R.string.wants_to_run, memberName),
                 style = MaterialTheme.typography.labelLarge,
             )
             if (approval.command.isNotBlank()) {
@@ -528,8 +514,8 @@ private fun ApprovalCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                OutlinedButton(onClick = { onAnswer(false) }) { Text(t("Deny", "رد")) }
-                Button(onClick = { onAnswer(true) }) { Text(t("Allow once", "یک بار اجازه")) }
+                OutlinedButton(onClick = { onAnswer(false) }) { Text(stringResource(R.string.deny)) }
+                Button(onClick = { onAnswer(true) }) { Text(stringResource(R.string.allow_once_2)) }
             }
         }
     }

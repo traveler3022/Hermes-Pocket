@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.domain.session.TaskHistoryRow
 import com.hermes.android.domain.session.TaskRow
 import com.hermes.android.ui.icons.filled.Stop
@@ -60,7 +62,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.TasksViewModel
 
 
@@ -103,9 +104,9 @@ fun TasksScreen(
     }
 
     HermesScaffold(
-        title = t("Task Desk", "میز کار"),
+        title = stringResource(R.string.task_desk),
         subtitle = uiState.tasks.count { it.isRunning }.takeIf { it > 0 }?.let { running ->
-            t("$running running", "$running در حال اجرا")
+            stringResource(R.string.running_4, running)
         },
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
@@ -113,7 +114,7 @@ fun TasksScreen(
             ExtendedFloatingActionButton(
                 onClick = { showNewTaskDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(t("New task", "تسک جدید")) },
+                text = { Text(stringResource(R.string.new_task_2)) },
             )
         },
     ) { padding ->
@@ -122,12 +123,12 @@ fun TasksScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text(t("Live", "زنده")) },
+                    text = { Text(stringResource(R.string.live)) },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text(t("History", "تاریخچه")) },
+                    text = { Text(stringResource(R.string.history)) },
                 )
             }
 
@@ -204,12 +205,9 @@ private fun LiveTab(
         uiState.isLoading && uiState.tasks.isEmpty() -> LoadingBox()
         uiState.tasks.isEmpty() -> HermesEmptyState(
             icon = Icons.Default.WorkOutline,
-            title = t("No live tasks", "تسک زنده‌ای نیست"),
-            caption = t(
-                "Hand the agent a job and walk away — it keeps running on the server and you get notified when it's done",
-                "کار رو به ایجنت بسپر و برو — روی سرور ادامه می‌ده و وقتی تموم شد خبرت می‌کنه",
-            ),
-            actionLabel = t("Start a task", "شروع یک تسک"),
+            title = stringResource(R.string.no_live_tasks),
+            caption = stringResource(R.string.hand_the_agent_a_job_and_walk_away_it),
+            actionLabel = stringResource(R.string.start_a_task),
             onAction = onStart,
         )
         else -> LazyColumn(
@@ -235,11 +233,8 @@ private fun HistoryTab(
         uiState.isLoadingHistory && uiState.history.isEmpty() -> LoadingBox()
         uiState.history.isEmpty() -> HermesEmptyState(
             icon = Icons.Default.WorkOutline,
-            title = t("No finished tasks yet", "هنوز تسک تمام‌شده‌ای نیست"),
-            caption = t(
-                "Tasks you delegate show up here once they finish",
-                "تسک‌هایی که واگذار می‌کنی بعد از پایان اینجا میان",
-            ),
+            title = stringResource(R.string.no_finished_tasks_yet),
+            caption = stringResource(R.string.tasks_you_delegate_show_up_here_once),
         )
         else -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -261,10 +256,10 @@ private fun HistoryTab(
                                 modifier = Modifier.weight(1f),
                             )
                             IconButton(onClick = { onOpenResult(row) }) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = t("View result", "دیدن نتیجه"))
+                                Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.view_result))
                             }
                             IconButton(onClick = { onOpenInChat(row) }) {
-                                Icon(Icons.Default.Refresh, contentDescription = t("Continue in chat", "ادامه در چت"))
+                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.continue_in_chat))
                             }
                         }
                         if (row.preview.isNotBlank()) {

@@ -49,11 +49,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.R
 import com.hermes.android.ui.design.HxIcons
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 import kotlinx.coroutines.delay
 
@@ -384,10 +385,7 @@ internal fun HxThinkingTrace(
             // The tool cards live in the sheet now, so the line has to say
             // what is running — otherwise a long tool looks like a hang.
             runningTool != null -> HxShimmerText(
-                text = t(
-                    "Using ${runningTool.toolName}…",
-                    "در حال استفاده از ${runningTool.toolName}…",
-                ),
+                text = stringResource(R.string.using, runningTool.toolName),
             )
 
             !isStreaming -> Text(
@@ -402,7 +400,7 @@ internal fun HxThinkingTrace(
 
             preview.isNotEmpty() -> HxStatusLine(text = preview)
 
-            else -> HxShimmerText(text = t("Thinking", "در حال فکر کردن"))
+            else -> HxShimmerText(text = stringResource(R.string.thinking_3))
         }
     }
 
@@ -428,13 +426,13 @@ internal fun HxThinkingTrace(
 @Composable
 private fun doneLabel(elapsedSeconds: Long?, toolCount: Int): String {
     val thought = elapsedSeconds
-        ?.let { t("Thought for ${it}s", "$it ثانیه فکر کرد") }
-        ?: t("Thoughts", "افکار")
+        ?.let { stringResource(R.string.thought_for_s, it) }
+        ?: stringResource(R.string.thoughts)
     if (toolCount == 0) return thought
     val tools = if (toolCount == 1) {
-        t("1 tool", "۱ ابزار")
+        stringResource(R.string.s_1_tool)
     } else {
-        t("$toolCount tools", "$toolCount ابزار")
+        stringResource(R.string.tools_2, toolCount)
     }
     return "$thought · $tools"
 }
@@ -492,7 +490,7 @@ private fun HxReasoningTimeline(
         if (isComplete) {
             HxTimelineRow(
                 title = doneLabel(elapsedSeconds, toolCount),
-                detail = t("Done", "تمام"),
+                detail = stringResource(R.string.done_2),
                 isLast = rows.isEmpty(),
                 icon = HxIcons.CircleCheck,
             )

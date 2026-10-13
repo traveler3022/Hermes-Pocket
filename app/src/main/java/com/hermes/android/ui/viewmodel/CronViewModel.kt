@@ -2,10 +2,12 @@ package com.hermes.android.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +35,7 @@ import kotlinx.serialization.json.contentOrNull
 @HiltViewModel
 class CronViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val blueprints: CronBlueprints,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CronUiState())
@@ -235,6 +238,67 @@ class CronViewModel @Inject constructor(
         }
     }
 
+    // ── Blueprints: ready-made jobs from Hermes' catalog ──────────────────
+
+    /** Opens the template list; loads it the first time (and after a failed load). */
+    fun openBlueprints() {
+        _uiState.value = _uiState.value.copy(showBlueprints = true)
+        if (_uiState.value.blueprints.isEmpty() && !_uiState.value.blueprintsLoading) loadBlueprints()
+    }
+
+    fun closeBlueprints() {
+        _uiState.value = _uiState.value.copy(showBlueprints = false)
+    }
+
+    fun loadBlueprints() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(blueprintsLoading = true, blueprintsError = null)
+            try {
+                val list = blueprints.list()
+                _uiState.value = _uiState.value.copy(blueprints = list, blueprintsLoading = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Cron] Blueprints failed to load")
+                _uiState.value = _uiState.value.copy(
+                    blueprintsLoading = false,
+                    blueprintsError = e.message ?: e.javaClass.simpleName,
+                )
+            }
+        }
+    }
+
+    fun pickBlueprint(blueprint: CronBlueprints.Blueprint?) {
+        _uiState.value = _uiState.value.copy(activeBlueprint = blueprint, blueprintError = null)
+    }
+
+    /** Creates the job; on success closes the form and the list and reloads the jobs. */
+    fun createFromBlueprint(key: String, values: Map<String, String>) {
+        if (_uiState.value.creatingFromBlueprint) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(creatingFromBlueprint = true, blueprintError = null)
+            try {
+                blueprints.create(key, values)
+                Timber.i("[Cron] Job created from blueprint $key")
+                _uiState.value = _uiState.value.copy(
+                    creatingFromBlueprint = false,
+                    activeBlueprint = null,
+                    showBlueprints = false,
+                )
+                loadJobs()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Cron] Blueprint $key refused")
+                // Shown inside the form: it is usually a value to fix (a malformed time).
+                _uiState.value = _uiState.value.copy(
+                    creatingFromBlueprint = false,
+                    blueprintError = e.message ?: e.javaClass.simpleName,
+                )
+            }
+        }
+    }
+
     fun showCreateDialog() {
         _uiState.value = _uiState.value.copy(showCreateDialog = true)
     }
@@ -254,6 +318,15 @@ data class CronUiState(
     val errorMessage: String? = null,
     val showCreateDialog: Boolean = false,
     val editingJob: CronJob? = null,
+    val showBlueprints: Boolean = false,
+    val blueprints: List<CronBlueprints.Blueprint> = emptyList(),
+    val blueprintsLoading: Boolean = false,
+    val blueprintsError: String? = null,
+    /** The blueprint whose form is open. */
+    val activeBlueprint: CronBlueprints.Blueprint? = null,
+    val creatingFromBlueprint: Boolean = false,
+    /** Why the server refused the form's values. */
+    val blueprintError: String? = null,
 )
 
 data class CronJob(

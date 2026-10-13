@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
@@ -54,7 +56,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SkillItem
 import com.hermes.android.ui.viewmodel.SkillsViewModel
 
@@ -93,7 +94,7 @@ fun SkillsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissInspect() }) { Text(t("Close", "بستن")) }
+                TextButton(onClick = { viewModel.dismissInspect() }) { Text(stringResource(R.string.close)) }
             },
         )
     }
@@ -101,20 +102,17 @@ fun SkillsScreen(
     uiState.pendingDeleteSkill?.let { name ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelDeleteSkill() },
-            title = { Text(t("Delete skill?", "مهارت حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_skill)) },
             text = {
-                Text(t(
-                    "\"$name\" and its folder in ~/.hermes/skills will be deleted.",
-                    "«$name» و پوشه‌اش در ~/.hermes/skills حذف می‌شود.",
-                ))
+                Text(stringResource(R.string.and_its_folder_in_hermes_skills_will_be, name))
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmDeleteSkill() }) {
-                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.cancelDeleteSkill() }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { viewModel.cancelDeleteSkill() }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -131,13 +129,13 @@ fun SkillsScreen(
         val isNew = uiState.editingSkillOriginalName == null
         AlertDialog(
             onDismissRequest = { viewModel.dismissSkillEditor() },
-            title = { Text(if (isNew) t("New Skill", "مهارت جدید") else t("Edit Skill", "ویرایش مهارت")) },
+            title = { Text(if (isNew) stringResource(R.string.new_skill) else stringResource(R.string.edit_skill)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                     OutlinedTextField(
                         value = nameField,
                         onValueChange = { nameField = it },
-                        label = { Text(t("Name", "نام")) },
+                        label = { Text(stringResource(R.string.name)) },
                         singleLine = true,
                         enabled = isNew,
                         modifier = Modifier.fillMaxWidth(),
@@ -148,7 +146,7 @@ fun SkillsScreen(
                         OutlinedTextField(
                             value = contentField,
                             onValueChange = { contentField = it },
-                            label = { Text(t("Content (Markdown)", "محتوا (مارک‌داون)")) },
+                            label = { Text(stringResource(R.string.content_markdown)) },
                             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             minLines = 6,
                             // Bounded, so a long skill scrolls inside the field instead of
@@ -162,26 +160,26 @@ fun SkillsScreen(
                 TextButton(
                     onClick = { viewModel.saveSkill(nameField, contentField) },
                     enabled = nameField.isNotBlank(),
-                ) { Text(t("Save", "ذخیره")) }
+                ) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissSkillEditor() }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { viewModel.dismissSkillEditor() }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
 
     HermesScaffold(
-        title = t("Skills", "مهارت‌ها"),
+        title = stringResource(R.string.skills),
         subtitle = if (uiState.skills.isEmpty()) null else {
-            t("${uiState.skills.size} installed", "${uiState.skills.size} نصب‌شده")
+            stringResource(R.string.installed_2, uiState.skills.size)
         },
         onBack = onNavigateBack,
         actions = {
             IconButton(onClick = { viewModel.reloadSkills() }) {
-                Icon(Icons.Default.Refresh, contentDescription = t("Reload", "بارگذاری مجدد"))
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reload))
             }
             IconButton(onClick = { viewModel.startNewSkill() }) {
-                Icon(Icons.Default.Add, contentDescription = t("New skill", "مهارت جدید"))
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_skill_2))
             }
         },
         snackbarHostState = snackbarHostState,
@@ -199,7 +197,7 @@ fun SkillsScreen(
                     searchQuery = it
                     viewModel.searchSkills(it)
                 },
-                placeholder = { Text(t("Search skills...", "جستجوی مهارت‌ها...")) },
+                placeholder = { Text(stringResource(R.string.search_skills)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -217,7 +215,7 @@ fun SkillsScreen(
                     CircularProgressIndicator()
                     Spacer(Modifier.height(HxSpace.sm))
                     Text(
-                        t("Loading skills…", "در حال بارگذاری مهارت‌ها…"),
+                        stringResource(R.string.loading_skills),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -225,12 +223,9 @@ fun SkillsScreen(
 
                 uiState.skills.isEmpty() -> HermesEmptyState(
                     icon = Icons.Default.AutoAwesome,
-                    title = t("No skills available", "مهارتی موجود نیست"),
-                    caption = t(
-                        "Skills teach the agent new abilities — search the hub or create one",
-                        "مهارت‌ها توانایی‌های جدید به ایجنت یاد می‌دن — از مخزن جستجو کن یا خودت بساز",
-                    ),
-                    actionLabel = t("New skill", "مهارت جدید"),
+                    title = stringResource(R.string.no_skills_available),
+                    caption = stringResource(R.string.skills_teach_the_agent_new_abilities),
+                    actionLabel = stringResource(R.string.new_skill_2),
                     onAction = { viewModel.startNewSkill() },
                 )
 
@@ -265,24 +260,24 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                 IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.MoreVert,
-                        contentDescription = t("Options", "گزینه‌ها"),
+                        contentDescription = stringResource(R.string.options),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(18.dp),
                     )
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     DropdownMenuItem(
-                        text = { Text(t("Edit", "ویرایش")) },
+                        text = { Text(stringResource(R.string.edit)) },
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                         onClick = { viewModel.startEditSkill(skill.name); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Install from hub", "نصب از مخزن")) },
+                        text = { Text(stringResource(R.string.install_from_hub)) },
                         leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
                         onClick = { viewModel.installSkill(skill.name); menuExpanded = false },
                     )
                     DropdownMenuItem(
-                        text = { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Delete,

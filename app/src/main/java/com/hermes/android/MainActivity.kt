@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -32,7 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.LocalAppLanguage
+import com.hermes.android.ui.i18n.ProvideAppLanguage
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint
@@ -84,7 +83,7 @@ class MainActivity : ComponentActivity() {
         val appLanguageState = AppLanguageState(this)
 
         setContent {
-            CompositionLocalProvider(LocalAppLanguage provides appLanguageState.language) {
+            ProvideAppLanguage(appLanguageState.language) {
                 Hermes2Theme(
                     themeMode = themeModeState.mode,
                     colorTheme = themeModeState.colorTheme,

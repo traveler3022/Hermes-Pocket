@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -81,7 +83,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -98,7 +99,7 @@ internal fun MemorySection(
     viewModel: ConfigViewModel,
 ) {
     if (state.isLoadingMemory) {
-        LoadingIndicator(t("Loading memory...", "در حال بارگذاری حافظه..."))
+        LoadingIndicator(stringResource(R.string.loading_memory))
         return
     }
     Column(
@@ -114,11 +115,11 @@ internal fun MemorySection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = t("Memory files", "فایل‌های حافظه"),
+                text = stringResource(R.string.memory_files),
                 style = MaterialTheme.typography.titleMedium,
             )
             TextButton(onClick = { viewModel.loadMemory() }) {
-                Text(t("Refresh", "بارگذاری مجدد"))
+                Text(stringResource(R.string.refresh_2))
             }
         }
         MemoryFileCard(
@@ -135,6 +136,7 @@ internal fun MemorySection(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         )
+        MemoryProvidersPanel(onBuiltInReset = { viewModel.loadMemory() })
     }
 }
 
@@ -147,8 +149,8 @@ internal fun MemoryFileCard(
     contentColor: androidx.compose.ui.graphics.Color,
 ) {
     val displayText = content
-        .ifBlank { t("Memory has not been created yet", "حافظه هنوز ساخته نشده") }
-        .replace("(not found)", t("Memory has not been created yet", "حافظه هنوز ساخته نشده"))
+        .ifBlank { stringResource(R.string.memory_has_not_been_created_yet) }
+        .replace("(not found)", stringResource(R.string.memory_has_not_been_created_yet))
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),

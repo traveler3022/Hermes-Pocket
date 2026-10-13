@@ -53,6 +53,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
@@ -137,7 +139,6 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -176,11 +177,11 @@ internal fun ConnectionIndicator(
     }
 
     val (color, label) = when (state) {
-        ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to t("● Connected", "● متصل")
-        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to t("◌ Connecting...", "◌ در حال اتصال...")
-        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to t("↻ Reconnecting...", "↻ اتصال دوباره...")
-        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to t("○ Tap to Connect", "○ برای اتصال لمس کنید")
-        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to t("✕ Connection Error", "✕ خطای اتصال")
+        ChatConnectionState.Connected -> MaterialTheme.colorScheme.primary to stringResource(R.string.connected)
+        ChatConnectionState.Connecting -> MaterialTheme.colorScheme.tertiary to stringResource(R.string.connecting)
+        ChatConnectionState.Reconnecting -> MaterialTheme.colorScheme.tertiary to stringResource(R.string.reconnecting)
+        ChatConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to stringResource(R.string.tap_to_connect)
+        ChatConnectionState.Failed -> MaterialTheme.colorScheme.error to stringResource(R.string.connection_error)
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -233,15 +234,9 @@ private fun StartupProgressIndicator(
         null
     }
     val label = when {
-        reconnecting -> t(
-            "Reconnecting… ${elapsedSeconds}s",
-            "در حال اتصال دوباره… ${elapsedSeconds} ثانیه",
-        )
-        bootEstimateMs > 0L && elapsedMs < bootEstimateMs -> t(
-            "Starting Hermes… ${elapsedSeconds}s of about ${bootEstimateMs / 1000}s",
-            "در حال آماده‌سازی Hermes… ${elapsedSeconds} از حدود ${bootEstimateMs / 1000} ثانیه",
-        )
-        else -> t("Starting Hermes… ${elapsedSeconds}s", "در حال آماده‌سازی Hermes… ${elapsedSeconds} ثانیه")
+        reconnecting -> stringResource(R.string.reconnecting_s, elapsedSeconds)
+        bootEstimateMs > 0L && elapsedMs < bootEstimateMs -> stringResource(R.string.starting_hermes_s_of_about_s, elapsedSeconds, bootEstimateMs / 1000)
+        else -> stringResource(R.string.starting_hermes_s, elapsedSeconds)
     }
 
     Card(
@@ -320,10 +315,10 @@ internal fun ConnectionRetryBanner(
     onRetry: () -> Unit,
 ) {
     val (title, subtitle) = when (state) {
-        ChatConnectionState.Failed -> t("Connection Failed", "اتصال ناموفق") to
-                t("Could not connect to Hermes gateway", "اتصال به گیت‌وی هرمس ممکن نیست")
-        ChatConnectionState.Disconnected -> t("Disconnected", "قطع شده") to
-                t("Not connected to Hermes gateway", "به گیت‌وی هرمس متصل نیست")
+        ChatConnectionState.Failed -> stringResource(R.string.connection_failed) to
+                stringResource(R.string.could_not_connect_to_hermes_gateway)
+        ChatConnectionState.Disconnected -> stringResource(R.string.disconnected) to
+                stringResource(R.string.not_connected_to_hermes_gateway)
         else -> return
     }
 
@@ -359,7 +354,7 @@ internal fun ConnectionRetryBanner(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(t("Reconnect", "اتصال دوباره"))
+                Text(stringResource(R.string.reconnect))
             }
         }
     }

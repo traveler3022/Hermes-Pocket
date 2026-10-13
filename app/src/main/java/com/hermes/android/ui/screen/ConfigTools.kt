@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -82,7 +84,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -105,37 +106,34 @@ internal fun ToolsTab(
     SettingsFolder {
         SettingsCardGroup {
             SettingsNavRow(
-                title = t("Toolsets", "گروه\u200Cهای ابزار"),
+                title = stringResource(R.string.toolsets),
                 subtitle = if (state.availableTools.isNotEmpty()) {
                     val enabled = state.availableTools.count { it.enabled }
-                    t(
-                        "$enabled of ${state.availableTools.size} on",
-                        "$enabled از ${state.availableTools.size} فعال",
-                    )
+                    stringResource(R.string.of_on, enabled, state.availableTools.size)
                 } else {
-                    t("Enable or disable tools", "فعال/غیرفعال کردن ابزارها")
+                    stringResource(R.string.enable_or_disable_tools)
                 },
                 icon = Icons.Default.Build,
                 onClick = { onOpen(SettingsSection.TOOLSETS) },
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("Plugins", "افزونه\u200Cها"),
-                subtitle = t("Install and manage plugins", "نصب و مدیریت افزونه\u200Cها"),
+                title = stringResource(R.string.plugins),
+                subtitle = stringResource(R.string.install_and_manage_plugins),
                 icon = Icons.Default.Extension,
                 onClick = onNavigateToPlugins,
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("Skills", "مهارت\u200Cها"),
-                subtitle = t("Browse and manage skills", "مرور و مدیریت مهارت\u200Cها"),
+                title = stringResource(R.string.skills),
+                subtitle = stringResource(R.string.browse_and_manage_skills),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToSkills,
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("MCP Servers", "سرورهای MCP"),
-                subtitle = t("Catalog, sign-in and connection tests", "کاتالوگ، ورود و تست اتصال"),
+                title = stringResource(R.string.mcp_servers),
+                subtitle = stringResource(R.string.catalog_sign_in_and_connection_tests),
                 icon = Icons.Default.Dns,
                 onClick = onNavigateToMcp,
             )
@@ -150,7 +148,7 @@ internal fun ToolsetsSection(
     viewModel: ConfigViewModel,
 ) {
     if (state.isLoadingTools) {
-        LoadingIndicator(t("Loading tools…", "در حال بارگذاری ابزارها…"))
+        LoadingIndicator(stringResource(R.string.loading_tools))
         return
     }
 

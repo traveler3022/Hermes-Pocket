@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.DesktopWindows
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Inventory2
@@ -60,14 +62,8 @@ fun LinuxToolsScreen(
     // The package list is a page of its own inside this screen; back returns here.
     var showPackages by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = showPackages) { showPackages = false }
-    val desktopNotInstalled = t(
-        "Install “Browser & desktop (VNC)” from Packages first.",
-        "اول بستهٔ «مرورگر و دسکتاپ (VNC)» را از «بسته‌ها» نصب کنید.",
-    )
-    val filesUnavailable = t(
-        "No Files app found. Open your file manager and pick “Hermes”.",
-        "برنامهٔ Files پیدا نشد. فایل‌منیجر گوشی را باز کنید و «Hermes» را انتخاب کنید.",
-    )
+    val desktopNotInstalled = stringResource(R.string.install_browser_desktop_vnc_from)
+    val filesUnavailable = stringResource(R.string.no_files_app_found_open_your_file)
 
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(state.error) {
@@ -78,12 +74,12 @@ fun LinuxToolsScreen(
     }
 
     HermesScaffold(
-        title = if (showPackages) t("Packages", "بسته‌ها") else t("Linux", "لینوکس"),
+        title = if (showPackages) stringResource(R.string.packages) else stringResource(R.string.linux),
         onBack = { if (showPackages) showPackages = false else onNavigateBack() },
         snackbarHostState = snackbarHostState,
         actions = {
             IconButton(onClick = viewModel::refresh, enabled = !state.checking) {
-                Icon(Icons.Default.Refresh, contentDescription = t("Refresh", "بازخوانی"))
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_3))
             }
         },
     ) { padding ->
@@ -96,10 +92,7 @@ fun LinuxToolsScreen(
         ) {
             if (!state.rootfsInstalled) {
                 Text(
-                    text = t(
-                        "The built-in Linux runtime is not installed yet. Install it from the setup wizard.",
-                        "محیط لینوکس داخلی هنوز نصب نشده است. آن را از «راه‌اندازی اولیه» نصب کنید.",
-                    ),
+                    text = stringResource(R.string.the_built_in_linux_runtime_is_not),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),
                 )
@@ -113,25 +106,22 @@ fun LinuxToolsScreen(
             Spacer(Modifier.height(12.dp))
             SettingsGroup {
                 SettingRow(
-                    title = t("Terminal", "ترمینال"),
-                    subtitle = t("Shell inside the built-in Linux", "شل داخل لینوکس داخلی"),
+                    title = stringResource(R.string.terminal),
+                    subtitle = stringResource(R.string.shell_inside_the_built_in_linux),
                     icon = Icons.Default.Terminal,
                     onClick = onOpenTerminal,
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("Files", "فایل‌ها"),
-                    subtitle = t("Browse Linux files in Android's Files app", "مرور فایل‌های لینوکس در برنامهٔ Files اندروید"),
+                    title = stringResource(R.string.files),
+                    subtitle = stringResource(R.string.browse_linux_files_in_androids_files_app),
                     icon = Icons.Default.Folder,
                     onClick = { if (!openLinuxFiles(context, viewModel.linuxFiles)) viewModel.showMessage(filesUnavailable) },
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("Browser & desktop", "مرورگر و دسکتاپ"),
-                    subtitle = t(
-                        "The Chromium the agent browses with, on a VNC screen",
-                        "همان Chromium که عامل با آن کار می‌کند، روی یک صفحهٔ VNC",
-                    ),
+                    title = stringResource(R.string.browser_desktop),
+                    subtitle = stringResource(R.string.the_chromium_the_agent_browses_with_on_a),
                     icon = Icons.Default.DesktopWindows,
                     onClick = {
                         if (state.installed[LinuxTools.DesktopProfileId] == false) {
@@ -143,11 +133,8 @@ fun LinuxToolsScreen(
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("Packages", "بسته‌ها"),
-                    subtitle = t(
-                        "${state.installed.count { it.value == true }} of ${viewModel.profiles.size} installed",
-                        "${state.installed.count { it.value == true }} از ${viewModel.profiles.size} نصب شده",
-                    ),
+                    title = stringResource(R.string.packages),
+                    subtitle = stringResource(R.string.of_installed, state.installed.count { it.value == true }, viewModel.profiles.size),
                     icon = Icons.Default.Inventory2,
                     onClick = { showPackages = true },
                 )
@@ -172,14 +159,14 @@ private fun PackagesPage(state: LinuxToolsUiState, viewModel: LinuxToolsViewMode
                         state.installing == profile.id || (installed == null && state.checking) ->
                             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         installed == true -> Text(
-                            t("Installed", "نصب شده"),
+                            stringResource(R.string.installed),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         else -> TextButton(
                             onClick = { viewModel.install(profile) },
                             enabled = state.installing == null,
-                        ) { Text(t("Install", "نصب")) }
+                        ) { Text(stringResource(R.string.install)) }
                     }
                 },
             )
@@ -187,7 +174,7 @@ private fun PackagesPage(state: LinuxToolsUiState, viewModel: LinuxToolsViewMode
     }
 
     if (state.log.isNotEmpty()) {
-        SectionHeader(t("Install output", "خروجی نصب"))
+        SectionHeader(stringResource(R.string.install_output))
         SettingsGroup {
             Text(
                 text = state.log.joinToString("\n"),

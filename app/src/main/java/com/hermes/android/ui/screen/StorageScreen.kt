@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +93,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.storage.JunkKind
 import com.hermes.android.ui.component.CacheChart
 import com.hermes.android.ui.component.CacheChartColors
@@ -100,7 +102,6 @@ import com.hermes.android.ui.component.CacheChartState
 import com.hermes.android.ui.component.EaseOutQuint
 import com.hermes.android.ui.component.roundPercents
 import com.hermes.android.ui.design.HermesScaffold
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.ExpandMore
 import com.hermes.android.ui.viewmodel.StorageEvent
@@ -186,16 +187,16 @@ private fun formatPercent(k: Float): String {
 
 @Composable
 private fun kindTitle(kind: JunkKind): String = when (kind) {
-    JunkKind.Photos -> t("Photos", "عکس‌ها")
-    JunkKind.Videos -> t("Videos", "ویدیوها")
-    JunkKind.Documents -> t("Documents", "اسناد")
-    JunkKind.Audio -> t("Audio", "صدا")
-    JunkKind.Temp -> t("Temporary files", "فایل‌های موقت")
-    JunkKind.Browser -> t("Browser cache", "کش مرورگر")
-    JunkKind.Packages -> t("Package cache", "کش بسته‌ها")
-    JunkKind.AppCache -> t("App cache", "کش برنامه")
-    JunkKind.Other -> t("Miscellaneous", "متفرقه")
-    JunkKind.Logs -> t("Logs", "لاگ‌ها")
+    JunkKind.Photos -> stringResource(R.string.photos)
+    JunkKind.Videos -> stringResource(R.string.videos)
+    JunkKind.Documents -> stringResource(R.string.documents)
+    JunkKind.Audio -> stringResource(R.string.audio)
+    JunkKind.Temp -> stringResource(R.string.temporary_files)
+    JunkKind.Browser -> stringResource(R.string.browser_cache)
+    JunkKind.Packages -> stringResource(R.string.package_cache)
+    JunkKind.AppCache -> stringResource(R.string.app_cache)
+    JunkKind.Other -> stringResource(R.string.miscellaneous)
+    JunkKind.Logs -> stringResource(R.string.logs)
 }
 
 /**
@@ -223,11 +224,8 @@ fun StorageScreen(
     val picking = state.picked.isNotEmpty()
     BackHandler(enabled = picking) { viewModel.clearPicks() }
 
-    val freed = t("%s freed on your phone!", "%s از فضای گوشی آزاد شد!")
-    val busy = t(
-        "Hermes is installing or updating. Clear the storage when it's done.",
-        "هرمس در حال نصب یا به‌روزرسانی است. بعد از تمام شدنش پاک کنید.",
-    )
+    val freed = stringResource(R.string.s_freed_on_your_phone)
+    val busy = stringResource(R.string.hermes_is_installing_or_updating_clear)
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -260,8 +258,8 @@ fun StorageScreen(
 
     HermesScaffold(
         title = when {
-            picking -> t("${state.picked.size} selected", "${state.picked.size} مورد انتخاب شد")
-            showTitle -> t("Storage Usage", "مصرف فضای ذخیره‌سازی")
+            picking -> stringResource(R.string.count_selected_2, state.picked.size)
+            showTitle -> stringResource(R.string.storage_usage)
             else -> ""
         },
         subtitle = if (picking) formatFileSize(state.pickedBytes) else null,
@@ -319,7 +317,7 @@ fun StorageScreen(
                     val kinds = row.kind?.let { setOf(it) } ?: otherKinds.toSet()
                     val selected = if (row.kind == null) otherSelected else row.kind in state.selected
                     SectionRowItem(
-                        title = row.kind?.let { kindTitle(it) } ?: t("Other", "سایر"),
+                        title = row.kind?.let { kindTitle(it) } ?: stringResource(R.string.other),
                         percent = row.percent,
                         size = row.size,
                         color = CacheChartColors[row.slot],
@@ -351,10 +349,10 @@ fun StorageScreen(
     }
 
     if (confirmClear) {
-        val buttonText = if (JunkKind.entries.all { it in state.selected }) t("Clear Cache", "پاک کردن همه") else t("Clear Selected", "پاک کردن انتخاب‌شده‌ها")
+        val buttonText = if (JunkKind.entries.all { it in state.selected }) stringResource(R.string.clear_cache) else stringResource(R.string.clear_selected)
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text(t("Clear Cache", "پاک کردن") + " (" + formatFileSize(state.selectedBytes) + ")") },
+            title = { Text(stringResource(R.string.clear_cache_2) + " (" + formatFileSize(state.selectedBytes) + ")") },
             text = { Text(storageInfo()) },
             confirmButton = {
                 TextButton(onClick = {
@@ -364,7 +362,7 @@ fun StorageScreen(
                 }) { Text(buttonText, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -373,13 +371,10 @@ fun StorageScreen(
         val count = state.picked.size
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(t("Delete files", "حذف فایل‌ها")) },
+            title = { Text(stringResource(R.string.delete_files)) },
             text = {
                 Text(
-                    t(
-                        "Delete $count files (${formatFileSize(state.pickedBytes)})? They can't be brought back.",
-                        "$count فایل (${formatFileSize(state.pickedBytes)}) برای همیشه پاک شوند؟ دیگر برنمی‌گردند.",
-                    ),
+                    stringResource(R.string.delete_files_they_cant_be_brought_back, count, formatFileSize(state.pickedBytes)),
                 )
             },
             confirmButton = {
@@ -387,10 +382,10 @@ fun StorageScreen(
                     confirmDelete = false
                     deleting = true
                     viewModel.deletePicked()
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -411,17 +406,12 @@ private fun DeletePickedButton(onClick: () -> Unit) {
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(t("Delete", "حذف"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+        Text(stringResource(R.string.delete), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
     }
 }
 
 @Composable
-private fun storageInfo(): String = t(
-    "Only files that come back on their own are cleared: caches, temporary files and logs. " +
-        "Chats, memories, keys, installed tools and your own files stay. Files used in the last hour are kept.",
-    "فقط چیزهایی پاک می‌شوند که خودشان دوباره ساخته می‌شوند: کش‌ها، فایل‌های موقت و لاگ‌ها. " +
-        "گفتگوها، حافظه، کلیدها، ابزارهای نصب‌شده و فایل‌های خودتان دست نمی‌خورند. فایل‌هایی که در یک ساعت اخیر استفاده شده‌اند می‌مانند.",
-)
+private fun storageInfo(): String = stringResource(R.string.only_files_that_come_back_on_their_own)
 
 /**
  * CacheChartHeader: the title, one of three subtitles, and a bar of the device — this app's
@@ -431,12 +421,9 @@ private fun storageInfo(): String = t(
 private fun ChartHeader(calculating: Boolean, hasCache: Boolean, percent: Float?, usedPercent: Float?) {
     val cleared = !calculating && !hasCache
     val subtitle = when {
-        calculating -> t("Calculating the size of leftover files…", "در حال محاسبهٔ حجم فایل‌های اضافه…")
-        cleared -> t(
-            "Caches come back on their own when Hermes needs them again.",
-            "کش‌ها هر وقت هرمس لازمشان داشته باشد خودشان دوباره ساخته می‌شوند.",
-        )
-        else -> t("Hermes uses %s of your phone's storage.", "هرمس %s از فضای گوشی را گرفته است.").format(formatPercent(percent ?: 0f))
+        calculating -> stringResource(R.string.calculating_the_size_of_leftover_files)
+        cleared -> stringResource(R.string.caches_come_back_on_their_own_when)
+        else -> stringResource(R.string.hermes_uses_s_of_your_phones_storage).format(formatPercent(percent ?: 0f))
     }
     val barAlpha by animateFloatAsState(if (cleared) 0f else 1f, tween(340, easing = EaseOutQuint), label = "barAlpha")
     val loading by animateFloatAsState(if (calculating || percent == null) 1f else 0f, tween(450, easing = EaseOutQuint), label = "loading")
@@ -451,7 +438,7 @@ private fun ChartHeader(calculating: Boolean, hasCache: Boolean, percent: Float?
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = if (cleared) t("Storage Cleared", "فضا آزاد شد") else t("Storage Usage", "مصرف فضای ذخیره‌سازی"),
+            text = if (cleared) stringResource(R.string.storage_cleared) else stringResource(R.string.storage_usage),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -668,7 +655,7 @@ private fun ClearCacheButton(allSelected: Boolean, size: Long, onClick: () -> Un
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (allSelected) t("Clear Cache", "پاک کردن همه") else t("Clear Selected", "پاک کردن انتخاب‌شده‌ها"),
+                text = if (allSelected) stringResource(R.string.clear_cache) else stringResource(R.string.clear_selected),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = onAccent,
@@ -747,17 +734,14 @@ private fun ClearingSheet(progress: Float, deleting: Boolean) {
                     }
                     Spacer(Modifier.height(30.dp))
                     Text(
-                        text = if (deleting) t("Deleting files…", "در حال حذف فایل‌ها…") else t("Clearing cache…", "در حال پاک کردن…"),
+                        text = if (deleting) stringResource(R.string.deleting_files) else stringResource(R.string.clearing_cache),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = t(
-                            "Please keep this window open while Hermes is clearing your storage.",
-                            "تا تمام شدن پاک‌سازی این صفحه را باز نگه دارید.",
-                        ),
+                        text = stringResource(R.string.please_keep_this_window_open_while),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface,

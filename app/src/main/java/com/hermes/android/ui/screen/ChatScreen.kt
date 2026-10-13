@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.ImageGallery
 import com.hermes.android.ui.component.parseContentBlocks
@@ -97,7 +99,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalFocusManager
 import coil.compose.AsyncImage
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
@@ -174,10 +175,7 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
-    val filesUnavailable = t(
-        "No Files app found. Open your file manager and pick “Hermes”.",
-        "برنامهٔ Files پیدا نشد. فایل‌منیجر گوشی را باز کنید و «Hermes» را انتخاب کنید.",
-    )
+    val filesUnavailable = stringResource(R.string.no_files_app_found_open_your_file)
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
@@ -495,22 +493,22 @@ fun ChatScreen(
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
                                     viewModel.drawerShowRename(target.id, target.title)
-                                }) { Text(t("Rename", "تغییر نام")) }
+                                }) { Text(stringResource(R.string.rename)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
                                     viewModel.drawerTogglePin(target.id)
-                                }) { Text(if (pinned) t("Unpin", "برداشتن سنجاق") else t("Pin", "سنجاق")) }
+                                }) { Text(if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
                                     viewModel.drawerShowDelete(target.id)
                                 }) {
-                                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         },
                         confirmButton = {},
                         dismissButton = {
-                            TextButton(onClick = { drawerMenuTarget = null }) { Text(t("Cancel", "لغو")) }
+                            TextButton(onClick = { drawerMenuTarget = null }) { Text(stringResource(R.string.cancel)) }
                         },
                     )
                 }
@@ -519,7 +517,7 @@ fun ChatScreen(
                 uiState.drawerRenameTarget?.let { rename ->
                     AlertDialog(
                         onDismissRequest = { viewModel.drawerHideRename() },
-                        title = { Text(t("Rename chat", "تغییر نام گفتگو")) },
+                        title = { Text(stringResource(R.string.rename_chat)) },
                         text = {
                             OutlinedTextField(
                                 value = rename.inputText,
@@ -531,12 +529,12 @@ fun ChatScreen(
                         },
                         confirmButton = {
                             Button(onClick = { viewModel.drawerConfirmRename() }) {
-                                Text(t("Save", "ذخیره"))
+                                Text(stringResource(R.string.save))
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { viewModel.drawerHideRename() }) {
-                                Text(t("Cancel", "لغو"))
+                                Text(stringResource(R.string.cancel))
                             }
                         },
                     )
@@ -547,12 +545,12 @@ fun ChatScreen(
                     val targetSession = uiState.sessions.find { it.id == uiState.drawerDeleteTarget }
                     AlertDialog(
                         onDismissRequest = { viewModel.drawerHideDelete() },
-                        title = { Text(t("Delete chat?", "حذف گفتگو؟")) },
+                        title = { Text(stringResource(R.string.delete_chat)) },
                         text = {
                             Text(
-                                t(
-                                    "\"${targetSession?.title ?: "This chat"}\" will be permanently deleted.",
-                                    "گفتگوی \"${targetSession?.title ?: "این گفتگو"}\" برای همیشه حذف می‌شود.",
+                                stringResource(
+                                    R.string.chat_will_be_deleted,
+                                    targetSession?.title ?: stringResource(R.string.this_chat),
                                 )
                             )
                         },
@@ -563,12 +561,12 @@ fun ChatScreen(
                                     containerColor = MaterialTheme.colorScheme.error,
                                 ),
                             ) {
-                                Text(t("Delete", "حذف"))
+                                Text(stringResource(R.string.delete))
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { viewModel.drawerHideDelete() }) {
-                                Text(t("Cancel", "لغو"))
+                                Text(stringResource(R.string.cancel))
                             }
                         },
                     )
@@ -613,7 +611,7 @@ fun ChatScreen(
                     ) {
                         HxHeaderCircleButton(
                             icon = HxIcons.MenuShort,
-                            contentDescription = t("Sessions", "گفتگوها"),
+                            contentDescription = stringResource(R.string.sessions),
                             onClick = { scope.launch { drawerState.open() } },
                         )
                         Box(
@@ -637,7 +635,7 @@ fun ChatScreen(
                         }
                         HxHeaderCircleButton(
                             icon = HxIcons.NewChat,
-                            contentDescription = t("New chat", "گفتگوی جدید"),
+                            contentDescription = stringResource(R.string.new_chat),
                             onClick = { viewModel.newConversation() },
                             iconSize = 25.dp,
                         )
@@ -648,7 +646,7 @@ fun ChatScreen(
                             var showOverflow by remember { mutableStateOf(false) }
                             HxHeaderCircleButton(
                                 icon = if (uiState.showSearch) Icons.Default.Close else Icons.Default.MoreVert,
-                                contentDescription = if (uiState.showSearch) t("Close search", "بستن جستجو") else t("More", "بیشتر"),
+                                contentDescription = if (uiState.showSearch) stringResource(R.string.close_search) else stringResource(R.string.more),
                                 onClick = {
                                     if (uiState.showSearch) viewModel.toggleSearch() else showOverflow = true
                                 },
@@ -658,7 +656,7 @@ fun ChatScreen(
                                 onDismissRequest = { showOverflow = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(t("Search messages", "جستجو در پیام‌ها")) },
+                                    text = { Text(stringResource(R.string.search_messages)) },
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
@@ -666,7 +664,7 @@ fun ChatScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(t("Stats", "آمار")) },
+                                    text = { Text(stringResource(R.string.stats)) },
                                     leadingIcon = { Icon(Icons.Default.DataUsage, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
@@ -677,7 +675,7 @@ fun ChatScreen(
                                 // since July with nothing that opened it, and /rollback is left
                                 // out of the / list because this is where it lives.
                                 DropdownMenuItem(
-                                    text = { Text(t("Changes", "تغییرات")) },
+                                    text = { Text(stringResource(R.string.changes)) },
                                     leadingIcon = { Icon(HxIcons.Undo, contentDescription = null) },
                                     enabled = uiState.activeSessionId != null,
                                     onClick = {
@@ -700,7 +698,7 @@ fun ChatScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
-                            placeholder = { Text(t("Search messages...", "جستجو در پیام‌ها...")) },
+                            placeholder = { Text(stringResource(R.string.search_messages_2)) },
                             singleLine = true,
                             leadingIcon = {
                                 Icon(Icons.Default.Search, contentDescription = null)
@@ -708,7 +706,7 @@ fun ChatScreen(
                             trailingIcon = {
                                 if (uiState.searchQuery.isNotEmpty()) {
                                     IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                        Icon(Icons.Default.Close, contentDescription = t("Clear", "پاک کردن"))
+                                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                                     }
                                 }
                             },
@@ -738,7 +736,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             Icons.Default.KeyboardArrowDown,
-                            contentDescription = t("Scroll to bottom", "رفتن به انتها"),
+                            contentDescription = stringResource(R.string.scroll_to_bottom),
                         )
                     }
                 }
@@ -796,8 +794,8 @@ fun ChatScreen(
                     }
 
                     // Message list
-                    val copiedToast = t("Copied", "کپی شد")
-                    val codeCopiedToast = t("Code copied", "کد کپی شد")
+                    val copiedToast = stringResource(R.string.copied)
+                    val codeCopiedToast = stringResource(R.string.code_copied)
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -833,7 +831,7 @@ fun ChatScreen(
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Text(
-                                            text = t("No matching messages", "پیامی پیدا نشد"),
+                                            text = stringResource(R.string.no_matching_messages),
                                             style = MaterialTheme.typography.bodyLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -1005,10 +1003,7 @@ fun ChatScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = t(
-                                "Editing message — sending replaces it and everything after it",
-                                "ویرایش پیام — با ارسال، این پیام و هرچه بعدش آمده جایگزین می‌شود",
-                            ),
+                            text = stringResource(R.string.editing_message_sending_replaces_it_and),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -1016,7 +1011,7 @@ fun ChatScreen(
                         IconButton(onClick = viewModel::cancelEditing) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = t("Cancel edit", "لغو ویرایش"),
+                                contentDescription = stringResource(R.string.cancel_edit),
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -1046,23 +1041,20 @@ fun ChatScreen(
     deleteFromMessageId?.let { messageId ->
         AlertDialog(
             onDismissRequest = { deleteFromMessageId = null },
-            title = { Text(t("Delete message?", "حذف پیام؟")) },
+            title = { Text(stringResource(R.string.delete_message)) },
             text = {
                 Text(
-                    t(
-                        "This message and everything after it will be removed from the chat, for Hermes too. This cannot be undone.",
-                        "این پیام و همهٔ پیام‌های بعد از آن از گفتگو حذف می‌شوند، برای Hermes هم. قابل برگشت نیست.",
-                    ),
+                    stringResource(R.string.this_message_and_everything_after_it),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     deleteFromMessageId = null
                     viewModel.deleteFromMessage(messageId)
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteFromMessageId = null }) { Text(t("Cancel", "لغو")) }
+                TextButton(onClick = { deleteFromMessageId = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }

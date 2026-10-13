@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
+import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -51,7 +54,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.CronJob
 import com.hermes.android.ui.viewmodel.CronViewModel
 
@@ -78,21 +80,23 @@ fun CronScreen(
     }
 
     HermesScaffold(
-        title = t("Scheduled Jobs", "کارهای زمان‌بندی‌شده"),
+        title = stringResource(R.string.scheduled_jobs),
         subtitle = if (uiState.jobs.isEmpty()) null else {
-            t(
-                "${uiState.jobs.count { it.enabled }} of ${uiState.jobs.size} active",
-                "${uiState.jobs.count { it.enabled }} از ${uiState.jobs.size} فعال",
-            )
+            stringResource(R.string.of_active, uiState.jobs.count { it.enabled }, uiState.jobs.size)
         },
         onBack = onNavigateBack,
+        actions = {
+            IconButton(onClick = { viewModel.openBlueprints() }) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = stringResource(R.string.ready_made_jobs))
+            }
+        },
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
             // Mockup-H shape: the create action is a FAB, not a top-bar icon.
             ExtendedFloatingActionButton(
                 onClick = { viewModel.showCreateDialog() },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(t("New job", "کار جدید")) },
+                text = { Text(stringResource(R.string.new_job)) },
             )
         },
     ) { padding ->
@@ -107,23 +111,27 @@ fun CronScreen(
                 androidx.compose.material3.CircularProgressIndicator()
                 Spacer(Modifier.height(HxSpace.sm))
                 Text(
-                    t("Loading cron jobs…", "در حال بارگذاری کارها…"),
+                    stringResource(R.string.loading_cron_jobs),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            uiState.jobs.isEmpty() -> Column(modifier = Modifier.padding(padding)) {
+            uiState.jobs.isEmpty() -> Column(modifier = Modifier.padding(padding).fillMaxSize()) {
                 HermesEmptyState(
                     icon = Icons.Default.Schedule,
-                    title = t("No scheduled jobs", "هنوز کاری زمان‌بندی نشده"),
-                    caption = t(
-                        "Run prompts automatically on a schedule — daily reports, backups, checks",
-                        "پرامپت‌ها رو خودکار و زمان‌بندی‌شده اجرا کن — گزارش روزانه، بکاپ، بررسی‌ها",
-                    ),
-                    actionLabel = t("Create a job", "ساخت کار جدید"),
+                    title = stringResource(R.string.no_scheduled_jobs),
+                    caption = stringResource(R.string.run_prompts_automatically_on_a_schedule),
+                    actionLabel = stringResource(R.string.create_a_job),
                     onAction = { viewModel.showCreateDialog() },
+                    modifier = Modifier.weight(1f),
                 )
+                TextButton(
+                    onClick = { viewModel.openBlueprints() },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = HxSpace.xl),
+                ) { Text(stringResource(R.string.or_start_from_a_ready_made_job)) }
             }
 
             else -> LazyColumn(
@@ -148,6 +156,23 @@ fun CronScreen(
         uiState.editingJob?.let { job ->
             CreateJobDialog(viewModel, existingJob = job)
         }
+        if (uiState.showBlueprints) {
+            BlueprintSheet(
+                state = uiState,
+                onPick = { viewModel.pickBlueprint(it) },
+                onRetry = viewModel::loadBlueprints,
+                onDismiss = viewModel::closeBlueprints,
+            )
+        }
+        uiState.activeBlueprint?.let { blueprint ->
+            BlueprintForm(
+                blueprint = blueprint,
+                creating = uiState.creatingFromBlueprint,
+                error = uiState.blueprintError,
+                onCreate = { values -> viewModel.createFromBlueprint(blueprint.key, values) },
+                onDismiss = { viewModel.pickBlueprint(null) },
+            )
+        }
     }
 }
 
@@ -158,16 +183,16 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(t("Delete job?", "کار حذف شود؟")) },
-            text = { Text(t("\"${job.name}\" will stop running and be removed.", "«${job.name}» دیگر اجرا نمی‌شود و حذف می‌شود.")) },
+            title = { Text(stringResource(R.string.delete_job)) },
+            text = { Text(stringResource(R.string.will_stop_running_and_be_removed, job.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.deleteJob(job.id)
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }
@@ -225,7 +250,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 StatusChip(
-                    label = if (job.enabled) t("active", "فعال") else t("paused", "متوقف"),
+                    label = if (job.enabled) stringResource(R.string.active_2) else stringResource(R.string.paused),
                     color = if (job.enabled) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -236,15 +261,15 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                         it.contains("error") || it.contains("fail")
                     }
                     StatusChip(
-                        label = if (failed) t("last: failed", "آخرین: خطا")
-                            else t("last: ok", "آخرین: موفق"),
+                        label = if (failed) stringResource(R.string.last_failed)
+                            else stringResource(R.string.last_ok),
                         color = if (failed) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.primary,
                     )
                 }
                 job.nextRunAt?.let {
                     Text(
-                        text = t("next: $it", "بعدی: $it"),
+                        text = stringResource(R.string.next, it),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
@@ -256,7 +281,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                 IconButton(onClick = { viewModel.startEditJob(job) }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = t("Edit", "ویرایش"),
+                        contentDescription = stringResource(R.string.edit),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(17.dp),
                     )
@@ -264,7 +289,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                 IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = t("Delete", "حذف"),
+                        contentDescription = stringResource(R.string.delete),
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                         modifier = Modifier.size(17.dp),
                     )
@@ -292,12 +317,12 @@ private fun humanizeCron(schedule: String): String? {
     return when {
         min.startsWith("*/") && hour == "*" && dom == "*" && month == "*" && dow == "*" ->
             min.removePrefix("*/").toIntOrNull()?.let { n ->
-                t("every $n min", "هر $n دقیقه")
+                stringResource(R.string.every_min, n)
             }
         min.toIntOrNull() != null && hour == "*" && dom == "*" && month == "*" && dow == "*" ->
-            t("hourly", "هر ساعت")
+            stringResource(R.string.hourly)
         dom == "*" && month == "*" && dow == "*" ->
-            clock()?.let { t("daily at $it", "هر روز $it") }
+            clock()?.let { stringResource(R.string.daily_at, it) }
         dom == "*" && month == "*" -> {
             // Any set of days, not just the two shapes this used to know: a job on
             // Saturday and Tuesday read as a bare "0 9 * * 6,2" in the list, which is
@@ -312,11 +337,12 @@ private fun humanizeCron(schedule: String): String? {
                     .filter { it.value in days }
                     .map { labels[it.index] }
                 if (names.size == 7) {
-                    t("daily at $time", "هر روز $time")
+                    stringResource(R.string.daily_at, time)
                 } else {
-                    t(
-                        "${names.joinToString(", ")} at $time",
-                        "${names.joinToString("، ")} ساعت $time",
+                    stringResource(
+                        R.string.days_at_time,
+                        names.joinToString(stringResource(R.string.list_separator)),
+                        time,
                     )
                 }
             }
@@ -414,18 +440,18 @@ private val WEEK_ORDER = listOf(6, 0, 1, 2, 3, 4, 5)
  */
 @Composable
 private fun weekNames(): List<String> = listOf(
-    t("Sat", "شنبه"),
-    t("Sun", "یک"),
-    t("Mon", "دو"),
-    t("Tue", "سه"),
-    t("Wed", "چهار"),
-    t("Thu", "پنج"),
-    t("Fri", "جمعه"),
+    stringResource(R.string.sat),
+    stringResource(R.string.sun),
+    stringResource(R.string.mon),
+    stringResource(R.string.tue),
+    stringResource(R.string.wed),
+    stringResource(R.string.thu),
+    stringResource(R.string.fri),
 )
 
 /** Five-minute steps: the interesting minutes of an hour, without 60 chips to scroll. */
 @Composable
-private fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
+internal fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -456,7 +482,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEdit) t("Edit Cron Job", "ویرایش کار") else t("Create Cron Job", "ساخت کار جدید")) },
+        title = { Text(if (isEdit) stringResource(R.string.edit_cron_job) else stringResource(R.string.create_cron_job)) },
         text = {
             // The picker is taller than the one field it replaced, and an AlertDialog
             // clips rather than scrolls; on a short screen the Create button used to be
@@ -478,26 +504,14 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     ) {
                         listOf(
                             Triple(
-                                t("☀️ Morning digest", "☀️ گزارش صبحگاهی"),
+                                stringResource(R.string.morning_digest),
                                 "morning-digest" to "0 8 * * *",
-                                t(
-                                    "Good morning! Give me a short digest: server health and disk space, " +
-                                        "anything notable in logs since yesterday, unfinished tasks from our " +
-                                        "recent sessions, and 3 suggestions for today. Keep it brief.",
-                                    "صبح بخیر! یک گزارش کوتاه بده: وضعیت سرور و فضای دیسک، " +
-                                        "نکات مهم لاگ‌ها از دیروز تا الان، کارهای نیمه‌تمام سشن‌های اخیر، " +
-                                        "و ۳ پیشنهاد برای امروز. خلاصه بنویس.",
-                                ),
+                                stringResource(R.string.good_morning_give_me_a_short_digest),
                             ),
                             Triple(
-                                t("🩺 Nightly check", "🩺 چک شبانه"),
+                                stringResource(R.string.nightly_check),
                                 "nightly-check" to "0 23 * * *",
-                                t(
-                                    "Run a quick health check of the server (services, disk, errors in logs) " +
-                                        "and summarize anything that needs my attention.",
-                                    "یک بررسی سریع سلامت سرور انجام بده (سرویس‌ها، دیسک، خطاهای لاگ) " +
-                                        "و هرچیزی که نیاز به توجه من داره رو خلاصه کن.",
-                                ),
+                                stringResource(R.string.run_a_quick_health_check_of_the_server),
                             ),
                         ).forEach { (label, idAndSchedule, promptText) ->
                             FilterChip(
@@ -515,11 +529,11 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text(t("Name", "نام")) },
+                    label = { Text(stringResource(R.string.name)) },
                     singleLine = true,
                 )
                 Text(
-                    text = t("When should it run?", "کی اجرا شود؟"),
+                    text = stringResource(R.string.when_should_it_run),
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Row(
@@ -529,11 +543,11 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     listOf(
-                        ScheduleMode.DAILY to t("Every day", "هر روز"),
-                        ScheduleMode.DAYS to t("Certain days", "روزهای خاص"),
-                        ScheduleMode.HOURLY to t("Every hour", "هر ساعت"),
-                        ScheduleMode.MINUTES to t("Every few minutes", "هر چند دقیقه"),
-                        ScheduleMode.CUSTOM to t("Custom", "سفارشی"),
+                        ScheduleMode.DAILY to stringResource(R.string.every_day),
+                        ScheduleMode.DAYS to stringResource(R.string.certain_days),
+                        ScheduleMode.HOURLY to stringResource(R.string.every_hour),
+                        ScheduleMode.MINUTES to stringResource(R.string.every_few_minutes),
+                        ScheduleMode.CUSTOM to stringResource(R.string.custom),
                     ).forEach { (candidate, label) ->
                         FilterChip(
                             selected = pick.mode == candidate,
@@ -559,7 +573,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     ScheduleMode.DAILY, ScheduleMode.DAYS -> {
                         if (pick.mode == ScheduleMode.DAYS) {
                             Text(
-                                text = t("Days", "روزها"),
+                                text = stringResource(R.string.days),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
@@ -586,7 +600,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                             }
                         }
                         Text(
-                            text = t("Hour", "ساعت"),
+                            text = stringResource(R.string.hour),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
@@ -605,7 +619,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                             }
                         }
                         Text(
-                            text = t("Minute", "دقیقه"),
+                            text = stringResource(R.string.minute),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
@@ -613,7 +627,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     }
                     ScheduleMode.HOURLY -> {
                         Text(
-                            text = t("At which minute past the hour", "در دقیقه‌ی چندم هر ساعت"),
+                            text = stringResource(R.string.at_which_minute_past_the_hour),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
@@ -632,7 +646,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                     onClick = { pick = pick.copy(everyN = n) },
                                     label = {
                                         Text(
-                                            t("every $n min", "هر $n دقیقه"),
+                                            stringResource(R.string.every_min, n),
                                             style = MaterialTheme.typography.labelSmall,
                                         )
                                     },
@@ -644,7 +658,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                         OutlinedTextField(
                             value = pick.raw,
                             onValueChange = { pick = pick.copy(raw = it) },
-                            label = { Text(t("Cron expression", "عبارت cron")) },
+                            label = { Text(stringResource(R.string.cron_expression)) },
                             singleLine = true,
                             placeholder = { Text("0 9 * * *") },
                         )
@@ -668,7 +682,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
-                    label = { Text(t("Prompt", "پرامپت")) },
+                    label = { Text(stringResource(R.string.prompt)) },
                     maxLines = 3,
                 )
             }
@@ -684,10 +698,10 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                         }
                     }
                 },
-            ) { Text(if (isEdit) t("Save", "ذخیره") else t("Create", "ساخت")) }
+            ) { Text(if (isEdit) stringResource(R.string.save) else stringResource(R.string.create)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(t("Cancel", "انصراف")) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) }
         },
     )
 }

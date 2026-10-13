@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
@@ -61,7 +63,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatTile
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.HistoryMessage
 import com.hermes.android.ui.viewmodel.SessionSortOrder
 import com.hermes.android.ui.viewmodel.SessionSummary
@@ -80,7 +81,7 @@ internal fun HistoryDetailView(
     onResumeSession: () -> Unit,
 ) {
     if (isLoading) {
-        LoadingIndicator(t("Loading messages...", "در حال بارگذاری پیام‌ها..."))
+        LoadingIndicator(stringResource(R.string.loading_messages))
         return
     }
 
@@ -92,7 +93,7 @@ internal fun HistoryDetailView(
                 .fillMaxWidth()
                 .padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
         ) {
-            Text(t("Continue this chat", "ادامه این گفتگو"))
+            Text(stringResource(R.string.continue_this_chat))
         }
 
         usage?.takeIf { it.total > 0 || it.calls > 0 }?.let { u ->
@@ -102,15 +103,15 @@ internal fun HistoryDetailView(
                     .fillMaxWidth()
                     .padding(horizontal = HxSpace.screen, vertical = HxSpace.xs),
             ) {
-                StatTile(value = hxCompactCount(u.input), label = t("in", "ورودی"))
-                StatTile(value = hxCompactCount(u.output), label = t("out", "خروجی"))
-                StatTile(value = hxCompactCount(u.total), label = t("total", "کل"))
-                StatTile(value = "${u.calls}", label = t("calls", "فراخوانی"))
+                StatTile(value = hxCompactCount(u.input), label = stringResource(R.string.in_text))
+                StatTile(value = hxCompactCount(u.output), label = stringResource(R.string.out))
+                StatTile(value = hxCompactCount(u.total), label = stringResource(R.string.total))
+                StatTile(value = "${u.calls}", label = stringResource(R.string.calls))
             }
             HxSplitBar(
                 parts = listOf(
-                    HxBarPart(t("in", "ورودی"), u.input, MaterialTheme.colorScheme.primary),
-                    HxBarPart(t("out", "خروجی"), u.output, MaterialTheme.colorScheme.tertiary),
+                    HxBarPart(stringResource(R.string.in_text), u.input, MaterialTheme.colorScheme.primary),
+                    HxBarPart(stringResource(R.string.out), u.output, MaterialTheme.colorScheme.tertiary),
                 ),
                 modifier = Modifier.padding(
                     horizontal = HxSpace.screen,
@@ -130,8 +131,8 @@ internal fun HistoryDetailView(
         if (messages.isEmpty()) {
             HermesEmptyState(
                 icon = Icons.Default.Forum,
-                title = t("No messages found", "پیامی پیدا نشد"),
-                caption = t("This session may be empty or inaccessible", "این گفتگو خالی یا در دسترس نیست"),
+                title = stringResource(R.string.no_messages_found),
+                caption = stringResource(R.string.this_session_may_be_empty_or),
                 modifier = Modifier.weight(1f),
             )
         } else {
@@ -168,7 +169,7 @@ internal fun HistoryMessageBubble(msg: HistoryMessage) {
         ) {
             Column(modifier = Modifier.padding(HxSpace.md)) {
                 Text(
-                    text = if (isUser) t("You", "شما") else "Hermes",
+                    text = if (isUser) stringResource(R.string.you) else "Hermes",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
@@ -205,7 +206,7 @@ internal fun ActiveAgentsCard(state: SessionsUiState) {
                         .background(MaterialTheme.colorScheme.tertiary),
                 )
                 Text(
-                    text = t("Active agents (${agents.size})", "ایجنت‌های فعال (${agents.size})"),
+                    text = stringResource(R.string.active_agents, agents.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )

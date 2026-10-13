@@ -53,6 +53,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.BrokenImage
 import com.hermes.android.ui.icons.filled.CallSplit
@@ -139,7 +141,6 @@ import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -170,7 +171,7 @@ internal fun InlineImageBlock(
         // collapsing to nothing (which read as "the image didn't send").
         SubcomposeAsyncImage(
             model = url,
-            contentDescription = alt.ifBlank { t("Image", "تصویر") },
+            contentDescription = alt.ifBlank { stringResource(R.string.image) },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 120.dp, max = 320.dp)
@@ -210,10 +211,7 @@ internal fun InlineImageBlock(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = t(
-                            "Image couldn't load — tap Save to download it",
-                            "تصویر لود نشد — «ذخیره» رو بزن تا دانلود شه",
-                        ),
+                        text = stringResource(R.string.image_couldnt_load_tap_save_to_download),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -234,7 +232,7 @@ internal fun InlineImageBlock(
         ) {
             Icon(
                 Icons.Default.Download,
-                contentDescription = t("Save image", "ذخیره تصویر"),
+                contentDescription = stringResource(R.string.save_image),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
             )
@@ -267,7 +265,7 @@ internal fun CodeBlockCard(
                 IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Default.ContentCopy,
-                        contentDescription = t("Copy code", "کپی کد"),
+                        contentDescription = stringResource(R.string.copy_code),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -310,7 +308,7 @@ internal fun MermaidBlockCard(
                 IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Default.ContentCopy,
-                        contentDescription = t("Copy code", "کپی کد"),
+                        contentDescription = stringResource(R.string.copy_code),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -373,14 +371,14 @@ internal fun HtmlBlockCard(
                 IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = t("Toggle preview", "نمایش/بستن"),
+                        contentDescription = stringResource(R.string.toggle_preview),
                         modifier = Modifier.size(18.dp),
                     )
                 }
                 IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
                     Icon(
                         HxIcons.ExternalLink,
-                        contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
+                        contentDescription = stringResource(R.string.open_full_screen),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -450,7 +448,7 @@ internal fun ArtifactCard(
                 IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Download,
-                        contentDescription = t("Download", "دانلود"),
+                        contentDescription = stringResource(R.string.download),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )

@@ -19,10 +19,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatUiState
 import com.hermes.android.ui.viewmodel.ModelPickerViewModel
@@ -43,7 +44,7 @@ internal fun ComposerModelButton(activeModel: String?, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = activeModel?.takeIf { it.isNotBlank() }?.let(::shortModelName) ?: t("Model", "مدل"),
+            text = activeModel?.takeIf { it.isNotBlank() }?.let(::shortModelName) ?: stringResource(R.string.model),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -52,7 +53,7 @@ internal fun ComposerModelButton(activeModel: String?, onClick: () -> Unit) {
         )
         Icon(
             Icons.Default.KeyboardArrowDown,
-            contentDescription = t("Change model", "تغییر مدل"),
+            contentDescription = stringResource(R.string.change_model),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
         )
