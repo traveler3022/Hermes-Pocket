@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.setup.OAuthProvider
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HxRadius
@@ -97,29 +99,26 @@ internal fun ProvidersSection(
         if (state.busy != null) {
             item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         }
-        item { SectionHeader(t("Add a provider", "افزودن پرووایدر")) }
+        item { SectionHeader(stringResource(R.string.add_a_provider)) }
         item {
             SettingsGroup {
                 SettingRow(
-                    title = t("API key", "کلید API"),
-                    subtitle = t(
-                        "Hermes providers, or your own OpenAI-compatible server",
-                        "پرووایدرهای هرمس، یا سرور سازگار با OpenAI خودت",
-                    ),
+                    title = stringResource(R.string.api_key_2),
+                    subtitle = stringResource(R.string.hermes_providers_or_your_own_openai),
                     icon = Icons.Default.Key,
                     onClick = { onOpen(SettingsSection.PROVIDER_KEYS) },
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("Sign in with account", "ورود با حساب"),
-                    subtitle = t("OAuth: ChatGPT, Nous Portal, xAI Grok…", "OAuth: ChatGPT، Nous Portal، xAI Grok و…"),
+                    title = stringResource(R.string.sign_in_with_account),
+                    subtitle = stringResource(R.string.oauth_chatgpt_nous_portal_xai_grok),
                     icon = Icons.Default.AccountCircle,
                     onClick = { onOpen(SettingsSection.PROVIDER_ACCOUNTS) },
                 )
             }
         }
 
-        item { SectionHeader(t("Connected", "وصل‌شده‌ها")) }
+        item { SectionHeader(stringResource(R.string.connected_4)) }
         when {
             connected.isNotEmpty() -> item {
                 SettingsGroup {
@@ -130,7 +129,7 @@ internal fun ProvidersSection(
                             title = row.name,
                             subtitle = listOfNotNull(
                                 modelsText(row.modelCount),
-                                account?.let { t("account", "حساب") },
+                                account?.let { stringResource(R.string.account) },
                             ).joinToString(" · ").ifEmpty { null },
                             icon = if (account != null) Icons.Default.AccountCircle else Icons.Default.Key,
                             iconTint = if (row.isCurrent) {
@@ -140,7 +139,7 @@ internal fun ProvidersSection(
                             },
                             onClick = { selected = row },
                             trailing = if (row.isCurrent) {
-                                { StatusChip(t("In use", "در حال استفاده"), MaterialTheme.colorScheme.primary) }
+                                { StatusChip(stringResource(R.string.in_use), MaterialTheme.colorScheme.primary) }
                             } else {
                                 null
                             },
@@ -151,12 +150,12 @@ internal fun ProvidersSection(
             state.isLoading -> item { LoadingRow() }
             state.loadError != null -> item { ErrorRow(state.loadError.orEmpty(), onRetry = viewModel::load) }
             configState.providers.isEmpty() -> item {
-                HintText(t("Nothing connected yet. Add a provider above.", "هنوز چیزی وصل نیست. از بالا یک پرووایدر اضافه کن."))
+                HintText(stringResource(R.string.nothing_connected_yet_add_a_provider))
             }
         }
 
         if (configState.providers.isNotEmpty()) {
-            item { SectionHeader(t("Custom servers", "سرورهای سفارشی")) }
+            item { SectionHeader(stringResource(R.string.custom_servers)) }
             items(configState.providers, key = { "custom:" + it.slug }) { provider ->
                 Box(Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.xs)) {
                     ProviderCard(
@@ -234,24 +233,24 @@ internal fun ProviderKeysSection(
         if (state.busy != null) {
             item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         }
-        item { SectionHeader(t("Your own server", "سرور خودت")) }
+        item { SectionHeader(stringResource(R.string.your_own_server)) }
         item {
             SettingsGroup {
                 SettingRow(
-                    title = t("Custom server", "سرور سفارشی"),
-                    subtitle = t("Any OpenAI-compatible endpoint: address and key", "هر سرور سازگار با OpenAI: آدرس و کلید"),
+                    title = stringResource(R.string.custom_server),
+                    subtitle = stringResource(R.string.any_openai_compatible_endpoint_address),
                     icon = Icons.Default.Dns,
                     onClick = { addingCustom = true },
                 )
             }
         }
 
-        item { SectionHeader(t("Hermes providers", "پرووایدرهای هرمس")) }
+        item { SectionHeader(stringResource(R.string.hermes_providers)) }
         item {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text(t("Search providers…", "جستجوی پرووایدر…")) },
+                placeholder = { Text(stringResource(R.string.search_providers)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier
@@ -279,8 +278,8 @@ internal fun ProviderKeysSection(
             state.rows.isEmpty() && state.loadError != null -> item {
                 ErrorRow(state.loadError.orEmpty(), onRetry = viewModel::load)
             }
-            query.isNotBlank() -> item { HintText(t("No provider matches.", "پرووایدری پیدا نشد.")) }
-            else -> item { HintText(t("Every key provider is already connected.", "همهٔ پرووایدرهای کلیدی وصل‌اند.")) }
+            query.isNotBlank() -> item { HintText(stringResource(R.string.no_provider_matches)) }
+            else -> item { HintText(stringResource(R.string.every_key_provider_is_already_connected)) }
         }
     }
 
@@ -355,10 +354,7 @@ internal fun ProviderAccountsSection(
         }
         item {
             Text(
-                text = t(
-                    "Sign in with a subscription instead of an API key. Most accounts open a sign-in page in your browser; the rest need one command in a terminal (Linux or Termux).",
-                    "به‌جای کلید API با اشتراکت وارد شو. بیشتر حساب‌ها صفحهٔ ورود را در مرورگرت باز می‌کنند؛ بقیه یک فرمان در ترمینال (لینوکس یا ترموکس) لازم دارند.",
-                ),
+                text = stringResource(R.string.sign_in_with_a_subscription_instead_of),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = HxSpace.screen).padding(top = HxSpace.lg),
@@ -370,19 +366,19 @@ internal fun ProviderAccountsSection(
                     state.accountsError != null ->
                         ErrorRow(state.accountsError.orEmpty(), onRetry = { viewModel.loadAccounts(force = true) })
                     state.accountsLoaded && !state.accountsLoading ->
-                        HintText(t("This Hermes has no sign-in providers.", "این هرمس پرووایدر ورودی ندارد."))
+                        HintText(stringResource(R.string.this_hermes_has_no_sign_in_providers))
                     else ->
-                        LoadingRow(t("Checking sign-ins… this takes a few seconds", "در حال بررسی ورودها… چند ثانیه طول می‌کشد"))
+                        LoadingRow(stringResource(R.string.checking_sign_ins_this_takes_a_few))
                 }
             }
         }
         if (connected.isNotEmpty()) {
-            item { SectionHeader(t("Connected", "وصل‌شده")) }
+            item { SectionHeader(stringResource(R.string.connected_5)) }
             item { AccountGroup(connected, onSelect = { selectedId = it.id }) }
         }
         if (others.isNotEmpty()) {
             item {
-                SectionHeader(if (connected.isEmpty()) t("Accounts", "حساب‌ها") else t("Other providers", "پرووایدرهای دیگر"))
+                SectionHeader(if (connected.isEmpty()) stringResource(R.string.accounts) else stringResource(R.string.other_providers))
             }
             item { AccountGroup(others, onSelect = { selectedId = it.id }) }
         }
@@ -431,15 +427,15 @@ private fun AccountGroup(accounts: List<OAuthProvider>, onSelect: (OAuthProvider
             SettingRow(
                 title = account.name,
                 subtitle = if (account.flow == "device_code") {
-                    t("Opens a sign-in page in your browser; Hermes connects by itself", "صفحهٔ ورود را در مرورگرت باز می‌کند؛ هرمس خودش وصل می‌شود")
+                    stringResource(R.string.opens_a_sign_in_page_in_your_browser)
                 } else {
-                    t("Sign in once in your terminal, then come back", "یک بار در ترمینال وارد شو و برگرد")
+                    stringResource(R.string.sign_in_once_in_your_terminal_then_come)
                 },
                 icon = Icons.Default.AccountCircle,
                 iconTint = if (account.loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 onClick = { onSelect(account) },
                 trailing = if (account.loggedIn) {
-                    { StatusChip(t("Connected", "وصل"), MaterialTheme.colorScheme.primary) }
+                    { StatusChip(stringResource(R.string.connected_6), MaterialTheme.colorScheme.primary) }
                 } else {
                     null
                 },
@@ -469,8 +465,8 @@ private fun AccountDialog(
         title = {
             Text(
                 when {
-                    !account.loggedIn -> t("Sign in with ${account.name}", "ورود با ${account.name}")
-                    confirmingSignOut -> t("Sign out of ${account.name}?", "از ${account.name} خارج می‌شوی؟")
+                    !account.loggedIn -> stringResource(R.string.sign_in_with, account.name)
+                    confirmingSignOut -> stringResource(R.string.sign_out_of, account.name)
                     else -> account.name
                 },
             )
@@ -480,22 +476,19 @@ private fun AccountDialog(
                 when {
                     inBrowser -> {
                         Text(
-                            t(
-                                "Hermes opens the ${account.name} sign-in page in your browser and connects by itself once you confirm there.",
-                                "هرمس صفحهٔ ورود ${account.name} را در مرورگرت باز می‌کند و وقتی آنجا تأیید کنی، خودش وصل می‌شود.",
-                            ),
+                            stringResource(R.string.hermes_opens_the_sign_in_page_in_your, account.name),
                         )
                         TextButton(onClick = { useTerminal = true }) {
-                            Text(t("Use the terminal instead", "به‌جایش با ترمینال"))
+                            Text(stringResource(R.string.use_the_terminal_instead))
                         }
                     }
                     !account.loggedIn -> {
-                        Text(t("Run this in a terminal, then tap “I've signed in”:", "این را در ترمینال اجرا کن، بعد «وارد شدم» را بزن:"))
+                        Text(stringResource(R.string.run_this_in_a_terminal_then_tap_ive))
                         CopyableText(account.cliCommand)
                     }
-                    confirmingSignOut -> Text(t("Hermes forgets this sign-in.", "هرمس این ورود را فراموش می‌کند."))
+                    confirmingSignOut -> Text(stringResource(R.string.hermes_forgets_this_sign_in))
                     else -> {
-                        Text(t("Connected.", "وصل است."))
+                        Text(stringResource(R.string.connected_7))
                         if (!account.disconnectable) {
                             account.disconnectHint?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -507,29 +500,29 @@ private fun AccountDialog(
         },
         confirmButton = {
             when {
-                inBrowser -> TextButton(onClick = onConnect) { Text(t("Connect", "اتصال")) }
+                inBrowser -> TextButton(onClick = onConnect) { Text(stringResource(R.string.connect)) }
                 !account.loggedIn -> TextButton(onClick = onRecheck, enabled = !busy) {
                     if (busy) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text(t("I've signed in", "وارد شدم"))
+                        Text(stringResource(R.string.ive_signed_in))
                     }
                 }
-                !account.disconnectable -> TextButton(onClick = onDismiss) { Text(t("Close", "بستن")) }
+                !account.disconnectable -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
                 confirmingSignOut -> TextButton(onClick = onSignOut, enabled = !busy) {
-                    Text(t("Sign out", "خروج"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error)
                 }
                 else -> TextButton(onClick = { confirmingSignOut = true }, enabled = !busy) {
-                    Text(t("Sign out", "خروج"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
         dismissButton = {
             when {
-                !account.loggedIn -> TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+                !account.loggedIn -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 !account.disconnectable -> Unit
-                confirmingSignOut -> TextButton(onClick = { confirmingSignOut = false }) { Text(t("Cancel", "لغو")) }
-                else -> TextButton(onClick = onDismiss) { Text(t("Close", "بستن")) }
+                confirmingSignOut -> TextButton(onClick = { confirmingSignOut = false }) { Text(stringResource(R.string.cancel)) }
+                else -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
             }
         },
     )
@@ -549,37 +542,34 @@ private fun DeviceSignInDialog(
     AlertDialog(
         // Only Cancel ends a sign-in that's still waiting on the browser.
         onDismissRequest = { if (error != null) onCancel() },
-        title = { Text(t("Sign in with $name", "ورود با $name")) },
+        title = { Text(stringResource(R.string.sign_in_with, name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(HxSpace.md)) {
                 when {
                     error != null -> Text(t(error.en, error.fa), color = MaterialTheme.colorScheme.error)
-                    code == null -> WaitingRow(t("Starting sign-in…", "در حال شروع ورود…"))
+                    code == null -> WaitingRow(stringResource(R.string.starting_sign_in))
                     else -> {
                         if (code.userCode.isNotBlank()) {
                             Text(
-                                t(
-                                    "We opened $name in your browser. Enter this code there (it's copied, so you can paste it):",
-                                    "صفحهٔ $name را در مرورگرت باز کردیم. این کد را آنجا وارد کن (کپی شده، می‌توانی بچسبانی):",
-                                ),
+                                stringResource(R.string.we_opened_in_your_browser_enter_this, name),
                             )
                             CopyableText(code.userCode, MaterialTheme.typography.titleLarge)
                         } else {
-                            Text(t("We opened $name in your browser. Confirm the sign-in there.", "صفحهٔ $name را در مرورگرت باز کردیم. ورود را آنجا تأیید کن."))
+                            Text(stringResource(R.string.we_opened_in_your_browser_confirm_the, name))
                         }
-                        WaitingRow(t("Waiting for you to confirm…", "در انتظار تأیید تو…"))
+                        WaitingRow(stringResource(R.string.waiting_for_you_to_confirm))
                     }
                 }
             }
         },
         confirmButton = {
             when {
-                error != null -> TextButton(onClick = onRetry) { Text(t("Try again", "دوباره")) }
-                code != null -> TextButton(onClick = { onReopen(code.url) }) { Text(t("Open the page again", "باز کردن دوبارهٔ صفحه")) }
+                error != null -> TextButton(onClick = onRetry) { Text(stringResource(R.string.try_again)) }
+                code != null -> TextButton(onClick = { onReopen(code.url) }) { Text(stringResource(R.string.open_the_page_again)) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) { Text(if (error != null) t("Close", "بستن") else t("Cancel", "لغو")) }
+            TextButton(onClick = onCancel) { Text(if (error != null) stringResource(R.string.close) else stringResource(R.string.cancel)) }
         },
     )
 }
@@ -600,7 +590,7 @@ private fun CopyableText(text: String, style: TextStyle = MaterialTheme.typograp
                 Text(text = text, style = style, fontFamily = FontFamily.Monospace)
             }
             IconButton(onClick = { clipboard.setText(AnnotatedString(text)) }) {
-                Icon(Icons.Default.ContentCopy, contentDescription = t("Copy", "کپی"))
+                Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.copy))
             }
         }
     }
@@ -631,22 +621,22 @@ private fun ConnectedProviderDialog(
     var confirming by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (confirming) t("Disconnect ${row.name}?", "اتصال ${row.name} قطع شود؟") else row.name) },
+        title = { Text(if (confirming) stringResource(R.string.disconnect, row.name) else row.name) },
         text = {
             if (confirming) {
                 Text(
                     if (account != null) {
-                        t("Hermes signs out of this account.", "هرمس از این حساب خارج می‌شود.")
+                        stringResource(R.string.hermes_signs_out_of_this_account)
                     } else {
-                        t("Its API keys are removed from Hermes.", "کلیدهای API آن از هرمس پاک می‌شوند.")
+                        stringResource(R.string.its_api_keys_are_removed_from_hermes)
                     },
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
                     listOfNotNull(
-                        account?.let { t("Signed in with an account", "با حساب وارد شده") },
+                        account?.let { stringResource(R.string.signed_in_with_an_account) },
                         modelsText(row.modelCount),
-                        if (row.isCurrent) t("in use", "در حال استفاده") else null,
+                        if (row.isCurrent) stringResource(R.string.in_use_2) else null,
                     ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · ")) }
                     Text(
                         text = row.slug,
@@ -657,7 +647,7 @@ private fun ConnectedProviderDialog(
                     if (canReplaceKey) {
                         TextButton(onClick = onReplaceKey, enabled = !busy) {
                             Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text(t("New API key", "کلید API تازه"), modifier = Modifier.padding(start = HxSpace.sm))
+                            Text(stringResource(R.string.new_api_key), modifier = Modifier.padding(start = HxSpace.sm))
                         }
                     }
                 }
@@ -665,12 +655,12 @@ private fun ConnectedProviderDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (confirming) onDisconnect() else confirming = true }, enabled = !busy) {
-                Text(t("Disconnect", "قطع اتصال"), color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.disconnect_2), color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
             TextButton(onClick = { if (confirming) confirming = false else onDismiss() }) {
-                Text(if (confirming) t("Cancel", "لغو") else t("Close", "بستن"))
+                Text(if (confirming) stringResource(R.string.cancel) else stringResource(R.string.close))
             }
         },
     )
@@ -691,8 +681,8 @@ private fun ProviderKeyDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = {
             Text(
-                if (row.connected) t("New key for ${row.name}", "کلید تازه برای ${row.name}")
-                else t("Connect ${row.name}", "اتصال ${row.name}"),
+                if (row.connected) stringResource(R.string.new_key_for, row.name)
+                else stringResource(R.string.connect_2, row.name),
             )
         },
         text = {
@@ -700,7 +690,7 @@ private fun ProviderKeyDialog(
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    label = { Text(row.keyEnv ?: t("API key", "کلید API")) },
+                    label = { Text(row.keyEnv ?: stringResource(R.string.api_key_2)) },
                     singleLine = true,
                     enabled = !busy,
                     // Never readable on screen, and kept out of the keyboard's learning.
@@ -710,7 +700,7 @@ private fun ProviderKeyDialog(
                 )
                 keyUrl?.let { url ->
                     TextButton(onClick = { runCatching { uriHandler.openUri(url) } }) {
-                        Text(t("Get a key", "گرفتن کلید"))
+                        Text(stringResource(R.string.get_a_key))
                     }
                 }
             }
@@ -720,12 +710,12 @@ private fun ProviderKeyDialog(
                 if (busy) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(t("Save", "ذخیره"))
+                    Text(stringResource(R.string.save))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(t("Cancel", "لغو")) }
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -748,7 +738,7 @@ private fun ProviderNotices(
 
 @Composable
 private fun modelsText(count: Int): String? =
-    if (count > 0) t("$count models", "$count مدل") else null
+    if (count > 0) stringResource(R.string.models_2, count) else null
 
 @Composable
 private fun LoadingRow(text: String? = null) {
@@ -768,7 +758,7 @@ private fun LoadingRow(text: String? = null) {
 private fun ErrorRow(message: String, onRetry: () -> Unit) {
     Column(modifier = Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.sm)) {
         Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = onRetry) { Text(t("Retry", "تلاش دوباره")) }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }
 

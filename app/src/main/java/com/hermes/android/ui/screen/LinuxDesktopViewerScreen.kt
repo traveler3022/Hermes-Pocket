@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Keyboard
 import com.hermes.android.ui.icons.filled.Mouse
 import androidx.compose.material.icons.filled.Refresh
@@ -54,7 +56,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.runtime.DesktopState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.LinuxDesktopViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -130,10 +131,10 @@ fun LinuxDesktopViewerScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "بازگشت"))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                 }
                 Text(
-                    text = t("Desktop", "دسکتاپ"),
+                    text = stringResource(R.string.desktop),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -141,17 +142,17 @@ fun LinuxDesktopViewerScreen(
                     Icon(
                         imageVector = if (touchMode) Icons.Default.TouchApp else Icons.Default.Mouse,
                         contentDescription = if (touchMode) {
-                            t("Touch mode — tap where you want", "حالت لمس — هرجا بزنی همان‌جا")
+                            stringResource(R.string.touch_mode_tap_where_you_want)
                         } else {
-                            t("Touchpad mode — drag to move the pointer", "حالت ماوس — با کشیدن نشانگر را ببر")
+                            stringResource(R.string.touchpad_mode_drag_to_move_the_pointer)
                         },
                     )
                 }
                 IconButton(onClick = { keyboard?.show() }) {
-                    Icon(Icons.Default.Keyboard, contentDescription = t("Keyboard", "کیبورد"))
+                    Icon(Icons.Default.Keyboard, contentDescription = stringResource(R.string.keyboard))
                 }
                 IconButton(onClick = ::connect) {
-                    Icon(Icons.Default.Refresh, contentDescription = t("Reconnect", "اتصال دوباره"))
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reconnect))
                 }
             }
         }
@@ -177,7 +178,7 @@ fun LinuxDesktopViewerScreen(
             when {
                 connecting || desktopState == DesktopState.Starting -> CircularProgressIndicator(color = Color.White)
                 desktopState != DesktopState.Running -> Text(
-                    text = failure ?: t("The desktop is not running.", "دسکتاپ روشن نیست."),
+                    text = failure ?: stringResource(R.string.the_desktop_is_not_running),
                     color = Color(0xFFBDBDBD),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 24.dp),

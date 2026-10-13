@@ -26,6 +26,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.Dns
@@ -74,7 +76,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
@@ -172,10 +173,7 @@ fun RuntimeSetupScreen(
                 )
                 Text(
                     text = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
-                        t(
-                            "Linux runs inside this app — no Termux needed",
-                            "لینوکس داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس",
-                        )
+                        stringResource(R.string.linux_runs_inside_this_app_no_termux)
                     } else {
                         "Termux & Hermes Agent Gateway Connection"
                     },
@@ -229,7 +227,7 @@ fun RuntimeSetupScreen(
                             hermesVersion = state.hermesVersion,
                             onStartGateway = { viewModel.startGateway() },
                             startLabel = if (runtimeChoice == RuntimeChoiceUi.BuiltInLinux) {
-                                t("Start Hermes", "اجرای Hermes")
+                                stringResource(R.string.start_hermes)
                             } else {
                                 "Start Agent Gateway (Termux)"
                             },
@@ -409,17 +407,12 @@ internal fun RemoteServerSetupContent(
         color = MaterialTheme.colorScheme.primary,
     )
     Text(
-        text = t("Connect to your Hermes server", "اتصال به سرور هرمس"),
+        text = stringResource(R.string.connect_to_your_hermes_server),
         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         textAlign = TextAlign.Center,
     )
     Text(
-        text = t(
-            "Hermes runs on your own server; this app connects to it over your private Tailscale network. " +
-                "No hosted server is provided.",
-            "هرمس روی سرور خودت اجرا می‌شود و این اپ از شبکه‌ی خصوصی Tailscale به آن وصل می‌شود. " +
-                "سرور میزبانی‌شده‌ای ارائه نمی‌شود.",
-        ),
+        text = stringResource(R.string.hermes_runs_on_your_own_server_this_app),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
@@ -451,7 +444,7 @@ internal fun RemoteServerSetupContent(
         ) {
             Icon(Icons.Default.Description, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
-            Text(t("Test connection", "آزمایش اتصال"))
+            Text(stringResource(R.string.test_connection_2))
         }
     }
 
@@ -463,7 +456,7 @@ internal fun RemoteServerSetupContent(
             enabled = ready,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(t("Continue", "ادامه"))
+            Text(stringResource(R.string.continue_text))
         }
     }
 }
@@ -491,47 +484,39 @@ private fun TailscaleCard(
             Text(text = "Tailscale", style = MaterialTheme.typography.titleMedium)
             when (ui.state) {
                 TailscaleUiState.Off, TailscaleUiState.Starting -> {
-                    Text(t("Starting Tailscale…", "در حال روشن کردن Tailscale…"), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.starting_tailscale), style = MaterialTheme.typography.bodyMedium)
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 TailscaleUiState.NeedsLogin -> {
                     Text(
-                        text = t(
-                            "Sign in once with the same account as your server, for example your Google account. " +
-                                "The page opens over the app and closes by itself. No Tailscale app is needed on this phone.",
-                            "یک بار با همان حسابی وارد شو که سرور با آن وارد شده، مثلاً حساب گوگل. " +
-                                "صفحه روی اپ باز می‌شود و خودش بسته می‌شود. اپ Tailscale روی این گوشی لازم نیست.",
-                        ),
+                        text = stringResource(R.string.sign_in_once_with_the_same_account_as),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
-                        Text(t("Sign in to Tailscale", "ورود به Tailscale"))
+                        Text(stringResource(R.string.sign_in_to_tailscale))
                     }
                 }
                 TailscaleUiState.NeedsApproval -> Text(
-                    text = t(
-                        "Approve this phone in the Tailscale admin console (Machines).",
-                        "این گوشی را در کنسول Tailscale، بخش Machines، تأیید کن.",
-                    ),
+                    text = stringResource(R.string.approve_this_phone_in_the_tailscale),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 TailscaleUiState.Unavailable -> Text(
-                    text = t("Tailscale isn't available: ", "Tailscale در دسترس نیست: ") + ui.error.orEmpty(),
+                    text = stringResource(R.string.tailscale_isnt_available) + ui.error.orEmpty(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
                 TailscaleUiState.Connected -> {
                     Text(
-                        text = t("Connected as ${ui.account}. This phone: ${ui.device}", "وصل با ${ui.account}. این گوشی: ${ui.device}"),
+                        text = stringResource(R.string.connected_as_this_phone, ui.account, ui.device),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     if (ui.devices.isEmpty()) {
                         Text(
-                            text = t("No other devices in this tailnet yet.", "هنوز دستگاه دیگری در این شبکه نیست."),
+                            text = stringResource(R.string.no_other_devices_in_this_tailnet_yet),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     } else {
-                        Text(t("Tap your server:", "سرورت را انتخاب کن:"), style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.tap_your_server), style = MaterialTheme.typography.labelLarge)
                         val chosen = serverUrl.trim().trimEnd('/')
                         ui.devices.forEach { device ->
                             DeviceRow(
@@ -542,7 +527,7 @@ private fun TailscaleCard(
                         }
                     }
                     TextButton(onClick = onSignOut) {
-                        Text(t("Sign out of Tailscale", "خروج از Tailscale"))
+                        Text(stringResource(R.string.sign_out_of_tailscale))
                     }
                 }
             }
@@ -565,9 +550,9 @@ private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () ->
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             )
             val path = when {
-                !device.online -> t("offline", "خاموش")
-                device.direct -> t("direct", "مستقیم")
-                device.relay.isNotEmpty() -> t("via relay ${device.relay}", "از رله‌ی ${device.relay}")
+                !device.online -> stringResource(R.string.offline)
+                device.direct -> stringResource(R.string.direct)
+                device.relay.isNotEmpty() -> stringResource(R.string.via_relay, device.relay)
                 else -> null
             }
             Text(
@@ -626,13 +611,13 @@ private fun ServerConfigCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = t("Hermes Server", "سرور هرمس"),
+                text = stringResource(R.string.hermes_server),
                 style = MaterialTheme.typography.titleMedium,
             )
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text(t("Server address", "آدرس سرور")) },
+                label = { Text(stringResource(R.string.server_address)) },
                 placeholder = { Text("https://my-server.tail1234.ts.net") },
                 leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
@@ -641,20 +626,17 @@ private fun ServerConfigCard(
             )
             if (signedInAs != null) {
                 Text(
-                    text = t(
-                        "Signed in as $signedInAs. Every connection uses a new one-time ticket.",
-                        "واردشده با $signedInAs. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
-                    ),
+                    text = stringResource(R.string.signed_in_as_every_connection_uses_a_new, signedInAs),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-                    Text(t("Sign out", "خروج"))
+                    Text(stringResource(R.string.sign_out))
                 }
             } else {
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
-                    label = { Text(t("Hermes username", "نام کاربری هرمس")) },
+                    label = { Text(stringResource(R.string.hermes_username)) },
                     singleLine = true,
                     enabled = !signingIn,
                     modifier = Modifier.fillMaxWidth(),
@@ -662,7 +644,7 @@ private fun ServerConfigCard(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text(t("Hermes password", "رمز هرمس")) },
+                    label = { Text(stringResource(R.string.hermes_password)) },
                     singleLine = true,
                     enabled = !signingIn,
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
@@ -671,7 +653,7 @@ private fun ServerConfigCard(
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
                                 if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showPassword) t("Hide password", "پنهان کردن رمز") else t("Show password", "نمایش رمز"),
+                                contentDescription = if (showPassword) stringResource(R.string.hide_password) else stringResource(R.string.show_password),
                             )
                         }
                     },
@@ -682,16 +664,11 @@ private fun ServerConfigCard(
                     enabled = !signingIn && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(t("Sign in", "ورود"))
+                    Text(stringResource(R.string.sign_in))
                 }
                 if (signingIn) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
-                    text = t(
-                        "The Hermes login you set on the server. The app keeps it encrypted on this phone and signs " +
-                            "in again by itself, so you type it once. Every connection uses a new one-time ticket.",
-                        "همان نام کاربری و رمزی که روی سرور برای هرمس گذاشتی. اپ آن را رمزگذاری‌شده روی همین گوشی نگه " +
-                            "می‌دارد و خودش دوباره وارد می‌شود؛ پس فقط یک بار تایپش می‌کنی. هر اتصال با یک تیکت یک‌بارمصرف تازه انجام می‌شود.",
-                    ),
+                    text = stringResource(R.string.the_hermes_login_you_set_on_the_server),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -722,41 +699,22 @@ private fun ServerSetupGuide() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             TextButton(onClick = { open = !open }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (open) t("Hide server setup", "بستن راهنمای سرور") else t("How to set up your server", "راه‌اندازی سرور"))
+                Text(if (open) stringResource(R.string.hide_server_setup) else stringResource(R.string.how_to_set_up_your_server))
             }
             if (open) {
-                GuideStep(t("1. On the server where Hermes is installed, run:", "۱. روی سروری که Hermes رویش نصب است این را بزن:"))
+                GuideStep(stringResource(R.string.s_1_on_the_server_where_hermes_is))
                 GuideCode(SERVER_SETUP_COMMAND)
                 GuideStep(
-                    t(
-                        "It installs Tailscale if needed and prints a sign-in link: log in with the account you use " +
-                            "in this app. If Tailscale asks to turn on HTTPS, open that link too. At the end it prints " +
-                            "your Hermes username and password.",
-                        "اگر لازم باشد Tailscale را نصب می‌کند و یک لینک ورود نشان می‌دهد: با همان حسابی که در این اپ " +
-                            "داری وارد شو. اگر Tailscale خواست HTTPS را روشن کنی، آن لینک را هم باز کن. آخر کار نام کاربری " +
-                            "و رمز هرمس را نشان می‌دهد.",
-                    ),
+                    stringResource(R.string.it_installs_tailscale_if_needed_and),
                 )
                 GuideStep(
-                    t(
-                        "2. In this app, tap Sign in to Tailscale above and use the same account. Pick your server " +
-                            "in the device list, then enter that username and password.",
-                        "۲. در همین اپ، «ورود به Tailscale» را بزن و با همان حساب وارد شو. سرورت را در لیست دستگاه‌ها " +
-                            "انتخاب کن و بعد همان نام کاربری و رمز را بزن.",
-                    ),
+                    stringResource(R.string.s_2_in_this_app_tap_sign_in_to_tailscale),
                 )
                 TextButton(onClick = { runCatching { uriHandler.openUri(SERVER_GUIDE_URL) } }) {
-                    Text(t("Full guide and the script on GitHub", "راهنمای کامل و اسکریپت در GitHub"))
+                    Text(stringResource(R.string.full_guide_and_the_script_on_github))
                 }
                 Text(
-                    text = t(
-                        "Hermes stays on 127.0.0.1 and no port is opened to the internet: only your own Tailscale " +
-                            "devices reach it, over an encrypted connection. Tip: turn on Device approval in Tailscale " +
-                            "so every new device needs your OK.",
-                        "Hermes روی 127.0.0.1 می‌ماند و هیچ پورتی به اینترنت باز نمی‌شود: فقط دستگاه‌های Tailscale خودت، " +
-                            "با اتصال رمزنگاری‌شده، به آن می‌رسند. پیشنهاد: Device approval را در Tailscale روشن کن تا " +
-                            "هر دستگاه جدید تأیید تو را لازم داشته باشد.",
-                    ),
+                    text = stringResource(R.string.hermes_stays_on_127_0_0_1_and_no_port_is),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -798,15 +756,15 @@ private fun ConnectionStatusBlock(
 ) {
     val (color, label) = when (connection.state) {
         ChatConnectionState.Connected ->
-            MaterialTheme.colorScheme.primary to t("Connected — gateway ready", "متصل — گیت‌وی آماده است")
+            MaterialTheme.colorScheme.primary to stringResource(R.string.connected_gateway_ready)
         ChatConnectionState.Connecting ->
-            MaterialTheme.colorScheme.tertiary to t("Connecting…", "در حال اتصال…")
+            MaterialTheme.colorScheme.tertiary to stringResource(R.string.connecting_2)
         ChatConnectionState.Reconnecting ->
-            MaterialTheme.colorScheme.tertiary to t("Reconnecting…", "در حال اتصال دوباره…")
+            MaterialTheme.colorScheme.tertiary to stringResource(R.string.reconnecting_3)
         ChatConnectionState.Failed ->
-            MaterialTheme.colorScheme.error to t("Connection failed", "اتصال ناموفق")
+            MaterialTheme.colorScheme.error to stringResource(R.string.connection_failed_2)
         ChatConnectionState.Disconnected ->
-            MaterialTheme.colorScheme.onSurfaceVariant to t("Not connected", "متصل نیست")
+            MaterialTheme.colorScheme.onSurfaceVariant to stringResource(R.string.not_connected)
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -827,7 +785,7 @@ private fun ConnectionStatusBlock(
         }
         connection.reconnectAttempt?.let { attempt ->
             Text(
-                text = t("Attempt $attempt", "تلاش $attempt"),
+                text = stringResource(R.string.attempt, attempt),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -836,7 +794,7 @@ private fun ConnectionStatusBlock(
             connection.state == ChatConnectionState.Disconnected
         ) {
             TextButton(onClick = onReconnect) {
-                Text(t("Try again", "تلاش دوباره"))
+                Text(stringResource(R.string.try_again_2))
             }
         }
     }

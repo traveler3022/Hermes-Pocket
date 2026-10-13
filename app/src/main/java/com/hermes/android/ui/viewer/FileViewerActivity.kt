@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Fullscreen
 import com.hermes.android.ui.icons.filled.FullscreenExit
 import com.hermes.android.ui.icons.filled.MusicNote
@@ -116,8 +118,7 @@ import com.hermes.android.ui.component.ZoomableImage
 import com.hermes.android.ui.component.fileKindOf
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.LocalAppLanguage
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.i18n.ProvideAppLanguage
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
 import dagger.hilt.android.AndroidEntryPoint
@@ -174,7 +175,7 @@ class FileViewerActivity : ComponentActivity() {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
-            CompositionLocalProvider(LocalAppLanguage provides appLanguageState.language) {
+            ProvideAppLanguage(appLanguageState.language) {
                 Hermes2Theme(
                     themeMode = themeModeState.mode,
                     colorTheme = themeModeState.colorTheme,
@@ -304,12 +305,12 @@ private fun FileViewerScreen(
                 title = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "برگشت"))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_2))
                     }
                 },
                 actions = {
                     IconButton(onClick = openExternally) {
-                        Icon(HxIcons.ExternalLink, contentDescription = t("Open with another app", "باز کردن با برنامهٔ دیگر"))
+                        Icon(HxIcons.ExternalLink, contentDescription = stringResource(R.string.open_with_another_app))
                     }
                 },
             )
@@ -480,8 +481,8 @@ private fun VideoPlayer(player: Player, fullscreen: Boolean, onFullscreen: (Bool
                             IconButton(onClick = { onFullscreen(!fullscreen) }) {
                                 Icon(
                                     if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                                    contentDescription = if (fullscreen) t("Exit full screen", "خروج از تمام‌صفحه")
-                                    else t("Full screen", "تمام‌صفحه"),
+                                    contentDescription = if (fullscreen) stringResource(R.string.exit_full_screen)
+                                    else stringResource(R.string.full_screen),
                                 )
                             }
                         }
@@ -674,7 +675,7 @@ private fun ViewerError(message: String, openExternally: () -> Unit) {
     ) {
         Text(message, color = MaterialTheme.colorScheme.error)
         TextButton(onClick = openExternally) {
-            Text(t("Open with another app", "باز کردن با برنامهٔ دیگر"))
+            Text(stringResource(R.string.open_with_another_app))
         }
     }
 }

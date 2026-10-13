@@ -36,16 +36,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.viewmodel.GroupsViewModel
 
@@ -75,7 +76,7 @@ fun GroupsScreen(
     }
 
     HermesScaffold(
-        title = t("Group chats", "گفتگوهای گروهی"),
+        title = stringResource(R.string.group_chats),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
         floatingActionButton = {
@@ -86,7 +87,7 @@ fun GroupsScreen(
                         creating = true
                     },
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(t("New group", "گروه جدید")) },
+                    text = { Text(stringResource(R.string.new_group)) },
                 )
             }
         },
@@ -101,21 +102,15 @@ fun GroupsScreen(
 
                 state.available == false -> HermesEmptyState(
                     icon = Icons.Default.Forum,
-                    title = t("Group chat is off on this Hermes", "گفتگوی گروهی در این هرمس خاموش است"),
-                    caption = t(
-                        "This gateway does not run group rooms. Update Hermes (hermes update) and restart it.",
-                        "این گیت‌وی اتاق گروهی اجرا نمی‌کند. هرمس را به‌روز کن (hermes update) و دوباره راه بینداز.",
-                    ),
+                    title = stringResource(R.string.group_chat_is_off_on_this_hermes),
+                    caption = stringResource(R.string.this_gateway_does_not_run_group_rooms),
                 )
 
                 state.rooms.isEmpty() -> HermesEmptyState(
                     icon = Icons.Default.Forum,
-                    title = t("No group chats yet", "هنوز گفتگوی گروهی نداری"),
-                    caption = t(
-                        "Put 2 to 6 profiles in one room: they answer your message together and pull each other in with @name.",
-                        "۲ تا ۶ پروفایل را در یک اتاق بگذار: با هم به پیامت جواب می‌دهند و با @نام همدیگر را صدا می‌زنند.",
-                    ),
-                    actionLabel = if (state.available == true) t("New group", "گروه جدید") else null,
+                    title = stringResource(R.string.no_group_chats_yet),
+                    caption = stringResource(R.string.put_2_to_6_profiles_in_one_room_they),
+                    actionLabel = if (state.available == true) stringResource(R.string.new_group) else null,
                     onAction = {
                         viewModel.loadProfiles()
                         creating = true
@@ -190,19 +185,19 @@ private fun NewGroupSheet(
             contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.xs),
         ) {
-            item { SheetHeader(t("New group", "گروه جدید"), onBack = null) }
+            item { SheetHeader(stringResource(R.string.new_group), onBack = null) }
             item {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text(t("Group name", "نام گروه")) },
+                    label = { Text(stringResource(R.string.group_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
             item {
                 SheetSection(
-                    t("Members (${members.size} of 2–6)", "اعضا (${members.size} از ۲ تا ۶)")
+                    stringResource(R.string.members_of_2_6, members.size)
                 )
             }
             if (profiles.isEmpty()) {
@@ -210,10 +205,7 @@ private fun NewGroupSheet(
             } else if (profiles.size < GroupRooms.MIN_MEMBERS) {
                 item {
                     SheetHint(
-                        t(
-                            "A group needs at least two profiles. Make another one from the drawer's title.",
-                            "گروه دست‌کم دو پروفایل لازم دارد. از عنوان کشوی کناری یک پروفایل دیگر بساز.",
-                        )
+                        stringResource(R.string.a_group_needs_at_least_two_profiles_make)
                     )
                 }
             }
@@ -255,7 +247,7 @@ private fun NewGroupSheet(
                     if (isCreating) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Text(t("Create group", "ساخت گروه"))
+                        Text(stringResource(R.string.create_group))
                     }
                 }
             }

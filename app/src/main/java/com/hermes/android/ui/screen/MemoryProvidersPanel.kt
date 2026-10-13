@@ -30,12 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.memory.MemoryProviders.ConfigField
 import com.hermes.android.domain.memory.MemoryProviders.FieldKind
 import com.hermes.android.domain.memory.MemoryProviders.Provider
@@ -43,7 +45,6 @@ import com.hermes.android.domain.memory.MemoryProviders.ProviderState
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel
 import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel.Busy
 import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel.Notice
@@ -65,12 +66,9 @@ internal fun MemoryProvidersPanel(
     var confirmReset by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-        Text(t("External memory", "حافظهٔ بیرونی"), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.external_memory), style = MaterialTheme.typography.titleMedium)
         Text(
-            t(
-                "Built-in memory is always on. One extra provider can store and search more of what the agent learns.",
-                "حافظهٔ داخلی همیشه روشن است. یک سرویس اضافه هم می‌شود روشن کرد تا ایجنت چیزهای بیشتری را نگه دارد و در آن جستجو کند.",
-            ),
+            stringResource(R.string.built_in_memory_is_always_on_one_extra),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -80,26 +78,26 @@ internal fun MemoryProvidersPanel(
             state.isLoading && status == null -> CircularProgressIndicator(Modifier.size(24.dp))
             state.loadError != null && status == null -> Column {
                 Text(
-                    t("Couldn't load: ", "بارگذاری نشد: ") + state.loadError,
+                    stringResource(R.string.couldnt_load) + state.loadError,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
-                TextButton(onClick = viewModel::load) { Text(t("Try again", "دوباره")) }
+                TextButton(onClick = viewModel::load) { Text(stringResource(R.string.try_again)) }
             }
             status != null -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (status.active.isBlank()) {
-                            t("In use: built-in only", "در حال استفاده: فقط حافظهٔ داخلی")
+                            stringResource(R.string.in_use_built_in_only)
                         } else {
-                            t("In use: ${status.active}", "در حال استفاده: ${status.active}")
+                            stringResource(R.string.in_use_3, status.active)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
                     if (status.active.isNotBlank()) {
                         TextButton(enabled = state.busy == null, onClick = viewModel::turnOff) {
-                            Text(t("Turn off", "خاموش کردن"))
+                            Text(stringResource(R.string.turn_off))
                         }
                     }
                 }
@@ -107,16 +105,13 @@ internal fun MemoryProvidersPanel(
                     ProviderRow(provider, active = provider.name == status.active) { viewModel.edit(provider.name) }
                 }
                 Text(
-                    t(
-                        "More providers (Honcho, Mem0, Supermemory…) come as plugins: on the Hermes machine run `hermes plugins install <name>`.",
-                        "سرویس‌های دیگر (Honcho، Mem0، Supermemory و…) افزونه‌اند: روی دستگاه هرمس `hermes plugins install <name>` را اجرا کن.",
-                    ),
+                    stringResource(R.string.more_providers_honcho_mem0_supermemory),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
 
                 Text(
-                    t("Erase built-in memory", "پاک کردن حافظهٔ داخلی"),
+                    stringResource(R.string.erase_built_in_memory),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(top = HxSpace.sm),
                 )
@@ -132,7 +127,7 @@ internal fun MemoryProvidersPanel(
                     if (state.busy == Busy.RESETTING) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text(t("Erase…", "پاک کردن…"), color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.erase), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -177,13 +172,13 @@ private fun ProviderRow(provider: Provider, active: Boolean, onClick: () -> Unit
         Column(Modifier.padding(HxSpace.inner)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                 Text(provider.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                if (active) StatusChip(label = t("in use", "فعال"), color = MaterialTheme.colorScheme.primary)
+                if (active) StatusChip(label = stringResource(R.string.in_use_4), color = MaterialTheme.colorScheme.primary)
                 val (label, ok) = when {
-                    !provider.dependenciesInstalled -> t("needs install", "نیاز به نصب") to false
-                    provider.state == ProviderState.READY -> t("ready", "آماده") to true
-                    provider.state == ProviderState.NEEDS_CONFIG -> t("needs settings", "نیاز به تنظیم") to false
-                    provider.state == ProviderState.MISSING -> t("not found", "پیدا نشد") to false
-                    else -> t("unavailable", "در دسترس نیست") to false
+                    !provider.dependenciesInstalled -> stringResource(R.string.needs_install) to false
+                    provider.state == ProviderState.READY -> stringResource(R.string.ready_2) to true
+                    provider.state == ProviderState.NEEDS_CONFIG -> stringResource(R.string.needs_settings) to false
+                    provider.state == ProviderState.MISSING -> stringResource(R.string.not_found) to false
+                    else -> stringResource(R.string.unavailable) to false
                 }
                 StatusChip(
                     label = label,
@@ -227,10 +222,7 @@ private fun ProviderEditor(
             ) {
                 if (provider != null && !provider.dependenciesInstalled) {
                     Text(
-                        t(
-                            "It needs packages installed on the Hermes machine first.",
-                            "اول باید چند بسته روی دستگاه هرمس نصب شود.",
-                        ),
+                        stringResource(R.string.it_needs_packages_installed_on_the),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     provider.externalTools.forEach { command ->
@@ -243,15 +235,15 @@ private fun ProviderEditor(
                     OutlinedButton(enabled = !busy, onClick = onInstall) {
                         if (state.busy == Busy.INSTALLING) {
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text(t("  Installing… (can take minutes)", "  در حال نصب… (چند دقیقه طول می‌کشد)"))
+                            Text(stringResource(R.string.installing_can_take_minutes))
                         } else {
-                            Text(t("Install", "نصب"))
+                            Text(stringResource(R.string.install))
                         }
                     }
                 }
                 state.install?.let { result ->
                     Text(
-                        if (result.ok) t("Install finished.", "نصب تمام شد.") else t("Install failed:", "نصب ناموفق بود:"),
+                        if (result.ok) stringResource(R.string.install_finished) else stringResource(R.string.install_failed),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (result.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     )
@@ -266,7 +258,7 @@ private fun ProviderEditor(
                 when {
                     state.isLoadingFields -> CircularProgressIndicator(Modifier.size(24.dp))
                     visible.isEmpty() -> Text(
-                        t("Nothing to set for this one.", "این یکی تنظیمی ندارد."),
+                        stringResource(R.string.nothing_to_set_for_this_one),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     else -> visible.forEach { field ->
@@ -281,12 +273,12 @@ private fun ProviderEditor(
                 if (state.busy == Busy.SAVING) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(t("Save and use", "ذخیره و استفاده"))
+                    Text(stringResource(R.string.save_and_use))
                 }
             }
         },
         dismissButton = {
-            TextButton(enabled = !busy, onClick = onDismiss) { Text(t("Close", "بستن")) }
+            TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.close)) }
         },
     )
 }
@@ -329,7 +321,7 @@ private fun ConfigFieldInput(field: ConfigField, value: String, enabled: Boolean
                 placeholder = {
                     Text(
                         if (field.kind == FieldKind.SECRET && field.isSet) {
-                            t("Saved — leave empty to keep it", "ذخیره شده؛ خالی بماند تا عوض نشود")
+                            stringResource(R.string.saved_leave_empty_to_keep_it)
                         } else {
                             field.placeholder
                         },
@@ -362,23 +354,20 @@ private fun ConfigFieldInput(field: ConfigField, value: String, enabled: Boolean
 private fun ResetDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("Erase built-in memory?", "حافظهٔ داخلی پاک شود؟")) },
+        title = { Text(stringResource(R.string.erase_built_in_memory_2)) },
         text = {
             Text(
-                t(
-                    "What the agent remembered there is deleted for good. External providers are not touched.",
-                    "چیزهایی که ایجنت آنجا به خاطر سپرده برای همیشه پاک می‌شود. به سرویس بیرونی دست زده نمی‌شود.",
-                ),
+                stringResource(R.string.what_the_agent_remembered_there_is),
             )
         },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = { onPick("memory") }) { Text(t("Only MEMORY.md", "فقط MEMORY.md")) }
-                TextButton(onClick = { onPick("user") }) { Text(t("Only USER.md", "فقط USER.md")) }
+                TextButton(onClick = { onPick("memory") }) { Text(stringResource(R.string.only_memory_md)) }
+                TextButton(onClick = { onPick("user") }) { Text(stringResource(R.string.only_user_md)) }
                 TextButton(onClick = { onPick("all") }) {
-                    Text(t("Both", "هر دو"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.both), color = MaterialTheme.colorScheme.error)
                 }
-                TextButton(onClick = onDismiss) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) }
             }
         },
     )
@@ -387,9 +376,9 @@ private fun ResetDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
 @Composable
 private fun NoticeText(notice: Notice) {
     val (text, failed) = when (notice) {
-        Notice.Saved -> t("Saved and turned on.", "ذخیره و روشن شد.") to false
-        Notice.TurnedOff -> t("Turned off. Built-in memory only.", "خاموش شد. فقط حافظهٔ داخلی.") to false
-        Notice.Reset -> t("Erased.", "پاک شد.") to false
+        Notice.Saved -> stringResource(R.string.saved_and_turned_on) to false
+        Notice.TurnedOff -> stringResource(R.string.turned_off_built_in_memory_only) to false
+        Notice.Reset -> stringResource(R.string.erased) to false
         is Notice.Failed -> notice.reason to true
     }
     Text(
@@ -401,7 +390,7 @@ private fun NoticeText(notice: Notice) {
 
 @Composable
 private fun sizeText(bytes: Long): String = when {
-    bytes <= 0 -> t("empty", "خالی")
-    bytes < 1024 -> t("$bytes B", "$bytes بایت")
-    else -> t("${bytes / 1024} KB", "${bytes / 1024} کیلوبایت")
+    bytes <= 0 -> stringResource(R.string.empty_2)
+    bytes < 1024 -> stringResource(R.string.b, bytes)
+    else -> stringResource(R.string.kb, bytes / 1024)
 }

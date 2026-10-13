@@ -47,14 +47,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.hermes.android.R
 import com.hermes.android.ui.component.PREVIEW_MAX_HEIGHT
 import com.hermes.android.ui.component.PREVIEW_MIN_HEIGHT
 import com.hermes.android.ui.design.HxIcons
-import com.hermes.android.ui.i18n.t
 import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -186,7 +187,7 @@ internal fun InlinePreviewFrame(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val shareFailed = t("Couldn't share the file", "فایل قابل اشتراک نیست")
+    val shareFailed = stringResource(R.string.couldnt_share_the_file)
     var doc by remember(file) { mutableStateOf<String?>(null) }
     var failed by remember(file) { mutableStateOf(false) }
     var measured by remember(file) { mutableStateOf<Int?>(null) }
@@ -204,7 +205,7 @@ internal fun InlinePreviewFrame(
     if (failed) {
         ArtifactCard(
             emoji = "🌐", name = file.substringAfterLast('/'),
-            actionLabel = t("Open", "باز کردن"),
+            actionLabel = stringResource(R.string.open),
             onAction = onOpen,
             onDownload = null,
         )
@@ -252,7 +253,7 @@ internal fun InlinePreviewFrame(
             ) {
                 Icon(
                     Icons.Default.Share,
-                    contentDescription = t("Share", "اشتراک\u200Cگذاری"),
+                    contentDescription = stringResource(R.string.share),
                     modifier = Modifier.size(16.dp),
                     tint = colors.primary,
                 )
@@ -260,7 +261,7 @@ internal fun InlinePreviewFrame(
             IconButton(onClick = onOpen, modifier = Modifier.size(32.dp)) {
                 Icon(
                     HxIcons.ExternalLink,
-                    contentDescription = t("Open full screen", "باز کردن در صفحهٔ کامل"),
+                    contentDescription = stringResource(R.string.open_full_screen),
                     modifier = Modifier.size(16.dp),
                     tint = colors.primary,
                 )

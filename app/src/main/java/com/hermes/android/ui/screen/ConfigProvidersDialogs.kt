@@ -24,6 +24,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -84,7 +86,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -134,10 +135,10 @@ internal fun AddProviderDialog(
         title = {
             Text(
                 when (step) {
-                    AddProviderStep.CONNECT -> t("Add Provider", "افزودن پرووایدر")
-                    AddProviderStep.LOADING -> t("Connecting…", "در حال اتصال…")
-                    AddProviderStep.PICK -> t("Choose a Model", "انتخاب مدل")
-                    AddProviderStep.MANUAL -> t("Model Not Auto-Detected", "مدل خودکار پیدا نشد")
+                    AddProviderStep.CONNECT -> stringResource(R.string.add_provider)
+                    AddProviderStep.LOADING -> stringResource(R.string.connecting_2)
+                    AddProviderStep.PICK -> stringResource(R.string.choose_a_model)
+                    AddProviderStep.MANUAL -> stringResource(R.string.model_not_auto_detected)
                 },
             )
         },
@@ -147,7 +148,7 @@ internal fun AddProviderDialog(
                     OutlinedTextField(
                         value = slug,
                         onValueChange = { slug = it.lowercase().replace(" ", "_") },
-                        label = { Text(t("Provider Name (slug)", "نام پرووایدر")) },
+                        label = { Text(stringResource(R.string.provider_name_slug)) },
                         placeholder = { Text("openai, anthropic, xai...") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -155,7 +156,7 @@ internal fun AddProviderDialog(
                     OutlinedTextField(
                         value = baseUrl,
                         onValueChange = { baseUrl = it },
-                        label = { Text(t("Base URL", "آدرس سرور")) },
+                        label = { Text(stringResource(R.string.base_url_2)) },
                         placeholder = { Text("https://api.openai.com/v1") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -164,7 +165,7 @@ internal fun AddProviderDialog(
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text(t("API Key", "کلید API")) },
+                        label = { Text(stringResource(R.string.api_key)) },
                         placeholder = { Text("sk-...") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -173,10 +174,7 @@ internal fun AddProviderDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     )
                     Text(
-                        t(
-                            "Next, we'll ask this endpoint for its real model list — same as connecting from Hermes itself.",
-                            "بعدش لیست واقعی مدل‌های این سرور رو می‌گیریم — دقیقاً مثل اتصال از خود Hermes.",
-                        ),
+                        stringResource(R.string.next_well_ask_this_endpoint_for_its_real),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -188,7 +186,7 @@ internal fun AddProviderDialog(
                     CircularProgressIndicator()
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        t("Fetching model list from the endpoint…", "در حال گرفتن لیست مدل از سرور…"),
+                        stringResource(R.string.fetching_model_list_from_the_endpoint),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -196,7 +194,7 @@ internal fun AddProviderDialog(
                     modifier = Modifier.heightIn(max = 360.dp),
                 ) {
                     Text(
-                        t("${models.size} models found at this endpoint:", "${models.size} مدل در این سرور پیدا شد:"),
+                        stringResource(R.string.models_found_at_this_endpoint, models.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp),
@@ -223,13 +221,13 @@ internal fun AddProviderDialog(
                         }
                     }
                     TextButton(onClick = { step = AddProviderStep.MANUAL }) {
-                        Text(t("My model isn't listed — type it manually", "مدلم لیست نیست — دستی وارد می‌کنم"))
+                        Text(stringResource(R.string.my_model_isnt_listed_type_it_manually))
                     }
                 }
                 AddProviderStep.MANUAL -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!probeError.isNullOrBlank()) {
                         Text(
-                            t("Couldn't fetch models: $probeError", "گرفتن لیست مدل ناموفق بود: $probeError"),
+                            stringResource(R.string.couldnt_fetch_models, probeError),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -237,17 +235,14 @@ internal fun AddProviderDialog(
                     OutlinedTextField(
                         value = manualModel,
                         onValueChange = { manualModel = it },
-                        label = { Text(t("Model Name", "نام مدل")) },
+                        label = { Text(stringResource(R.string.model_name)) },
                         placeholder = { Text("gpt-4o, claude-sonnet-4-20250514...") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         leadingIcon = { Icon(Icons.Default.Psychology, null) },
                     )
                     Text(
-                        t(
-                            "Warning: this name isn't verified against the endpoint — a typo will fail to connect.",
-                            "توجه: این اسم با سرور چک نشده — اگه اشتباه تایپ بشه، اتصال شکست می‌خوره.",
-                        ),
+                        stringResource(R.string.warning_this_name_isnt_verified_against),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -259,24 +254,24 @@ internal fun AddProviderDialog(
                 AddProviderStep.CONNECT -> TextButton(
                     onClick = { fetch() },
                     enabled = slug.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank(),
-                ) { Text(t("Fetch Models", "گرفتن لیست مدل")) }
+                ) { Text(stringResource(R.string.fetch_models)) }
                 AddProviderStep.LOADING -> {}
                 AddProviderStep.PICK -> TextButton(
                     onClick = { onAdd(slug, baseUrl, selectedModel.orEmpty(), apiKey) },
                     enabled = !selectedModel.isNullOrBlank(),
-                ) { Text(t("Add", "افزودن")) }
+                ) { Text(stringResource(R.string.add)) }
                 AddProviderStep.MANUAL -> TextButton(
                     onClick = { onAdd(slug, baseUrl, manualModel, apiKey) },
                     enabled = manualModel.isNotBlank(),
-                ) { Text(t("Add Anyway", "افزودن به هر حال")) }
+                ) { Text(stringResource(R.string.add_anyway)) }
             }
         },
         dismissButton = {
             when (step) {
-                AddProviderStep.CONNECT -> TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
-                AddProviderStep.LOADING -> TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+                AddProviderStep.CONNECT -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                AddProviderStep.LOADING -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 AddProviderStep.PICK, AddProviderStep.MANUAL -> TextButton(onClick = { step = AddProviderStep.CONNECT }) {
-                    Text(t("Back", "بازگشت"))
+                    Text(stringResource(R.string.back))
                 }
             }
         },
@@ -293,12 +288,12 @@ internal fun SetKeyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("API Key for $providerSlug", "کلید API برای $providerSlug")) },
+        title = { Text(stringResource(R.string.api_key_for, providerSlug)) },
         text = {
             OutlinedTextField(
                 value = key,
                 onValueChange = { key = it },
-                label = { Text(t("API Key", "کلید API")) },
+                label = { Text(stringResource(R.string.api_key)) },
                 placeholder = { Text("sk-...") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -312,10 +307,10 @@ internal fun SetKeyDialog(
             TextButton(
                 onClick = { onSet(key) },
                 enabled = key.isNotBlank(),
-            ) { Text(t("Save", "ذخیره")) }
+            ) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
@@ -372,7 +367,7 @@ internal fun CredentialRow(
             ) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = t("Remove", "حذف"),
+                    contentDescription = stringResource(R.string.remove),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -383,16 +378,16 @@ internal fun CredentialRow(
     if (showConfirm) {
         AlertDialog(
             onDismissRequest = { showConfirm = false },
-            title = { Text(t("Remove Key?", "کلید حذف شود؟")) },
-            text = { Text(t("This key will be removed from the credential pool.", "این کلید از credential pool حذف میشه.")) },
+            title = { Text(stringResource(R.string.remove_key)) },
+            text = { Text(stringResource(R.string.this_key_will_be_removed_from_the)) },
             confirmButton = {
                 TextButton(onClick = {
                     onRemove()
                     showConfirm = false
-                }) { Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirm = false }) { Text(t("Cancel", "لغو")) }
+                TextButton(onClick = { showConfirm = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }

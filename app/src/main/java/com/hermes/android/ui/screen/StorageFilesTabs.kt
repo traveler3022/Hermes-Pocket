@@ -70,16 +70,17 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.hermes.android.R
 import com.hermes.android.domain.storage.FileArea
 import com.hermes.android.domain.storage.FoundFile
 import com.hermes.android.domain.storage.FoundFolder
 import com.hermes.android.domain.storage.FoundKind
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.MusicNote
 import com.hermes.android.ui.viewer.FileViewerActivity
@@ -162,10 +163,10 @@ internal fun LazyListScope.storageFileTabs(state: StorageUiState, actions: FileT
 
 @Composable
 private fun tabTitle(tab: StorageTab): String = when (tab) {
-    StorageTab.Folders -> t("Folders", "پوشه‌ها")
-    StorageTab.Media -> t("Media", "رسانه")
-    StorageTab.Files -> t("Files", "فایل‌ها")
-    StorageTab.Music -> t("Music", "موسیقی")
+    StorageTab.Folders -> stringResource(R.string.folders)
+    StorageTab.Media -> stringResource(R.string.media)
+    StorageTab.Files -> stringResource(R.string.files)
+    StorageTab.Music -> stringResource(R.string.music)
 }
 
 /** ViewPagerFixed's tabs: the chosen page coloured and underlined. */
@@ -212,7 +213,7 @@ private fun StorageTabsRow(tabs: List<StorageTab>, selected: StorageTab, onTab: 
 private fun FilesLoading() {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(
-            t("Looking for files…", "در حال پیدا کردن فایل‌ها…"),
+            stringResource(R.string.looking_for_files),
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -224,9 +225,9 @@ private fun FilesLoading() {
 private fun folderTitle(folder: FoundFolder): String {
     if (folder.relative.isNotEmpty()) return folder.relative
     return when (folder.area) {
-        FileArea.Home -> t("Home folder", "پوشهٔ خانه")
-        FileArea.Temp -> t("Temporary files", "فایل‌های موقت")
-        FileArea.HermesCache -> t("Hermes cache", "کش هرمس") + " · " + folder.guestPath.substringAfterLast('/')
+        FileArea.Home -> stringResource(R.string.home_folder)
+        FileArea.Temp -> stringResource(R.string.temporary_files)
+        FileArea.HermesCache -> stringResource(R.string.hermes_cache) + " · " + folder.guestPath.substringAfterLast('/')
     }
 }
 
@@ -257,7 +258,7 @@ private fun FolderRow(folder: FoundFolder, checked: Boolean, divider: Boolean, o
             Column(Modifier.weight(1f)) {
                 Text(folderTitle(folder), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
                 Text(
-                    folder.guestPath + " · " + t("${folder.count} files", "${folder.count} فایل"),
+                    folder.guestPath + " · " + stringResource(R.string.files_2, folder.count),
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -383,8 +384,8 @@ private fun MediaCell(file: FoundFile, checked: Boolean, thumbs: VideoThumbs, on
 @Composable
 private fun PickMenu(expanded: Boolean, checked: Boolean, onDismiss: () -> Unit, onOpen: () -> Unit, onPick: () -> Unit) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(text = { Text(t("Open file", "باز کردن فایل")) }, onClick = { onDismiss(); onOpen() })
-        DropdownMenuItem(text = { Text(if (checked) t("Deselect", "لغو انتخاب") else t("Select", "انتخاب")) }, onClick = { onDismiss(); onPick() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.open_file)) }, onClick = { onDismiss(); onOpen() })
+        DropdownMenuItem(text = { Text(if (checked) stringResource(R.string.deselect) else stringResource(R.string.select)) }, onClick = { onDismiss(); onPick() })
     }
 }
 

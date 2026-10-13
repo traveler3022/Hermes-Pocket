@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Extension
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,7 +34,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PluginsViewModel
 
 /**
@@ -58,17 +59,14 @@ fun PluginsScreen(
     }
 
     HermesScaffold(
-        title = t("Plugins", "افزونه‌ها"),
+        title = stringResource(R.string.plugins),
         subtitle = if (uiState.plugins.isEmpty()) null else {
-            t(
-                "${uiState.plugins.count { it.enabled }} of ${uiState.plugins.size} enabled",
-                "${uiState.plugins.count { it.enabled }} از ${uiState.plugins.size} فعال",
-            )
+            stringResource(R.string.of_enabled, uiState.plugins.count { it.enabled }, uiState.plugins.size)
         },
         onBack = onNavigateBack,
         actions = {
             IconButton(onClick = { viewModel.reloadPlugins() }) {
-                Icon(Icons.Default.Refresh, contentDescription = t("Reload", "بارگذاری مجدد"))
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reload))
             }
         },
         snackbarHostState = snackbarHostState,
@@ -84,7 +82,7 @@ fun PluginsScreen(
                 CircularProgressIndicator()
                 Spacer(Modifier.height(HxSpace.sm))
                 Text(
-                    t("Loading plugins…", "در حال بارگذاری افزونه‌ها…"),
+                    stringResource(R.string.loading_plugins),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -93,11 +91,8 @@ fun PluginsScreen(
             uiState.plugins.isEmpty() -> Column(modifier = Modifier.padding(padding)) {
                 HermesEmptyState(
                     icon = Icons.Default.Extension,
-                    title = t("No plugins available", "افزونه‌ای موجود نیست"),
-                    caption = t(
-                        "Plugins the gateway exposes will appear here",
-                        "افزونه‌هایی که گیت‌وی ارائه بده اینجا نمایش داده می‌شن",
-                    ),
+                    title = stringResource(R.string.no_plugins_available),
+                    caption = stringResource(R.string.plugins_the_gateway_exposes_will_appear),
                 )
             }
 
@@ -114,7 +109,7 @@ fun PluginsScreen(
                             SettingRow(
                                 title = plugin.name,
                                 subtitle = plugin.description.ifBlank {
-                                    if (plugin.source == "bundled") t("Bundled", "همراه برنامه") else null
+                                    if (plugin.source == "bundled") stringResource(R.string.bundled) else null
                                 },
                                 icon = Icons.Default.Extension,
                                 iconTint = if (plugin.enabled) {

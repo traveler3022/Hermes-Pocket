@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,7 +41,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PendingApprovalUi
 
 /**
@@ -96,7 +97,7 @@ internal fun ApprovalSheet(
                 Spacer(Modifier.size(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = t("Command approval", "درخواست اجرای فرمان"),
+                        text = stringResource(R.string.command_approval),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -179,14 +180,14 @@ internal fun ApprovalSheet(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
                 ) {
-                    Text(t("Deny", "رد"))
+                    Text(stringResource(R.string.deny))
                 }
                 if ("once" in approval.choices) {
                     Button(
                         onClick = { onRespond("once") },
                         modifier = Modifier.weight(1.4f),
                     ) {
-                        Text(t("Allow once", "یک‌بار مجاز"))
+                        Text(stringResource(R.string.allow_once))
                     }
                 }
             }
@@ -197,7 +198,7 @@ internal fun ApprovalSheet(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
                     Text(
-                        t("Allow for this chat", "در این گفتگو مجاز باش"),
+                        stringResource(R.string.allow_for_this_chat),
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
@@ -209,7 +210,7 @@ internal fun ApprovalSheet(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
                     Text(
-                        t("Always allow this pattern", "همیشه برای این الگو مجاز باش"),
+                        stringResource(R.string.always_allow_this_pattern),
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }

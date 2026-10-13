@@ -24,6 +24,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -83,7 +85,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.theme.ColorTheme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.theme.ThemeModeState
@@ -103,7 +104,7 @@ internal fun ProviderDropdown(
 
     Column {
         Text(
-            text = t("API Provider", "پرووایدر API"),
+            text = stringResource(R.string.api_provider),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
@@ -124,7 +125,7 @@ internal fun ProviderDropdown(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = selected ?: t("All providers", "همه پرووایدرها"),
+                        text = selected ?: stringResource(R.string.all_providers),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -148,7 +149,7 @@ internal fun ProviderDropdown(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = t("All providers", "همه پرووایدرها"),
+                                text = stringResource(R.string.all_providers),
                                 fontWeight = if (selected == null) FontWeight.Medium else FontWeight.Normal,
                             )
                         },
@@ -208,7 +209,7 @@ internal fun ModelDropdown(
 
     Column {
         Text(
-            text = t("Model", "مدل"),
+            text = stringResource(R.string.model),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
@@ -230,7 +231,7 @@ internal fun ModelDropdown(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = selected?.modelId
-                            ?: t("Select model...", "مدل رو انتخاب کن..."),
+                            ?: stringResource(R.string.select_model_2),
                         style = MaterialTheme.typography.bodyLarge,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = if (selected != null) FontWeight.Medium else FontWeight.Normal,
@@ -241,7 +242,7 @@ internal fun ModelDropdown(
                     )
                     if (selected != null) {
                         Text(
-                            text = "✓ " + t("Active", "فعال"),
+                            text = "✓ " + stringResource(R.string.active),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -280,11 +281,11 @@ internal fun ModelDropdown(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = t("Select model", "انتخاب مدل"),
+                            text = stringResource(R.string.select_model_3),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            text = t("${filtered.size} / ${models.size}", "${filtered.size} / ${models.size}"),
+                            text = stringResource(R.string.text, filtered.size, models.size),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -298,7 +299,7 @@ internal fun ModelDropdown(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         placeholder = {
-                            Text(t("Search ${models.size} models…", "جستجو بین ${models.size} مدل…"))
+                            Text(stringResource(R.string.search_models, models.size))
                         },
                         singleLine = true,
                         leadingIcon = {
@@ -320,7 +321,7 @@ internal fun ModelDropdown(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
-                                        text = t("No match", "چیزی پیدا نشد"),
+                                        text = stringResource(R.string.no_match),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -444,7 +445,7 @@ internal fun ProviderCard(
                             if (provider.isPrimary) {
                                 AssistChip(
                                     onClick = {},
-                                    label = { Text(t("Primary", "اصلی"), style = MaterialTheme.typography.labelSmall) },
+                                    label = { Text(stringResource(R.string.primary), style = MaterialTheme.typography.labelSmall) },
                                     leadingIcon = { Icon(Icons.Default.Star, null, Modifier.size(14.dp)) },
                                     colors = AssistChipDefaults.assistChipColors(
                                         containerColor = MaterialTheme.colorScheme.primary,
@@ -479,7 +480,7 @@ internal fun ProviderCard(
                     IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = t("Delete", "حذف"),
+                            contentDescription = stringResource(R.string.delete),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp),
                         )
@@ -502,9 +503,9 @@ internal fun ProviderCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // Details
-                    DetailRow(t("Base URL", "آدرس"), provider.baseUrl)
+                    DetailRow(stringResource(R.string.base_url), provider.baseUrl)
                     if (provider.defaultModel.isNotBlank()) {
-                        DetailRow(t("Default Model", "مدل پیشفرض"), provider.defaultModel)
+                        DetailRow(stringResource(R.string.default_model), provider.defaultModel)
                     }
 
                     // ── Primary action ──
@@ -520,7 +521,7 @@ internal fun ProviderCard(
                             ) {
                                 Icon(Icons.Default.Star, null, Modifier.size(15.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(t("Set primary", "پرووایدر اصلی شود"), style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.set_primary), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -536,9 +537,9 @@ internal fun ProviderCard(
                     ) {
                         Text(
                             text = if (credentials.size > 1) {
-                                t("API Keys (${credentials.size})", "کلیدهای API (${credentials.size})")
+                                stringResource(R.string.api_keys, credentials.size)
                             } else {
-                                t("API Key", "کلید API")
+                                stringResource(R.string.api_key)
                             },
                             style = MaterialTheme.typography.labelMedium,
                         )
@@ -547,15 +548,15 @@ internal fun ProviderCard(
                                 TextButton(onClick = { showAddKeyDialog = true }) {
                                     Icon(Icons.Default.Add, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text(t("Add Key", "افزودن کلید"), style = MaterialTheme.typography.labelSmall)
+                                    Text(stringResource(R.string.add_key), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                             TextButton(onClick = { showSetKeyDialog = true }) {
                                 Icon(Icons.Default.Key, null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text(
-                                    if (credentials.isEmpty()) t("Set Key", "ثبت کلید")
-                                    else t("Replace First Key", "تعویض کلید اول"),
+                                    if (credentials.isEmpty()) stringResource(R.string.set_key)
+                                    else stringResource(R.string.replace_first_key),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }
@@ -564,17 +565,14 @@ internal fun ProviderCard(
 
                     if (credentials.isEmpty()) {
                         Text(
-                            text = t("No key configured", "کلیدی تنظیم نشده"),
+                            text = stringResource(R.string.no_key_configured),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         if (credentials.size > 1) {
                             Text(
-                                text = t(
-                                    "Tried in priority order — when the active key hits a rate limit, Hermes rotates to the next one automatically",
-                                    "به ترتیب اولویت امتحان می‌شن — وقتی کلید فعال به محدودیت بخوره، Hermes خودکار می‌ره سراغ بعدی",
-                                ),
+                                text = stringResource(R.string.tried_in_priority_order_when_the_active),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 2.dp),
@@ -609,13 +607,10 @@ internal fun ProviderCard(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(t("Delete Provider?", "پرووایدر حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_provider)) },
             text = {
                 Text(
-                    t(
-                        "This will remove \"${provider.slug}\" from config.yaml and credential pool.",
-                        "\"${provider.slug}\" از config.yaml و credential pool حذف میشه.",
-                    )
+                    stringResource(R.string.this_will_remove_from_config_yaml_and, provider.slug)
                 )
             },
             confirmButton = {
@@ -623,12 +618,12 @@ internal fun ProviderCard(
                     onRemove()
                     showDeleteConfirm = false
                 }) {
-                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(t("Cancel", "لغو"))
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.ExpandLess
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -46,7 +48,6 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -184,27 +185,27 @@ internal fun AssistantMessageBubble(
                                         )
                                         is ContentBlock.Video -> ArtifactCard(
                                             emoji = "\uD83C\uDFAC", name = block.name,
-                                            actionLabel = t("Play", "پخش"),
+                                            actionLabel = stringResource(R.string.play),
                                             onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                             onDownload = { onDownloadFile(block.url, block.name) },
                                         )
                                         is ContentBlock.Audio -> ArtifactCard(
                                             emoji = "\uD83C\uDFB5", name = block.name,
-                                            actionLabel = t("Play", "پخش"),
+                                            actionLabel = stringResource(R.string.play),
                                             onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                             onDownload = { onDownloadFile(block.url, block.name) },
                                         )
                                         is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
                                             ArtifactCard(
                                                 emoji = "\uD83D\uDCC4", name = block.name,
-                                                actionLabel = t("Download", "دانلود"),
+                                                actionLabel = stringResource(R.string.download),
                                                 onAction = { onDownloadFile(block.url, block.name) },
                                                 onDownload = null,
                                             )
                                         } else {
                                             ArtifactCard(
                                                 emoji = "\uD83D\uDCC4", name = block.name,
-                                                actionLabel = t("Open", "باز کردن"),
+                                                actionLabel = stringResource(R.string.open),
                                                 onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                                 onDownload = { onDownloadFile(block.url, block.name) },
                                             )
@@ -225,7 +226,7 @@ internal fun AssistantMessageBubble(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isResponseExpanded) t("Collapse", "جمع کردن") else t("Show more", "ادامه..."),
+                                    text = if (isResponseExpanded) stringResource(R.string.collapse) else stringResource(R.string.show_more),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }
@@ -247,7 +248,7 @@ internal fun AssistantMessageBubble(
                     if (isLastAssistant && !isSending) {
                         MessageActionIcon(
                             icon = Icons.Default.Refresh,
-                            contentDescription = t("Retry", "تلاش دوباره"),
+                            contentDescription = stringResource(R.string.retry),
                             onClick = onRetry,
                         )
                     }
@@ -259,7 +260,7 @@ internal fun AssistantMessageBubble(
                     Box {
                         MessageActionIcon(
                             icon = Icons.Default.MoreVert,
-                            contentDescription = t("More options", "گزینه\u200Cهای بیشتر"),
+                            contentDescription = stringResource(R.string.more_options),
                             onClick = { showContextMenu = true },
                         )
                         DropdownMenu(
@@ -267,7 +268,7 @@ internal fun AssistantMessageBubble(
                             onDismissRequest = { showContextMenu = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text(t("Copy text", "کپی متن")) },
+                                text = { Text(stringResource(R.string.copy_text)) },
                                 onClick = { onCopyMessage(message.text); showContextMenu = false },
                                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                             )
@@ -275,13 +276,13 @@ internal fun AssistantMessageBubble(
                             val firstCode = remember(message.text) { extractCodeBlocks(message.text).firstOrNull() }
                             if (firstCode != null) {
                                 DropdownMenuItem(
-                                    text = { Text(t("Copy code", "کپی کد")) },
+                                    text = { Text(stringResource(R.string.copy_code)) },
                                     onClick = { onCopyCode(firstCode); showContextMenu = false },
                                     leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text(t("Share", "اشتراک\u200Cگذاری")) },
+                                text = { Text(stringResource(R.string.share)) },
                                 onClick = {
                                     val sendIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
@@ -294,7 +295,7 @@ internal fun AssistantMessageBubble(
                                 leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                             )
                             DropdownMenuItem(
-                                text = { Text(t("Branch conversation", "شاخه\u200Cزدن گفتگو")) },
+                                text = { Text(stringResource(R.string.branch_conversation)) },
                                 onClick = { onBranch(); showContextMenu = false },
                                 leadingIcon = { Icon(HxIcons.GitBranch, contentDescription = null) },
                             )

@@ -21,11 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hermes.android.R
 import com.hermes.android.ui.design.HxIcons
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.MessageReaction
 import com.hermes.android.ui.viewmodel.QUICK_REACTIONS
 
@@ -118,7 +119,7 @@ internal fun ReactionSlot(
         if (reactions.isEmpty()) {
             MessageActionIcon(
                 icon = HxIcons.SmilePlus,
-                contentDescription = t("React", "واکنش"),
+                contentDescription = stringResource(R.string.react),
                 onClick = { open = true },
             )
         } else {

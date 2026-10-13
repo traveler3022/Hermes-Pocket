@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.DeleteOutline
@@ -47,7 +49,6 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.design.hxMessageMaxWidth
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -181,7 +182,7 @@ internal fun UserMessageBubble(
                             ) {
                                 Icon(
                                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = if (isExpanded) t("Collapse", "جمع کردن") else t("Expand", "باز کردن"),
+                                    contentDescription = if (isExpanded) stringResource(R.string.collapse) else stringResource(R.string.expand),
                                     modifier = Modifier.size(18.dp),
                                     tint = bubbleTextColor.copy(alpha = 0.6f),
                                 )
@@ -202,7 +203,7 @@ internal fun UserMessageBubble(
                                     tint = bubbleTextColor.copy(alpha = 0.6f),
                                 )
                                 Text(
-                                    text = t("Waiting for Hermes\u2026", "در انتظار آماده شدن Hermes\u2026"),
+                                    text = stringResource(R.string.waiting_for_hermes),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = bubbleTextColor.copy(alpha = 0.6f),
                                 )
@@ -219,20 +220,20 @@ internal fun UserMessageBubble(
                         HorizontalDivider()
                     }
                     DropdownMenuItem(
-                        text = { Text(t("Copy", "کپی")) },
+                        text = { Text(stringResource(R.string.copy)) },
                         onClick = { showMenu = false; onCopyMessage(message.text) },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                     )
                     onEdit?.let { edit ->
                         DropdownMenuItem(
-                            text = { Text(t("Edit", "ویرایش")) },
+                            text = { Text(stringResource(R.string.edit)) },
                             onClick = { showMenu = false; edit() },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                         )
                     }
                     onDelete?.let { delete ->
                         DropdownMenuItem(
-                            text = { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) },
+                            text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                             onClick = { showMenu = false; delete() },
                             leadingIcon = {
                                 Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)

@@ -28,9 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Download
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -106,7 +107,7 @@ fun ImageGallery(
                 .padding(16.dp)
                 .background(Color.Black.copy(alpha = 0.5f), CircleShape),
         ) {
-            Icon(Icons.Default.Close, contentDescription = t("Close", "بستن"), tint = Color.White)
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = Color.White)
         }
         IconButton(
             onClick = { onSave(images[pager.currentPage]) },
@@ -115,7 +116,7 @@ fun ImageGallery(
                 .padding(16.dp)
                 .background(Color.Black.copy(alpha = 0.5f), CircleShape),
         ) {
-            Icon(Icons.Default.Download, contentDescription = t("Save image", "ذخیره تصویر"), tint = Color.White)
+            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.save_image), tint = Color.White)
         }
     }
 }

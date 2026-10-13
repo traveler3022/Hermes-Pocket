@@ -34,15 +34,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hermes.android.R
 import com.hermes.android.runtime.TerminalLaunchSpec
 import com.hermes.android.ui.design.HermesScaffold
-import com.hermes.android.ui.i18n.t
 import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -84,7 +85,7 @@ fun LinuxTerminalScreen(
                 when {
                     result == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     result.isFailure -> Text(
-                        text = result.exceptionOrNull()?.message ?: t("Could not start the terminal.", "ترمینال اجرا نشد."),
+                        text = result.exceptionOrNull()?.message ?: stringResource(R.string.could_not_start_the_terminal),
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                     )
@@ -228,7 +229,7 @@ private fun KeyStripRow(terminal: TerminalView?, modifiers: StickyModifiers) {
         ) {
             StripButton("Ctrl", armed = modifiers.ctrl) { modifiers.ctrl = !modifiers.ctrl }
             StripButton("Alt", armed = modifiers.alt) { modifiers.alt = !modifiers.alt }
-            StripButton(t("Keyboard", "کیبورد")) { terminal?.let(::showKeyboard) }
+            StripButton(stringResource(R.string.keyboard)) { terminal?.let(::showKeyboard) }
             for (key in StripKeys) {
                 StripButton(key.label) {
                     val view = terminal ?: return@StripButton

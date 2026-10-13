@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.ExpandLess
 import com.hermes.android.ui.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
@@ -42,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 
@@ -231,7 +232,7 @@ internal fun MessageBubble(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = t("🤖 Sub-agent", "🤖 زیر ایجنت"),
+                            text = stringResource(R.string.sub_agent),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

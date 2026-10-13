@@ -28,10 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.updates.AppRelease
 import com.hermes.android.domain.updates.AppUpdates
 import com.hermes.android.domain.updates.UpdateCheck
@@ -42,7 +44,6 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.AboutUiState
 import com.hermes.android.ui.viewmodel.AboutViewModel
 import com.hermes.android.ui.viewmodel.HermesUpdate
@@ -71,16 +72,16 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
         // (screens, installed from a GitHub release) and Hermes Agent (the agent
         // itself, inside the built-in Linux). Each gets its own name, version and
         // one line saying what it is, so neither button looks like the other.
-        SectionHeader(t("App — Hermes for Android", "برنامه — Hermes برای اندروید"))
+        SectionHeader(stringResource(R.string.app_hermes_for_android))
         SettingsGroup {
             SettingRow(
-                title = t("App version", "نسخهٔ برنامه"),
+                title = stringResource(R.string.app_version),
                 subtitle = state.installedVersion,
                 icon = HxIcons.Sparkles,
             )
             SettingRow(
-                title = t("Source code", "کد منبع"),
-                subtitle = t("Open the project on GitHub", "باز کردن پروژه در گیت‌هاب"),
+                title = stringResource(R.string.source_code),
+                subtitle = stringResource(R.string.open_the_project_on_github),
                 icon = HxIcons.ExternalLink,
                 onClick = { uriHandler.openUri(AppUpdates.PROJECT_URL) },
             )
@@ -92,10 +93,7 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(HxSpace.md),
             ) {
                 Text(
-                    text = t(
-                        "Hermes Pocket is installed by hand from a GitHub release, so nothing announces a new build. Check whenever you want to know.",
-                        "هرمس پاکت دستی از روی ریلیزهای گیت‌هاب نصب می‌شود، پس چیزی خبر نسخهٔ جدید را نمی‌دهد. هر وقت خواستی بررسی کن.",
-                    ),
+                    text = stringResource(R.string.hermes_pocket_is_installed_by_hand_from),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -111,7 +109,7 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
-                        Text(t("Check for app updates", "بررسی به‌روزرسانی برنامه"))
+                        Text(stringResource(R.string.check_for_app_updates))
                     }
                 }
 
@@ -119,19 +117,13 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                     null -> Unit
 
                     is UpdateCheck.UpToDate -> UpdateNote(
-                        text = t(
-                            "You are on the newest release.",
-                            "روی جدیدترین نسخه‌ای.",
-                        ),
+                        text = stringResource(R.string.you_are_on_the_newest_release),
                     )
 
                     // A failed check says so rather than claiming the app is up
                     // to date — silence would be the same shape as good news.
                     is UpdateCheck.Failed -> UpdateNote(
-                        text = t(
-                            "Could not check right now — ${result.reason}.",
-                            "الان نشد بررسی کرد — ${result.reason}.",
-                        ),
+                        text = stringResource(R.string.could_not_check_right_now, result.reason),
                         isProblem = true,
                     )
 
@@ -221,7 +213,7 @@ private fun AvailableRelease(
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = t("Open the release", "باز کردن ریلیز"),
+                text = stringResource(R.string.open_the_release),
                 modifier = Modifier.padding(start = HxSpace.sm),
             )
         }
@@ -232,10 +224,10 @@ private fun AvailableRelease(
 @Composable
 private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
     var confirming by remember { mutableStateOf(false) }
-    SectionHeader(t("Hermes Agent — the core", "هستهٔ Hermes Agent"))
+    SectionHeader(stringResource(R.string.hermes_agent_the_core))
     SettingsGroup {
         SettingRow(
-            title = t("Core version", "نسخهٔ هسته"),
+            title = stringResource(R.string.core_version),
             subtitle = state.hermesVersion ?: "—",
             icon = HxIcons.Terminal,
         )
@@ -244,19 +236,13 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(HxSpace.md),
         ) {
             Text(
-                text = t(
-                    "The agent that writes the replies and runs the tools. It lives in the built-in Linux and updates separately from the app.",
-                    "خود عامل که جواب‌ها را می‌نویسد و ابزارها را اجرا می‌کند. داخل Linux داخلی است و جدا از برنامه به‌روز می‌شود.",
-                ),
+                text = stringResource(R.string.the_agent_that_writes_the_replies_and),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!state.canUpdateHermes) {
                 UpdateNote(
-                    text = t(
-                        "Hermes runs outside the app here (Termux or a server); update it there.",
-                        "اینجا هرمس بیرون از برنامه اجرا می‌شود (Termux یا سرور)؛ همان‌جا به‌روزش کن.",
-                    ),
+                    text = stringResource(R.string.hermes_runs_outside_the_app_here_termux),
                 )
                 return@Column
             }
@@ -265,7 +251,7 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
                 onClick = { confirming = true },
                 enabled = update !is HermesUpdate.Running,
             ) {
-                Text(t("Update the Hermes core", "به‌روزرسانی هستهٔ هرمس"))
+                Text(stringResource(R.string.update_the_hermes_core))
             }
             when (update) {
                 HermesUpdate.Idle -> Unit
@@ -282,16 +268,13 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
                 }
                 is HermesUpdate.Done -> UpdateNote(
                     text = if (update.changed) {
-                        t("Hermes core updated: ${update.version}", "هستهٔ هرمس به‌روز شد: ${update.version}")
+                        stringResource(R.string.hermes_core_updated, update.version)
                     } else {
-                        t("The core was already the newest version.", "هسته از قبل جدیدترین نسخه بود.")
+                        stringResource(R.string.the_core_was_already_the_newest_version)
                     },
                 )
                 is HermesUpdate.Failed -> UpdateNote(
-                    text = t(
-                        "Update failed — ${update.reason}. Hermes is being started again.",
-                        "به‌روزرسانی نشد — ${update.reason}. هرمس دوباره روشن می‌شود.",
-                    ),
+                    text = stringResource(R.string.update_failed_hermes_is_being_started, update.reason),
                     isProblem = true,
                 )
             }
@@ -301,20 +284,17 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
     if (confirming) {
         AlertDialog(
             onDismissRequest = { confirming = false },
-            title = { Text(t("Update the Hermes core?", "هستهٔ هرمس به‌روز شود؟")) },
+            title = { Text(stringResource(R.string.update_the_hermes_core_2)) },
             text = {
                 Text(
-                    t(
-                        "Hermes stops for a few minutes while it downloads, and any reply in progress is cut off. Your chats and settings stay.",
-                        "هرمس چند دقیقه برای دانلود خاموش می‌شود و جوابی که در حال نوشتن است قطع می‌شود. گفتگوها و تنظیمات سر جایشان می‌مانند.",
-                    ),
+                    stringResource(R.string.hermes_stops_for_a_few_minutes_while_it),
                 )
             },
             confirmButton = {
-                TextButton(onClick = { confirming = false; onUpdate() }) { Text(t("Update", "به‌روزرسانی")) }
+                TextButton(onClick = { confirming = false; onUpdate() }) { Text(stringResource(R.string.update)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirming = false }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel_2)) }
             },
         )
     }

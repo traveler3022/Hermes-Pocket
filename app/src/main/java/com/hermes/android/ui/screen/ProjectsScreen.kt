@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Folder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -35,7 +37,6 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ProjectsViewModel
 
 @Composable
@@ -66,13 +67,13 @@ fun ProjectsScreen(
     // Back from a project returns to the project list, like the top bar's arrow.
     BackHandler(enabled = detail != null) { viewModel.closeProject() }
     HermesScaffold(
-        title = detail?.label ?: t("Projects", "پروژه‌ها"),
+        title = detail?.label ?: stringResource(R.string.projects),
         onBack = if (detail != null) { { viewModel.closeProject() } } else onNavigateBack,
         actions = {
             val path = uiState.selectedProjectPath
             if (detail != null && path != null) {
                 IconButton(onClick = { viewModel.createProjectSession(path) }) {
-                    Icon(Icons.Default.Add, contentDescription = t("New chat", "چت جدید"))
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_chat_2))
                 }
             }
         },
@@ -94,11 +95,8 @@ fun ProjectsScreen(
             uiState.projects.isEmpty() -> Column(modifier = Modifier.padding(padding)) {
                 HermesEmptyState(
                     icon = Icons.Default.Folder,
-                    title = t("No projects yet", "هنوز پروژه‌ای نیست"),
-                    caption = t(
-                        "Projects are grouped automatically from where your sessions run",
-                        "پروژه‌ها خودکار از محل اجرای گفتگوهات گروه‌بندی می‌شن",
-                    ),
+                    title = stringResource(R.string.no_projects_yet),
+                    caption = stringResource(R.string.projects_are_grouped_automatically_from),
                 )
             }
             else -> LazyColumn(
@@ -124,10 +122,7 @@ fun ProjectsScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                t(
-                                    "${project.sessionCount} sessions",
-                                    "${project.sessionCount} گفتگو",
-                                ),
+                                stringResource(R.string.sessions_2, project.sessionCount),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -181,7 +176,7 @@ private fun ProjectDetailList(
         if (detail.sessions.isEmpty()) {
             item {
                 Text(
-                    t("No sessions in this project", "گفتگویی توی این پروژه نیست"),
+                    stringResource(R.string.no_sessions_in_this_project),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(HxSpace.md),

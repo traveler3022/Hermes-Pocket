@@ -15,15 +15,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
+import com.hermes.android.R
 import com.hermes.android.runtime.LinuxFileAccess
 import com.hermes.android.runtime.LinuxFileGate
 import com.hermes.android.service.HermesNotifications
 import com.hermes.android.ui.i18n.AppLanguageState
-import com.hermes.android.ui.i18n.LocalAppLanguage
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.i18n.ProvideAppLanguage
 import com.hermes.android.i18n.tForContext
 import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeModeState
@@ -78,7 +78,7 @@ class FileGateActivity : ComponentActivity() {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
-            CompositionLocalProvider(LocalAppLanguage provides appLanguageState.language) {
+            ProvideAppLanguage(appLanguageState.language) {
                 Hermes2Theme(
                     themeMode = themeModeState.mode,
                     colorTheme = themeModeState.colorTheme,
@@ -89,42 +89,32 @@ class FileGateActivity : ComponentActivity() {
                     if (risk == LinuxFileGate.Risk.DISGUISED) {
                         AlertDialog(
                             onDismissRequest = ::finish,
-                            title = { Text(t("Blocked: a disguised program", "بسته شد: برنامهٔ پنهان")) },
+                            title = { Text(stringResource(R.string.blocked_a_disguised_program)) },
                             text = {
                                 Text(
-                                    t(
-                                        "“${file.name}” is named like a photo or document, but it is really a program. " +
-                                            "Files like this are made to trick people, so it can't leave Hermes.",
-                                        "«${file.name}» از روی اسمش عکس یا سند به نظر می‌رسد، ولی در واقع برنامه است. " +
-                                            "این‌جور فایل‌ها برای فریب ساخته می‌شوند، پس از Hermes بیرون نمی‌رود.",
-                                    ),
+                                    stringResource(R.string.is_named_like_a_photo_or_document_but_it, file.name),
                                 )
                             },
-                            confirmButton = { TextButton(onClick = ::finish) { Text(t("OK", "باشه")) } },
+                            confirmButton = { TextButton(onClick = ::finish) { Text(stringResource(R.string.ok)) } },
                         )
                     } else {
                         AlertDialog(
                             onDismissRequest = ::finish,
-                            title = { Text(t("This file is a program", "این فایل یک برنامه است")) },
+                            title = { Text(stringResource(R.string.this_file_is_a_program)) },
                             text = {
                                 Text(
-                                    t(
-                                        "“${file.name}” may have come from the internet. If it is malware, it can harm " +
-                                            "your phone. Continue only if you know where it came from.",
-                                        "«${file.name}» ممکن است از اینترنت آمده باشد. اگر بدافزار باشد، می‌تواند به " +
-                                            "گوشی آسیب بزند. فقط اگر می‌دانید از کجا آمده ادامه دهید.",
-                                    ),
+                                    stringResource(R.string.may_have_come_from_the_internet_if_it_is, file.name),
                                 )
                             },
                             confirmButton = {
                                 TextButton(onClick = { allow(file, open) }) {
                                     Text(
-                                        if (open) t("Open anyway", "باز شود") else t("Allow for 10 minutes", "اجازه برای ۱۰ دقیقه"),
+                                        if (open) stringResource(R.string.open_anyway) else stringResource(R.string.allow_for_10_minutes),
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 }
                             },
-                            dismissButton = { TextButton(onClick = ::finish) { Text(t("Cancel", "لغو")) } },
+                            dismissButton = { TextButton(onClick = ::finish) { Text(stringResource(R.string.cancel)) } },
                         )
                     }
                 }

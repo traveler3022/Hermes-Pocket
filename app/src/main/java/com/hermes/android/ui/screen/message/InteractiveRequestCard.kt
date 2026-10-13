@@ -26,11 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.hermes.android.ui.i18n.t
+import com.hermes.android.R
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ClarifyQuestionUi
 import com.hermes.android.ui.viewmodel.InteractiveKind
@@ -61,14 +62,14 @@ internal fun InteractiveRequestCard(
         ) {
             if (message.questions.isEmpty() && message.kind != InteractiveKind.SECRET) {
                 Text(
-                    text = message.question.ifBlank { t("Sudo password required", "رمز sudo لازم است") },
+                    text = message.question.ifBlank { stringResource(R.string.sudo_password_required) },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             when {
-                message.answered -> CardStatus(t("Answered", "پاسخ داده شد"))
-                message.expired -> CardStatus(t("No longer waiting for an answer", "دیگر منتظر پاسخ نیست"))
+                message.answered -> CardStatus(stringResource(R.string.answered))
+                message.expired -> CardStatus(stringResource(R.string.no_longer_waiting_for_an_answer))
                 message.kind == InteractiveKind.CLARIFY && message.questions.isNotEmpty() ->
                     BatchClarify(message.questions) { onRespondToClarifyBatch(message.requestId, it) }
                 message.kind == InteractiveKind.CLARIFY -> {
@@ -79,11 +80,11 @@ internal fun InteractiveRequestCard(
                     }
                 }
                 message.kind == InteractiveKind.SUDO ->
-                    MaskedInput(label = null, placeholder = t("Enter sudo password...", "رمز sudo بنویسید...")) {
+                    MaskedInput(label = null, placeholder = stringResource(R.string.enter_sudo_password)) {
                         onRespondToSudo(message.requestId, it)
                     }
                 else ->
-                    MaskedInput(label = message.question, placeholder = t("Enter value...", "مقدار را وارد کنید...")) {
+                    MaskedInput(label = message.question, placeholder = stringResource(R.string.enter_value)) {
                         onRespondToSecret(message.requestId, it)
                     }
             }
@@ -116,7 +117,7 @@ private fun ClarifyAnswerInput(
             value = picked.firstOrNull().orEmpty(),
             onValueChange = { onPickedChange(if (it.isEmpty()) emptyList() else listOf(it)) },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(t("Type answer...", "جواب بنویسید...")) },
+            placeholder = { Text(stringResource(R.string.type_answer)) },
         )
         return
     }
@@ -171,7 +172,7 @@ private fun ColumnScope.MaskedInput(label: String?, placeholder: String, onSubmi
 @Composable
 private fun ColumnScope.SendButton(enabled: Boolean, onClick: () -> Unit) {
     Button(onClick = onClick, enabled = enabled, modifier = Modifier.align(Alignment.End)) {
-        Text(t("Send", "ارسال"))
+        Text(stringResource(R.string.send))
     }
 }
 

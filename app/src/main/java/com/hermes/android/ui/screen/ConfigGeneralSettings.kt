@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.automirrored.filled.ArrowForwardIos
 import com.hermes.android.ui.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
@@ -69,33 +71,30 @@ internal fun GeneralSettingsSection(
     SettingsFolder {
         SettingsCardGroup {
             SettingsNavRow(
-                title = t("Command Approval", "تأیید فرمان‌ها"),
+                title = stringResource(R.string.command_approval_2),
                 subtitle = t(state.approvalMode, approvalModeFa(state.approvalMode)),
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.APPROVAL) },
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("Personality", "شخصیت"),
-                subtitle = t(
-                    "Preset, SOUL.md, memory",
-                    "پریست، SOUL.md، حافظه",
-                ),
+                title = stringResource(R.string.personality),
+                subtitle = stringResource(R.string.preset_soul_md_memory),
                 icon = Icons.Default.Face,
                 onClick = { onOpen(SettingsSection.PERSONALITY) },
             )
         }
         SettingsCardGroup {
             SettingsNavRow(
-                title = t("Platforms", "پلتفرم\u200Cها"),
-                subtitle = t("Telegram, Discord, Slack", "تلگرام، دیسکورد، اسلک"),
+                title = stringResource(R.string.platforms),
+                subtitle = stringResource(R.string.telegram_discord_slack),
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("Advanced", "پیشرفته"),
-                subtitle = t("env \u00B7 MCP \u00B7 console \u00B7 log", "env \u00B7 MCP \u00B7 کنسول \u00B7 لاگ"),
+                title = stringResource(R.string.advanced),
+                subtitle = stringResource(R.string.env_mcp_console_log),
                 icon = Icons.Default.Terminal,
                 onClick = { onOpen(SettingsSection.ADVANCED) },
             )
@@ -187,13 +186,13 @@ internal fun PersonalitySection(
             SettingsNavRow(
                 title = "SOUL.md",
                 subtitle = state.soulMd.lineSequence().firstOrNull { it.isNotBlank() }
-                    ?: t("Persistent identity", "هویت پایدار عامل"),
+                    ?: stringResource(R.string.persistent_identity),
                 icon = Icons.Default.Description,
                 onClick = { onOpen(SettingsSection.SOUL) },
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
-                title = t("Memory", "حافظه"),
+                title = stringResource(R.string.memory),
                 subtitle = "USER.md \u00B7 MEMORY.md",
                 icon = Icons.Default.Psychology,
                 onClick = { onOpen(SettingsSection.MEMORY) },
@@ -218,14 +217,14 @@ internal fun ApprovalCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Command Approval", "تأیید فرمان‌ها"),
+                text = stringResource(R.string.command_approval_2),
                 style = MaterialTheme.typography.titleSmall,
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 val modes = listOf(
-                    "manual" to t("Manual", "دستی"),
-                    "smart" to t("Smart", "هوشمند"),
-                    "off" to t("Off", "خاموش"),
+                    "manual" to stringResource(R.string.manual),
+                    "smart" to stringResource(R.string.smart),
+                    "off" to stringResource(R.string.off),
                 )
                 modes.forEachIndexed { index, (mode, label) ->
                     SegmentedButton(
@@ -236,18 +235,9 @@ internal fun ApprovalCard(
                 }
             }
             val approvalDescription = when (state.approvalMode) {
-                "manual" -> t(
-                    "Every risky command asks for your permission before running — the safest mode.",
-                    "هر فرمان پرریسک قبل از اجرا از شما اجازه می‌گیرد — امن‌ترین حالت.",
-                )
-                "smart" -> t(
-                    "Low-risk commands run automatically; risky ones still ask.",
-                    "فرمان‌های کم‌خطر خودکار اجرا می‌شوند؛ پرریسک‌ها همچنان می‌پرسند.",
-                )
-                "off" -> t(
-                    "Nothing asks for permission (yolo). Only for servers you can afford to lose.",
-                    "هیچ‌چیز اجازه نمی‌گیرد (yolo). فقط برای سروری که از دست دادنش مهم نیست.",
-                )
+                "manual" -> stringResource(R.string.every_risky_command_asks_for_your)
+                "smart" -> stringResource(R.string.low_risk_commands_run_automatically)
+                "off" -> stringResource(R.string.nothing_asks_for_permission_yolo_only)
                 else -> state.approvalMode
             }
             Text(
@@ -279,14 +269,11 @@ internal fun PersonalityCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Personality", "شخصیت"),
+                text = stringResource(R.string.personality),
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
-                text = t(
-                    "Preset name, e.g. helpful / kawaii / pirate",
-                    "اسم یک پریست، مثل helpful / kawaii / pirate",
-                ),
+                text = stringResource(R.string.preset_name_e_g_helpful_kawaii_pirate),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -297,14 +284,14 @@ internal fun PersonalityCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                placeholder = { Text(t("Enter preset name", "اسم پریست را وارد کنید")) },
+                placeholder = { Text(stringResource(R.string.enter_preset_name)) },
                 singleLine = true,
             )
             if (personalityText != state.personality) {
                 TextButton(
                     onClick = { viewModel.setPersonality(personalityText) },
                     modifier = Modifier.align(Alignment.End),
-                ) { Text(t("Save", "ذخیره")) }
+                ) { Text(stringResource(R.string.save)) }
             }
         }
     }
@@ -332,18 +319,15 @@ internal fun SoulCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = t("SOUL.md — persistent identity", "SOUL.md — هویت پایدار عامل"),
+                    text = stringResource(R.string.soul_md_persistent_identity),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 TextButton(onClick = { editingSoul = !editingSoul }) {
-                    Text(if (editingSoul) t("Close", "بستن") else t("Edit", "ویرایش"))
+                    Text(if (editingSoul) stringResource(R.string.close) else stringResource(R.string.edit))
                 }
             }
             Text(
-                text = t(
-                    "The agent's persistent voice & identity — first part of its system prompt",
-                    "هویت و لحن ماندگار ایجنت — اولین بخش از دستور سیستم",
-                ),
+                text = stringResource(R.string.the_agents_persistent_voice_identity),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -360,18 +344,18 @@ internal fun SoulCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        placeholder = { Text(t("Who is your agent?", "ایجنتت کیه؟")) },
+                        placeholder = { Text(stringResource(R.string.who_is_your_agent)) },
                         minLines = 4,
                     )
                     if (soulText != state.soulMd) {
                         TextButton(
                             onClick = { viewModel.saveSoul(soulText) },
                             modifier = Modifier.align(Alignment.End),
-                        ) { Text(t("Save SOUL.md", "ذخیره SOUL.md")) }
+                        ) { Text(stringResource(R.string.save_soul_md)) }
                     }
                 }
                 else -> Text(
-                    text = state.soulMd.ifBlank { t("(empty — tap Edit)", "(خالی — روی ویرایش بزنید)") },
+                    text = state.soulMd.ifBlank { stringResource(R.string.empty_tap_edit) },
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = FontFamily.Monospace,
                         textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
@@ -401,7 +385,7 @@ internal fun ReasoningCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Reasoning depth", "عمق تفکر"),
+                text = stringResource(R.string.reasoning_depth),
                 style = MaterialTheme.typography.titleSmall,
             )
             val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
@@ -453,10 +437,7 @@ internal fun ReasoningCard(
                 )
             }
             Text(
-                text = t(
-                    "Also switchable mid-session from the chat input bar.",
-                    "وسط جلسه هم از نوار ورودی چت قابل تغییر است.",
-                ),
+                text = stringResource(R.string.also_switchable_mid_session_from_the),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )

@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
@@ -70,7 +72,7 @@ internal fun GeneralTab(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = t("Language", "زبان"),
+                        text = stringResource(R.string.language),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Row(
@@ -79,7 +81,7 @@ internal fun GeneralTab(
                     ) {
                         AppLanguage.entries.forEach { lang ->
                             val label = when (lang) {
-                                AppLanguage.AUTO -> t("Auto", "خودکار")
+                                AppLanguage.AUTO -> stringResource(R.string.auto)
                                 AppLanguage.ENGLISH -> "English"
                                 AppLanguage.FARSI -> "فارسی"
                             }
@@ -96,7 +98,7 @@ internal fun GeneralTab(
 
         if (themeModeState != null) {
             Text(
-                text = t("Appearance", "ظاهر"),
+                text = stringResource(R.string.appearance),
                 style = MaterialTheme.typography.titleMedium,
             )
             Card(
@@ -108,7 +110,7 @@ internal fun GeneralTab(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = t("Theme", "تم"),
+                        text = stringResource(R.string.theme),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Row(
@@ -117,9 +119,9 @@ internal fun GeneralTab(
                     ) {
                         ThemeMode.entries.forEach { mode ->
                             val label = when (mode) {
-                                ThemeMode.SYSTEM -> t("System", "سیستم")
-                                ThemeMode.LIGHT -> t("Light", "روشن")
-                                ThemeMode.DARK -> t("Dark", "تاریک")
+                                ThemeMode.SYSTEM -> stringResource(R.string.system)
+                                ThemeMode.LIGHT -> stringResource(R.string.light)
+                                ThemeMode.DARK -> stringResource(R.string.dark)
                             }
                             androidx.compose.material3.FilterChip(
                                 selected = themeModeState.mode == mode,
@@ -129,7 +131,7 @@ internal fun GeneralTab(
                         }
                     }
                     Text(
-                        text = t("Color Theme", "رنگ تم"),
+                        text = stringResource(R.string.color_theme),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 4.dp),
                     )
@@ -154,14 +156,11 @@ internal fun GeneralTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = t("Warm / Night mode", "حالت گرم / شب"),
+                                text = stringResource(R.string.warm_night_mode),
                                 style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
-                                text = t(
-                                    "Shifts screens toward a warm amber tint to reduce blue light for long sessions.",
-                                    "صفحات را به سمت رنگ کهربایی گرم متمایل می‌کند تا نور آبی در استفاده طولانی کمتر شود.",
-                                ),
+                                text = stringResource(R.string.shifts_screens_toward_a_warm_amber_tint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -178,14 +177,11 @@ internal fun GeneralTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = t("Show the agent's running commentary", "نمایش روایت میانی"),
+                                text = stringResource(R.string.show_the_agents_running_commentary),
                                 style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
-                                text = t(
-                                    "What the agent says between tool calls stays in the chat instead of folding into the thinking trace. More to read, nothing hidden.",
-                                    "چیزهایی که ایجنت بین ابزارها می‌گوید در خود گفتگو می‌ماند و داخل صفحهٔ استدلال جمع نمی‌شود. شلوغ‌تر، ولی چیزی پنهان نمی‌ماند.",
-                                ),
+                                text = stringResource(R.string.what_the_agent_says_between_tool_calls),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -202,14 +198,11 @@ internal fun GeneralTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = t("Message reactions", "ری‌اکشن روی پیام‌ها"),
+                                text = stringResource(R.string.message_reactions),
                                 style = MaterialTheme.typography.titleSmall,
                             )
                             Text(
-                                text = t(
-                                    "Touch and hold a message to react with an emoji. The agent sees your reactions and can react to your messages too.",
-                                    "پیام را نگه دارید تا با یک ایموجی به آن واکنش نشان دهید. ایجنت واکنش‌های شما را می‌بیند و خودش هم می‌تواند به پیام‌هایتان واکنش نشان دهد.",
-                                ),
+                                text = stringResource(R.string.touch_and_hold_a_message_to_react_with),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -223,7 +216,7 @@ internal fun GeneralTab(
                     KanbanSettingRow()
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
-                        text = t("Font", "فونت"),
+                        text = stringResource(R.string.font),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Row(
@@ -240,7 +233,7 @@ internal fun GeneralTab(
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
-                        text = t("Font size", "اندازه فونت"),
+                        text = stringResource(R.string.font_size),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Row(
@@ -293,18 +286,11 @@ private fun KanbanSettingRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = t("Kanban board", "تابلوی کانبان"),
+                text = stringResource(R.string.kanban_board),
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
-                text = t(
-                    "A task board your profiles work through, in the menu. With a server it runs there. " +
-                        "On the built-in Linux it runs on the phone: a check every minute and a Hermes process " +
-                        "per task, so it is heavy, and switching it restarts Hermes.",
-                    "تابلوی کارهایی که پروفایل‌ها انجام می‌دهند، در منو. با سرور، روی سرور اجرا می‌شود. " +
-                        "در لینوکس داخلی روی خود گوشی اجرا می‌شود: هر دقیقه یک بررسی و برای هر کار یک پروسهٔ " +
-                        "هرمس، پس سنگین است و روشن یا خاموش کردنش هرمس را دوباره راه می‌اندازد.",
-                ),
+                text = stringResource(R.string.a_task_board_your_profiles_work_through),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

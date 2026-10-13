@@ -31,14 +31,15 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.hermes.android.R
 import com.hermes.android.domain.cron.CronBlueprints.Blueprint
 import com.hermes.android.domain.cron.CronBlueprints.Field
 import com.hermes.android.domain.cron.CronBlueprints.FieldType
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.i18n.BlueprintTexts
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.CronUiState
 import java.util.Locale
 
@@ -54,7 +55,7 @@ internal fun BlueprintSheet(
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val persian = t("en", "fa") == "fa"
+    val persian = stringResource(R.string.en) == "fa"
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -64,13 +65,10 @@ internal fun BlueprintSheet(
             contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.xs),
         ) {
-            item { SheetHeader(t("Ready-made jobs", "کارهای آماده"), onBack = null) }
+            item { SheetHeader(stringResource(R.string.ready_made_jobs), onBack = null) }
             item {
                 Text(
-                    t(
-                        "Pick one, fill in a few blanks, and Hermes runs it on schedule.",
-                        "یکی را انتخاب کن، چند جای خالی را پر کن و هرمس سر وقت اجرایش می‌کند.",
-                    ),
+                    stringResource(R.string.pick_one_fill_in_a_few_blanks_and_hermes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = HxSpace.sm),
@@ -85,11 +83,11 @@ internal fun BlueprintSheet(
                 state.blueprintsError != null -> item {
                     Column(verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
                         Text(
-                            t("Couldn't load them: ", "بارگذاری نشد: ") + state.blueprintsError,
+                            stringResource(R.string.couldnt_load_them) + state.blueprintsError,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        TextButton(onClick = onRetry) { Text(t("Try again", "دوباره")) }
+                        TextButton(onClick = onRetry) { Text(stringResource(R.string.try_again)) }
                     }
                 }
                 else -> state.blueprints.groupBy { it.category }.forEach { (category, list) ->
@@ -152,7 +150,7 @@ internal fun BlueprintForm(
     onCreate: (Map<String, String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val persian = t("en", "fa") == "fa"
+    val persian = stringResource(R.string.en) == "fa"
     val values = remember(blueprint.key) {
         mutableStateMapOf<String, String>().apply { blueprint.fields.forEach { put(it.name, it.default) } }
     }
@@ -182,12 +180,12 @@ internal fun BlueprintForm(
                 if (creating) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(t("Create", "ساخت"))
+                    Text(stringResource(R.string.create))
                 }
             }
         },
         dismissButton = {
-            TextButton(enabled = !creating, onClick = onDismiss) { Text(t("Cancel", "انصراف")) }
+            TextButton(enabled = !creating, onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) }
         },
     )
 }

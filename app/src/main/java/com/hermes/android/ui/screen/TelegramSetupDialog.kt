@@ -29,11 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.hermes.android.R
 import com.hermes.android.domain.messaging.TelegramApplyResult
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.TelegramSetupUiState
 import com.hermes.android.ui.viewmodel.TelegramSetupViewModel
 import com.hermes.android.ui.viewmodel.TelegramStep
@@ -53,12 +54,12 @@ internal fun TelegramSetupDialog(state: TelegramSetupUiState, viewModel: Telegra
         title = {
             Text(
                 when (step) {
-                    TelegramStep.Idle -> t("Telegram setup", "راه‌اندازی تلگرام")
-                    TelegramStep.Starting -> t("Starting…", "در حال شروع…")
-                    is TelegramStep.Waiting -> t("Step 1: make the bot", "قدم ۱: ساختن بات")
-                    is TelegramStep.Ready -> t("Step 2: who may use it", "قدم ۲: چه کسانی استفاده کنند")
-                    is TelegramStep.Saving -> t("Saving…", "در حال ذخیره…")
-                    is TelegramStep.Done -> t("Telegram connected", "تلگرام وصل شد")
+                    TelegramStep.Idle -> stringResource(R.string.telegram_setup)
+                    TelegramStep.Starting -> stringResource(R.string.starting_2)
+                    is TelegramStep.Waiting -> stringResource(R.string.step_1_make_the_bot)
+                    is TelegramStep.Ready -> stringResource(R.string.step_2_who_may_use_it)
+                    is TelegramStep.Saving -> stringResource(R.string.saving)
+                    is TelegramStep.Done -> stringResource(R.string.telegram_connected)
                 },
             )
         },
@@ -69,7 +70,7 @@ internal fun TelegramSetupDialog(state: TelegramSetupUiState, viewModel: Telegra
                 }
                 if (state.expired) {
                     Text(
-                        t("The setup link expired before the bot was made. Start again.", "لینک راه‌اندازی قبل از ساخته شدن بات منقضی شد. دوباره شروع کن."),
+                        stringResource(R.string.the_setup_link_expired_before_the_bot),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -88,16 +89,16 @@ internal fun TelegramSetupDialog(state: TelegramSetupUiState, viewModel: Telegra
         confirmButton = {
             when (step) {
                 is TelegramStep.Ready -> Button(onClick = { viewModel.apply() }, enabled = state.allowedIds.isNotEmpty()) {
-                    Text(t("Save and restart", "ذخیره و راه‌اندازی دوباره"))
+                    Text(stringResource(R.string.save_and_restart))
                 }
-                TelegramStep.Idle -> TextButton(onClick = { viewModel.start() }) { Text(t("Try again", "دوباره")) }
-                is TelegramStep.Done -> TextButton(onClick = { viewModel.close() }) { Text(t("Done", "تمام")) }
+                TelegramStep.Idle -> TextButton(onClick = { viewModel.start() }) { Text(stringResource(R.string.try_again)) }
+                is TelegramStep.Done -> TextButton(onClick = { viewModel.close() }) { Text(stringResource(R.string.done_2)) }
                 else -> Unit
             }
         },
         dismissButton = {
             if (!busy && step !is TelegramStep.Done) {
-                TextButton(onClick = { viewModel.close() }) { Text(t("Cancel", "انصراف")) }
+                TextButton(onClick = { viewModel.close() }) { Text(stringResource(R.string.cancel_2)) }
             }
         },
     )
@@ -109,26 +110,26 @@ private fun WaitingStep(step: TelegramStep.Waiting) {
     val clipboard = LocalClipboardManager.current
     val link = step.pairing.deepLink
     Text(
-        t(
-            "Open Telegram and create the bot there" +
-                (if (step.pairing.suggestedUsername.isNotEmpty()) " (suggested name: @${step.pairing.suggestedUsername})" else "") +
-                ". Come back here afterwards — this page moves on by itself.",
-            "تلگرام را باز کن و بات را آنجا بساز" +
-                (if (step.pairing.suggestedUsername.isNotEmpty()) " (نام پیشنهادی: @${step.pairing.suggestedUsername})" else "") +
-                ". بعد به اینجا برگرد؛ این صفحه خودش جلو می‌رود.",
+        stringResource(
+            R.string.telegram_open_and_create,
+            if (step.pairing.suggestedUsername.isNotEmpty()) {
+                stringResource(R.string.telegram_suggested_name, step.pairing.suggestedUsername)
+            } else {
+                ""
+            },
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
     if (link.isNotEmpty()) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { runCatching { uriHandler.openUri(link) } }) { Text(t("Open Telegram", "باز کردن تلگرام")) }
-            TextButton(onClick = { clipboard.setText(AnnotatedString(link)) }) { Text(t("Copy link", "کپی لینک")) }
+            Button(onClick = { runCatching { uriHandler.openUri(link) } }) { Text(stringResource(R.string.open_telegram)) }
+            TextButton(onClick = { clipboard.setText(AnnotatedString(link)) }) { Text(stringResource(R.string.copy_link)) }
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
         Text(
-            t("Waiting for Telegram…", "در انتظار تلگرام…"),
+            stringResource(R.string.waiting_for_telegram),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -139,25 +140,22 @@ private fun WaitingStep(step: TelegramStep.Waiting) {
 private fun ReadyStep(step: TelegramStep.Ready, state: TelegramSetupUiState, viewModel: TelegramSetupViewModel) {
     var newId by remember { mutableStateOf("") }
     step.botUsername?.let {
-        Text(t("Bot made: @$it", "بات ساخته شد: ‎@$it"), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.bot_made, it), style = MaterialTheme.typography.bodyMedium)
     }
     Text(
-        t(
-            "Only these Telegram user ids may talk to the agent. The bot's maker is added already.",
-            "فقط این شناسه‌های کاربری تلگرام می‌توانند با ایجنت حرف بزنند. سازندهٔ بات از قبل اضافه شده.",
-        ),
+        stringResource(R.string.only_these_telegram_user_ids_may_talk_to),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     state.allowedIds.forEach { id ->
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = if (id == step.ownerUserId) t("$id (you)", "$id (خودت)") else id,
+                text = if (id == step.ownerUserId) stringResource(R.string.you_2, id) else id,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { viewModel.removeAllowedId(id) }) {
-                Icon(Icons.Default.Close, contentDescription = t("Remove", "حذف"), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.remove), modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -165,32 +163,28 @@ private fun ReadyStep(step: TelegramStep.Ready, state: TelegramSetupUiState, vie
         OutlinedTextField(
             value = newId,
             onValueChange = { value -> newId = value.filter { it.isDigit() } },
-            placeholder = { Text(t("Telegram user id", "شناسهٔ کاربری تلگرام")) },
+            placeholder = { Text(stringResource(R.string.telegram_user_id)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = { if (viewModel.addAllowedId(newId)) newId = "" }) {
-            Icon(Icons.Default.Add, contentDescription = t("Add", "افزودن"))
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add))
         }
     }
 }
 
 @Composable
 private fun DoneStep(step: TelegramStep.Done) {
-    val bot = step.botUsername?.let { "@$it" } ?: t("The bot", "بات")
+    val bot = step.botUsername?.let { "@$it" } ?: stringResource(R.string.the_bot)
     Text(
         when (val result = step.result) {
-            TelegramApplyResult.Done -> t("$bot is saved.", "$bot ذخیره شد.")
-            TelegramApplyResult.Restarting -> t(
-                "$bot is saved and the messaging gateway is restarting. Message the bot in a moment.",
-                "$bot ذخیره شد و گیت‌وی پیام‌رسان دوباره راه می‌افتد. چند لحظه بعد به بات پیام بده.",
-            )
-            is TelegramApplyResult.NeedsRestart -> t(
-                "$bot is saved, but the messaging gateway could not restart" +
-                    (result.reason?.let { ": $it" } ?: "") + ". Run `hermes gateway restart` on the server.",
-                "$bot ذخیره شد، ولی گیت‌وی پیام‌رسان دوباره راه نیفتاد" +
-                    (result.reason?.let { ": $it" } ?: "") + ". روی سرور `hermes gateway restart` را اجرا کن.",
+            TelegramApplyResult.Done -> stringResource(R.string.is_saved, bot)
+            TelegramApplyResult.Restarting -> stringResource(R.string.is_saved_and_the_messaging_gateway_is, bot)
+            is TelegramApplyResult.NeedsRestart -> stringResource(
+                R.string.telegram_saved_restart_failed,
+                bot,
+                result.reason?.let { ": $it" } ?: "",
             )
         },
         style = MaterialTheme.typography.bodyMedium,

@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.domain.session.DelegationStatus
 import com.hermes.android.domain.session.ModelChoice
 import com.hermes.android.domain.session.TaskRow
@@ -66,7 +68,6 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.TasksViewModel
 
 @Composable
@@ -87,20 +88,17 @@ internal fun DelegationRow(
         ) {
             Text(
                 text = if (delegation.active.isEmpty()) {
-                    t("No subagents running", "ساب‌ایجنتی در حال اجرا نیست")
+                    stringResource(R.string.no_subagents_running)
                 } else {
-                    t(
-                        "${delegation.active.size} subagent(s) running",
-                        "${delegation.active.size} ساب‌ایجنت در حال اجرا",
-                    )
+                    stringResource(R.string.subagent_s_running, delegation.active.size)
                 },
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onTogglePaused) {
                 Text(
-                    if (delegation.paused) t("Resume spawning", "ازسرگیری spawn")
-                    else t("Pause spawning", "توقف spawn"),
+                    if (delegation.paused) stringResource(R.string.resume_spawning)
+                    else stringResource(R.string.pause_spawning),
                 )
             }
         }
@@ -141,9 +139,9 @@ internal fun TaskRow(
                     modifier = Modifier.weight(1f),
                 )
                 if (task.isRunning) {
-                    StatusChip(t("Running", "در حال اجرا"), MaterialTheme.colorScheme.primary)
+                    StatusChip(stringResource(R.string.running), MaterialTheme.colorScheme.primary)
                 } else {
-                    StatusChip(t("Idle", "پایان‌یافته"), MaterialTheme.colorScheme.onSurfaceVariant)
+                    StatusChip(stringResource(R.string.idle), MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (task.preview.isNotBlank()) {
@@ -158,7 +156,7 @@ internal fun TaskRow(
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = listOf(task.model, t("${task.messageCount} messages", "${task.messageCount} پیام"))
+                    text = listOf(task.model, stringResource(R.string.messages_2, task.messageCount))
                         .filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -166,20 +164,20 @@ internal fun TaskRow(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onOpen) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = t("View result", "دیدن نتیجه"),
+                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.view_result),
                         tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onOpenInChat) {
-                    Icon(Icons.Default.Refresh, contentDescription = t("Open in chat", "باز کردن در چت"))
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.open_in_chat))
                 }
                 if (task.isRunning) {
                     IconButton(onClick = onInterrupt) {
-                        Icon(Icons.Default.Stop, contentDescription = t("Interrupt", "توقف"),
+                        Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.interrupt),
                             tint = MaterialTheme.colorScheme.error)
                     }
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = t("Close task", "بستن تسک"),
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_task),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -223,8 +221,8 @@ internal fun ResultSheet(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                    TextButton(onClick = onRerun) { Text(t("Re-run", "اجرای مجدد")) }
-                    TextButton(onClick = onOpenInChat) { Text(t("Continue in chat", "ادامه در چت")) }
+                    TextButton(onClick = onRerun) { Text(stringResource(R.string.re_run)) }
+                    TextButton(onClick = onOpenInChat) { Text(stringResource(R.string.continue_in_chat)) }
                 }
             }
         }
@@ -259,7 +257,7 @@ internal fun NewTaskDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isLaunching) onDismiss() },
-        title = { Text(t("New task", "تسک جدید")) },
+        title = { Text(stringResource(R.string.new_task_2)) },
         text = {
             // Scrolls: a few plan steps plus the model picker ran past the bottom of the dialog.
             Column(
@@ -267,16 +265,13 @@ internal fun NewTaskDialog(
                 verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 Text(
-                    t(
-                        "Runs in its own session on the server — you can close the app.",
-                        "توی یک سشن مستقل روی سرور اجرا میشه — می‌تونی اپ رو ببندی.",
-                    ),
+                    stringResource(R.string.runs_in_its_own_session_on_the_server),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
-                    label = { Text(t("Title (optional)", "عنوان (اختیاری)")) },
+                    label = { Text(stringResource(R.string.title_optional)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -288,7 +283,7 @@ internal fun NewTaskDialog(
                             onValueChange = { newVal ->
                                 steps = steps.toMutableList().also { it[index] = newVal }
                             },
-                            label = { Text(t("Step ${index + 1}", "گام ${index + 1}")) },
+                            label = { Text(stringResource(R.string.step, index + 1)) },
                             minLines = 2, maxLines = 4,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -302,14 +297,14 @@ internal fun NewTaskDialog(
                                     // Remove this step, move openStep back
                                     steps = steps.toMutableList().also { it.removeAt(index) }
                                     openStep = (openStep - 1).coerceAtLeast(0)
-                                }) { Text(t("Delete", "حذف")) }
+                                }) { Text(stringResource(R.string.delete)) }
                             }
                             TextButton(onClick = {
                                 if (stepText.isNotBlank()) {
                                     steps = steps + ""
                                     openStep = steps.lastIndex
                                 }
-                            }) { Text(t("Save & next", "ذخیره و بعدی")) }
+                            }) { Text(stringResource(R.string.save_next)) }
                         }
                     } else {
                         // ── Collapsed step: preview + edit/delete/reorder ──
@@ -353,7 +348,7 @@ internal fun NewTaskDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.KeyboardArrowUp,
-                                        contentDescription = t("Move up", "بالا"),
+                                        contentDescription = stringResource(R.string.move_up),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -375,7 +370,7 @@ internal fun NewTaskDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.KeyboardArrowDown,
-                                        contentDescription = t("Move down", "پایین"),
+                                        contentDescription = stringResource(R.string.move_down),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -386,7 +381,7 @@ internal fun NewTaskDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.Edit,
-                                        contentDescription = t("Edit", "ویرایش"),
+                                        contentDescription = stringResource(R.string.edit),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -406,7 +401,7 @@ internal fun NewTaskDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.Close,
-                                        contentDescription = t("Delete", "حذف"),
+                                        contentDescription = stringResource(R.string.delete),
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(18.dp),
                                     )
@@ -417,7 +412,7 @@ internal fun NewTaskDialog(
                 }
 
                 Text(
-                    t("Thinking depth", "عمق تفکر"),
+                    stringResource(R.string.thinking_depth),
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Row(
@@ -430,7 +425,7 @@ internal fun NewTaskDialog(
                             onClick = { effort = opt },
                             label = {
                                 Text(
-                                    if (opt.isEmpty()) t("default", "پیش‌فرض") else opt,
+                                    if (opt.isEmpty()) stringResource(R.string.default_text) else opt,
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             },
@@ -444,7 +439,7 @@ internal fun NewTaskDialog(
                         models.map { it.provider }.distinct().sorted()
                     }
 
-                    Text(t("Model", "مدل"), style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.model), style = MaterialTheme.typography.labelMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -456,7 +451,7 @@ internal fun NewTaskDialog(
                                 model = null
                                 selectedProvider = null
                             },
-                            label = { Text(t("Default", "پیش‌فرض"), style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.default_text_2), style = MaterialTheme.typography.labelSmall) },
                         )
                         FilterChip(
                             selected = modelMode == 1,
@@ -465,15 +460,12 @@ internal fun NewTaskDialog(
                                 model = null
                                 selectedProvider = null
                             },
-                            label = { Text(t("Custom", "کاستوم"), style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.custom_2), style = MaterialTheme.typography.labelSmall) },
                         )
                     }
                     if (modelMode == 0) {
                         Text(
-                            t(
-                                "Uses the current provider and model from settings",
-                                "از پرووایدر و مدل فعلی تنظیمات استفاده می‌کند",
-                            ),
+                            stringResource(R.string.uses_the_current_provider_and_model_from),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -481,7 +473,7 @@ internal fun NewTaskDialog(
                         // Step 1: pick provider
                         if (selectedProvider == null) {
                             Text(
-                                t("Select provider", "پرووایدر را انتخاب کنید"),
+                                stringResource(R.string.select_provider),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                             Row(
@@ -511,7 +503,7 @@ internal fun NewTaskDialog(
                             val modelsForProvider = models.filter { it.provider == selectedProvider }
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                t("Select model", "مدل را انتخاب کنید"),
+                                stringResource(R.string.select_model_4),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                             Row(
@@ -528,7 +520,7 @@ internal fun NewTaskDialog(
                             }
                             TextButton(onClick = { selectedProvider = null; model = null }) {
                                 Text(
-                                    t("← Change provider", "← تغییر پرووایدر"),
+                                    stringResource(R.string.change_provider),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }
@@ -541,10 +533,10 @@ internal fun NewTaskDialog(
             TextButton(
                 onClick = { onLaunch(title, prompt, effort.ifEmpty { null }, model) },
                 enabled = !isLaunching && prompt.isNotBlank(),
-            ) { Text(if (isLaunching) t("Starting…", "در حال شروع…") else t("Start", "شروع")) }
+            ) { Text(if (isLaunching) stringResource(R.string.starting_2) else stringResource(R.string.start_2)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isLaunching) { Text(t("Cancel", "انصراف")) }
+            TextButton(onClick = onDismiss, enabled = !isLaunching) { Text(stringResource(R.string.cancel_2)) }
         },
     )
 }

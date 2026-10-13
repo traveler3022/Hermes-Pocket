@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,12 +69,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -89,15 +90,15 @@ private val EFFORTS = listOf("none", "minimal", "low", "medium", "high", "xhigh"
 
 @Composable
 private fun columnLabel(column: String): String = when (column) {
-    "triage" -> t("Triage", "تقسیم")
-    "todo" -> t("To do", "در صف")
-    "scheduled" -> t("Scheduled", "زمان‌بندی")
-    "ready" -> t("Ready", "آماده")
-    "running" -> t("Running", "در حال اجرا")
-    "blocked" -> t("Blocked", "متوقف")
-    "review" -> t("Review", "بازبینی")
-    "done" -> t("Done", "انجام‌شده")
-    "archived" -> t("Archived", "بایگانی")
+    "triage" -> stringResource(R.string.triage)
+    "todo" -> stringResource(R.string.to_do)
+    "scheduled" -> stringResource(R.string.scheduled)
+    "ready" -> stringResource(R.string.ready)
+    "running" -> stringResource(R.string.running)
+    "blocked" -> stringResource(R.string.blocked)
+    "review" -> stringResource(R.string.review)
+    "done" -> stringResource(R.string.done)
+    "archived" -> stringResource(R.string.archived)
     else -> column
 }
 
@@ -142,8 +143,8 @@ fun KanbanScreen(
     }
 
     HermesScaffold(
-        title = t("Kanban", "کانبان"),
-        subtitle = t("Tasks your profiles work on", "کارهایی که پروفایل‌ها انجام می‌دهند"),
+        title = stringResource(R.string.kanban),
+        subtitle = stringResource(R.string.tasks_your_profiles_work_on),
         onBack = onNavigateBack,
         actions = {
             if (state.available) {
@@ -153,7 +154,7 @@ fun KanbanScreen(
                 }) {
                     Icon(
                         if (filterOpen) Icons.Default.Close else Icons.Default.Search,
-                        contentDescription = t("Filter", "فیلتر"),
+                        contentDescription = stringResource(R.string.filter),
                         tint = if (state.filtering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -171,11 +172,11 @@ fun KanbanScreen(
             if (state.available) {
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = t("More", "بیشتر"))
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text(t("Show archived", "نمایش بایگانی‌شده‌ها")) },
+                            text = { Text(stringResource(R.string.show_archived)) },
                             leadingIcon = {
                                 if (state.showArchived) Icon(Icons.Default.Check, contentDescription = null) else Box(Modifier.size(24.dp))
                             },
@@ -185,7 +186,7 @@ fun KanbanScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text(t("Orchestration", "هماهنگی خودکار")) },
+                            text = { Text(stringResource(R.string.orchestration)) },
                             onClick = {
                                 menuOpen = false
                                 viewModel.loadAssignees()
@@ -195,7 +196,7 @@ fun KanbanScreen(
                         )
                         if (state.board != null) {
                             DropdownMenuItem(
-                                text = { Text(t("Export this board", "خروجی گرفتن از این تابلو")) },
+                                text = { Text(stringResource(R.string.export_this_board)) },
                                 enabled = !state.isBusy,
                                 onClick = {
                                     menuOpen = false
@@ -204,7 +205,7 @@ fun KanbanScreen(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text(t("Import a board", "وارد کردن تابلو")) },
+                            text = { Text(stringResource(R.string.import_a_board)) },
                             enabled = !state.isBusy,
                             onClick = {
                                 menuOpen = false
@@ -224,7 +225,7 @@ fun KanbanScreen(
                         creating = true
                     },
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(t("New task", "کار جدید")) },
+                    text = { Text(stringResource(R.string.new_task)) },
                 )
             }
         },
@@ -233,11 +234,8 @@ fun KanbanScreen(
             if (!state.available) {
                 HermesEmptyState(
                     icon = Icons.Default.Inventory2,
-                    title = t("Kanban is off", "کانبان خاموش است"),
-                    caption = t(
-                        "Turn it on in Settings › General. Termux has no Kanban: use the built-in Linux or a server.",
-                        "از تنظیمات › عمومی روشنش کن. ترموکس کانبان ندارد: از لینوکس داخلی یا سرور استفاده کن.",
-                    ),
+                    title = stringResource(R.string.kanban_is_off),
+                    caption = stringResource(R.string.turn_it_on_in_settings_general_termux),
                 )
                 return@Column
             }
@@ -255,7 +253,7 @@ fun KanbanScreen(
                     )
                     Spacer(Modifier.width(HxSpace.sm))
                     Text(
-                        t("${state.diagnostics.size} tasks need attention", "${state.diagnostics.size} کار نیاز به توجه دارد"),
+                        stringResource(R.string.tasks_need_attention, state.diagnostics.size),
                         color = severityColor(worst),
                     )
                 }
@@ -294,7 +292,7 @@ fun KanbanScreen(
                 ) { CircularProgressIndicator() }
 
                 tasks.isEmpty() -> Text(
-                    if (state.filtering) t("No task matches the filter.", "کاری با این فیلتر پیدا نشد.") else t("Nothing here.", "این‌جا خالی است."),
+                    if (state.filtering) stringResource(R.string.no_task_matches_the_filter) else stringResource(R.string.nothing_here),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(HxSpace.screen),
@@ -337,7 +335,7 @@ fun KanbanScreen(
     if (bulkAssigning) {
         AlertDialog(
             onDismissRequest = { bulkAssigning = false },
-            title = { Text(t("Assign ${state.selected.size} tasks to", "واگذاری ${state.selected.size} کار به")) },
+            title = { Text(stringResource(R.string.assign_tasks_to, state.selected.size)) },
             text = {
                 AssigneePicker(current = "", assignees = state.assignees, enabled = !state.isBusy) { profile ->
                     bulkAssigning = false
@@ -345,7 +343,7 @@ fun KanbanScreen(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { bulkAssigning = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { bulkAssigning = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (showingHealth) {
@@ -429,17 +427,17 @@ private fun FilterBar(
         OutlinedTextField(
             value = query,
             onValueChange = onQuery,
-            placeholder = { Text(t("Search tasks", "جستجوی کارها")) },
+            placeholder = { Text(stringResource(R.string.search_tasks)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-            FilterChip(selected = assignee == null, onClick = { onAssignee(null) }, label = { Text(t("Everyone", "همه")) })
+            FilterChip(selected = assignee == null, onClick = { onAssignee(null) }, label = { Text(stringResource(R.string.everyone)) })
             FilterChip(
                 selected = assignee == KanbanViewModel.UNASSIGNED,
                 onClick = { onAssignee(KanbanViewModel.UNASSIGNED) },
-                label = { Text(t("Unassigned", "بدون مسئول")) },
+                label = { Text(stringResource(R.string.unassigned)) },
             )
             assignees.forEach { name ->
                 FilterChip(selected = assignee == name, onClick = { onAssignee(name) }, label = { Text("@$name") })
@@ -463,15 +461,15 @@ private fun SelectionBar(
     Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(t("$count selected", "$count انتخاب‌شده"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = onSelectAll, enabled = !isBusy) { Text(t("Select column", "انتخاب ستون")) }
-                IconButton(onClick = onClear) { Icon(Icons.Default.Close, contentDescription = t("Cancel", "لغو")) }
+                Text(stringResource(R.string.selected, count), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onSelectAll, enabled = !isBusy) { Text(stringResource(R.string.select_column)) }
+                IconButton(onClick = onClear) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel)) }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                Button(onClick = onReady, enabled = !isBusy) { Text(t("Make ready", "آماده کن")) }
-                OutlinedButton(onClick = onDone, enabled = !isBusy) { Text(t("Done", "انجام‌شده")) }
-                OutlinedButton(onClick = onAssign, enabled = !isBusy) { Text(t("Assign", "واگذاری")) }
-                OutlinedButton(onClick = onArchive, enabled = !isBusy) { Text(t("Archive", "بایگانی")) }
+                Button(onClick = onReady, enabled = !isBusy) { Text(stringResource(R.string.make_ready)) }
+                OutlinedButton(onClick = onDone, enabled = !isBusy) { Text(stringResource(R.string.done)) }
+                OutlinedButton(onClick = onAssign, enabled = !isBusy) { Text(stringResource(R.string.assign)) }
+                OutlinedButton(onClick = onArchive, enabled = !isBusy) { Text(stringResource(R.string.archive)) }
             }
         }
     }
@@ -496,44 +494,35 @@ private fun OrchestrationSheet(
             Modifier.padding(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            SheetHeader(t("Orchestration", "هماهنگی خودکار"), onBack = null)
+            SheetHeader(stringResource(R.string.orchestration), onBack = null)
             if (settings == null) {
                 CircularProgressIndicator(Modifier.size(24.dp))
                 return@Column
             }
             var draft by remember(settings) { mutableStateOf(settings) }
-            SheetSection(t("Splits new tasks", "تقسیم‌کنندهٔ کارهای جدید"))
+            SheetSection(stringResource(R.string.splits_new_tasks))
             SheetHint(
-                t(
-                    "The profile that breaks a task with no assignee into steps.",
-                    "پروفایلی که کار بدون مسئول را به چند مرحله می‌شکند.",
-                )
+                stringResource(R.string.the_profile_that_breaks_a_task_with_no)
             )
             ProfileChoice(draft.orchestratorProfile, profiles, draft.activeProfile, enabled = !isBusy) {
                 draft = draft.copy(orchestratorProfile = it)
             }
-            SheetSection(t("Gets unmatched steps", "مسئول مرحله‌های بی‌صاحب"))
+            SheetSection(stringResource(R.string.gets_unmatched_steps))
             SheetHint(
-                t(
-                    "Who gets a step no profile's description fits.",
-                    "مرحله‌ای که توضیح هیچ پروفایلی به آن نمی‌خورد به چه کسی برسد.",
-                )
+                stringResource(R.string.who_gets_a_step_no_profiles_description)
             )
             ProfileChoice(draft.defaultAssignee, profiles, draft.activeProfile, enabled = !isBusy) {
                 draft = draft.copy(defaultAssignee = it)
             }
             SettingSwitch(
-                title = t("Split on its own", "تقسیم خودکار"),
-                hint = t("New tasks without an assignee are split as they arrive.", "کارهای جدید بدون مسئول همان موقع تقسیم می‌شوند."),
+                title = stringResource(R.string.split_on_its_own),
+                hint = stringResource(R.string.new_tasks_without_an_assignee_are_split),
                 checked = draft.autoDecompose,
                 enabled = !isBusy,
             ) { draft = draft.copy(autoDecompose = it) }
             SettingSwitch(
-                title = t("Start the next steps", "شروع مرحله‌های بعد"),
-                hint = t(
-                    "A step waiting on others becomes ready when they finish.",
-                    "مرحله‌ای که منتظر بقیه است، وقتی آن‌ها تمام شوند آماده می‌شود.",
-                ),
+                title = stringResource(R.string.start_the_next_steps),
+                hint = stringResource(R.string.a_step_waiting_on_others_becomes_ready),
                 checked = draft.autoPromoteChildren,
                 enabled = !isBusy,
             ) { draft = draft.copy(autoPromoteChildren = it) }
@@ -542,7 +531,7 @@ private fun OrchestrationSheet(
                 enabled = !isBusy && draft != settings,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(t("Save", "ذخیره"))
+                if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.save))
             }
         }
     }
@@ -556,7 +545,7 @@ private fun ProfileChoice(current: String, profiles: List<String>, active: Strin
             selected = current.isEmpty(),
             onClick = { onPick("") },
             enabled = enabled,
-            label = { Text(t("Active profile (@$active)", "پروفایل فعال (@$active)")) },
+            label = { Text(stringResource(R.string.active_profile, active)) },
         )
         (profiles + current).filter { it.isNotEmpty() }.distinct().forEach { name ->
             FilterChip(selected = current == name, onClick = { onPick(name) }, enabled = enabled, label = { Text("@$name") })
@@ -600,7 +589,7 @@ private fun BoardPicker(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(end = HxSpace.xs),
             )
-            Icon(Icons.Default.ExpandMore, contentDescription = t("Boards", "تابلوها"), modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.ExpandMore, contentDescription = stringResource(R.string.boards), modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             boards.forEach { board ->
@@ -618,7 +607,7 @@ private fun BoardPicker(
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text(t("New board", "تابلوی جدید")) },
+                text = { Text(stringResource(R.string.new_board)) },
                 leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
                 onClick = {
                     open = false
@@ -631,12 +620,12 @@ private fun BoardPicker(
         var name by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { creating = false },
-            title = { Text(t("New board", "تابلوی جدید")) },
+            title = { Text(stringResource(R.string.new_board)) },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text(t("Name", "نام")) },
+                    label = { Text(stringResource(R.string.name)) },
                     singleLine = true,
                 )
             },
@@ -644,9 +633,9 @@ private fun BoardPicker(
                 TextButton(
                     enabled = name.isNotBlank() && !isBusy,
                     onClick = { onCreate(name) { creating = false } },
-                ) { Text(t("Create", "ساختن")) }
+                ) { Text(stringResource(R.string.create_2)) }
             },
-            dismissButton = { TextButton(onClick = { creating = false }) { Text(t("Cancel", "انصراف")) } },
+            dismissButton = { TextButton(onClick = { creating = false }) { Text(stringResource(R.string.cancel_2)) } },
         )
     }
 }
@@ -665,9 +654,9 @@ private fun TaskCard(task: KanbanRepository.Task, selected: Boolean, onClick: ()
         Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
             Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
-                task.assignee?.let { "@$it" } ?: t("unassigned", "بدون مسئول"),
+                task.assignee?.let { "@$it" } ?: stringResource(R.string.unassigned_2),
                 task.progress?.let { (done, total) -> "$done/$total" },
-                task.commentCount.takeIf { it > 0 }?.let { t("$it comments", "$it نظر") },
+                task.commentCount.takeIf { it > 0 }?.let { stringResource(R.string.comments, it) },
             ).joinToString(" · ")
             Text(meta, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val note = task.lastError.ifBlank { task.summary }
@@ -737,7 +726,7 @@ private fun TaskSheet(
             item { Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
             item {
                 Text(
-                    "${columnLabel(task.status)} · " + (task.assignee?.let { "@$it" } ?: t("unassigned", "بدون مسئول")),
+                    "${columnLabel(task.status)} · " + (task.assignee?.let { "@$it" } ?: stringResource(R.string.unassigned_2)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -753,17 +742,14 @@ private fun TaskSheet(
                         }
                         Spacer(Modifier.width(HxSpace.sm))
                         Text(
-                            if (isSpecifying) t("Writing it out…", "در حال نوشتن…")
-                            else t("Write out the details with AI", "نوشتن جزئیات با هوش مصنوعی")
+                            if (isSpecifying) stringResource(R.string.writing_it_out)
+                            else stringResource(R.string.write_out_the_details_with_ai)
                         )
                     }
                 }
                 item {
                     SheetHint(
-                        t(
-                            "The server's model writes a full title and details, then the task joins the queue.",
-                            "مدل سرور عنوان و جزئیات کامل را می‌نویسد، بعد کار به صف می‌رود.",
-                        )
+                        stringResource(R.string.the_servers_model_writes_a_full_title)
                     )
                 }
             }
@@ -772,13 +758,13 @@ private fun TaskSheet(
             }
             val report = task.summary.ifBlank { task.result }
             if (report.isNotBlank()) {
-                item { SheetSection(t("Worker's report", "گزارش کارگزار")) }
+                item { SheetSection(stringResource(R.string.workers_report)) }
                 item { HermesMarkdown(markdown = report) }
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(t("Files", "فایل‌ها"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { uploadLauncher.launch("*/*") }, enabled = !isBusy) { Text(t("Add file", "افزودن فایل")) }
+                    Text(stringResource(R.string.files), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { uploadLauncher.launch("*/*") }, enabled = !isBusy) { Text(stringResource(R.string.add_file)) }
                 }
             }
             items(detail.attachments, key = { "file-${it.id}" }) { file ->
@@ -791,11 +777,11 @@ private fun TaskSheet(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(t("Model and thinking", "مدل و میزان فکر"), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.model_and_thinking), style = MaterialTheme.typography.titleSmall)
                         Text(
                             listOf(
-                                task.modelOverride?.let { m -> task.providerOverride?.let { "$it/$m" } ?: m } ?: t("Profile's model", "مدل پروفایل"),
-                                task.reasoningEffort?.let { effortLabel(it) } ?: t("profile's level", "سطح پروفایل"),
+                                task.modelOverride?.let { m -> task.providerOverride?.let { "$it/$m" } ?: m } ?: stringResource(R.string.profiles_model),
+                                task.reasoningEffort?.let { effortLabel(it) } ?: stringResource(R.string.profiles_level),
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -805,19 +791,19 @@ private fun TaskSheet(
                         TextButton(onClick = {
                             onLoadModelOptions()
                             editingRun = true
-                        }, enabled = !isBusy) { Text(t("Change", "تغییر")) }
+                        }, enabled = !isBusy) { Text(stringResource(R.string.change)) }
                     }
                 }
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(t("Estimate", "تخمین"), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.estimate), style = MaterialTheme.typography.titleSmall)
                         estimate?.let { found ->
                             Text(
                                 listOfNotNull(
-                                    found.complexity?.let { t("Size $it", "اندازه $it") },
-                                    t("~${found.tokens} tokens", "حدود ${found.tokens} توکن"),
+                                    found.complexity?.let { stringResource(R.string.size, it) },
+                                    stringResource(R.string.tokens, found.tokens),
                                 ).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -828,16 +814,16 @@ private fun TaskSheet(
                     }
                     TextButton(onClick = onEstimate, enabled = !isEstimating) {
                         if (isEstimating) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                        else Text(if (estimate == null) t("Estimate", "تخمین بزن") else t("Again", "دوباره"))
+                        else Text(if (estimate == null) stringResource(R.string.estimate_2) else stringResource(R.string.again))
                     }
                 }
             }
             if (!homeChannels.isNullOrEmpty()) {
-                item { SheetSection(t("Send news to", "ارسال خبرها به")) }
+                item { SheetSection(stringResource(R.string.send_news_to)) }
                 items(homeChannels, key = { "home-${it.platform}" }) { home ->
                     SettingSwitch(
                         title = "${home.platform.replaceFirstChar { it.uppercase() }} · ${home.name}",
-                        hint = t("Updates on this task go to this home channel.", "خبرهای این کار به این کانال خانه می‌رود."),
+                        hint = stringResource(R.string.updates_on_this_task_go_to_this_home),
                         checked = home.subscribed,
                         enabled = !isBusy,
                     ) { on -> onHomeChannel(home.platform, on) }
@@ -846,20 +832,20 @@ private fun TaskSheet(
             item { HorizontalDivider() }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(t("Waits on", "منتظر این کارها"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.waits_on), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     if (task.status != "done" && task.status != "archived") {
-                        TextButton(onClick = { pickingParent = true }, enabled = !isBusy) { Text(t("Add", "افزودن")) }
+                        TextButton(onClick = { pickingParent = true }, enabled = !isBusy) { Text(stringResource(R.string.add)) }
                     }
                 }
             }
             if (detail.parents.isEmpty()) {
-                item { SheetHint(t("Starts without waiting for another task.", "بدون منتظر ماندن برای کار دیگری شروع می‌شود.")) }
+                item { SheetHint(stringResource(R.string.starts_without_waiting_for_another_task)) }
             }
             items(detail.parents, key = { "parent-${it.id}" }) { parent ->
                 LinkRow(parent, isBusy) { onUnlink(parent.id, task.id) }
             }
             if (detail.children.isNotEmpty()) {
-                item { SheetSection(t("Waiting on this", "منتظر این کار")) }
+                item { SheetSection(stringResource(R.string.waiting_on_this)) }
                 items(detail.children, key = { "child-${it.id}" }) { child ->
                     LinkRow(child, isBusy) { onUnlink(task.id, child.id) }
                 }
@@ -872,7 +858,7 @@ private fun TaskSheet(
                             reassigning = !reassigning
                         },
                         enabled = !isBusy,
-                    ) { Text(t("Change who does it", "تغییر مسئول")) }
+                    ) { Text(stringResource(R.string.change_who_does_it)) }
                 }
                 if (reassigning) {
                     item {
@@ -884,10 +870,7 @@ private fun TaskSheet(
                     if (task.status == "running") {
                         item {
                             SheetHint(
-                                t(
-                                    "The current worker is stopped first, then the new profile starts over.",
-                                    "اول کارگزار فعلی متوقف می‌شود، بعد پروفایل جدید از اول شروع می‌کند.",
-                                )
+                                stringResource(R.string.the_current_worker_is_stopped_first_then)
                             )
                         }
                     }
@@ -895,7 +878,7 @@ private fun TaskSheet(
             }
             if (detail.runs.isNotEmpty()) {
                 item { HorizontalDivider() }
-                item { SheetSection(t("Attempts", "تلاش‌ها")) }
+                item { SheetSection(stringResource(R.string.attempts)) }
                 items(detail.runs.reversed(), key = { "run-${it.id}" }) { run ->
                     RunRow(run, inspections[run.id], onInspect = { onInspect(run.id) })
                 }
@@ -904,19 +887,19 @@ private fun TaskSheet(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        t("Worker log", "لاگ کارگزار"),
+                        stringResource(R.string.worker_log),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = onLoadLog, enabled = !isLogLoading) {
-                        Text(if (log == null) t("Show", "نمایش") else t("Refresh", "تازه‌سازی"))
+                        Text(if (log == null) stringResource(R.string.show) else stringResource(R.string.refresh))
                     }
                 }
             }
             if (isLogLoading && log == null) item { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
             log?.let { item { LogView(it) } }
             item { HorizontalDivider() }
-            item { SheetSection(t("Comments", "نظرها")) }
+            item { SheetSection(stringResource(R.string.comments_2)) }
             items(detail.comments) { c ->
                 Column {
                     Text(c.author, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -928,12 +911,12 @@ private fun TaskSheet(
                     OutlinedTextField(
                         value = comment,
                         onValueChange = { comment = it },
-                        placeholder = { Text(t("Add a comment for the worker", "نظری برای کارگزار بنویس")) },
+                        placeholder = { Text(stringResource(R.string.add_a_comment_for_the_worker)) },
                         maxLines = 4,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { onComment(comment) { comment = "" } }, enabled = comment.isNotBlank() && !isBusy) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = t("Send", "ارسال"))
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send))
                     }
                 }
             }
@@ -942,14 +925,14 @@ private fun TaskSheet(
     deletingFile?.let { file ->
         AlertDialog(
             onDismissRequest = { deletingFile = null },
-            title = { Text(t("Remove ${file.filename}?", "${file.filename} حذف شود؟")) },
+            title = { Text(stringResource(R.string.remove_2, file.filename)) },
             confirmButton = {
                 TextButton(onClick = {
                     deletingFile = null
                     onDeleteAttachment(file.id)
-                }) { Text(t("Remove", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { deletingFile = null }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { deletingFile = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (editingRun) {
@@ -970,10 +953,10 @@ private fun TaskSheet(
         val choices = boardTasks.filter { it.id !in linked && it.status != "archived" }
         AlertDialog(
             onDismissRequest = { pickingParent = false },
-            title = { Text(t("Wait for which task?", "منتظر کدام کار بماند؟")) },
+            title = { Text(stringResource(R.string.wait_for_which_task)) },
             text = {
                 if (choices.isEmpty()) {
-                    Text(t("No other task on this board.", "کار دیگری در این تابلو نیست."))
+                    Text(stringResource(R.string.no_other_task_on_this_board))
                 } else {
                     LazyColumn(Modifier.fillMaxWidth()) {
                         items(choices, key = { it.id }) { choice ->
@@ -994,49 +977,46 @@ private fun TaskSheet(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { pickingParent = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { pickingParent = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (confirmReclaim) {
         AlertDialog(
             onDismissRequest = { confirmReclaim = false },
-            title = { Text(t("Stop the worker?", "کارگزار متوقف شود؟")) },
+            title = { Text(stringResource(R.string.stop_the_worker)) },
             text = {
                 Text(
-                    t(
-                        "The worker process is ended and the task goes back to the queue, so it starts over.",
-                        "پردازش کارگزار بسته می‌شود و کار به صف برمی‌گردد تا از اول شروع شود.",
-                    )
+                    stringResource(R.string.the_worker_process_is_ended_and_the_task)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmReclaim = false
                     onReclaim()
-                }) { Text(t("Stop", "توقف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.stop), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmReclaim = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { confirmReclaim = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(t("Delete this task?", "این کار حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_this_task)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
 
 @Composable
 private fun effortLabel(effort: String): String = when (effort) {
-    "none" -> t("thinking off", "بدون فکر")
-    else -> t("thinking: $effort", "فکر: $effort")
+    "none" -> stringResource(R.string.thinking_off)
+    else -> stringResource(R.string.thinking, effort)
 }
 
 @Composable
@@ -1058,7 +1038,7 @@ private fun HealthSheet(
             contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            item { SheetHeader(t("Board health", "سلامت تابلو"), onBack = null) }
+            item { SheetHeader(stringResource(R.string.board_health), onBack = null) }
             items(diagnostics, key = { it.taskId }) { row ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -1099,10 +1079,10 @@ private fun RunSettingsDialog(
     var pickedEffort by remember { mutableStateOf(effort) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t("Model and thinking", "مدل و میزان فکر")) },
+        title = { Text(stringResource(R.string.model_and_thinking)) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                item { SheetSection(t("Model", "مدل")) }
+                item { SheetSection(stringResource(R.string.model)) }
                 item {
                     FilterChip(
                         selected = pickedModel.isBlank(),
@@ -1110,7 +1090,7 @@ private fun RunSettingsDialog(
                             pickedModel = ""
                             pickedProvider = null
                         },
-                        label = { Text(t("Profile's model", "مدل پروفایل")) },
+                        label = { Text(stringResource(R.string.profiles_model)) },
                     )
                 }
                 if (options.isEmpty()) {
@@ -1118,7 +1098,7 @@ private fun RunSettingsDialog(
                         OutlinedTextField(
                             value = pickedModel,
                             onValueChange = { pickedModel = it },
-                            label = { Text(t("Model name", "نام مدل")) },
+                            label = { Text(stringResource(R.string.model_name_2)) },
                             singleLine = true,
                         )
                     }
@@ -1141,10 +1121,10 @@ private fun RunSettingsDialog(
                         }
                     }
                 }
-                item { SheetSection(t("Thinking", "میزان فکر")) }
+                item { SheetSection(stringResource(R.string.thinking_2)) }
                 item {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-                        FilterChip(selected = pickedEffort == null, onClick = { pickedEffort = null }, label = { Text(t("Profile's", "پروفایل")) })
+                        FilterChip(selected = pickedEffort == null, onClick = { pickedEffort = null }, label = { Text(stringResource(R.string.profiles)) })
                         EFFORTS.forEach { level ->
                             FilterChip(selected = pickedEffort == level, onClick = { pickedEffort = level }, label = { Text(level) })
                         }
@@ -1156,9 +1136,9 @@ private fun RunSettingsDialog(
             TextButton(onClick = {
                 val chosen = pickedModel.trim().ifEmpty { null }
                 onSave(chosen, if (chosen == null) null else pickedProvider, pickedEffort)
-            }) { Text(t("Save", "ذخیره")) }
+            }) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -1176,7 +1156,7 @@ private fun AttachmentRow(file: KanbanRepository.Attachment, onOpen: () -> Unit,
             Text(file.filename, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(fileSize(file.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, contentDescription = t("Remove", "حذف"), modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.remove), modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -1199,7 +1179,7 @@ private fun LinkRow(linked: KanbanRepository.LinkedTask, isBusy: Boolean, onUnli
             }
         }
         IconButton(onClick = onUnlink, enabled = !isBusy) {
-            Icon(Icons.Default.Close, contentDescription = t("Remove link", "حذف پیوند"))
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.remove_link))
         }
     }
 }
@@ -1219,23 +1199,23 @@ private fun TaskActions(
     ) {
         when (status) {
             "review" -> {
-                Button(onClick = { onMove("done", null) }, enabled = !isBusy) { Text(t("Approve", "تأیید")) }
-                OutlinedButton(onClick = { onMove("ready", null) }, enabled = !isBusy) { Text(t("Send back", "برگرداندن")) }
+                Button(onClick = { onMove("done", null) }, enabled = !isBusy) { Text(stringResource(R.string.approve)) }
+                OutlinedButton(onClick = { onMove("ready", null) }, enabled = !isBusy) { Text(stringResource(R.string.send_back)) }
             }
             "blocked", "scheduled", "triage", "todo" ->
-                Button(onClick = { onMove("ready", null) }, enabled = !isBusy) { Text(t("Make ready", "آماده کن")) }
+                Button(onClick = { onMove("ready", null) }, enabled = !isBusy) { Text(stringResource(R.string.make_ready)) }
             "ready", "running" -> {
                 OutlinedButton(
                     onClick = { onMove("blocked", "Paused from the Hermes app") },
                     enabled = !isBusy,
-                ) { Text(t("Pause", "توقف")) }
+                ) { Text(stringResource(R.string.pause)) }
                 if (status == "running") {
-                    OutlinedButton(onClick = onStopWorker, enabled = !isBusy) { Text(t("Stop and retry", "توقف و شروع دوباره")) }
+                    OutlinedButton(onClick = onStopWorker, enabled = !isBusy) { Text(stringResource(R.string.stop_and_retry)) }
                 }
             }
-            "done" -> OutlinedButton(onClick = { onMove("archived", null) }, enabled = !isBusy) { Text(t("Archive", "بایگانی")) }
+            "done" -> OutlinedButton(onClick = { onMove("archived", null) }, enabled = !isBusy) { Text(stringResource(R.string.archive)) }
         }
-        TextButton(onClick = onDelete, enabled = !isBusy) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+        TextButton(onClick = onDelete, enabled = !isBusy) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
     }
 }
 
@@ -1257,27 +1237,27 @@ private fun NewTaskSheet(
             Modifier.padding(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            SheetHeader(t("New task", "کار جدید"), onBack = null)
+            SheetHeader(stringResource(R.string.new_task), onBack = null)
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text(t("What should be done?", "چه کاری انجام شود؟")) },
+                label = { Text(stringResource(R.string.what_should_be_done)) },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = body,
                 onValueChange = { body = it },
-                label = { Text(t("Details (optional)", "جزئیات (اختیاری)")) },
+                label = { Text(stringResource(R.string.details_optional)) },
                 minLines = 3,
                 maxLines = 8,
                 modifier = Modifier.fillMaxWidth(),
             )
-            SheetSection(t("Who does it", "چه کسی انجامش دهد"))
+            SheetSection(stringResource(R.string.who_does_it))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                 FilterChip(
                     selected = assignee == null,
                     onClick = { assignee = null },
-                    label = { Text(t("Let Hermes split it", "هرمس تقسیمش کند")) },
+                    label = { Text(stringResource(R.string.let_hermes_split_it)) },
                 )
                 assignees.forEach { name ->
                     FilterChip(selected = assignee == name, onClick = { assignee = name }, label = { Text("@$name") })
@@ -1285,10 +1265,7 @@ private fun NewTaskSheet(
             }
             if (assignee == null) {
                 SheetHint(
-                    t(
-                        "Hermes breaks it into steps and gives each to the profile whose description fits.",
-                        "هرمس آن را به چند کار می‌شکند و هر کدام را به پروفایلی می‌دهد که توضیحش می‌خورد.",
-                    )
+                    stringResource(R.string.hermes_breaks_it_into_steps_and_gives)
                 )
             }
             Button(
@@ -1296,7 +1273,7 @@ private fun NewTaskSheet(
                 enabled = title.isNotBlank() && !isBusy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(t("Add task", "افزودن کار"))
+                if (isBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.add_task))
             }
         }
     }
@@ -1310,7 +1287,7 @@ private fun AssigneePicker(current: String?, assignees: List<String>, enabled: B
             selected = current == null,
             onClick = { if (current != null) onPick(null) },
             enabled = enabled,
-            label = { Text(t("Nobody", "هیچ‌کس")) },
+            label = { Text(stringResource(R.string.nobody)) },
         )
         assignees.forEach { name ->
             FilterChip(
@@ -1329,7 +1306,7 @@ private fun RunRow(run: KanbanRepository.Run, inspection: KanbanRepository.Inspe
     val open = run.endedAt == null
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         val seconds = ((run.endedAt ?: (System.currentTimeMillis() / 1000)) - run.startedAt).coerceAtLeast(0)
-        val state = if (open) t("running", "در حال اجرا") else (run.outcome ?: run.status)
+        val state = if (open) stringResource(R.string.running_2) else (run.outcome ?: run.status)
         Text(
             listOfNotNull("#${run.id}", run.profile?.let { "@$it" }, state, duration(seconds)).joinToString(" · "),
             style = MaterialTheme.typography.labelMedium,
@@ -1343,7 +1320,7 @@ private fun RunRow(run: KanbanRepository.Run, inspection: KanbanRepository.Inspe
         }
         if (open) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onInspect) { Text(t("Check worker", "بررسی کارگزار")) }
+                TextButton(onClick = onInspect) { Text(stringResource(R.string.check_worker)) }
                 inspection?.let { Text(inspectionLine(it), style = MaterialTheme.typography.bodySmall) }
             }
         }
@@ -1353,40 +1330,40 @@ private fun RunRow(run: KanbanRepository.Run, inspection: KanbanRepository.Inspe
 @Composable
 private fun inspectionLine(found: KanbanRepository.Inspection): String =
     if (!found.alive) {
-        t("Not running", "در حال اجرا نیست") + found.reason.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+        stringResource(R.string.not_running) + found.reason.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
     } else {
         listOfNotNull(
             found.pid?.let { "PID $it" },
             found.cpuPercent?.let { "CPU ${"%.0f".format(it)}%" },
             found.memoryBytes?.let { "${it / (1024 * 1024)} MB" },
-        ).joinToString(" · ").ifEmpty { t("Alive", "زنده") }
+        ).joinToString(" · ").ifEmpty { stringResource(R.string.alive) }
     }
 
 @Composable
 private fun duration(seconds: Long): String = when {
-    seconds < 60 -> t("${seconds}s", "${seconds} ثانیه")
-    seconds < 3600 -> t("${seconds / 60}m", "${seconds / 60} دقیقه")
-    else -> t("${seconds / 3600}h ${seconds % 3600 / 60}m", "${seconds / 3600} ساعت و ${seconds % 3600 / 60} دقیقه")
+    seconds < 60 -> stringResource(R.string.s, seconds)
+    seconds < 3600 -> stringResource(R.string.m, seconds / 60)
+    else -> stringResource(R.string.h_m, seconds / 3600, seconds % 3600 / 60)
 }
 
 /** The tail of the worker's output, in a fixed-width face; long lines scroll sideways. */
 @Composable
 private fun LogView(log: KanbanRepository.Log) {
     if (!log.exists) {
-        SheetHint(t("No worker has started on this task yet.", "هنوز کارگزاری روی این کار شروع نکرده."))
+        SheetHint(stringResource(R.string.no_worker_has_started_on_this_task_yet))
         return
     }
     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
         Column(Modifier.fillMaxWidth().padding(HxSpace.sm)) {
             if (log.truncated) {
                 Text(
-                    t("Showing the last part only.", "فقط بخش آخر نمایش داده می‌شود."),
+                    stringResource(R.string.showing_the_last_part_only),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
-                log.text.ifEmpty { t("(empty)", "(خالی)") },
+                log.text.ifEmpty { stringResource(R.string.empty) },
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
             )

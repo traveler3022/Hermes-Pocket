@@ -47,6 +47,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
@@ -131,7 +133,6 @@ import coil.compose.AsyncImage
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -187,13 +188,13 @@ internal val reasoningLevels = listOf("none", "minimal", "low", "medium", "high"
 
 @Composable
 internal fun reasoningLevelLabel(level: String): String = when (level) {
-    "none" -> t("Off", "خاموش")
-    "minimal" -> t("Minimal", "حداقلی")
-    "low" -> t("Low", "کم")
-    "medium" -> t("Medium", "متوسط")
-    "high" -> t("High", "زیاد")
-    "xhigh" -> t("Very High", "خیلی زیاد")
-    "max" -> t("Max", "بیشینه")
+    "none" -> stringResource(R.string.off)
+    "minimal" -> stringResource(R.string.minimal)
+    "low" -> stringResource(R.string.low)
+    "medium" -> stringResource(R.string.medium)
+    "high" -> stringResource(R.string.high)
+    "xhigh" -> stringResource(R.string.very_high)
+    "max" -> stringResource(R.string.max)
     else -> level
 }
 

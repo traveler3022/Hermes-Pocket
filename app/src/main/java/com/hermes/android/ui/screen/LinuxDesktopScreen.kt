@@ -13,6 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AspectRatio
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.DesktopWindows
@@ -73,7 +75,7 @@ fun LinuxDesktopScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dialog by remember { mutableStateOf<DesktopDialog?>(null) }
-    val clearedMessage = t("Browser data cleared.", "داده‌های مرورگر پاک شد.")
+    val clearedMessage = stringResource(R.string.browser_data_cleared)
 
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(ui.message) {
@@ -84,7 +86,7 @@ fun LinuxDesktopScreen(
     }
 
     HermesScaffold(
-        title = t("Browser & desktop", "مرورگر و دسکتاپ"),
+        title = stringResource(R.string.browser_desktop),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
     ) { padding ->
@@ -97,10 +99,7 @@ fun LinuxDesktopScreen(
         ) {
             if (ui.installed == false) {
                 Text(
-                    text = t(
-                        "Install “Browser & desktop (VNC)” under Linux → Packages first.",
-                        "اول بستهٔ «مرورگر و دسکتاپ (VNC)» را از لینوکس ← بسته‌ها نصب کنید.",
-                    ),
+                    text = stringResource(R.string.install_browser_desktop_vnc_under_linux),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),
                 )
@@ -118,14 +117,11 @@ fun LinuxDesktopScreen(
                 onRestart = viewModel::restart,
             )
 
-            SectionHeader(t("Agent", "عامل"))
+            SectionHeader(stringResource(R.string.agent))
             SettingsGroup {
                 SettingRow(
-                    title = t("Agent browses here", "عامل با این مرورگر کار کند"),
-                    subtitle = t(
-                        "Hermes' browser tools use this Chromium, so you can watch and take over. It starts when the agent first browses or you open the viewer.",
-                        "ابزارهای مرورگر Hermes از همین Chromium استفاده می‌کنند و شما کارش را زنده می‌بینید و می‌توانید دست بگیرید. وقتی عامل اولین بار مرور کند یا نمایشگر را باز کنید روشن می‌شود.",
-                    ),
+                    title = stringResource(R.string.agent_browses_here),
+                    subtitle = stringResource(R.string.hermes_browser_tools_use_this_chromium),
                     icon = Icons.Default.SmartToy,
                     trailing = {
                         Switch(
@@ -137,28 +133,28 @@ fun LinuxDesktopScreen(
                 )
             }
 
-            SectionHeader(t("Browser", "مرورگر"))
+            SectionHeader(stringResource(R.string.browser))
             SettingsGroup {
                 SettingRow(
-                    title = t("Home page", "صفحهٔ شروع"),
+                    title = stringResource(R.string.home_page),
                     subtitle = settings.homepage,
                     icon = Icons.Default.Home,
                     onClick = { dialog = DesktopDialog.Homepage },
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("Clear browser data", "پاک کردن داده‌های مرورگر"),
-                    subtitle = t("Cookies, logins, history, cache", "کوکی‌ها، ورودها، تاریخچه و کش"),
+                    title = stringResource(R.string.clear_browser_data),
+                    subtitle = stringResource(R.string.cookies_logins_history_cache),
                     icon = Icons.Default.DeleteSweep,
                     iconTint = MaterialTheme.colorScheme.error,
                     onClick = { dialog = DesktopDialog.ClearData },
                 )
             }
 
-            SectionHeader(t("Display", "نمایشگر"))
+            SectionHeader(stringResource(R.string.display))
             SettingsGroup {
                 SettingRow(
-                    title = t("Screen size", "اندازهٔ صفحه"),
+                    title = stringResource(R.string.screen_size),
                     subtitle = with(settings.resolution) { "${t(titleEn, titleFa)} · ${width}×$height" },
                     icon = Icons.Default.AspectRatio,
                     onClick = { dialog = DesktopDialog.Resolution },
@@ -168,16 +164,13 @@ fun LinuxDesktopScreen(
             SectionHeader("VNC")
             SettingsGroup {
                 SettingRow(
-                    title = t("Allow other devices", "اتصال از دستگاه‌های دیگر"),
+                    title = stringResource(R.string.allow_other_devices),
                     subtitle = if (settings.vncLan && settings.vncPassword.isNotEmpty()) {
                         viewModel.lanAddress()?.let {
-                            t("Connect a VNC client to $it", "با یک برنامهٔ VNC به $it وصل شوید")
-                        } ?: t("Not on a Wi-Fi network", "به شبکهٔ Wi-Fi وصل نیستید")
+                            stringResource(R.string.connect_a_vnc_client_to, it)
+                        } ?: stringResource(R.string.not_on_a_wi_fi_network)
                     } else {
-                        t(
-                            "Off: only this app can see the desktop",
-                            "خاموش: فقط همین اپ دسکتاپ را می‌بیند",
-                        )
+                        stringResource(R.string.off_only_this_app_can_see_the_desktop)
                     },
                     icon = Icons.Default.Wifi,
                     trailing = {
@@ -196,9 +189,9 @@ fun LinuxDesktopScreen(
                 )
                 GroupDivider()
                 SettingRow(
-                    title = t("VNC password", "رمز VNC"),
+                    title = stringResource(R.string.vnc_password),
                     subtitle = if (settings.vncPassword.isEmpty()) {
-                        t("Not set", "تنظیم نشده")
+                        stringResource(R.string.not_set)
                     } else {
                         "•".repeat(settings.vncPassword.length)
                     },
@@ -207,10 +200,7 @@ fun LinuxDesktopScreen(
                 )
             }
             Text(
-                text = t(
-                    "The agent can also control the whole desktop (screenshots, mouse, keyboard) through its terminal; Hermes gets a built-in skill that explains how.",
-                    "عامل می‌تواند کل دسکتاپ را هم از راه ترمینال کنترل کند: عکس صفحه، ماوس و کیبورد. یک مهارت داخلی به Hermes اضافه می‌شود که روش کار را توضیح می‌دهد.",
-                ),
+                text = stringResource(R.string.the_agent_can_also_control_the_whole),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
@@ -220,7 +210,7 @@ fun LinuxDesktopScreen(
 
     when (dialog) {
         DesktopDialog.Homepage -> TextSettingDialog(
-            title = t("Home page", "صفحهٔ شروع"),
+            title = stringResource(R.string.home_page),
             initial = settings.homepage,
             keyboardType = KeyboardType.Uri,
             onDismiss = { dialog = null },
@@ -234,11 +224,11 @@ fun LinuxDesktopScreen(
             // turn LAN access on as well, exposing VNC to the network unasked.
             val share = dialog == DesktopDialog.PasswordToShare
             TextSettingDialog(
-                title = t("VNC password", "رمز VNC"),
+                title = stringResource(R.string.vnc_password),
                 initial = settings.vncPassword,
                 keyboardType = KeyboardType.Password,
                 password = true,
-                hint = t("6–8 characters; VNC uses only the first 8.", "۶ تا ۸ کاراکتر؛ VNC فقط ۸ کاراکتر اول را می‌خواند."),
+                hint = stringResource(R.string.s_6_8_characters_vnc_uses_only_the_first_8),
                 isValid = { it.length >= 6 },
                 onDismiss = { dialog = null },
                 onSave = { value ->
@@ -249,7 +239,7 @@ fun LinuxDesktopScreen(
         }
         DesktopDialog.Resolution -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text(t("Screen size", "اندازهٔ صفحه")) },
+            title = { Text(stringResource(R.string.screen_size)) },
             text = {
                 Column {
                     DesktopResolution.values().forEach { option ->
@@ -269,26 +259,23 @@ fun LinuxDesktopScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { dialog = null }) { Text(t("Close", "بستن")) } },
+            confirmButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.close)) } },
         )
         DesktopDialog.ClearData -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text(t("Clear browser data?", "داده‌های مرورگر پاک شود؟")) },
+            title = { Text(stringResource(R.string.clear_browser_data_2)) },
             text = {
                 Text(
-                    t(
-                        "Signs out of every site in this browser. The desktop stops first.",
-                        "از همهٔ سایت‌ها در این مرورگر خارج می‌شوید. اول دسکتاپ متوقف می‌شود.",
-                    ),
+                    stringResource(R.string.signs_out_of_every_site_in_this_browser),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearBrowserData(clearedMessage)
                     dialog = null
-                }) { Text(t("Clear", "پاک کن"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.clear_2), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text(t("Cancel", "لغو")) } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.cancel)) } },
         )
         null -> Unit
     }
@@ -308,18 +295,18 @@ private fun StatusCard(
     onRestart: () -> Unit,
 ) {
     val (label, color) = when (state) {
-        DesktopState.Running -> t("Running", "روشن") to Color(0xFF22C55E)
-        DesktopState.Starting -> t("Starting…", "در حال روشن شدن…") to Color(0xFFF59E0B)
-        DesktopState.Stopped -> t("Stopped", "خاموش") to MaterialTheme.colorScheme.outline
-        is DesktopState.Error -> t("Failed", "خطا") to MaterialTheme.colorScheme.error
+        DesktopState.Running -> stringResource(R.string.running_3) to Color(0xFF22C55E)
+        DesktopState.Starting -> stringResource(R.string.starting) to Color(0xFFF59E0B)
+        DesktopState.Stopped -> stringResource(R.string.stopped_2) to MaterialTheme.colorScheme.outline
+        is DesktopState.Error -> stringResource(R.string.failed) to MaterialTheme.colorScheme.error
     }
     SettingsGroup {
         SettingRow(
-            title = t("Desktop", "دسکتاپ"),
+            title = stringResource(R.string.desktop),
             subtitle = when {
                 state is DesktopState.Error -> state.message.lines().first()
-                restartPending -> t("Restart to apply the new settings", "برای اعمال تنظیمات جدید، دوباره روشن کنید")
-                else -> t("Chromium on a VNC display inside the built-in Linux", "Chromium روی یک نمایشگر VNC داخل لینوکس داخلی")
+                restartPending -> stringResource(R.string.restart_to_apply_the_new_settings)
+                else -> stringResource(R.string.chromium_on_a_vnc_display_inside_the)
             },
             icon = Icons.Default.DesktopWindows,
             trailing = {
@@ -337,18 +324,18 @@ private fun StatusCard(
                 .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
         ) {
             Button(onClick = onOpen, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text(t("Open viewer", "باز کردن نمایشگر"))
+                Text(stringResource(R.string.open_viewer))
             }
             when {
                 state == DesktopState.Running && restartPending ->
-                    OutlinedButton(onClick = onRestart, enabled = !busy) { Text(t("Restart", "راه‌اندازی دوباره")) }
+                    OutlinedButton(onClick = onRestart, enabled = !busy) { Text(stringResource(R.string.restart)) }
                 state == DesktopState.Running ->
-                    OutlinedButton(onClick = onStop, enabled = !busy) { Text(t("Stop", "توقف")) }
+                    OutlinedButton(onClick = onStop, enabled = !busy) { Text(stringResource(R.string.stop)) }
                 else ->
                     OutlinedButton(
                         onClick = onStart,
                         enabled = !busy && state != DesktopState.Starting,
-                    ) { Text(t("Start", "روشن کردن")) }
+                    ) { Text(stringResource(R.string.start)) }
             }
         }
     }
@@ -381,8 +368,8 @@ private fun TextSettingDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onSave(value) }, enabled = isValid(value)) { Text(t("Save", "ذخیره")) }
+            TextButton(onClick = { onSave(value) }, enabled = isValid(value)) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(t("Cancel", "لغو")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }

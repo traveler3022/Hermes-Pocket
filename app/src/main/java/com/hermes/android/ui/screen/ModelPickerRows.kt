@@ -9,6 +9,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ModelOption
 
 // Rows shared by the pages of ModelPickerSheet.
@@ -37,7 +38,7 @@ internal fun SheetHeader(title: String, onBack: (() -> Unit)?) {
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "بازگشت"))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
             }
         }
         Text(
@@ -138,7 +139,7 @@ internal fun ModelRow(
             IconButton(onClick = onToggleStar, enabled = starEnabled) {
                 Icon(
                     if (starred) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = if (starred) t("Unstar", "برداشتن ستاره") else t("Star", "ستاره زدن"),
+                    contentDescription = if (starred) stringResource(R.string.unstar) else stringResource(R.string.star),
                     tint = when {
                         starred -> MaterialTheme.colorScheme.primary
                         starEnabled -> MaterialTheme.colorScheme.onSurfaceVariant

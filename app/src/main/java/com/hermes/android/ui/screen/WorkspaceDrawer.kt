@@ -2,6 +2,8 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.outlined.Folder
 import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.icons.filled.Inventory2
@@ -44,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.SessionItem
 
 /** A Workspace destination in the drawer's upper block. */
@@ -120,7 +121,7 @@ internal fun WorkspaceDrawerSheet(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = profileTitle ?: t("Hermes", "هرمس"),
+                        text = profileTitle ?: stringResource(R.string.hermes),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -129,13 +130,13 @@ internal fun WorkspaceDrawerSheet(
                     )
                     Icon(
                         Icons.Default.KeyboardArrowDown,
-                        contentDescription = t("Switch profile", "عوض کردن پروفایل"),
+                        contentDescription = stringResource(R.string.switch_profile),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 HxHeaderCircleButton(
                     icon = HxIcons.Search,
-                    contentDescription = t("Search chats", "جستجو در گفتگوها"),
+                    contentDescription = stringResource(R.string.search_chats),
                     onClick = onSearch,
                 )
             }
@@ -168,7 +169,7 @@ internal fun WorkspaceDrawerSheet(
                 if (!showAll && sessions.size > visibleSessions) {
                     item {
                         Text(
-                            text = t("Show all…", "مشاهده همه…"),
+                            text = stringResource(R.string.show_all),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
@@ -204,7 +205,7 @@ internal fun WorkspaceDrawerSheet(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = t("Chat", "چت"),
+                        text = stringResource(R.string.chat),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary,
@@ -221,7 +222,7 @@ internal fun WorkspaceDrawerSheet(
                     ) {
                         Icon(
                             HxIcons.User,
-                            contentDescription = t("Account", "حساب"),
+                            contentDescription = stringResource(R.string.account_2),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(19.dp),
                         )
@@ -356,12 +357,12 @@ internal fun rememberWorkspaceDestinations(
     onFiles: () -> Unit,
     onKanban: (() -> Unit)? = null,
 ): List<WorkspaceDestination> {
-    val workbench = t("Workbench", "میز کار")
-    val agent = t("Agent", "عامل")
-    val scheduled = t("Scheduled", "زمان‌بندی‌شده")
-    val groups = t("Group chats", "گفتگوهای گروهی")
-    val files = t("Files", "فایل‌ها")
-    val kanban = t("Kanban", "کانبان")
+    val workbench = stringResource(R.string.workbench)
+    val agent = stringResource(R.string.agent)
+    val scheduled = stringResource(R.string.scheduled_2)
+    val groups = stringResource(R.string.group_chats)
+    val files = stringResource(R.string.files)
+    val kanban = stringResource(R.string.kanban)
     // Remembered, as the name says: a new list on every call made the drawer
     // recompose along with the chat behind it.
     return remember(

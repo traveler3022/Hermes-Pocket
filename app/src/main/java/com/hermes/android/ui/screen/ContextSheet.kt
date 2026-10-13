@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.domain.session.ContextBreakdown
 import com.hermes.android.domain.session.ContextCategory
 import com.hermes.android.ui.icons.filled.Compress
@@ -40,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ContextViewModel
 
 /**
@@ -80,13 +81,13 @@ fun ContextSheet(
                 .padding(bottom = HxSpace.xl),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            Text(t("Context", "کانتکست"), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.context), style = MaterialTheme.typography.titleMedium)
 
             val breakdown = uiState.breakdown
             when {
                 uiState.isLoading && breakdown == null -> ContextLoadingRow()
                 breakdown == null -> Text(
-                    t("Context usage is unavailable.", "اطلاعات کانتکست در دسترس نیست."),
+                    stringResource(R.string.context_usage_is_unavailable),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -113,8 +114,8 @@ fun ContextSheet(
                 singleLine = true,
                 enabled = !uiState.isCompressing,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(t("Keep focus on (optional)", "تمرکز روی (اختیاری)")) },
-                placeholder = { Text(t("e.g. the login bug", "مثلاً باگ لاگین")) },
+                label = { Text(stringResource(R.string.keep_focus_on_optional)) },
+                placeholder = { Text(stringResource(R.string.e_g_the_login_bug)) },
             )
 
             Button(
@@ -125,19 +126,16 @@ fun ContextSheet(
                 if (uiState.isCompressing) {
                     CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(HxSpace.sm))
-                    Text(t("Compressing…", "در حال فشرده‌سازی…"))
+                    Text(stringResource(R.string.compressing))
                 } else {
                     Icon(Icons.Default.Compress, contentDescription = null, modifier = Modifier.height(18.dp))
                     Spacer(Modifier.width(HxSpace.sm))
-                    Text(t("Compress history", "فشرده‌سازی تاریخچه"))
+                    Text(stringResource(R.string.compress_history))
                 }
             }
 
             Text(
-                t(
-                    "Compression summarizes older turns to free room. Stop the current turn first.",
-                    "فشرده‌سازی نوبت‌های قدیمی رو خلاصه می‌کنه تا جا باز شه. اول نوبت جاری رو متوقف کن.",
-                ),
+                stringResource(R.string.compression_summarizes_older_turns_to),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

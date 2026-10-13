@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Dns
 import com.hermes.android.ui.icons.filled.ExpandLess
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -147,9 +149,9 @@ fun ConfigScreen(
     val connectionTitle = if (runtimeViewModel.isRemoteRuntime) {
         serverConfig.serverUrl
     } else when (runtimeChoice) {
-        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.BuiltInLinux -> t("Built-in Linux", "لینوکس داخلی")
+        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.BuiltInLinux -> stringResource(R.string.built_in_linux)
         com.hermes.android.ui.viewmodel.RuntimeChoiceUi.Termux -> "Termux"
-        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.RemoteServer -> t("Remote Server", "سرور راه دور")
+        com.hermes.android.ui.viewmodel.RuntimeChoiceUi.RemoteServer -> stringResource(R.string.remote_server)
     }
 
     // Nested navigation: null = the top-level category menu; a value = drilled
@@ -167,8 +169,8 @@ fun ConfigScreen(
     }
 
     com.hermes.android.ui.design.HermesScaffold(
-        title = section?.let { t(it.titleEn, it.titleFa) } ?: t("Control Center", "میز فرمان"),
-        subtitle = if (section == null) t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه") else null,
+        title = section?.let { t(it.titleEn, it.titleFa) } ?: stringResource(R.string.control_center),
+        subtitle = if (section == null) stringResource(R.string.agent_server_and_app_configuration) else null,
         onBack = { if (section != null) section = section?.parent else onNavigateBack() },
         snackbarHostState = snackbarHostState,
     ) { padding ->

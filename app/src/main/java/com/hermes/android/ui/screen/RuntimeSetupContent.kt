@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.Dns
@@ -66,7 +68,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.InstallInstructionsUi
@@ -175,12 +176,12 @@ internal fun InstallingContent(progress: InstallProgressUi?) {
         ) {
             CircularProgressIndicator()
             Text(
-                text = t("Installing Hermes...", "در حال نصب Hermes..."),
+                text = stringResource(R.string.installing_hermes),
                 style = MaterialTheme.typography.titleMedium,
             )
             progress?.let { p ->
                 Text(
-                    text = t("Stage: ${p.stage}", "مرحله: ${p.stage}"),
+                    text = stringResource(R.string.stage, p.stage),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
@@ -217,17 +218,17 @@ internal fun InstalledContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Hermes installed ✓", "Hermes نصب شد ✓"),
+                text = stringResource(R.string.hermes_installed),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Text(
-                text = t("Version: ${hermesVersion ?: "unknown"}", "نسخه: ${hermesVersion ?: "نامشخص"}"),
+                text = stringResource(R.string.version_label, hermesVersion ?: stringResource(R.string.version_unknown)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             Text(
-                text = t("Next step: Start the Agent Gateway", "قدم بعد: اجرای Hermes"),
+                text = stringResource(R.string.next_step_start_the_agent_gateway),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -255,27 +256,22 @@ internal fun MissingContent(storeUrl: String?, onCheckAgain: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Termux is not installed", "Termux نصب نیست"),
+                text = stringResource(R.string.termux_is_not_installed),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Text(
-                text = t(
-                    "Hermes runs inside the Termux app in this mode. Install Termux from F-Droid " +
-                        "(not the Play Store version), open it once, then come back and check again.",
-                    "در این حالت Hermes داخل اپ Termux اجرا می‌شود. Termux را از F-Droid نصب کنید " +
-                        "(نه نسخه‌ی Play Store)، یک بار بازش کنید، بعد برگردید و دوباره بررسی کنید.",
-                ),
+                text = stringResource(R.string.hermes_runs_inside_the_termux_app_in),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (storeUrl != null) {
                     Button(onClick = { runCatching { uriHandler.openUri(storeUrl) } }) {
-                        Text(t("Get Termux", "دریافت Termux"))
+                        Text(stringResource(R.string.get_termux))
                     }
                 }
-                OutlinedButton(onClick = onCheckAgain) { Text(t("Check again", "بررسی دوباره")) }
+                OutlinedButton(onClick = onCheckAgain) { Text(stringResource(R.string.check_again)) }
             }
         }
     }
@@ -294,7 +290,7 @@ internal fun ErrorContent(message: String, onRetry: () -> Unit, onFetchLogs: () 
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = t("Error", "خطا"),
+                text = stringResource(R.string.error),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -304,8 +300,8 @@ internal fun ErrorContent(message: String, onRetry: () -> Unit, onFetchLogs: () 
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onRetry) { Text(t("Retry", "تلاش دوباره")) }
-                Button(onClick = onFetchLogs) { Text(t("Fetch Logs", "دریافت لاگ")) }
+                Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                Button(onClick = onFetchLogs) { Text(stringResource(R.string.fetch_logs)) }
             }
         }
     }

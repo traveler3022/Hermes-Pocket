@@ -28,15 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.PlatformConfig
 import com.hermes.android.ui.viewmodel.PlatformType
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
@@ -69,11 +70,8 @@ fun PlatformsScreen(
     }
 
     HermesScaffold(
-        title = t("Messaging Platforms", "پلتفرم‌های پیام‌رسان"),
-        subtitle = t(
-            "Talk to your agent from Telegram, Discord, Slack",
-            "با ایجنت از تلگرام، دیسکورد و اسلک حرف بزن",
-        ),
+        title = stringResource(R.string.messaging_platforms),
+        subtitle = stringResource(R.string.talk_to_your_agent_from_telegram_discord),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
     ) { padding ->
@@ -88,7 +86,7 @@ fun PlatformsScreen(
                 CircularProgressIndicator()
                 Spacer(Modifier.height(HxSpace.sm))
                 Text(
-                    t("Loading platforms…", "در حال بارگذاری پلتفرم‌ها…"),
+                    stringResource(R.string.loading_platforms),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -155,7 +153,7 @@ private fun PlatformCard(
                     )
                 }
                 StatusChip(
-                    label = if (platform.isConnected) t("connected", "متصل") else t("off", "خاموش"),
+                    label = if (platform.isConnected) stringResource(R.string.connected_8) else stringResource(R.string.off_2),
                     color = if (platform.isConnected) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -170,14 +168,14 @@ private fun PlatformCard(
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(t("Set up step by step", "راه‌اندازی قدم‌به‌قدم"))
+                    Text(stringResource(R.string.set_up_step_by_step))
                 }
             }
 
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
-                label = { Text(t("Bot Token", "توکن بات")) },
+                label = { Text(stringResource(R.string.bot_token)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
@@ -190,7 +188,7 @@ private fun PlatformCard(
                 shape = RoundedCornerShape(50),
                 modifier = Modifier.align(Alignment.End),
             ) {
-                Text(t("Save Token", "ذخیره توکن"))
+                Text(stringResource(R.string.save_token))
             }
         }
     }

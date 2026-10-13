@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.OpenInNew
 import com.hermes.android.ui.icons.filled.RocketLaunch
 import androidx.compose.material3.AlertDialog
@@ -56,7 +58,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 import com.hermes.android.ui.viewmodel.RuntimeUiState
 import com.hermes.android.ui.viewmodel.RuntimeViewModel
@@ -113,10 +114,10 @@ fun SetupScreen(
     state.confirmMessage?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::dismissConfirm,
-            title = { Text(t("Expensive model", "مدل گران")) },
+            title = { Text(stringResource(R.string.expensive_model)) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = viewModel::confirmExpensiveModel) { Text(t("Use it", "استفاده شود")) } },
-            dismissButton = { TextButton(onClick = viewModel::dismissConfirm) { Text(t("Pick another", "انتخاب دیگر")) } },
+            confirmButton = { TextButton(onClick = viewModel::confirmExpensiveModel) { Text(stringResource(R.string.use_it)) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissConfirm) { Text(stringResource(R.string.pick_another)) } },
         )
     }
 }
@@ -131,9 +132,9 @@ private fun StepHeader(step: SetupStep, onBack: () -> Unit) {
         SetupStep.Model -> 4
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = t("Back", "بازگشت")) }
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back)) }
         Text(
-            t("Step $index of 4", "مرحله $index از ۴"),
+            stringResource(R.string.step_of_4, index),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -158,18 +159,13 @@ private fun ColumnScope.WelcomeStep(onStart: () -> Unit) {
         textAlign = TextAlign.Center,
     )
     Text(
-        t(
-            "An AI agent that lives on your phone. It runs commands, edits files and searches the web — " +
-                "with your own API key, no account and no middleman.",
-            "یک ایجنت هوش مصنوعی که روی گوشی خودتان زندگی می‌کند: دستور اجرا می‌کند، فایل ویرایش می‌کند و در وب " +
-                "جست‌وجو می‌کند — با کلید API خودتان، بدون حساب کاربری و بدون واسطه.",
-        ),
+        stringResource(R.string.an_ai_agent_that_lives_on_your_phone_it),
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(24.dp))
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text(t("Get started", "شروع")) }
+    Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.get_started)) }
 }
 
 @Composable
@@ -186,7 +182,7 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     // selectRuntime() runs detection for the runtime they chose.
     LaunchedEffect(chosen) { if (chosen) viewModel.detect() }
 
-    Text(t("Where should Hermes run?", "Hermes کجا اجرا شود؟"), style = MaterialTheme.typography.headlineSmall)
+    Text(stringResource(R.string.where_should_hermes_run), style = MaterialTheme.typography.headlineSmall)
     RuntimeChoiceRow(
         selected = choice.takeIf { chosen },
         enabled = !installing,
@@ -195,14 +191,7 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     )
     if (!chosen) {
         Text(
-            t(
-                "Built-in Linux runs Hermes inside this app, with nothing else to install. " +
-                    "Termux uses the separate Termux app. Remote/Server connects to Hermes on your own server. " +
-                    "You can switch later in Settings.",
-                "لینوکس داخلی Hermes را داخل همین اپ اجرا می‌کند و چیز دیگری لازم نیست. " +
-                    "Termux از اپ جداگانه‌ی Termux استفاده می‌کند. سرور راه دور به Hermes روی سرور خودت وصل می‌شود. " +
-                    "بعداً از تنظیمات هم می‌شود عوضش کرد.",
-            ),
+            stringResource(R.string.built_in_linux_runs_hermes_inside_this),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -210,20 +199,9 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
     }
     Text(
         when (choice) {
-            RuntimeChoiceUi.BuiltInLinux -> t(
-                "Recommended. A small Linux runs inside this app — nothing else to install.",
-                "پیشنهادی. یک لینوکس کوچک داخل همین اپ اجرا می‌شود — نیازی به نصب چیز دیگری نیست.",
-            )
-            RuntimeChoiceUi.Termux -> t(
-                "Uses the separate Termux app. Pick this if you already run Hermes in Termux.",
-                "از اپ جداگانه‌ی Termux استفاده می‌کند. اگر Hermes را از قبل در Termux دارید این را انتخاب کنید.",
-            )
-            RuntimeChoiceUi.RemoteServer -> t(
-                "Connects this app to Hermes running on your own server; it does not provide a hosted server. " +
-                    "Use your server's Tailscale address and Hermes sign-in.",
-                "این اپ را به Hermes روی سرور خودت وصل می‌کند و سرور میزبانی‌شده‌ای ارائه نمی‌دهد. " +
-                    "از نشانی Tailscale و ورود هرمسِ سرورت استفاده کن.",
-            )
+            RuntimeChoiceUi.BuiltInLinux -> stringResource(R.string.recommended_a_small_linux_runs_inside)
+            RuntimeChoiceUi.Termux -> stringResource(R.string.uses_the_separate_termux_app_pick_this)
+            RuntimeChoiceUi.RemoteServer -> stringResource(R.string.connects_this_app_to_hermes_running_on)
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -252,7 +230,7 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
             is RuntimeUiState.Installed -> InstalledContent(
                 hermesVersion = state.hermesVersion,
                 onStartGateway = viewModel::startGateway,
-                startLabel = t("Start Hermes", "اجرای Hermes"),
+                startLabel = stringResource(R.string.start_hermes),
             )
             is RuntimeUiState.Running -> {
                 Card(
@@ -262,10 +240,10 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.size(12.dp))
-                        Text(t("Hermes is running", "Hermes در حال اجراست"), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.hermes_is_running), style = MaterialTheme.typography.titleMedium)
                     }
                 }
-                Button(onClick = onReady, modifier = Modifier.fillMaxWidth()) { Text(t("Continue", "ادامه")) }
+                Button(onClick = onReady, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.continue_text)) }
             }
             is RuntimeUiState.Error -> ErrorContent(
                 message = state.message,
@@ -282,12 +260,9 @@ private fun ColumnScope.RuntimeStep(viewModel: RuntimeViewModel, onReady: () -> 
 
 @Composable
 private fun ProviderStep(state: SetupUiState, viewModel: SetupViewModel) {
-    Text(t("Choose your AI provider", "ارائه‌دهنده‌ی هوش مصنوعی را انتخاب کنید"), style = MaterialTheme.typography.headlineSmall)
+    Text(stringResource(R.string.choose_your_ai_provider), style = MaterialTheme.typography.headlineSmall)
     Text(
-        t(
-            "Hermes calls the model with your own key. It is stored only on this phone.",
-            "Hermes با کلید خودتان به مدل وصل می‌شود. کلید فقط روی همین گوشی ذخیره می‌شود.",
-        ),
+        stringResource(R.string.hermes_calls_the_model_with_your_own_key),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -308,7 +283,7 @@ private fun ProviderStep(state: SetupUiState, viewModel: SetupViewModel) {
     }
     if (state.alreadyConfigured) {
         TextButton(onClick = viewModel::finish, modifier = Modifier.fillMaxWidth()) {
-            Text(t("Keep my current model and finish", "همین مدل فعلی بماند و تمام"))
+            Text(stringResource(R.string.keep_my_current_model_and_finish))
         }
     }
 }
@@ -322,7 +297,7 @@ private fun ApiKeyStep(state: SetupUiState, viewModel: SetupViewModel) {
         OutlinedTextField(
             value = state.baseUrl,
             onValueChange = viewModel::setBaseUrl,
-            label = { Text(t("Base URL", "آدرس پایه")) },
+            label = { Text(stringResource(R.string.base_url_3)) },
             placeholder = { Text("https://example.com/v1") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -332,7 +307,7 @@ private fun ApiKeyStep(state: SetupUiState, viewModel: SetupViewModel) {
     OutlinedTextField(
         value = state.apiKey,
         onValueChange = viewModel::setApiKey,
-        label = { Text(if (provider.needsBaseUrl) t("API key (optional)", "کلید API (اختیاری)") else t("API key", "کلید API")) },
+        label = { Text(if (provider.needsBaseUrl) stringResource(R.string.api_key_optional) else stringResource(R.string.api_key_2)) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -349,24 +324,24 @@ private fun ApiKeyStep(state: SetupUiState, viewModel: SetupViewModel) {
         }) {
             Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
-            Text(t("Get a key from ${provider.name}", "دریافت کلید از ${provider.name}"))
+            Text(stringResource(R.string.get_a_key_from, provider.name))
         }
     }
     Button(onClick = viewModel::submitKey, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
         if (state.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-        else Text(t("Verify and continue", "بررسی و ادامه"))
+        else Text(stringResource(R.string.verify_and_continue))
     }
 }
 
 @Composable
 private fun ModelStep(state: SetupUiState, viewModel: SetupViewModel) {
-    Text(t("Pick a model", "یک مدل انتخاب کنید"), style = MaterialTheme.typography.headlineSmall)
+    Text(stringResource(R.string.pick_a_model), style = MaterialTheme.typography.headlineSmall)
     OutlinedTextField(
         value = state.modelQuery,
         onValueChange = viewModel::setModelQuery,
         label = {
             Text(
-                if (state.models.isEmpty()) t("Model ID", "شناسه‌ی مدل") else t("Search or type a model ID", "جست‌وجو یا تایپ شناسه‌ی مدل"),
+                if (state.models.isEmpty()) stringResource(R.string.model_id) else stringResource(R.string.search_or_type_a_model_id),
             )
         },
         singleLine = true,
@@ -375,7 +350,7 @@ private fun ModelStep(state: SetupUiState, viewModel: SetupViewModel) {
     val query = state.modelQuery.trim()
     if (query.isNotEmpty() && query !in state.models) {
         Button(onClick = { viewModel.pickModel(query) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-            Text(t("Use \"$query\"", "استفاده از «$query»"))
+            Text(stringResource(R.string.use, query))
         }
     }
     val filtered = state.models.filter { query.isEmpty() || it.contains(query, ignoreCase = true) }.take(60)

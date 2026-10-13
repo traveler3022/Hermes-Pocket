@@ -22,8 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.hermes.android.R
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ModelFavorite
 import com.hermes.android.ui.viewmodel.ModelFavorites
 import com.hermes.android.ui.viewmodel.ModelOption
@@ -84,14 +85,11 @@ internal fun ModelPickerSheet(
         ) {
             when (val current = page) {
                 ModelSheetPage.Main -> {
-                    item { SheetHeader(t("Model", "مدل"), onBack = null) }
+                    item { SheetHeader(stringResource(R.string.model), onBack = null) }
                     if (favorites.isEmpty()) {
                         item {
                             SheetHint(
-                                t(
-                                    "Star models inside a provider to pin them here (up to ${ModelFavorites.MAX}).",
-                                    "داخل هر پرووایدر روی ستاره‌ی مدل بزن تا اینجا بیاد (تا ${ModelFavorites.MAX} تا).",
-                                )
+                                stringResource(R.string.star_models_inside_a_provider_to_pin, ModelFavorites.MAX)
                             )
                         }
                     }
@@ -109,16 +107,16 @@ internal fun ModelPickerSheet(
                         )
                     }
                     item {
-                        NavRow(t("Effort", "سطح استدلال"), reasoningLevelLabel(reasoningLevel)) {
+                        NavRow(stringResource(R.string.effort), reasoningLevelLabel(reasoningLevel)) {
                             open(ModelSheetPage.Effort)
                         }
                     }
-                    item { SheetSection(t("Providers", "پرووایدرها")) }
+                    item { SheetSection(stringResource(R.string.providers)) }
                     when {
                         models.isEmpty() && isLoading -> item {
                             CircularProgressIndicator(modifier = Modifier.padding(HxSpace.sm))
                         }
-                        models.isEmpty() -> item { SheetHint(t("No models loaded.", "مدلی بارگذاری نشد.")) }
+                        models.isEmpty() -> item { SheetHint(stringResource(R.string.no_models_loaded)) }
                         else -> items(byProvider.keys.sorted(), key = { "provider:$it" }) { slug ->
                             val providerModels = byProvider.getValue(slug)
                             NavRow(
@@ -131,7 +129,7 @@ internal fun ModelPickerSheet(
                 }
 
                 ModelSheetPage.Effort -> {
-                    item { SheetHeader(t("Effort", "سطح استدلال")) { open(ModelSheetPage.Main) } }
+                    item { SheetHeader(stringResource(R.string.effort)) { open(ModelSheetPage.Main) } }
                     items(reasoningLevels) { level ->
                         val selected = level == reasoningLevel
                         ListItem(
@@ -169,7 +167,7 @@ internal fun ModelPickerSheet(
                                 value = query,
                                 onValueChange = { query = it },
                                 singleLine = true,
-                                placeholder = { Text(t("Search models", "جستجوی مدل")) },
+                                placeholder = { Text(stringResource(R.string.search_models_2)) },
                                 modifier = Modifier.fillMaxWidth().padding(bottom = HxSpace.xs),
                             )
                         }
@@ -177,10 +175,7 @@ internal fun ModelPickerSheet(
                     if (favorites.size >= ModelFavorites.MAX) {
                         item {
                             SheetHint(
-                                t(
-                                    "${ModelFavorites.MAX} models starred — unstar one to add another.",
-                                    "${ModelFavorites.MAX} مدل ستاره خورده — برای افزودن، یکی رو بردار.",
-                                )
+                                stringResource(R.string.models_starred_unstar_one_to_add_another, ModelFavorites.MAX)
                             )
                         }
                     }

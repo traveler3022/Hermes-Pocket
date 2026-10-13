@@ -30,15 +30,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hermes.android.R
 import com.hermes.android.domain.tools.ToolsetEnvVar
 import com.hermes.android.domain.tools.ToolsetProvider
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ToolsetSetupUiState
 import com.hermes.android.ui.viewmodel.ToolsetSetupViewModel
 
@@ -68,12 +69,12 @@ internal fun ToolsetSetupSheet(
                 .padding(horizontal = 16.dp),
         ) {
             Text(
-                text = t("Set up “$toolset”", "تنظیم «$toolset»"),
+                text = stringResource(R.string.set_up, toolset),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = t("Choose the service these tools use and give it its keys.", "سرویسی که این ابزارها استفاده می‌کنند را انتخاب کن و کلیدهایش را بده."),
+                text = stringResource(R.string.choose_the_service_these_tools_use_and),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
@@ -104,7 +105,7 @@ private fun ToolsetSetupBody(state: ToolsetSetupUiState, viewModel: ToolsetSetup
     }
     if (config.providers.isEmpty()) {
         Text(
-            text = t("This toolset has no services to choose from.", "این گروه ابزار سرویسی برای انتخاب ندارد."),
+            text = stringResource(R.string.this_toolset_has_no_services_to_choose),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 16.dp),
@@ -174,9 +175,9 @@ private fun ProviderCard(provider: ToolsetProvider, busy: String?, viewModel: To
 
 @Composable
 private fun statusLabel(provider: ToolsetProvider): String? = when (provider.status) {
-    "ready" -> t("ready", "آماده")
-    "needs_keys" -> t("needs a key", "کلید لازم دارد")
-    "needs_auth" -> t("needs sign-in", "ورود لازم دارد")
+    "ready" -> stringResource(R.string.ready_2)
+    "needs_keys" -> stringResource(R.string.needs_a_key)
+    "needs_auth" -> stringResource(R.string.needs_sign_in)
     null -> null
     else -> provider.status
 }
@@ -191,7 +192,7 @@ private fun EnvVarField(env: ToolsetEnvVar, busy: String?, viewModel: ToolsetSet
             onValueChange = { value = it },
             label = { Text(env.key) },
             placeholder = {
-                Text(if (env.isSet) t("Set — type to replace", "ذخیره شده — برای عوض کردن بنویس") else env.prompt.orEmpty())
+                Text(if (env.isSet) stringResource(R.string.set_type_to_replace) else env.prompt.orEmpty())
             },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
@@ -201,16 +202,16 @@ private fun EnvVarField(env: ToolsetEnvVar, busy: String?, viewModel: ToolsetSet
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             env.url?.let { url ->
-                TextButton(onClick = { runCatching { uriHandler.openUri(url) } }) { Text(t("Get a key", "گرفتن کلید")) }
+                TextButton(onClick = { runCatching { uriHandler.openUri(url) } }) { Text(stringResource(R.string.get_a_key)) }
             }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
                 if (env.isSet) {
                     TextButton(onClick = { viewModel.clearKey(env.key) }, enabled = busy == null) {
-                        Text(t("Remove", "پاک کردن"), color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.remove_3), color = MaterialTheme.colorScheme.error)
                     }
                 }
                 TextButton(onClick = { viewModel.saveKey(env.key, value) }, enabled = busy == null && value.isNotBlank()) {
-                    Text(if (busy == env.key) t("Saving…", "در حال ذخیره…") else t("Save", "ذخیره"))
+                    Text(if (busy == env.key) stringResource(R.string.saving) else stringResource(R.string.save))
                 }
             }
         }

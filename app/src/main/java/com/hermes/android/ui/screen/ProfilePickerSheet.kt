@@ -41,12 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.R
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HxSpace
-import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ProfilesViewModel
 
 /**
@@ -106,13 +107,10 @@ internal fun ProfilePickerSheet(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
         ) {
-            item { SheetHeader(t("Profiles", "پروفایل‌ها"), onBack = null) }
+            item { SheetHeader(stringResource(R.string.profiles_2), onBack = null) }
             item {
                 SheetHint(
-                    t(
-                        "Each profile is a separate agent with its own model, skills, memory and chats.",
-                        "هر پروفایل یک عامل جداست، با مدل، مهارت‌ها، حافظه و گفتگوهای خودش.",
-                    )
+                    stringResource(R.string.each_profile_is_a_separate_agent_with)
                 )
             }
             when {
@@ -138,7 +136,7 @@ internal fun ProfilePickerSheet(
                     modifier = Modifier.clickable { creating = true },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     leadingContent = { Icon(Icons.Default.Add, contentDescription = null) },
-                    headlineContent = { Text(t("New profile", "پروفایل جدید")) },
+                    headlineContent = { Text(stringResource(R.string.new_profile)) },
                 )
             }
         }
@@ -176,7 +174,7 @@ private fun ProfileRow(
                 IconButton(onClick = onEdit) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = t("Edit profile", "ویرایش پروفایل"),
+                        contentDescription = stringResource(R.string.edit_profile),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -220,21 +218,18 @@ private fun NewProfileForm(
         contentPadding = PaddingValues(start = HxSpace.screen, end = HxSpace.screen, bottom = HxSpace.xl),
         verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
     ) {
-        item { SheetHeader(t("New profile", "پروفایل جدید"), onBack = onBack) }
+        item { SheetHeader(stringResource(R.string.new_profile), onBack = onBack) }
         item {
             OutlinedTextField(
                 value = name,
                 // The name is also a folder and a command on the server: lowercase it as typed.
                 onValueChange = { name = it.lowercase().replace(' ', '-') },
-                label = { Text(t("Name", "نام")) },
+                label = { Text(stringResource(R.string.name)) },
                 singleLine = true,
                 isError = name.isNotEmpty() && !valid,
                 supportingText = {
                     Text(
-                        t(
-                            "English letters, numbers, - and _ (e.g. writer)",
-                            "حروف انگلیسی، عدد، - و _ (مثلاً writer)",
-                        )
+                        stringResource(R.string.english_letters_numbers_and_e_g_writer)
                     )
                 },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
@@ -245,7 +240,7 @@ private fun NewProfileForm(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text(t("What is it for? (optional)", "برای چه کاری؟ (اختیاری)")) },
+                label = { Text(stringResource(R.string.what_is_it_for_optional)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -258,7 +253,7 @@ private fun NewProfileForm(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    t("Copy settings and skills from this profile", "کپی تنظیمات و مهارت‌ها از پروفایل فعلی"),
+                    stringResource(R.string.copy_settings_and_skills_from_this),
                     modifier = Modifier.weight(1f),
                 )
                 Switch(checked = copyCurrent, onCheckedChange = { copyCurrent = it })
@@ -276,18 +271,12 @@ private fun NewProfileForm(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(t("Copy API keys", "کپی کلیدهای API"))
+                    Text(stringResource(R.string.copy_api_keys))
                     Text(
                         if (keysLocked) {
-                            t(
-                                "Copying settings brings this profile's keys too.",
-                                "کپی تنظیمات، کلیدهای این پروفایل را هم می‌آورد.",
-                            )
+                            stringResource(R.string.copying_settings_brings_this_profiles)
                         } else {
-                            t(
-                                "From the main profile. Off: the new profile starts with no keys.",
-                                "از پروفایل اصلی. خاموش: پروفایل جدید بدون کلید شروع می‌شود.",
-                            )
+                            stringResource(R.string.from_the_main_profile_off_the_new)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -312,7 +301,7 @@ private fun NewProfileForm(
                 if (state.isCreating) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(t("Create and switch", "بساز و برو به آن"))
+                    Text(stringResource(R.string.create_and_switch))
                 }
             }
         }
@@ -361,11 +350,11 @@ private fun ProfileEditor(
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = if (profile.isDefault) it else it.lowercase().replace(' ', '-') },
-                label = { Text(t("Name", "نام")) },
+                label = { Text(stringResource(R.string.name)) },
                 singleLine = true,
                 isError = !nameValid,
                 supportingText = if (profile.isDefault) null else {
-                    { Text(t("English letters, numbers, - and _", "حروف انگلیسی، عدد، - و _")) }
+                    { Text(stringResource(R.string.english_letters_numbers_and)) }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -374,7 +363,7 @@ private fun ProfileEditor(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text(t("What is it for?", "برای چه کاری؟")) },
+                label = { Text(stringResource(R.string.what_is_it_for)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -382,9 +371,9 @@ private fun ProfileEditor(
             OutlinedTextField(
                 value = soul,
                 onValueChange = { soul = it },
-                label = { Text(t("Persona (SOUL.md)", "شخصیت (SOUL.md)")) },
+                label = { Text(stringResource(R.string.persona_soul_md)) },
                 placeholder = {
-                    Text(t("Who this agent is and how it should work.", "این عامل کیست و چطور باید کار کند."))
+                    Text(stringResource(R.string.who_this_agent_is_and_how_it_should_work))
                 },
                 minLines = 6,
                 maxLines = 14,
@@ -392,10 +381,9 @@ private fun ProfileEditor(
             )
         }
         item {
-            val model = details.model.ifBlank { t("Same as the main profile", "مثل پروفایل اصلی") }
+            val model = details.model.ifBlank { stringResource(R.string.same_as_the_main_profile) }
             SheetHint(
-                t("Model: $model — change it from the chat's model button while this profile is open.",
-                    "مدل: $model — وقتی این پروفایل باز است، از دکمهٔ مدل در چت عوضش کن.")
+                stringResource(R.string.model_change_it_from_the_chats_model, model)
             )
         }
         state.error?.let { error ->
@@ -410,7 +398,7 @@ private fun ProfileEditor(
                 if (state.isBusy) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(t("Save", "ذخیره"))
+                    Text(stringResource(R.string.save))
                 }
             }
         }
@@ -422,7 +410,7 @@ private fun ProfileEditor(
                     enabled = !state.isBusy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(t("Delete profile", "حذف پروفایل"), color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete_profile), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -431,19 +419,16 @@ private fun ProfileEditor(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(t("Delete ${profile.title}?", "${profile.title} حذف شود؟")) },
+            title = { Text(stringResource(R.string.delete_2, profile.title)) },
             text = {
                 Text(
                     buildString {
                         append(
-                            t(
-                                "Its chats, memory, skills and settings are deleted from the server. This cannot be undone.",
-                                "گفتگوها، حافظه، مهارت‌ها و تنظیماتش از سرور پاک می‌شوند. برگشت ندارد.",
-                            )
+                            stringResource(R.string.its_chats_memory_skills_and_settings_are)
                         )
                         if (isActive) {
                             append("\n\n")
-                            append(t("The app goes back to the main profile.", "اپ به پروفایل اصلی برمی‌گردد."))
+                            append(stringResource(R.string.the_app_goes_back_to_the_main_profile))
                         }
                     }
                 )
@@ -452,10 +437,10 @@ private fun ProfileEditor(
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete(profile.name)
-                }) { Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text(t("Cancel", "لغو")) }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
