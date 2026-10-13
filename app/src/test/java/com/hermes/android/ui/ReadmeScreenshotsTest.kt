@@ -42,6 +42,24 @@ import com.hermes.android.ui.theme.Hermes2Theme
 import com.hermes.android.ui.theme.ThemeMode
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.SessionItem
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.screen.BuiltInLinuxDetectedContent
+import com.hermes.android.ui.screen.RuntimeChoiceRow
+import com.hermes.android.ui.screen.SettingsMenu
+import com.hermes.android.ui.viewmodel.ChatConnectionState
+import com.hermes.android.ui.viewmodel.ConfigUiState
+import com.hermes.android.ui.viewmodel.GatewayConnectionUi
+import com.hermes.android.ui.viewmodel.InsightsData
+import com.hermes.android.ui.viewmodel.RuntimeChoiceUi
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -84,6 +102,18 @@ class ReadmeScreenshotsTest {
 
     @Test
     fun drawerPersian() = shot("drawer-fa", AppLanguage.FARSI) { Drawer(fa = true) }
+
+    @Test
+    fun controlCenterEnglish() = shot("control-center-en") { ControlCenter() }
+
+    @Test
+    fun controlCenterPersian() = shot("control-center-fa", AppLanguage.FARSI) { ControlCenter() }
+
+    @Test
+    fun runtimeEnglish() = shot("runtime-en") { RuntimeChoice() }
+
+    @Test
+    fun runtimePersian() = shot("runtime-fa", AppLanguage.FARSI) { RuntimeChoice() }
 
     private fun shot(
         name: String,
@@ -215,5 +245,76 @@ private fun Drawer(fa: Boolean) {
             onSessionClick = {},
             onAccount = {},
         )
+    }
+}
+
+/** ConfigScreen's top level, on Built-in Linux so no server address shows. */
+@Composable
+private fun ControlCenter() {
+    HermesScaffold(
+        title = t("Control Center", "میز فرمان"),
+        subtitle = t("Agent, server, and app configuration", "پیکربندی ایجنت، سرور و برنامه"),
+        onBack = {},
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            SettingsMenu(
+                state = ConfigUiState(
+                    activeProvider = "openrouter",
+                    activeModel = "claude-sonnet-4.5",
+                    insights = InsightsData(days = 30, sessions = 42, messages = 610),
+                ),
+                connection = GatewayConnectionUi(state = ChatConnectionState.Connected),
+                serverUrl = t("Built-in Linux", "لینوکس داخلی"),
+                onOpen = {},
+                onNavigateToRuntime = {},
+                onNavigateToCron = {},
+                onNavigateToProjects = {},
+            )
+        }
+    }
+}
+
+/** SetupScreen's runtime step: the three places Hermes can run, Built-in Linux picked. */
+@Composable
+private fun RuntimeChoice() {
+    Scaffold { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = {}) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) }
+                Text(
+                    t("Step 1 of 4", "مرحله ۱ از ۴"),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
+            Text(t("Where should Hermes run?", "Hermes کجا اجرا شود؟"), style = MaterialTheme.typography.headlineSmall)
+            RuntimeChoiceRow(
+                selected = RuntimeChoiceUi.BuiltInLinux,
+                enabled = true,
+                onSelect = {},
+                showServer = true,
+            )
+            Text(
+                t(
+                    "Built-in Linux runs Hermes inside this app, with nothing else to install. " +
+                        "Termux uses the separate Termux app. Remote/Server connects to Hermes on your own server. " +
+                        "You can switch later in Settings.",
+                    "لینوکس داخلی Hermes را داخل همین اپ اجرا می‌کند و چیز دیگری لازم نیست. " +
+                        "Termux از اپ جداگانه‌ی Termux استفاده می‌کند. سرور راه دور به Hermes روی سرور خودت وصل می‌شود. " +
+                        "بعداً از تنظیمات هم می‌شود عوضش کرد.",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BuiltInLinuxDetectedContent(diskFreeBytes = 12_400_000_000L, onStartInstall = {})
+        }
     }
 }
