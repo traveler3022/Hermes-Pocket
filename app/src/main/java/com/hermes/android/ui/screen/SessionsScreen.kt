@@ -3,7 +3,9 @@ package com.hermes.android.ui.screen
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
@@ -27,7 +30,10 @@ import androidx.compose.material.icons.filled.Search
 import com.hermes.android.ui.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -49,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +66,8 @@ import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.i18n.t
+import com.hermes.android.ui.viewmodel.BulkDelete
+import com.hermes.android.ui.viewmodel.CleanupKind
 import com.hermes.android.ui.viewmodel.HistoryMessage
 import com.hermes.android.ui.viewmodel.SessionSortOrder
 import com.hermes.android.ui.viewmodel.SessionSummary
@@ -172,7 +181,67 @@ fun SessionsScreen(
         )
     }
 
+    uiState.pendingBulkDelete?.let { pending ->
+        val count = pending.ids.size
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelBulkDelete() },
+            title = { Text(t("Delete $count chats?", "$count گفتگو حذف شود؟")) },
+            text = {
+                Text(
+                    when (pending) {
+                        is BulkDelete.Selected -> t("The selected chats will be deleted for good.", "گفتگوهای انتخاب‌شده برای همیشه حذف می‌شوند.")
+                        is BulkDelete.Cleanup -> when (val kind = pending.kind) {
+                            CleanupKind.Empty -> t("Chats with no messages will be deleted. Pinned chats stay.", "گفتگوهای بدون پیام حذف می‌شوند. گفتگوهای سنجاق‌شده می‌مانند.")
+                            is CleanupKind.OlderThan -> t(
+                                "Chats started more than ${kind.days} days ago will be deleted for good. Pinned chats stay.",
+                                "گفتگوهایی که بیش از ${kind.days} روز پیش شروع شده‌اند برای همیشه حذف می‌شوند. گفتگوهای سنجاق‌شده می‌مانند.",
+                            )
+                        }
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.executeBulkDelete() }) {
+                    Text(t("Delete", "حذف"), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelBulkDelete() }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
+    }
+
+    var askOlderThan by remember { mutableStateOf(false) }
+    if (askOlderThan) {
+        var days by remember { mutableStateOf("30") }
+        val valid = days.toIntOrNull()?.takeIf { it > 0 }
+        AlertDialog(
+            onDismissRequest = { askOlderThan = false },
+            title = { Text(t("Delete old chats", "حذف گفتگوهای قدیمی")) },
+            text = {
+                OutlinedTextField(
+                    value = days,
+                    onValueChange = { value -> days = value.filter { it.isDigit() }.take(4) },
+                    label = { Text(t("Older than (days)", "قدیمی‌تر از (روز)")) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { valid?.let { viewModel.askCleanup(CleanupKind.OlderThan(it)) }; askOlderThan = false },
+                    enabled = valid != null,
+                ) { Text(t("Next", "بعدی")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askOlderThan = false }) { Text(t("Cancel", "انصراف")) }
+            },
+        )
+    }
+
     val inHistoryDetail = uiState.selectedSessionId != null
+    BackHandler(enabled = !inHistoryDetail && uiState.isSelecting) { viewModel.toggleSelecting() }
     // Back from a session's history returns to the list, like the top bar's arrow;
     // it used to leave the Sessions screen altogether.
     BackHandler(enabled = inHistoryDetail) { viewModel.closeHistory() }
@@ -181,14 +250,35 @@ fun SessionsScreen(
         title = if (inHistoryDetail) {
             uiState.sessions.find { it.id == uiState.selectedSessionId }?.title
                 ?: t("Session history", "تاریخچه گفتگو")
+        } else if (uiState.isSelecting) {
+            t("${uiState.selectedIds.size} selected", "${uiState.selectedIds.size} انتخاب‌شده")
         } else {
             t("Sessions", "گفتگوها")
         },
-        subtitle = if (inHistoryDetail) null else {
+        subtitle = if (inHistoryDetail || uiState.isSelecting) null else {
             t("${uiState.sessions.size} conversations", "${uiState.sessions.size} گفتگو")
         },
-        onBack = { if (inHistoryDetail) viewModel.closeHistory() else onNavigateBack() },
-        actions = { if (!inHistoryDetail) SortMenu(uiState, viewModel) },
+        onBack = {
+            when {
+                inHistoryDetail -> viewModel.closeHistory()
+                uiState.isSelecting -> viewModel.toggleSelecting()
+                else -> onNavigateBack()
+            }
+        },
+        actions = {
+            when {
+                inHistoryDetail -> Unit
+                uiState.isSelecting -> {
+                    TextButton(onClick = { viewModel.selectAll(visibleSessions(uiState).mapTo(linkedSetOf()) { it.id }) }) {
+                        Text(t("All", "همه"))
+                    }
+                    IconButton(onClick = { viewModel.askBulkDelete() }, enabled = uiState.selectedIds.isNotEmpty()) {
+                        Icon(Icons.Default.Delete, contentDescription = t("Delete selected", "حذف انتخاب‌شده‌ها"))
+                    }
+                }
+                else -> SortMenu(uiState, viewModel, onDeleteOld = { askOlderThan = true })
+            }
+        },
         snackbarHostState = snackbarHostState,
     ) { padding ->
         Column(
@@ -196,6 +286,9 @@ fun SessionsScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
+            if (uiState.isDeletingBulk) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
             if (inHistoryDetail) {
                 HistoryDetailView(
                     messages = uiState.selectedSessionHistory,
@@ -215,7 +308,7 @@ fun SessionsScreen(
 // ── Top-bar sort/refresh menu ─────────────────────────────────────────────
 
 @Composable
-private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel) {
+private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDeleteOld: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -245,6 +338,23 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel) {
                     onClick = { viewModel.setSortOrder(order); expanded = false },
                 )
             }
+            if (state.sessions.isNotEmpty()) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(t("Select chats", "انتخاب گفتگوها")) },
+                    onClick = { viewModel.toggleSelecting(); expanded = false },
+                )
+                DropdownMenuItem(
+                    text = { Text(t("Delete empty chats", "حذف گفتگوهای خالی")) },
+                    onClick = { viewModel.askCleanup(CleanupKind.Empty); expanded = false },
+                    enabled = !state.isDeletingBulk,
+                )
+                DropdownMenuItem(
+                    text = { Text(t("Delete old chats…", "حذف گفتگوهای قدیمی…")) },
+                    onClick = { onDeleteOld(); expanded = false },
+                    enabled = !state.isDeletingBulk,
+                )
+            }
         }
     }
 }
@@ -269,22 +379,7 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
         return
     }
 
-    val filteredSessions = if (state.searchQuery.isBlank()) state.sessions else {
-        val q = state.searchQuery.lowercase()
-        state.sessions.filter {
-            it.title.lowercase().contains(q) || it.lastMessagePreview?.lowercase()?.contains(q) == true
-        }
-    }
-    val pinned = filteredSessions.filter { it.id in state.pinnedSessionIds }
-    val unpinned = filteredSessions.filter { it.id !in state.pinnedSessionIds }
-    val sort = { list: List<SessionSummary> ->
-        when (state.sortOrder) {
-            SessionSortOrder.NEWEST_FIRST -> list.sortedByDescending { it.updatedAt }
-            SessionSortOrder.OLDEST_FIRST -> list.sortedBy { it.updatedAt }
-            SessionSortOrder.NAME_AZ -> list.sortedBy { it.title.lowercase() }
-        }
-    }
-    val displaySessions = sort(pinned) + sort(unpinned)
+    val displaySessions = visibleSessions(state)
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search — pill-shaped, tonal, no heavy outline.
@@ -343,19 +438,44 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
                     session = session,
                     viewModel = viewModel,
                     isPinned = session.id in state.pinnedSessionIds,
+                    selecting = state.isSelecting,
+                    selected = session.id in state.selectedIds,
                 )
             }
         }
     }
 }
 
+/** The rows the list shows: search applied, pinned first, then the chosen order. */
+private fun visibleSessions(state: SessionsUiState): List<SessionSummary> {
+    val filteredSessions = if (state.searchQuery.isBlank()) state.sessions else {
+        val q = state.searchQuery.lowercase()
+        state.sessions.filter {
+            it.title.lowercase().contains(q) || it.lastMessagePreview?.lowercase()?.contains(q) == true
+        }
+    }
+    val pinned = filteredSessions.filter { it.id in state.pinnedSessionIds }
+    val unpinned = filteredSessions.filter { it.id !in state.pinnedSessionIds }
+    val sort = { list: List<SessionSummary> ->
+        when (state.sortOrder) {
+            SessionSortOrder.NEWEST_FIRST -> list.sortedByDescending { it.updatedAt }
+            SessionSortOrder.OLDEST_FIRST -> list.sortedBy { it.updatedAt }
+            SessionSortOrder.NAME_AZ -> list.sortedBy { it.title.lowercase() }
+        }
+    }
+    return sort(pinned) + sort(unpinned)
+}
+
 // ── One session row ───────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionRow(
     session: SessionSummary,
     viewModel: SessionsViewModel,
     isPinned: Boolean,
+    selecting: Boolean,
+    selected: Boolean,
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -366,7 +486,13 @@ private fun SessionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(HxRadius.md))
-            .clickable { viewModel.loadSessionHistory(session.id) },
+            // While selecting, a tap ticks the row; a long press starts selecting.
+            .combinedClickable(
+                onClick = {
+                    if (selecting) viewModel.toggleSelected(session.id) else viewModel.loadSessionHistory(session.id)
+                },
+                onLongClick = { viewModel.toggleSelected(session.id) },
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -374,6 +500,9 @@ private fun SessionRow(
                 .padding(start = HxSpace.inner, top = HxSpace.md, bottom = HxSpace.md, end = HxSpace.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (selecting) {
+                Checkbox(checked = selected, onCheckedChange = { viewModel.toggleSelected(session.id) })
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isPinned) {
@@ -411,7 +540,7 @@ private fun SessionRow(
                 )
             }
 
-            Box {
+            if (!selecting) Box {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         Icons.Default.MoreVert,

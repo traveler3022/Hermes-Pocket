@@ -30,8 +30,8 @@ interface ChatSessions {
     /** Lends [block] a throwaway session, closed after. */
     suspend fun <T> withScratchSession(block: suspend (liveId: String) -> T): T
 
-    /** The server's stored chats, as session.list sends them. */
-    suspend fun storedChats(): JsonElement
+    /** The server's stored chats, as session.list sends them; up to [limit] (server default 200). */
+    suspend fun storedChats(limit: Int? = null): JsonElement
 
     /** The transcript of a LIVE session as the server stores it, row ids included. */
     suspend fun history(liveId: String): JsonElement

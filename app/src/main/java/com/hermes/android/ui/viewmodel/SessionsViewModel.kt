@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -286,6 +287,95 @@ class SessionsViewModel @Inject constructor(
                 Timber.e(e, "[Sessions] Delete failed")
                 _uiState.value = _uiState.value.copy(errorMessage = "Delete failed: ${e.message}")
             }
+        }
+    }
+
+    // ── Select several, delete them together ──────────────────────────────
+
+    fun toggleSelecting() {
+        _uiState.update { it.copy(isSelecting = !it.isSelecting, selectedIds = emptySet()) }
+    }
+
+    fun toggleSelected(sessionId: String) {
+        _uiState.update {
+            val ids = if (sessionId in it.selectedIds) it.selectedIds - sessionId else it.selectedIds + sessionId
+            it.copy(isSelecting = true, selectedIds = ids)
+        }
+    }
+
+    /** Selects [ids] (the rows on screen), or clears the selection when they are all selected already. */
+    fun selectAll(ids: Set<String>) {
+        _uiState.update { it.copy(selectedIds = if (it.selectedIds.containsAll(ids)) emptySet() else ids) }
+    }
+
+    fun askBulkDelete() {
+        if (_uiState.value.selectedIds.isEmpty()) return
+        _uiState.update { it.copy(pendingBulkDelete = BulkDelete.Selected(it.selectedIds.toList())) }
+    }
+
+    /**
+     * Finds the stored chats that [kind] would remove and asks before deleting them. The whole
+     * stored list is read (not just the rows on screen); pinned chats are left alone.
+     */
+    fun askCleanup(kind: CleanupKind) {
+        viewModelScope.launch {
+            try {
+                val pinned = _uiState.value.pinnedSessionIds
+                val cutoff = (kind as? CleanupKind.OlderThan)?.let { System.currentTimeMillis() - it.days * DAY_MS }
+                val ids = parseSessionList(sessionRepository.storedChats(limit = CLEANUP_LIST_LIMIT))
+                    .filter { it.id.isNotEmpty() && it.id !in pinned }
+                    .filter { if (cutoff == null) it.messageCount == 0 else it.updatedAt < cutoff }
+                    .map { it.id }
+                if (ids.isEmpty()) {
+                    _uiState.update { it.copy(errorMessage = tForContext(context, "Nothing to delete", "چیزی برای حذف نیست")) }
+                } else {
+                    _uiState.update { it.copy(pendingBulkDelete = BulkDelete.Cleanup(kind, ids)) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Sessions] cleanup listing failed")
+                _uiState.update { it.copy(errorMessage = "Could not read chats: ${e.message}") }
+            }
+        }
+    }
+
+    fun cancelBulkDelete() {
+        _uiState.update { it.copy(pendingBulkDelete = null) }
+    }
+
+    /** Deletes the asked chats one by one; a chat open in a live worker is closed first, as for a single delete. */
+    fun executeBulkDelete() {
+        val pending = _uiState.value.pendingBulkDelete ?: return
+        _uiState.update { it.copy(pendingBulkDelete = null, isDeletingBulk = true) }
+        viewModelScope.launch {
+            var deleted = 0
+            var failed = 0
+            for (id in pending.ids) {
+                try {
+                    gatewayClient.deleteStoredSession(id)
+                    deleted++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "[Sessions] bulk delete of $id failed")
+                    failed++
+                }
+            }
+            Timber.i("[Sessions] Bulk delete: $deleted deleted, $failed failed")
+            _uiState.update {
+                it.copy(
+                    isDeletingBulk = false,
+                    isSelecting = false,
+                    selectedIds = emptySet(),
+                    errorMessage = if (failed == 0) {
+                        tForContext(context, "$deleted chats deleted", "$deleted گفتگو حذف شد")
+                    } else {
+                        tForContext(context, "$deleted deleted, $failed failed", "$deleted حذف شد، $failed نشد")
+                    },
+                )
+            }
+            loadSessions()
         }
     }
 
@@ -581,6 +671,11 @@ data class SessionsUiState(
     val pinnedSessionIds: Set<String> = emptySet(),
     val showRenameDialog: SessionRenameDialog? = null,
     val showDeleteConfirm: String? = null,
+    // Selecting several chats, and a bulk delete waiting for the user's yes.
+    val isSelecting: Boolean = false,
+    val selectedIds: Set<String> = emptySet(),
+    val pendingBulkDelete: BulkDelete? = null,
+    val isDeletingBulk: Boolean = false,
     // Token usage for the currently-open session (session.usage)
     val selectedSessionUsage: SessionUsage? = null,
     // Running agent processes (agents.list)
@@ -617,6 +712,19 @@ data class MemoryUiState(
     val isLoading: Boolean = false,
 )
 
+/** Which stored chats a cleanup removes. */
+sealed interface CleanupKind {
+    data object Empty : CleanupKind
+    data class OlderThan(val days: Int) : CleanupKind
+}
+
+/** Chats about to be deleted together, once the user confirms. */
+sealed interface BulkDelete {
+    val ids: List<String>
+    data class Selected(override val ids: List<String>) : BulkDelete
+    data class Cleanup(val kind: CleanupKind, override val ids: List<String>) : BulkDelete
+}
+
 data class SessionSummary(
     val id: String,
     val title: String,
@@ -630,3 +738,8 @@ data class HistoryMessage(
     val content: String,
     val timestamp: Long,
 )
+
+private const val DAY_MS = 24L * 60 * 60 * 1000
+
+/** How many stored chats a cleanup looks through (session.list stops at 200 by default). */
+private const val CLEANUP_LIST_LIMIT = 2000
