@@ -91,6 +91,8 @@ class ReadmeScreenshotsTest {
         language: AppLanguage = AppLanguage.ENGLISH,
         content: @Composable () -> Unit,
     ) {
+        // Shimmers and pulses never settle; drive the clock by hand instead of waiting for idle.
+        composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
             CompositionLocalProvider(
                 LocalAppLanguage provides language,
@@ -105,7 +107,7 @@ class ReadmeScreenshotsTest {
                 }
             }
         }
-        composeRule.waitForIdle()
+        composeRule.mainClock.advanceTimeBy(3_000)
         val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
         File(outDir, "$name.png").outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
