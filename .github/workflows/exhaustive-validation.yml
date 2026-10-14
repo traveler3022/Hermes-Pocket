@@ -142,9 +142,10 @@ jobs:
             set +e
             mkdir -p build/exhaustive-validation
             # Bound instrumentation runtime so a blocked device/test cannot consume the entire job.
-            set -o pipefail
-            timeout --signal=TERM --kill-after=30s 10m ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee build/exhaustive-validation/instrumentation-gradle.log
-            instrumentation_rc=${PIPESTATUS[0]}
+            # This action executes the script with /bin/sh, so avoid Bash-only pipefail/PIPESTATUS.
+            timeout --signal=TERM --kill-after=30s 10m ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace > build/exhaustive-validation/instrumentation-gradle.log 2>&1
+            instrumentation_rc=$?
+            cat build/exhaustive-validation/instrumentation-gradle.log
             adb devices -l > build/exhaustive-validation/adb-devices-after-tests.txt 2>&1 || true
             adb logcat -d -v threadtime > build/exhaustive-validation/instrumentation-logcat.txt 2>&1 || true
 
