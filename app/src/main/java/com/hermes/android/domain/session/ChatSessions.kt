@@ -21,6 +21,13 @@ interface ChatSessions {
         call: suspend (liveId: String) -> T,
     ): T
 
+    /**
+     * Sends [text] as the user's next turn in [sessionId] (either id kind) from outside the
+     * chat screen, e.g. a notification reply: attaches it without making it the reconnect
+     * target, then prompt.submit.
+     */
+    suspend fun replyFromOutside(sessionId: String, text: String)
+
     /** The STORED id of the chat the server used last, or null when it has none. */
     suspend fun mostRecentId(): String?
 
