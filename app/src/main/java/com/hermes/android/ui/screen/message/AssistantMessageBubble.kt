@@ -48,6 +48,7 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.component.preprocessAssistantMarkdown
 import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -118,10 +119,13 @@ internal fun AssistantMessageBubble(
                             TypingDots(modifier = Modifier.padding(vertical = 4.dp))
                         }
                     } else {
+                        // Reasoning blocks, stray backticks, prose wrapped in fences and
+                        // unmatched citation markers are cleaned up before parsing.
+                        val cleanMd = remember(message.text) { preprocessAssistantMarkdown(message.text) }
                         val displayMd = if (!isResponseExpanded && isLongResponse) {
-                            message.text.take(800) + "\n\n\u2026"
+                            cleanMd.take(800) + "\n\n\u2026"
                         } else {
-                            message.text
+                            cleanMd
                         }
                         val blocks = remember(displayMd) {
                             parseContentBlocks(displayMd).map { block ->
