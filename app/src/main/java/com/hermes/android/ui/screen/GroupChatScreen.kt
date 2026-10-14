@@ -411,16 +411,12 @@ private fun MemberContent(
                         onDownload = { onDownloadFile(url, name) },
                     )
                 }
-                is ContentBlock.Video -> ArtifactCard(
-                    emoji = "\uD83C\uDFAC", name = block.name,
-                    actionLabel = stringResource(R.string.play),
-                    onAction = { FileViewerActivity.open(context, block.url, block.name) },
+                is ContentBlock.Video -> InlineVideoPlayer(
+                    url = block.url, name = block.name,
                     onDownload = { onDownloadFile(block.url, block.name) },
                 )
-                is ContentBlock.Audio -> ArtifactCard(
-                    emoji = "\uD83C\uDFB5", name = block.name,
-                    actionLabel = stringResource(R.string.play),
-                    onAction = { FileViewerActivity.open(context, block.url, block.name) },
+                is ContentBlock.Audio -> InlineAudioPlayer(
+                    url = block.url, name = block.name,
                     onDownload = { onDownloadFile(block.url, block.name) },
                 )
                 is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
