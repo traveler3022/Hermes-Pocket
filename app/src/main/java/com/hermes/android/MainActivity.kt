@@ -55,6 +55,13 @@ class MainActivity : ComponentActivity() {
      */
     private val pendingShare = mutableStateOf<String?>(null)
 
+    /**
+     * The assistant gesture (long-press Home) opened the app, until the chat has
+     * taken it: a new chat with voice input started. Same rules as [pendingShare],
+     * so a rotation doesn't open yet another chat.
+     */
+    private val pendingAssist = mutableStateOf<AssistOpen?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -73,6 +80,10 @@ class MainActivity : ComponentActivity() {
         requestTermuxPermissionWhenSelected()
 
         pendingShare.value = if (savedInstanceState?.getBoolean(KEY_SHARE_TAKEN) == true) null else extractSharedText(intent)
+        pendingAssist.value = if (
+            savedInstanceState?.getBoolean(KEY_ASSIST_TAKEN, true) == false ||
+            (savedInstanceState == null && isFreshAssist(intent))
+        ) AssistOpen() else null
         // Set when the user taps an agent-activity notification ("task done"):
         // opens the app straight into the session the result belongs to.
         val notificationSessionId = intent?.getStringExtra(
@@ -101,6 +112,8 @@ class MainActivity : ComponentActivity() {
                             onSharedTextTaken = { pendingShare.value = null },
                             notificationSessionId = notificationSessionId,
                             notificationOpen = notificationOpen.value,
+                            assistOpen = pendingAssist.value,
+                            onAssistTaken = { pendingAssist.value = null },
                             themeModeState = themeModeState,
                             appLanguageState = appLanguageState,
                         )
@@ -121,11 +134,15 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra(com.hermes.android.service.AgentActivityNotifier.EXTRA_SESSION_ID)
             ?.takeIf { it.isNotBlank() }
             ?.let { notificationOpen.value = NotificationOpen(it) }
+        if (isFreshAssist(intent)) {
+            pendingAssist.value = AssistOpen()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_SHARE_TAKEN, pendingShare.value == null)
+        outState.putBoolean(KEY_ASSIST_TAKEN, pendingAssist.value == null)
     }
 
     override fun onStart() {
@@ -190,6 +207,11 @@ class MainActivity : ComponentActivity() {
             .onFailure { timber.log.Timber.w(it, "[Main] battery optimization dialog unavailable") }
     }
 
+    /** Reopened from Recents, the old assist intent comes again; that is no new invocation. */
+    private fun isFreshAssist(intent: Intent?): Boolean =
+        com.hermes.android.assistant.AssistantLaunch.isAssistIntent(intent) &&
+            ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+
     private fun extractSharedText(intent: Intent?): String? {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             return intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -201,6 +223,7 @@ class MainActivity : ComponentActivity() {
         const val PREFS_NAME = "hermes_prefs"
         const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
         const val KEY_SHARE_TAKEN = "share_taken"
+        const val KEY_ASSIST_TAKEN = "assist_taken"
         const val TERMUX_RUN_COMMAND = "com.termux.permission.RUN_COMMAND"
     }
 }
@@ -226,6 +249,8 @@ private fun HermesNavHost(
     onSharedTextTaken: () -> Unit = {},
     notificationSessionId: String? = null,
     notificationOpen: NotificationOpen? = null,
+    assistOpen: AssistOpen? = null,
+    onAssistTaken: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -292,6 +317,8 @@ private fun HermesNavHost(
                 sharedText = shared,
                 onSharedTextTaken = onSharedTextTaken,
                 resumeSessionId = resumeId,
+                assistOpen = assistOpen,
+                onAssistTaken = onAssistTaken,
                 themeModeState = themeModeState,
             )
         }
@@ -455,7 +482,26 @@ private fun HermesNavHost(
             popUpTo("chat") { inclusive = true }
         }
     }
+
+    // The assistant gesture while another page is open: back to the chat, which
+    // then opens the new chat and the voice input. Dropped during the first-run
+    // setup: a voice prompt popping up once it is done would come out of nowhere.
+    LaunchedEffect(assistOpen) {
+        if (assistOpen == null) return@LaunchedEffect
+        val route = navController.currentDestination?.route ?: return@LaunchedEffect
+        if (route == "setup") {
+            onAssistTaken()
+            return@LaunchedEffect
+        }
+        if (route.startsWith("chat")) return@LaunchedEffect
+        navController.navigate("chat") {
+            popUpTo("chat") { inclusive = true }
+        }
+    }
 }
+
+/** One assistant invocation; a class, not data, so a second long-press still counts. */
+private class AssistOpen
 
 /** One notification tap; a class, not data, so tapping the same chat again still counts. */
 private class NotificationOpen(val sessionId: String)

@@ -959,4 +959,10 @@
     <string name="server_pair_waiting">Waiting for the server. If the setup command is still running, this goes on by itself once it has finished.</string>
     <string name="server_pair_manual">Enter the login by hand</string>
     <string name="server_pair_set_up_before">Set up the server before? Run the setup command again, or tap Cancel and enter the login by hand.</string>
+    <string name="assistant_title">Phone assistant</string>
+    <string name="assistant_is_default">Hermes is the phone\'s assistant</string>
+    <string name="assistant_not_default">Not set: another app answers the assistant gesture</string>
+    <string name="assistant_explanation">Make Hermes the phone\'s digital assistant: touch and hold the Home button (or swipe in from a bottom corner) and Hermes opens a new chat, listening. On the page that opens, choose Hermes under “Digital assistant app”.</string>
+    <string name="assistant_open_settings">Open assistant settings</string>
+    <string name="assistant_settings_unavailable">This phone has no assistant settings page</string>
 </resources>

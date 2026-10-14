@@ -957,4 +957,10 @@
     <string name="server_pair_waiting">منتظر سرور… اگر دستور نصب هنوز در حال اجراست، بعد از تمام شدنش خودش ادامه می‌دهد.</string>
     <string name="server_pair_manual">ورود دستی با نام کاربری و رمز</string>
     <string name="server_pair_set_up_before">قبلاً سرور را راه انداخته‌ای؟ دستور نصب را یک بار دیگر بزن، یا «لغو» را بزن و ورود دستی را انتخاب کن.</string>
+    <string name="assistant_title">دستیار گوشی</string>
+    <string name="assistant_is_default">هرمس دستیار گوشی است</string>
+    <string name="assistant_not_default">تنظیم نشده: حرکت دستیار را برنامهٔ دیگری جواب می‌دهد</string>
+    <string name="assistant_explanation">هرمس را دستیار دیجیتال گوشی کن: دکمهٔ خانه را نگه دار (یا از گوشهٔ پایین صفحه به داخل بکش) تا هرمس یک گفتگوی تازه باز کند و گوش بدهد. در صفحه‌ای که باز می‌شود، زیر «برنامهٔ دستیار دیجیتال» هرمس را انتخاب کن.</string>
+    <string name="assistant_open_settings">باز کردن تنظیمات دستیار</string>
+    <string name="assistant_settings_unavailable">این گوشی صفحهٔ تنظیمات دستیار ندارد</string>
 </resources>

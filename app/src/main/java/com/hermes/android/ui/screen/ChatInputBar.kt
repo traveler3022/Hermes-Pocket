@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,6 +75,9 @@ internal fun InputBar(
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
     activeModel: String? = null,
     onModelClick: () -> Unit = {},
+    // Set when the assistant gesture opened the chat: start voice input once.
+    voiceRequest: Any? = null,
+    onVoiceRequestTaken: () -> Unit = {},
 ) {
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -103,6 +107,12 @@ internal fun InputBar(
             voiceInput.launch(intent)
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, noSpeech, Toast.LENGTH_LONG).show()
+        }
+    }
+    LaunchedEffect(voiceRequest) {
+        if (voiceRequest != null) {
+            onVoiceRequestTaken()
+            startVoiceInput()
         }
     }
     // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
