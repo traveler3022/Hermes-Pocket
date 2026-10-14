@@ -154,6 +154,7 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                         installed = state.installedVersion,
                         download = state.appDownload,
                         isDebugBuild = state.isDebugBuild,
+                        installedCommit = state.installedCommit,
                         onDownload = viewModel::downloadUpdate,
                         onCancel = viewModel::cancelDownload,
                         onInstall = viewModel::install,
@@ -189,6 +190,7 @@ private fun AvailableRelease(
     installed: String,
     download: AppDownload,
     isDebugBuild: Boolean,
+    installedCommit: String,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onInstall: () -> Unit,
@@ -206,7 +208,9 @@ private fun AvailableRelease(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 Text(
-                    text = "$installed → ${release.versionName}",
+                    // A test build has no version of its own; commits tell two apart.
+                    text = release.testBuild?.let { "${installedCommit.ifBlank { "?" }} → ${it.commit}" }
+                        ?: "$installed → ${release.versionName}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium,
@@ -221,15 +225,27 @@ private fun AvailableRelease(
             }
         }
 
+        val testBuild = release.testBuild
         Text(
-            text = release.title,
+            text = if (testBuild != null) {
+                stringResource(
+                    R.string.app_update_new_test_build,
+                    testBuild.branch ?: "?",
+                    testBuild.built ?: "?",
+                )
+            } else {
+                release.title
+            },
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        if (testBuild != null && installedCommit.isBlank()) {
+            UpdateNote(text = stringResource(R.string.app_update_commit_unknown))
+        }
 
         // Release notes are markdown on GitHub, and the app already renders
         // markdown — showing them raw would be the one place it did not.
-        if (release.notes.isNotBlank()) {
+        if (release.notes.isNotBlank() && testBuild == null) {
             HermesMarkdown(
                 markdown = release.notes,
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -241,7 +257,6 @@ private fun AvailableRelease(
         // In-app download when the release carries an APK; the release page stays as
         // the fallback for everything this cannot do.
         if (release.apk != null) {
-            if (isDebugBuild) UpdateNote(text = stringResource(R.string.app_update_debug_build_note))
             AppDownloadControls(
                 download = download,
                 onDownload = onDownload,
@@ -265,6 +280,15 @@ private fun AvailableRelease(
             OutlinedButton(onClick = onOpen) { openRelease() }
         } else {
             Button(onClick = onOpen) { openRelease() }
+        }
+        // Secondary: a debug build only follows test builds; the versioned releases are
+        // another package and would install beside it.
+        if (isDebugBuild) {
+            Text(
+                text = stringResource(R.string.app_update_debug_build_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

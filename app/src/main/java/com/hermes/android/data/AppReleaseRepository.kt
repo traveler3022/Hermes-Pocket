@@ -14,6 +14,7 @@ import com.hermes.android.domain.updates.AppRelease
 import com.hermes.android.domain.updates.AppUpdates
 import com.hermes.android.domain.updates.DownloadProblem
 import com.hermes.android.domain.updates.ReleaseApk
+import com.hermes.android.domain.updates.TestBuild
 import com.hermes.android.domain.updates.UpdateCheck
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -74,13 +75,38 @@ class AppReleaseRepository @Inject constructor(
 
     override val isDebugBuild: Boolean = BuildConfig.DEBUG
 
+    override val installedCommit: String = BuildConfig.GIT_SHA
+
     override suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
+        if (isDebugBuild) return@withContext checkTestBuild()
         val release = fetchLatest() ?: return@withContext UpdateCheck.Failed(FAILED_REACH)
         if (isNewer(release.versionName, installedVersion)) {
             UpdateCheck.Available(release)
         } else {
             UpdateCheck.UpToDate
         }
+    }
+
+    /**
+     * A debug build follows the rolling `debug-latest` pre-release CI republishes on every
+     * green build (build-apk.yml): its notes name the branch, commit and time, and its
+     * `app-debug.apk` has this build's package and committed debug key, so it installs over.
+     * Newer means "another commit"; a build without a recorded commit always gets the offer.
+     */
+    private fun checkTestBuild(): UpdateCheck {
+        val obj = when (val found = fetchByTag(TEST_BUILD_TAG)) {
+            is TagLookup.Found -> found.release
+            // CI deletes and recreates the release on each build; it may be mid-swap.
+            TagLookup.Missing, TagLookup.Unreachable -> return UpdateCheck.Failed(FAILED_REACH)
+        }
+        val build = parseTestBuild(obj.string("body").orEmpty())
+            ?: return UpdateCheck.Failed(FAILED_TEST_BUILD)
+        if (sameCommit(build.commit, installedCommit)) return UpdateCheck.UpToDate
+        val release = obj.toRelease()?.copy(
+            apk = pickTestBuildApk(obj.assets()),
+            testBuild = build,
+        ) ?: return UpdateCheck.Failed(FAILED_TEST_BUILD)
+        return UpdateCheck.Available(release)
     }
 
     /**
@@ -123,9 +149,12 @@ class AppReleaseRepository @Inject constructor(
             notes = string("body").orEmpty().trim(),
             pageUrl = string("html_url") ?: AppUpdates.PROJECT_URL,
             publishedAt = string("published_at")?.take(10),
-            apk = pickReleaseApk((this["assets"] as? JsonArray)?.mapNotNull { it.toAsset() }.orEmpty()),
+            apk = pickReleaseApk(assets()),
         )
     }
+
+    private fun JsonObject.assets(): List<ReleaseAsset> =
+        (this["assets"] as? JsonArray)?.mapNotNull { it.toAsset() }.orEmpty()
 
     private fun kotlinx.serialization.json.JsonElement.toAsset(): ReleaseAsset? {
         val obj = this as? JsonObject ?: return null
@@ -237,8 +266,9 @@ class AppReleaseRepository @Inject constructor(
         val archive: PackageInfo = runCatching {
             pm.getPackageArchiveInfo(file.path, PackageManager.GET_SIGNING_CERTIFICATES)
         }.getOrNull() ?: return DownloadProblem.NotAnApk
-        // A debug build is `<id>.debug`; the release it fetches is `<id>`.
-        val releasePackage = context.packageName.removeSuffix(DEBUG_SUFFIX)
+        // A debug build is `<id>.debug`; the release it fetches is `<id>`, the test build
+        // it fetches is its own package.
+        val releasePackage = if (apk.isTestBuild) context.packageName else context.packageName.removeSuffix(DEBUG_SUFFIX)
         if (archive.packageName != releasePackage) {
             Timber.w("[Update] APK is ${archive.packageName}, expected $releasePackage")
             return DownloadProblem.WrongApp
@@ -282,6 +312,10 @@ class AppReleaseRepository @Inject constructor(
     // ── What's New ───────────────────────────────────────────────────────────
 
     override suspend fun pendingWhatsNew(): AppRelease? = withContext(Dispatchers.IO) {
+        // A debug build: versionCode stays put between test builds, and the debug-latest
+        // notes hold only branch, commit and time — nothing worth a dialog. The user who
+        // installs test builds already knows what changed.
+        if (isDebugBuild) return@withContext null
         val current = BuildConfig.VERSION_CODE
         val lastSeen = prefs.getInt(KEY_WHATS_NEW_CODE, NONE)
         if (lastSeen >= current) {
@@ -303,11 +337,12 @@ class AppReleaseRepository @Inject constructor(
                 null
             }
             is TagLookup.Found -> {
-                if (found.release.notes.isBlank()) {
+                val release = found.release.toRelease()
+                if (release == null || release.notes.isBlank()) {
                     markWhatsNewSeen()
                     null
                 } else {
-                    found.release
+                    release
                 }
             }
         }
@@ -324,7 +359,7 @@ class AppReleaseRepository @Inject constructor(
     }.getOrDefault(true)
 
     private sealed interface TagLookup {
-        data class Found(val release: AppRelease) : TagLookup
+        data class Found(val release: JsonObject) : TagLookup
         data object Missing : TagLookup
         data object Unreachable : TagLookup
     }
@@ -342,9 +377,7 @@ class AppReleaseRepository @Inject constructor(
                     Timber.w("[Update] release $tag request failed: HTTP ${response.code}")
                     TagLookup.Unreachable
                 }
-                else -> json.parseToJsonElement(body).jsonObject.toRelease()
-                    ?.let { TagLookup.Found(it) }
-                    ?: TagLookup.Missing
+                else -> TagLookup.Found(json.parseToJsonElement(body).jsonObject)
             }
         }
     } catch (e: Exception) {
@@ -366,6 +399,8 @@ class AppReleaseRepository @Inject constructor(
         private const val REQUEST_TIMEOUT_SECONDS = 15L
         private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 30L
         private const val FAILED_REACH = "Could not reach GitHub"
+        private const val FAILED_TEST_BUILD = "The test build's notes could not be read"
+        private const val TEST_BUILD_TAG = "debug-latest"
         private const val HTTP_NOT_FOUND = 404
 
         private const val UPDATES_DIR = "updates"
@@ -405,6 +440,39 @@ internal fun pickReleaseApk(assets: List<ReleaseAsset>): ReleaseApk? {
         ?: apks.firstOrNull { !it.name.contains("debug", ignoreCase = true) }
         ?: return null
     return ReleaseApk(name = chosen.name, url = chosen.url, size = chosen.size)
+}
+
+/** The debug APK of `debug-latest`: `app-debug.apk`, else any uploaded https `.apk` with "debug" in it. */
+internal fun pickTestBuildApk(assets: List<ReleaseAsset>): ReleaseApk? {
+    val apks = assets.filter {
+        it.uploaded && it.name.endsWith(".apk", ignoreCase = true) && it.url.startsWith("https://")
+    }
+    val chosen = apks.firstOrNull { it.name.equals("app-debug.apk", ignoreCase = true) }
+        ?: apks.firstOrNull { it.name.contains("debug", ignoreCase = true) }
+        ?: return null
+    return ReleaseApk(name = chosen.name, url = chosen.url, size = chosen.size, isTestBuild = true)
+}
+
+/**
+ * Reads the `debug-latest` notes build-apk.yml writes:
+ * `Branch: <name>` / `Commit: <8 hex>` / `Built: <time>`. Null without a commit line.
+ */
+internal fun parseTestBuild(body: String): TestBuild? {
+    fun field(name: String): String? =
+        Regex("^\\s*$name:\\s*(.+?)\\s*$", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
+            .find(body)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+    val commit = field("Commit")?.lowercase()?.takeIf { COMMIT_PATTERN.matches(it) } ?: return null
+    return TestBuild(branch = field("Branch"), commit = commit, built = field("Built"))
+}
+
+private val COMMIT_PATTERN = Regex("^[0-9a-f]{7,40}$")
+
+/** Both name the same commit; one may be longer than the other. Unknown is never the same. */
+internal fun sameCommit(a: String, b: String): Boolean {
+    val x = a.trim().lowercase()
+    val y = b.trim().lowercase()
+    if (x.length < 7 || y.length < 7) return false
+    return x.startsWith(y) || y.startsWith(x)
 }
 
 /**

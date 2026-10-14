@@ -16,9 +16,13 @@ interface AppUpdates {
 
     /**
      * True for a debug build. Its package id ends in `.debug`, so a release APK installs
-     * beside it as a second app instead of over it.
+     * beside it as a second app instead of over it. A debug build follows the rolling
+     * `debug-latest` test build instead of the versioned releases.
      */
     val isDebugBuild: Boolean
+
+    /** The commit this build came from (8 hex), or empty when the build did not record one. */
+    val installedCommit: String
 
     suspend fun check(): UpdateCheck
 
@@ -41,7 +45,7 @@ interface AppUpdates {
     /**
      * The installed version's release, once, after the app was updated: null on a fresh
      * install, when it was already shown, or when the release has no notes. Offline also
-     * answers null, but is asked again on the next launch.
+     * answers null, but is asked again on the next launch. Always null in a debug build.
      */
     suspend fun pendingWhatsNew(): AppRelease?
 
@@ -62,13 +66,27 @@ data class AppRelease(
     val publishedAt: String?,
     /** The installable APK attached to the release; null when it has none. */
     val apk: ReleaseApk? = null,
+    /** Set for the rolling `debug-latest` test build, which has no version of its own. */
+    val testBuild: TestBuild? = null,
 )
 
-/** The APK asset of a release. [size] is what GitHub says, 0 when it did not say. */
+/** What the `debug-latest` release notes say about the test build. */
+data class TestBuild(
+    val branch: String?,
+    /** 8 hex digits, as CI writes them. */
+    val commit: String,
+    val built: String?,
+)
+
+/**
+ * The APK asset of a release. [size] is what GitHub says, 0 when it did not say.
+ * [isTestBuild]: the debug APK, which installs over this debug build (same package and key).
+ */
 data class ReleaseApk(
     val name: String,
     val url: String,
     val size: Long,
+    val isTestBuild: Boolean = false,
 )
 
 /** What a check found. */

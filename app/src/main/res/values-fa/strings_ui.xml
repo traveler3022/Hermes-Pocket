@@ -969,7 +969,9 @@
     <string name="app_update_failed_wrong_app">این APK به‌روزرسانیِ همین نصب نیست: برنامهٔ دیگری است یا با کلید دیگری امضا شده، پس اندروید نصبش نمی‌کند. ریلیز را در مرورگر باز کن.</string>
     <string name="app_update_failed_storage">برای دانلود جای خالی کافی نیست.</string>
     <string name="app_update_installer_unavailable">نصب‌کننده باز نشد. به‌جایش ریلیز را در مرورگر باز کن.</string>
-    <string name="app_update_debug_build_note">این یک نسخهٔ آزمایشی است. ریلیز کنار آن به‌عنوان یک برنامهٔ جدا نصب می‌شود، نه روی آن.</string>
+    <string name="app_update_debug_build_note">ریلیزهای نسخه‌دار برنامهٔ جدایی هستند: کنار این نسخهٔ آزمایشی نصب می‌شوند، نه روی آن.</string>
     <string name="whats_new_in_version">تازه‌های نسخهٔ %1$s</string>
     <string name="whats_new_got_it">متوجه شدم</string>
+    <string name="app_update_new_test_build">نسخهٔ آزمایشی جدید (شاخهٔ %1$s، ساخته‌شده %2$s)</string>
+    <string name="app_update_commit_unknown">کامیتِ این نسخه معلوم نیست، پس شاید همین نسخه باشد. دانلود همچنان کار می‌کند.</string>
 </resources>

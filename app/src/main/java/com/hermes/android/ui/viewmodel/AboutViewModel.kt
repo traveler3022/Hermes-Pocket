@@ -29,6 +29,8 @@ data class AboutUiState(
     val result: UpdateCheck? = null,
     /** True for a debug build: the release installs beside it, as a second app. */
     val isDebugBuild: Boolean = false,
+    /** This build's commit (8 hex); empty when the build did not record one. */
+    val installedCommit: String = "",
     val appDownload: AppDownload = AppDownload.Idle,
     /** Hermes Agent's own version (`hermes --version`), not this app's. */
     val hermesVersion: String? = null,
@@ -72,6 +74,7 @@ class AboutViewModel @Inject constructor(
             hermesVersion = runtime.state.value.hermesVersion(),
             canUpdateHermes = runtime.canUpdateHermes,
             isDebugBuild = releases.isDebugBuild,
+            installedCommit = releases.installedCommit,
         ),
     )
     val uiState = _uiState.asStateFlow()
