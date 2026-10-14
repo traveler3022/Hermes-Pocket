@@ -142,6 +142,7 @@ class FileViewerActivity : ComponentActivity() {
     @Inject lateinit var remoteFiles: ServerFiles
     @Inject lateinit var mediaStreams: MediaPlayers
     @Inject lateinit var linuxFiles: LinuxFileAccess
+    @Inject lateinit var tableColumnWidths: com.hermes.android.domain.markdown.TableColumnWidths
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -175,27 +176,31 @@ class FileViewerActivity : ComponentActivity() {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
-            ProvideAppLanguage(appLanguageState.language) {
-                Hermes2Theme(
-                    themeMode = themeModeState.mode,
-                    colorTheme = themeModeState.colorTheme,
-                    warmMode = themeModeState.warmMode,
-                    appFont = themeModeState.appFont,
-                    fontScalePct = themeModeState.fontScalePct,
-                ) {
-                    FileViewerScreen(
-                        uri = uri, name = name, kind = kind,
-                        readBytes = ::readBytes,
-                        newPlayer = mediaStreams::playerBuilder,
-                        openExternally = {
-                            if (remoteFiles.isServerFile(uri.toString())) {
-                                lifecycleScope.launch { openServerFileOutside(uri.toString(), name) }
-                            } else {
-                                openUrlExternally(this, uri.toString(), linuxFiles)
-                            }
-                        },
-                        onBack = ::finish,
-                    )
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.hermes.android.ui.component.LocalTableColumnWidths provides tableColumnWidths,
+            ) {
+                ProvideAppLanguage(appLanguageState.language) {
+                    Hermes2Theme(
+                        themeMode = themeModeState.mode,
+                        colorTheme = themeModeState.colorTheme,
+                        warmMode = themeModeState.warmMode,
+                        appFont = themeModeState.appFont,
+                        fontScalePct = themeModeState.fontScalePct,
+                    ) {
+                        FileViewerScreen(
+                            uri = uri, name = name, kind = kind,
+                            readBytes = ::readBytes,
+                            newPlayer = mediaStreams::playerBuilder,
+                            openExternally = {
+                                if (remoteFiles.isServerFile(uri.toString())) {
+                                    lifecycleScope.launch { openServerFileOutside(uri.toString(), name) }
+                                } else {
+                                    openUrlExternally(this, uri.toString(), linuxFiles)
+                                }
+                            },
+                            onBack = ::finish,
+                        )
+                    }
                 }
             }
         }

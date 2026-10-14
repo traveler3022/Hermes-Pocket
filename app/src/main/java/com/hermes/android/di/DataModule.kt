@@ -7,6 +7,7 @@ import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.LearningRepository
 import com.hermes.android.data.MemoryProvidersRepository
 import com.hermes.android.data.MessagingGatewayRepository
+import com.hermes.android.data.PrefsTableColumnWidths
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
@@ -37,6 +38,7 @@ import com.hermes.android.domain.tools.McpServerSwitch
 import com.hermes.android.domain.tools.SkillsAdmin
 import com.hermes.android.domain.tools.PluginCatalog
 import com.hermes.android.domain.kanban.KanbanRepository
+import com.hermes.android.domain.markdown.TableColumnWidths
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.domain.memory.LearningJourney
 import com.hermes.android.domain.memory.MemoryProviders
@@ -74,6 +76,9 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTaskRegistry(impl: PrefsTaskRegistry): TaskRegistry
+
+    @Binds
+    abstract fun bindTableColumnWidths(impl: PrefsTableColumnWidths): TableColumnWidths
 
     // One SessionRepository (a singleton) behind each of the views the screens use.
     @Binds

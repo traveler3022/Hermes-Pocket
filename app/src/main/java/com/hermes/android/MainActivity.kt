@@ -44,6 +44,10 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
 
+    /** Where markdown tables remember the column widths a reader dragged to. */
+    @javax.inject.Inject
+    lateinit var tableColumnWidths: com.hermes.android.domain.markdown.TableColumnWidths
+
     /** Latest notification tap that reached the running activity (onNewIntent). */
     private val notificationOpen = mutableStateOf<NotificationOpen?>(null)
 
@@ -94,31 +98,35 @@ class MainActivity : ComponentActivity() {
         val appLanguageState = AppLanguageState(this)
 
         setContent {
-            ProvideAppLanguage(appLanguageState.language) {
-                Hermes2Theme(
-                    themeMode = themeModeState.mode,
-                    colorTheme = themeModeState.colorTheme,
-                    warmMode = themeModeState.warmMode,
-                    appFont = themeModeState.appFont,
-                    fontScalePct = themeModeState.fontScalePct,
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background,
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.hermes.android.ui.component.LocalTableColumnWidths provides tableColumnWidths,
+            ) {
+                ProvideAppLanguage(appLanguageState.language) {
+                    Hermes2Theme(
+                        themeMode = themeModeState.mode,
+                        colorTheme = themeModeState.colorTheme,
+                        warmMode = themeModeState.warmMode,
+                        appFont = themeModeState.appFont,
+                        fontScalePct = themeModeState.fontScalePct,
                     ) {
-                        HermesNavHost(
-                            startInSetup = !setupState.isComplete,
-                            sharedText = pendingShare.value,
-                            onSharedTextTaken = { pendingShare.value = null },
-                            notificationSessionId = notificationSessionId,
-                            notificationOpen = notificationOpen.value,
-                            assistOpen = pendingAssist.value,
-                            onAssistTaken = { pendingAssist.value = null },
-                            themeModeState = themeModeState,
-                            appLanguageState = appLanguageState,
-                        )
-                        // Once after an app update: that version's release notes.
-                        com.hermes.android.ui.screen.WhatsNewDialog()
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            HermesNavHost(
+                                startInSetup = !setupState.isComplete,
+                                sharedText = pendingShare.value,
+                                onSharedTextTaken = { pendingShare.value = null },
+                                notificationSessionId = notificationSessionId,
+                                notificationOpen = notificationOpen.value,
+                                assistOpen = pendingAssist.value,
+                                onAssistTaken = { pendingAssist.value = null },
+                                themeModeState = themeModeState,
+                                appLanguageState = appLanguageState,
+                            )
+                            // Once after an app update: that version's release notes.
+                            com.hermes.android.ui.screen.WhatsNewDialog()
+                        }
                     }
                 }
             }
