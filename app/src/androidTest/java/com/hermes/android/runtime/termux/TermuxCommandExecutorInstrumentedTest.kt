@@ -2,7 +2,6 @@ package com.hermes.android.runtime.termux
 
 import android.content.Context
 import android.content.Intent
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +38,8 @@ class TermuxCommandExecutorInstrumentedTest {
 
     @Before
     fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
+        // Mock Context so dispatch is captured instead of invoking Android's real service manager.
+        context = mockk(relaxed = true)
         detector = mockk(relaxed = true)
         executor = TermuxCommandExecutor(context, detector, TermuxPendingResults())
     }
@@ -70,6 +70,9 @@ class TermuxCommandExecutorInstrumentedTest {
 
         val intent = if (fgSlot.isCaptured) fgSlot.captured else svcSlot.captured
         assertNotNull("Intent must have been captured", intent)
+
+        // Android requires service intents to be explicit; assert the contract before dispatch.
+        assertTrue("Service intent must be explicit", intent.component != null)
 
         // Verify action
         assertEquals(
