@@ -26,6 +26,7 @@ class SkillsAdminRepository @Inject constructor(
             val name = o.str("name") ?: return@mapNotNull null
             SkillState(
                 name = name,
+                category = o.str("category"),
                 enabled = (o["enabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
                 provenance = o.str("provenance"),
             )

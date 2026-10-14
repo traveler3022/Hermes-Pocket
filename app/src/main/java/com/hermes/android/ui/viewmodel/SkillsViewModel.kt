@@ -51,11 +51,23 @@ class SkillsViewModel @Inject constructor(
                 val result = gatewayClient.request(GatewayMethods.SKILLS_MANAGE, params.toMap())
                 // On/off and origin come from the dashboard; an older server (or one without
                 // these routes) leaves them unknown and the switch hidden.
+                // skills.manage list leaves disabled skills out (and caches the list per process),
+                // so a skill switched off vanished with no way back on. The dashboard's list keeps
+                // them, with their state; skills.manage stays the fallback for a server without it.
                 val states = runCatching { admin.states() }
                     .onFailure { Timber.w(it, "[Skills] No on/off state from the dashboard") }
-                    .getOrNull()?.associateBy { it.name }.orEmpty()
-                val skills = parseSkills(result).map { item ->
-                    states[item.name]?.let { item.copy(enabled = it.enabled, provenance = it.provenance) } ?: item
+                    .getOrNull()
+                val rpcSkills = parseSkills(result)
+                val skills = if (states.isNullOrEmpty()) rpcSkills else {
+                    val rpcCategory = rpcSkills.associate { it.name to it.category }
+                    states.map {
+                        SkillItem(
+                            name = it.name,
+                            category = it.category ?: rpcCategory[it.name].orEmpty(),
+                            enabled = it.enabled,
+                            provenance = it.provenance,
+                        )
+                    }.sortedWith(compareBy({ it.category }, { it.name }))
                 }
                 _uiState.value = _uiState.value.copy(
                     skills = skills,

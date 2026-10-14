@@ -1,7 +1,7 @@
 package com.hermes.android.domain.tools
 
 /** A skill's on/off state and where it came from (hub, bundled, external, agent), per the dashboard. */
-data class SkillState(val name: String, val enabled: Boolean, val provenance: String?)
+data class SkillState(val name: String, val category: String?, val enabled: Boolean, val provenance: String?)
 
 /** The hub's security scan of a skill before it is installed. */
 data class SkillScan(
