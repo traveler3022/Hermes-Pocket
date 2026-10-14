@@ -410,4 +410,21 @@ class HermesMarkdownParserTest {
         assertEquals(true, isRtlText("آب ab"))
         assertNull(isRtlText("12345 !?"))
     }
+
+    @Test
+    fun `a GitHub alert takes the quote lines under its marker as blocks`() {
+        assertEquals(
+            listOf(
+                MdBlock.Alert(AlertKind.Warning, listOf(MdBlock.Para("Back up first.\nThen run it."), MdBlock.ListItem(0, null, null, "one"))),
+                MdBlock.Para("After."),
+            ),
+            parseMdBlocks("> [!WARNING]\n> Back up first.\n> Then run it.\n>\n> - one\n\nAfter."),
+        )
+    }
+
+    @Test
+    fun `alert text on the marker line is the first body line, and a plain quote stays a quote`() {
+        assertEquals(listOf(MdBlock.Alert(AlertKind.Note, listOf(MdBlock.Para("Short note.")))), parseMdBlocks("> [!note] Short note."))
+        assertEquals(listOf(MdBlock.Quote(1, "[!NOTES] not an alert")), parseMdBlocks("> [!NOTES] not an alert"))
+    }
 }

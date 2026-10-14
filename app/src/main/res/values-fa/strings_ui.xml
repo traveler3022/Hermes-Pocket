@@ -1085,4 +1085,9 @@
     <string name="webhooks_secret">رمز</string>
     <string name="webhooks_copy_secret">کپی رمز</string>
     <string name="webhooks_off">خاموش</string>
+    <string name="md_alert_note">یادداشت</string>
+    <string name="md_alert_tip">نکته</string>
+    <string name="md_alert_important">مهم</string>
+    <string name="md_alert_warning">هشدار</string>
+    <string name="md_alert_caution">احتیاط</string>
 </resources>

@@ -26,6 +26,9 @@ internal sealed class MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock()
     data class Code(val language: String, val code: String) : MdBlock()
     data class Quote(val depth: Int, val text: String) : MdBlock()
+
+    /** A GitHub alert: `> [!NOTE]` and the quote lines under it, parsed as blocks of their own. */
+    data class Alert(val kind: AlertKind, val children: List<MdBlock>) : MdBlock()
     /**
      * [text] is the item's first paragraph; [children] are the blocks indented under it
      * after a blank line (a second paragraph, a quote, a table). Nested items are not
@@ -56,6 +59,9 @@ internal sealed class MdBlock {
     data class Para(val text: String) : MdBlock()
     data object Rule : MdBlock()
 }
+
+/** GitHub's five alert kinds, as in Hermes Desktop. */
+internal enum class AlertKind { Note, Tip, Important, Warning, Caution }
 
 /** A table column's alignment from its separator cell: `---`, `:---`, `:---:`, `---:`. */
 internal enum class TableAlign { None, Left, Center, Right }
@@ -146,6 +152,7 @@ private val ruleRe = Regex("^(?:\\s*[-*_]){3,}\\s*$")
 private val tableSepRe = Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
 private val footnoteDefRe = Regex("^\\[\\^([^\\]\\s]+)]:\\s*(.*)$")
 private val definitionRe = Regex("^:\\s+(.*)$")
+private val alertMarkerRe = Regex("^\\[!(note|tip|important|warning|caution)]\\s*(.*)$", RegexOption.IGNORE_CASE)
 
 /** Nesting deeper than this is drawn at this depth, so an over-indented line cannot push text off screen. */
 private const val MaxListDepth = 6
@@ -172,6 +179,7 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
         val number = numberRe.matchEntire(trimmed)
         val footnote = footnoteDefRe.matchEntire(trimmed)
         val definition = definitionRe.matchEntire(trimmed)?.groupValues?.get(1)
+        val alert = if (trimmed.startsWith(">")) alertMarkerRe.matchEntire(trimmed.removePrefix(">").trim()) else null
 
         when {
             trimmed.startsWith("```") || trimmed.startsWith("~~~") -> {
@@ -197,6 +205,21 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
                 flush()
                 out.add(MdBlock.Heading(heading.groupValues[1].length, heading.groupValues[2].trim()))
                 i++
+            }
+
+            // `> [!NOTE]`: the quote lines under it are the alert's body. Text after the
+            // marker on its own line is accepted as the body's first line, as Desktop does.
+            alert != null -> {
+                flush()
+                val body = ArrayList<String>()
+                alert.groupValues[2].takeIf { it.isNotBlank() }?.let(body::add)
+                i++
+                while (i < lines.size && lines[i].trimStart().startsWith(">")) {
+                    body.add(lines[i].trimStart().removePrefix(">").removePrefix(" "))
+                    i++
+                }
+                val kind = AlertKind.valueOf(alert.groupValues[1].lowercase().replaceFirstChar { it.uppercase() })
+                out.add(MdBlock.Alert(kind, parseMdBlocks(body.joinToString("\n"))))
             }
 
             trimmed.startsWith(">") -> {

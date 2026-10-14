@@ -1,6 +1,7 @@
 package com.hermes.android.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -13,9 +14,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -51,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.hermes.android.R
 import com.hermes.android.domain.markdown.TableColumnWidths
 import com.hermes.android.domain.markdown.markdownTableKey
+import com.hermes.android.ui.icons.filled.Lightbulb
 
 /**
  * Native-Compose markdown renderer for Hermes assistant/tool output.
@@ -310,6 +318,8 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
 
         is MdBlock.Table -> MdTable(block, body, inlineStyle, theme.rule, muted)
 
+        is MdBlock.Alert -> MdAlert(block, theme)
+
         is MdBlock.Para -> BlockRow(block.text) {
             MdText(
                 raw = block.text,
@@ -319,6 +329,59 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
             )
         }
     }
+}
+
+/**
+ * A GitHub alert (`> [!NOTE]`), drawn as Hermes Desktop draws it: a bordered box
+ * whose first line is the kind's icon and name in its accent colour, then the body.
+ */
+@Composable
+private fun MdAlert(block: MdBlock.Alert, theme: MdTheme) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // Desktop's Tailwind accents: the 600 shade on light, the 400 shade on dark.
+    val (icon, label, accent) = when (block.kind) {
+        AlertKind.Note -> Triple(Icons.Filled.Info, R.string.md_alert_note, if (dark) Color(0xFF60A5FA) else Color(0xFF2563EB))
+        AlertKind.Tip -> Triple(Icons.Filled.Lightbulb, R.string.md_alert_tip, if (dark) Color(0xFF34D399) else Color(0xFF059669))
+        AlertKind.Important -> Triple(Icons.Filled.Info, R.string.md_alert_important, if (dark) Color(0xFFA78BFA) else Color(0xFF7C3AED))
+        AlertKind.Warning -> Triple(Icons.Filled.Warning, R.string.md_alert_warning, if (dark) Color(0xFFFBBF24) else Color(0xFFD97706))
+        AlertKind.Caution -> Triple(Icons.Filled.Warning, R.string.md_alert_caution, if (dark) Color(0xFFFB7185) else Color(0xFFE11D48))
+    }
+    val firstText = block.children.firstOrNull()?.let(::blockText).orEmpty()
+    BlockRow(firstText) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, theme.rule, RoundedCornerShape(8.dp))
+                .background(theme.codeBg.copy(alpha = 0.25f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(label),
+                    style = theme.body.copy(color = accent, fontWeight = FontWeight.SemiBold, fontSize = theme.base * 0.93f),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            block.children.forEach { MdBlockView(it, theme) }
+        }
+    }
+}
+
+/** The words a block reads by, for picking its direction. */
+private fun blockText(block: MdBlock): String = when (block) {
+    is MdBlock.Heading -> block.text
+    is MdBlock.Quote -> block.text
+    is MdBlock.ListItem -> block.text
+    is MdBlock.Definition -> block.term
+    is MdBlock.Footnote -> block.text
+    is MdBlock.Para -> block.text
+    is MdBlock.Alert -> block.children.firstOrNull()?.let(::blockText).orEmpty()
+    is MdBlock.Table -> block.rows.firstOrNull()?.joinToString(" ").orEmpty()
+    is MdBlock.Code, MdBlock.Rule -> ""
 }
 
 /**

@@ -1087,4 +1087,9 @@
     <string name="webhooks_secret">Secret</string>
     <string name="webhooks_copy_secret">Copy secret</string>
     <string name="webhooks_off">Off</string>
+    <string name="md_alert_note">Note</string>
+    <string name="md_alert_tip">Tip</string>
+    <string name="md_alert_important">Important</string>
+    <string name="md_alert_warning">Warning</string>
+    <string name="md_alert_caution">Caution</string>
 </resources>
