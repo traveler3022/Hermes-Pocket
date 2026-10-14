@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning")
+                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -774,7 +774,7 @@ class ProotLinuxRuntime @Inject constructor(
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
                             app = FastAPI()
-                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status"):
+                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp"):
                                 try:
                                     app.include_router(importlib.import_module("hermes_cli.web_routers." + name).router)
                                 except Exception:

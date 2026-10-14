@@ -35,6 +35,7 @@ import javax.inject.Inject
 @HiltViewModel
 class McpViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val serverSwitch: com.hermes.android.domain.tools.McpServerSwitch,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(McpUiState())
@@ -181,6 +182,14 @@ class McpViewModel @Inject constructor(
             GatewayMethods.MCP_SERVERS_SET_API_KEY,
             params("name" to name, "value" to value.trim(), "env_var" to envVar.trim().ifEmpty { null }),
         )
+    }
+
+    /** On or off without losing its config; MCP is reloaded after, like any other change. */
+    fun setEnabled(name: String, enabled: Boolean) = mutate(
+        if (enabled) McpNotice("$name turned on", "$name روشن شد") else McpNotice("$name turned off", "$name خاموش شد"),
+        server = name,
+    ) {
+        serverSwitch.setEnabled(name, enabled)
     }
 
     fun remove(name: String) = mutate(McpNotice("Removed $name", "$name حذف شد"), server = name) {

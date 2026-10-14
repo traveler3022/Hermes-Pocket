@@ -1023,4 +1023,5 @@
     <string name="learning_delete_memory_title">Delete this memory?</string>
     <string name="learning_delete_memory_body">The entry is removed from %1$s and the agent no longer remembers it.</string>
     <string name="learning_saved">Saved</string>
+    <string name="mcp_server_enabled">Enabled (off keeps its settings)</string>
 </resources>

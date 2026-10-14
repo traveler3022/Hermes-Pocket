@@ -1021,4 +1021,5 @@
     <string name="learning_delete_memory_title">این حافظه پاک شود؟</string>
     <string name="learning_delete_memory_body">این مورد از %1$s حذف می‌شود و ایجنت دیگر آن را به یاد ندارد.</string>
     <string name="learning_saved">ذخیره شد</string>
+    <string name="mcp_server_enabled">فعال (خاموش کردن تنظیماتش را نگه می‌دارد)</string>
 </resources>
