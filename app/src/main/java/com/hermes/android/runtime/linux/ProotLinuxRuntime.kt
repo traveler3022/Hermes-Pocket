@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers")
+                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers", "/api/skills")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -774,9 +774,13 @@ class ProotLinuxRuntime @Inject constructor(
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
                             app = FastAPI()
-                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp"):
+                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp", "skills"):
                                 try:
-                                    app.include_router(importlib.import_module("hermes_cli.web_routers." + name).router)
+                                    module = importlib.import_module("hermes_cli.web_routers." + name)
+                                    # skills has hub_router too, and it must come first (route order).
+                                    for attr in ("hub_router", "router"):
+                                        if hasattr(module, attr):
+                                            app.include_router(getattr(module, attr))
                                 except Exception:
                                     log.exception("dashboard router %s not loaded", name)
                             state["client"] = TestClient(app)

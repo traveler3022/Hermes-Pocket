@@ -1022,4 +1022,11 @@
     <string name="learning_delete_memory_body">این مورد از %1$s حذف می‌شود و ایجنت دیگر آن را به یاد ندارد.</string>
     <string name="learning_saved">ذخیره شد</string>
     <string name="mcp_server_enabled">فعال (خاموش کردن تنظیماتش را نگه می‌دارد)</string>
+    <string name="skill_uninstall">حذف نصب</string>
+    <string name="skill_uninstall_title">%1$s حذف نصب شود؟</string>
+    <string name="skill_uninstall_body">این skill هاب از سرور حذف می‌شود. می‌توانید دوباره از هاب نصبش کنید.</string>
+    <string name="skill_scan_title">اسکن امنیتی: %1$s</string>
+    <string name="skill_scan_verdict">نتیجه: %1$s</string>
+    <string name="skill_install_anyway">با این حال نصب کن</string>
+    <string name="skill_update_hub">به‌روزرسانی skillهای هاب</string>
 </resources>

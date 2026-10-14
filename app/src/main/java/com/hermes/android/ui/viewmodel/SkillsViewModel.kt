@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -29,6 +30,7 @@ import kotlinx.serialization.json.contentOrNull
 @HiltViewModel
 class SkillsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
+    private val admin: com.hermes.android.domain.tools.SkillsAdmin,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SkillsUiState())
@@ -47,7 +49,14 @@ class SkillsViewModel @Inject constructor(
                     put("action", "list")
                 }
                 val result = gatewayClient.request(GatewayMethods.SKILLS_MANAGE, params.toMap())
-                val skills = parseSkills(result)
+                // On/off and origin come from the dashboard; an older server (or one without
+                // these routes) leaves them unknown and the switch hidden.
+                val states = runCatching { admin.states() }
+                    .onFailure { Timber.w(it, "[Skills] No on/off state from the dashboard") }
+                    .getOrNull()?.associateBy { it.name }.orEmpty()
+                val skills = parseSkills(result).map { item ->
+                    states[item.name]?.let { item.copy(enabled = it.enabled, provenance = it.provenance) } ?: item
+                }
                 _uiState.value = _uiState.value.copy(
                     skills = skills,
                     isLoading = false,
@@ -105,6 +114,99 @@ class SkillsViewModel @Inject constructor(
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /** Turns a skill on or off; it stays installed. New chats pick the change up. */
+    fun setEnabled(name: String, enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                admin.setEnabled(name, enabled)
+                _uiState.value = _uiState.value.copy(
+                    skills = _uiState.value.skills.map { if (it.name == name) it.copy(enabled = enabled) else it },
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Toggle failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to change $name: ${e.message}")
+            }
+        }
+    }
+
+    /** Hub skills only: the server runs `hermes skills uninstall` in the background. */
+    fun uninstallSkill(name: String) {
+        _uiState.value = _uiState.value.copy(pendingUninstallSkill = null)
+        viewModelScope.launch {
+            try {
+                admin.uninstall(name)
+                _uiState.value = _uiState.value.copy(noticeMessage = "Uninstalling $name…")
+                delay(BACKGROUND_ACTION_SETTLE_MS)
+                loadSkills()
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Uninstall failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to uninstall: ${e.message}")
+            }
+        }
+    }
+
+    fun requestUninstallSkill(name: String) {
+        _uiState.value = _uiState.value.copy(pendingUninstallSkill = name)
+    }
+
+    fun cancelUninstallSkill() {
+        _uiState.value = _uiState.value.copy(pendingUninstallSkill = null)
+    }
+
+    /** Updates every hub skill (`hermes skills update`), in the background on the server. */
+    fun updateHubSkills() {
+        viewModelScope.launch {
+            try {
+                admin.updateAll()
+                _uiState.value = _uiState.value.copy(noticeMessage = "Updating hub skills…")
+                delay(BACKGROUND_ACTION_SETTLE_MS)
+                loadSkills()
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Update failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to update: ${e.message}")
+            }
+        }
+    }
+
+    fun clearNotice() {
+        _uiState.value = _uiState.value.copy(noticeMessage = null)
+    }
+
+    /**
+     * Install from the hub after its security scan: a clean "allow" installs at once, anything
+     * else (ask, block, a finding, or no scan at all) waits for the user in a dialog.
+     */
+    fun scanThenInstall(skillName: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(scanning = skillName)
+            val scan = try {
+                admin.scan(skillName)
+            } catch (e: Exception) {
+                Timber.w(e, "[Skills] Scan failed")
+                com.hermes.android.domain.tools.SkillScan(
+                    verdict = null, summary = "Scan unavailable: ${e.message}", policy = null,
+                    policyReason = null, findings = emptyList(),
+                )
+            }
+            _uiState.value = _uiState.value.copy(scanning = null)
+            if (scan.policy == "allow" && scan.findings.isEmpty()) {
+                installSkill(skillName)
+            } else {
+                _uiState.value = _uiState.value.copy(pendingScan = skillName to scan)
+            }
+        }
+    }
+
+    fun confirmScannedInstall() {
+        val name = _uiState.value.pendingScan?.first ?: return
+        _uiState.value = _uiState.value.copy(pendingScan = null)
+        installSkill(name)
+    }
+
+    fun cancelScannedInstall() {
+        _uiState.value = _uiState.value.copy(pendingScan = null)
     }
 
     fun installSkill(skillName: String) {
@@ -400,9 +502,22 @@ data class SkillsUiState(
     val isLoadingSkillContent: Boolean = false,
     /** Skill waiting on the delete confirmation, or null. */
     val pendingDeleteSkill: String? = null,
+    /** Hub skill waiting on the uninstall confirmation, or null. */
+    val pendingUninstallSkill: String? = null,
+    /** Skill whose hub scan is running, or null. */
+    val scanning: String? = null,
+    /** A scan that needs the user's word before installing. */
+    val pendingScan: Pair<String, com.hermes.android.domain.tools.SkillScan>? = null,
+    val noticeMessage: String? = null,
 )
 
 data class SkillItem(
     val name: String,
     val category: String,
+    /** Null when the server didn't say (no dashboard route): no switch then. */
+    val enabled: Boolean? = null,
+    /** hub, bundled, external or agent. */
+    val provenance: String? = null,
 )
+
+private const val BACKGROUND_ACTION_SETTLE_MS = 4_000L

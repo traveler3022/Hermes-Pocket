@@ -1024,4 +1024,11 @@
     <string name="learning_delete_memory_body">The entry is removed from %1$s and the agent no longer remembers it.</string>
     <string name="learning_saved">Saved</string>
     <string name="mcp_server_enabled">Enabled (off keeps its settings)</string>
+    <string name="skill_uninstall">Uninstall</string>
+    <string name="skill_uninstall_title">Uninstall %1$s?</string>
+    <string name="skill_uninstall_body">Removes this hub skill from the server. You can install it again from the hub.</string>
+    <string name="skill_scan_title">Security scan: %1$s</string>
+    <string name="skill_scan_verdict">Verdict: %1$s</string>
+    <string name="skill_install_anyway">Install anyway</string>
+    <string name="skill_update_hub">Update hub skills</string>
 </resources>
