@@ -232,11 +232,10 @@ private fun Drawer(fa: Boolean) {
             sessions = sessions,
             activeSessionId = "s0",
             destinations = rememberWorkspaceDestinations(
-                waitingCount = 2,
-                onWorkbench = {},
                 onAgent = {},
                 onScheduled = {},
                 onGroups = {},
+                onMedia = {},
                 onFiles = {},
                 onKanban = {},
             ),

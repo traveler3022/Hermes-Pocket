@@ -1,13 +1,9 @@
 package com.hermes.android.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 
 class DownloadStorageTest {
-
-    @get:Rule val tmp = TemporaryFolder()
 
     @Test
     fun `name comes from the card, else from the URL`() {
@@ -33,12 +29,18 @@ class DownloadStorageTest {
 
     @Test
     fun `same file is reused and a different one gets a free name`() {
-        val dir = tmp.newFolder()
-        java.io.File(dir, "a.mp3").writeText("one")
-        assertEquals("a.mp3", freeTarget(dir, "a.mp3") { it.readText() == "one" }.name)
-        assertEquals("a (1).mp3", freeTarget(dir, "a.mp3") { it.readText() == "two" }.name)
-        java.io.File(dir, "a (1).mp3").writeText("three")
-        assertEquals("a (2).mp3", freeTarget(dir, "a.mp3") { it.readText() == "two" }.name)
-        assertEquals("b", freeTarget(dir, "b") { false }.name)
+        val taken = mutableMapOf("a.mp3" to "one")
+        fun state(content: String): (String) -> NameState = { name ->
+            when (taken[name]) {
+                null -> NameState.Free
+                content -> NameState.Same
+                else -> NameState.Other
+            }
+        }
+        assertEquals("a.mp3", freeName("a.mp3", state("one")))
+        assertEquals("a (1).mp3", freeName("a.mp3", state("two")))
+        taken["a (1).mp3"] = "three"
+        assertEquals("a (2).mp3", freeName("a.mp3", state("two")))
+        assertEquals("b", freeName("b") { NameState.Free })
     }
 }

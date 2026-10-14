@@ -146,11 +146,11 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSessions: () -> Unit = {},
-    onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToGroups: () -> Unit = {},
     onNavigateToKanban: () -> Unit = {},
+    onNavigateToMedia: () -> Unit = {},
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
@@ -463,8 +463,6 @@ fun ChatScreen(
                     },
                     unreadOf = { session -> sessionActivity[session.id]?.unreadReplies ?: 0 },
                     destinations = rememberWorkspaceDestinations(
-                        waitingCount = if (uiState.pendingApproval != null) 1 else 0,
-                        onWorkbench = { closeDrawerThen(onNavigateToTasks) },
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
@@ -473,6 +471,7 @@ fun ChatScreen(
                         } else {
                             null
                         },
+                        onMedia = { closeDrawerThen(onNavigateToMedia) },
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context, viewModel.linuxFiles)) {

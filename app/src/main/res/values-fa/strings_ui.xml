@@ -1090,4 +1090,7 @@
     <string name="md_alert_important">مهم</string>
     <string name="md_alert_warning">هشدار</string>
     <string name="md_alert_caution">احتیاط</string>
+    <string name="media_empty">هنوز چیزی اینجا ذخیره نشده</string>
+    <string name="media_empty_caption">فایل‌هایی که در چت با دکمهٔ دانلود ذخیره می‌کنی اینجا می‌آیند؛ در پوشهٔ Download/Hermes گوشی.</string>
+    <string name="no_app_opens_file">برنامه‌ای برای باز کردن این فایل نیست</string>
 </resources>

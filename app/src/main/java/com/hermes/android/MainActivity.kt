@@ -320,11 +320,11 @@ private fun HermesNavHost(
             com.hermes.android.ui.screen.ChatScreen(
                 onNavigateToSettings = { navController.navigate("config") },
                 onNavigateToSessions = { navController.navigate("sessions") },
-                onNavigateToTasks = { navController.navigate("tasks") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToGroups = { navController.navigate("groups") },
                 onNavigateToKanban = { navController.navigate("kanban") },
+                onNavigateToMedia = { navController.navigate("media") },
                 sharedText = shared,
                 onSharedTextTaken = onSharedTextTaken,
                 resumeSessionId = resumeId,
@@ -334,14 +334,9 @@ private fun HermesNavHost(
             )
         }
 
-        composable("tasks") {
-            com.hermes.android.ui.screen.TasksScreen(
+        composable("media") {
+            com.hermes.android.ui.screen.MediaScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
-                onOpenInChat = { sessionId ->
-                    navController.navigate("chat?resumeSessionId=$sessionId") {
-                        popUpTo("chat") { inclusive = true }
-                    }
-                },
             )
         }
 
