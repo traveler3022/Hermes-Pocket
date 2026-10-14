@@ -131,6 +131,7 @@ fun ConfigScreen(
     onNavigateToStorage: () -> Unit = {},
     onNavigateToProjects: () -> Unit = {},
     onNavigateToSetup: () -> Unit = {},
+    onNavigateToLearning: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
@@ -201,7 +202,7 @@ fun ConfigScreen(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
+                SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
                 SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
                 SettingsSection.PROVIDERS -> ProvidersSection(

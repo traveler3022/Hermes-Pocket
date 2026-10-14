@@ -4,7 +4,9 @@ import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.data.LearningRepository
 import com.hermes.android.data.MemoryProvidersRepository
+import com.hermes.android.data.MessagingGatewayRepository
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
@@ -22,11 +24,13 @@ import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.messaging.MessagingGateway
 import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
 import com.hermes.android.domain.tools.ToolsetSetup
 import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.domain.media.MediaPlayers
+import com.hermes.android.domain.memory.LearningJourney
 import com.hermes.android.domain.memory.MemoryProviders
 import com.hermes.android.domain.notify.AppVisibility
 import com.hermes.android.domain.notify.ApprovalAlerts
@@ -98,6 +102,9 @@ abstract class DataModule {
     abstract fun bindMessagingPairing(impl: PairingRepository): MessagingPairing
 
     @Binds
+    abstract fun bindMessagingGateway(impl: MessagingGatewayRepository): MessagingGateway
+
+    @Binds
     abstract fun bindSetupProgress(impl: SetupState): SetupProgress
 
     @Binds
@@ -111,6 +118,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindMemoryProviders(impl: MemoryProvidersRepository): MemoryProviders
+
+    @Binds
+    abstract fun bindLearningJourney(impl: LearningRepository): LearningJourney
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

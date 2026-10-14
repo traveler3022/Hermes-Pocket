@@ -36,6 +36,8 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
+import com.hermes.android.ui.viewmodel.GatewayAction
+import com.hermes.android.ui.viewmodel.GatewayEvent
 import com.hermes.android.ui.viewmodel.PlatformConfig
 import com.hermes.android.ui.viewmodel.PlatformType
 import com.hermes.android.ui.viewmodel.PairingEvent
@@ -82,6 +84,24 @@ fun PlatformsScreen(
         }
     }
 
+    val gatewayState by viewModel.gateway.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel, resources) {
+        viewModel.gatewayEvents.collect { event ->
+            snackbarHostState.showSnackbar(
+                when (event) {
+                    is GatewayEvent.Sent -> resources.getString(
+                        when (event.action) {
+                            GatewayAction.START -> R.string.gateway_starting
+                            GatewayAction.STOP -> R.string.gateway_stopping
+                            GatewayAction.RESTART -> R.string.gateway_restarting
+                        },
+                    )
+                    is GatewayEvent.Failed -> event.message
+                },
+            )
+        }
+    }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -122,6 +142,20 @@ fun PlatformsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(HxSpace.group),
             ) {
+                item(key = "gateway") {
+                    if (viewModel.gatewayAvailable) {
+                        GatewaySection(
+                            state = gatewayState,
+                            onRefresh = viewModel::refreshGateway,
+                            onStart = viewModel::startGateway,
+                            onStop = viewModel::stopGateway,
+                            onRestart = viewModel::restartGateway,
+                        )
+                    } else {
+                        // The built-in Linux runs only the app's stdio gateway, never `hermes gateway`.
+                        GatewayUnavailableNote()
+                    }
+                }
                 items(uiState.platforms, key = { it.type.name }) { platform ->
                     PlatformCard(
                         platform,
