@@ -164,6 +164,22 @@ class OkHttpGatewayClient @Inject constructor(
     private val nonTrackingRequestIds =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
+    /**
+     * Live ids of sessions this client created or used with `trackSession =
+     * false` (Task Desk launches, notification replies, kanban/group calls).
+     * Their events must not update [lastSessionId] either — the reconnect
+     * auto-resume target belongs to the user's chat (see
+     * [com.hermes.android.data.SessionRepository.launchTask]: "deliberately
+     * NOT tracked as the reconnect auto-resume target"). Without this, a
+     * running background task streams events carrying its own session id,
+     * silently becomes the resume target, and after a reconnect with no chat
+     * open gets adopted as the user's open chat. A tracked response for the
+     * same id (the user opens the task's transcript in the chat) re-enables
+     * event tracking for it.
+     */
+    private val untrackedSessions =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     override suspend fun connect(
         url: String,
         connectTimeoutMs: Long,
@@ -867,12 +883,17 @@ class OkHttpGatewayClient @Inject constructor(
                 )
             )
         } else if (response.result != null) {
-            if (!skipSessionTracking) {
+            val responseSid =
                 // session.most_recent answers {"session_id": null} when there
                 // is nothing to resume, and JsonNull.content is the string
                 // "null" — adopting that is as bad as adopting "".
-                (response.result as? JsonObject)?.get("session_id").sessionIdOrNull()?.let { sid ->
-                    lastSessionId = sid
+                (response.result as? JsonObject)?.get("session_id").sessionIdOrNull()
+            if (skipSessionTracking) {
+                responseSid?.let { untrackedSessions += it }
+            } else {
+                responseSid?.let {
+                    lastSessionId = it
+                    untrackedSessions.remove(it)
                 }
             }
             deferred.complete(response.result)
@@ -954,7 +975,7 @@ class OkHttpGatewayClient @Inject constructor(
             if (event.sessionId != null) {
                 lastSessionId = event.sessionId
             }
-        } else if (event.sessionId != null) {
+        } else if (event.sessionId != null && event.sessionId !in untrackedSessions) {
             lastSessionId = event.sessionId
         }
         emitEvent(event, eventType)
