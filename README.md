@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/traveler3022/Hermes-Pocket/releases/latest"><img alt="Download APK" src="https://img.shields.io/badge/⬇_Download_APK-0EA5E9?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://github.com/traveler3022/Hermes-Pocket/releases/latest/download/app-release.apk"><img alt="Download APK" src="https://img.shields.io/badge/⬇_Download_APK-0EA5E9?style=for-the-badge&logo=android&logoColor=white"></a>
   <br>
   <a href="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml/badge.svg"></a>
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
@@ -116,9 +116,7 @@ Everything lives in **Control Center**:
 
 ## Getting started
 
-1. **[Download the APK](https://github.com/traveler3022/Hermes-Pocket/releases/latest)** and install it.
-   The newest test build of every change is always at
-   [`debug-latest`](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest).
+1. **[Download the APK](https://github.com/traveler3022/Hermes-Pocket/releases/latest/download/app-release.apk)** of the latest release and install it.
 2. Open the app, tap **Get started**, and pick where Hermes runs:
    - **Built-in Linux**: tap **Install Hermes** and keep the app open while it sets itself up
      (about 1 GB free and a stable connection, once).
@@ -213,8 +211,7 @@ cd Hermes-Pocket
 ```
 
 Needs JDK 17 and Android SDK 36. Built with Kotlin, Jetpack Compose, Material 3, Hilt and OkHttp.
-Every push is built on GitHub Actions and published to
-[`debug-latest`](https://github.com/traveler3022/Hermes-Pocket/releases/tag/debug-latest).
+Every push is built and tested on GitHub Actions.
 The screenshots above are drawn from the app's own UI code by the **README Screenshots** workflow.
 
 ## License
