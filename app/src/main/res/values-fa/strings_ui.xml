@@ -963,4 +963,21 @@
     <string name="assistant_explanation">هرمس را دستیار دیجیتال گوشی کن: دکمهٔ خانه را نگه دار (یا از گوشهٔ پایین صفحه به داخل بکش) تا هرمس یک گفتگوی تازه باز کند و گوش بدهد. در صفحه‌ای که باز می‌شود، زیر «برنامهٔ دستیار دیجیتال» هرمس را انتخاب کن.</string>
     <string name="assistant_open_settings">باز کردن تنظیمات دستیار</string>
     <string name="assistant_settings_unavailable">این گوشی صفحهٔ تنظیمات دستیار ندارد</string>
+    <string name="app_update_download_and_install">دانلود و نصب</string>
+    <string name="app_update_downloading">در حال دانلود…</string>
+    <string name="app_update_downloading_percent">در حال دانلود… %1$d٪</string>
+    <string name="app_update_downloaded">دانلود شد. اندروید برای نصب از تو تأیید می‌گیرد.</string>
+    <string name="app_update_install">نصب</string>
+    <string name="app_update_allow_installs">«نصب برنامه‌های ناشناس» را برای هرمس پاکت مجاز کن، بعد دوباره «نصب» را بزن.</string>
+    <string name="app_update_try_again">دوباره امتحان کن</string>
+    <string name="app_update_failed_network">دانلود قطع شد. اتصال را بررسی کن و دوباره امتحان کن، یا ریلیز را در مرورگر باز کن.</string>
+    <string name="app_update_failed_not_apk">چیزی که رسید فایل APK ریلیز نیست. دوباره امتحان کن، یا ریلیز را در مرورگر باز کن.</string>
+    <string name="app_update_failed_wrong_app">این APK به‌روزرسانیِ همین نصب نیست: برنامهٔ دیگری است یا با کلید دیگری امضا شده، پس اندروید نصبش نمی‌کند. ریلیز را در مرورگر باز کن.</string>
+    <string name="app_update_failed_storage">برای دانلود جای خالی کافی نیست.</string>
+    <string name="app_update_installer_unavailable">نصب‌کننده باز نشد. به‌جایش ریلیز را در مرورگر باز کن.</string>
+    <string name="app_update_debug_build_note">ریلیزهای نسخه‌دار برنامهٔ جدایی هستند: کنار این نسخهٔ آزمایشی نصب می‌شوند، نه روی آن.</string>
+    <string name="whats_new_in_version">تازه‌های نسخهٔ %1$s</string>
+    <string name="whats_new_got_it">متوجه شدم</string>
+    <string name="app_update_new_test_build">نسخهٔ آزمایشی جدید (شاخهٔ %1$s، ساخته‌شده %2$s)</string>
+    <string name="app_update_commit_unknown">کامیتِ این نسخه معلوم نیست، پس شاید همین نسخه باشد. دانلود همچنان کار می‌کند.</string>
 </resources>

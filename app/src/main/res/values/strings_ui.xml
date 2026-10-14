@@ -965,4 +965,21 @@
     <string name="assistant_explanation">Make Hermes the phone\'s digital assistant: touch and hold the Home button (or swipe in from a bottom corner) and Hermes opens a new chat, listening. On the page that opens, choose Hermes under “Digital assistant app”.</string>
     <string name="assistant_open_settings">Open assistant settings</string>
     <string name="assistant_settings_unavailable">This phone has no assistant settings page</string>
+    <string name="app_update_download_and_install">Download and install</string>
+    <string name="app_update_downloading">Downloading…</string>
+    <string name="app_update_downloading_percent">Downloading… %1$d%%</string>
+    <string name="app_update_downloaded">Downloaded. Android asks you to confirm the install.</string>
+    <string name="app_update_install">Install</string>
+    <string name="app_update_allow_installs">Allow “Install unknown apps” for Hermes Pocket, then tap Install again.</string>
+    <string name="app_update_try_again">Try again</string>
+    <string name="app_update_failed_network">The download stopped. Check the connection and try again, or open the release in the browser.</string>
+    <string name="app_update_failed_not_apk">What arrived is not the release APK. Try again, or open the release in the browser.</string>
+    <string name="app_update_failed_wrong_app">This APK is not an update for this install: it is another app or signed with another key, so Android would refuse it. Open the release in the browser.</string>
+    <string name="app_update_failed_storage">Not enough free space for the download.</string>
+    <string name="app_update_installer_unavailable">The installer could not be opened. Open the release in the browser instead.</string>
+    <string name="app_update_debug_build_note">Versioned releases are a separate app: they install beside this test build, not over it.</string>
+    <string name="whats_new_in_version">What’s new in %1$s</string>
+    <string name="whats_new_got_it">Got it</string>
+    <string name="app_update_new_test_build">New test build (branch %1$s, built %2$s)</string>
+    <string name="app_update_commit_unknown">This build’s commit is unknown, so it may already be this one. Downloading still works.</string>
 </resources>
