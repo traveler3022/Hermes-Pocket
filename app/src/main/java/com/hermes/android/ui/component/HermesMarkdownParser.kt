@@ -44,10 +44,21 @@ internal sealed class MdBlock {
 
     /** `[^label]: text`. Parsed where it stands; [HermesMarkdown] moves them all to the end. */
     data class Footnote(val label: String, val text: String) : MdBlock()
-    data class Table(val rows: List<List<String>>, val hasHeader: Boolean) : MdBlock()
+    /**
+     * [aligns] holds one entry per column of the `|:--|:-:|--:|` separator row; a row
+     * with more cells than that leaves the extra ones at [TableAlign.None].
+     */
+    data class Table(
+        val rows: List<List<String>>,
+        val hasHeader: Boolean,
+        val aligns: List<TableAlign> = emptyList(),
+    ) : MdBlock()
     data class Para(val text: String) : MdBlock()
     data object Rule : MdBlock()
 }
+
+/** A table column's alignment from its separator cell: `---`, `:---`, `:---:`, `---:`. */
+internal enum class TableAlign { None, Left, Center, Right }
 
 internal data class InlineStyle(
     val linkColor: Color,
@@ -206,12 +217,13 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
                 flush()
                 val rows = ArrayList<List<String>>()
                 rows.add(splitRow(trimmed))
+                val aligns = splitRow(lines[i + 1]).map(::tableAlign)
                 i += 2
                 while (i < lines.size && lines[i].trimStart().startsWith("|")) {
                     rows.add(splitRow(lines[i].trimStart()))
                     i++
                 }
-                out.add(MdBlock.Table(rows, hasHeader = true))
+                out.add(MdBlock.Table(rows, hasHeader = true, aligns = aligns))
             }
 
             bullet != null -> {
@@ -350,6 +362,18 @@ private fun listItemBody(lines: List<String>, start: Int, first: String, indent:
 
 private fun splitRow(line: String): List<String> =
     line.trim().trim('|').split('|').map { it.trim() }
+
+/** One trimmed separator cell → its column alignment. */
+private fun tableAlign(cell: String): TableAlign {
+    val left = cell.startsWith(':')
+    val right = cell.endsWith(':')
+    return when {
+        left && right -> TableAlign.Center
+        right -> TableAlign.Right
+        left -> TableAlign.Left
+        else -> TableAlign.None
+    }
+}
 
 // ── Inline ───────────────────────────────────────────────────────────────
 

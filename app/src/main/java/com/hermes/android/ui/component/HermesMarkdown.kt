@@ -394,6 +394,11 @@ private fun MdTable(
             .background(inlineStyle.codeBg.copy(alpha = 0.45f))
             .horizontalScroll(rememberScrollState()),
     ) {
+        // Columns follow the layout direction, so a right-to-left screen mirrors the
+        // whole table: markdown's left and right are taken as the table's start and
+        // end and mirror with it. Center is the same both ways, and a column with no
+        // colon keeps each cell at the side its own words start on.
+        val rtlTable = LocalLayoutDirection.current == LayoutDirection.Rtl
         Column(Modifier.width(IntrinsicSize.Max)) {
             block.rows.forEachIndexed { index, row ->
                 val header = index == 0 && block.hasHeader
@@ -401,7 +406,7 @@ private fun MdTable(
                     Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    row.forEach { cell ->
+                    row.forEachIndexed { column, cell ->
                         MdText(
                             raw = cell,
                             style = if (header) {
@@ -411,6 +416,12 @@ private fun MdTable(
                             },
                             inlineStyle = inlineStyle,
                             modifier = Modifier.width(TableCellWidth),
+                            align = when (block.aligns.getOrElse(column) { TableAlign.None }) {
+                                TableAlign.None -> TextAlign.Start
+                                TableAlign.Center -> TextAlign.Center
+                                TableAlign.Left -> if (rtlTable) TextAlign.Right else TextAlign.Left
+                                TableAlign.Right -> if (rtlTable) TextAlign.Left else TextAlign.Right
+                            },
                         )
                     }
                 }
@@ -439,6 +450,7 @@ private fun MdText(
     style: TextStyle,
     inlineStyle: InlineStyle,
     modifier: Modifier = Modifier,
+    align: TextAlign = TextAlign.Start,
 ) {
     val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
     val direction = remember(raw) {
@@ -452,7 +464,7 @@ private fun MdText(
         text = text,
         style = style.copy(
             textDirection = direction,
-            textAlign = TextAlign.Start,
+            textAlign = align,
         ),
         modifier = modifier,
     )
