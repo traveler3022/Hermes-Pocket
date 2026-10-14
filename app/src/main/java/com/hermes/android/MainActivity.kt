@@ -320,6 +320,7 @@ private fun HermesNavHost(
                 onNavigateToStorage = { navController.navigate("storage") },
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToSetup = { navController.navigate("setup") },
+                onNavigateToLearning = { navController.navigate("learning") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
             )
@@ -343,6 +344,12 @@ private fun HermesNavHost(
 
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("learning") {
+            com.hermes.android.ui.screen.LearningScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
