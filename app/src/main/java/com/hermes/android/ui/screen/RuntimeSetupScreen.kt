@@ -393,6 +393,7 @@ internal fun RemoteServerSetupContent(
     val tailscaleUi by viewModel.tailscaleUi.collectAsStateWithLifecycle()
     val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
     val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
+    val connecting by viewModel.connecting.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val ready = isRemoteSetupReady(signedInAs, connection)
 
@@ -436,6 +437,9 @@ internal fun RemoteServerSetupContent(
         initialUrl = serverConfig.serverUrl,
         signedInAs = signedInAs,
         signingIn = signingIn,
+        connecting = connecting,
+        onConnect = { url -> viewModel.connectToServer(url) },
+        onCancelConnect = { viewModel.cancelConnect() },
         onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
         onSignOut = { viewModel.signOut() },
     )
@@ -599,6 +603,9 @@ private fun ServerConfigCard(
     initialUrl: String,
     signedInAs: String?,
     signingIn: Boolean,
+    connecting: Boolean,
+    onConnect: (url: String) -> Unit,
+    onCancelConnect: () -> Unit,
     onSignIn: (url: String, username: String, password: String) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -606,6 +613,8 @@ private fun ServerConfigCard(
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var manualLogin by rememberSaveable { mutableStateOf(false) }
+    val busy = signingIn || connecting
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -628,7 +637,7 @@ private fun ServerConfigCard(
                 placeholder = { Text("https://my-server.tail1234.ts.net") },
                 leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
-                enabled = !signingIn,
+                enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (signedInAs != null) {
@@ -639,7 +648,32 @@ private fun ServerConfigCard(
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.sign_out))
                 }
+            } else if (connecting) {
+                // Stays until the app is connected: the setup command may still be running.
+                Text(stringResource(R.string.server_pair_connecting), style = MaterialTheme.typography.bodyMedium)
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = stringResource(R.string.server_pair_waiting),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onCancelConnect, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.cancel))
+                }
             } else {
+                Text(stringResource(R.string.server_pair_hint), style = MaterialTheme.typography.bodyMedium)
+                Button(
+                    onClick = { onConnect(url) },
+                    enabled = !busy && url.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.connect))
+                }
+                TextButton(onClick = { manualLogin = !manualLogin }, enabled = !busy) {
+                    Text(stringResource(R.string.server_pair_manual))
+                }
+            }
+            if (signedInAs == null && !connecting && manualLogin) {
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
@@ -686,7 +720,7 @@ private fun ServerConfigCard(
 
 /** The repo's server setup (server/setup.sh) and its guide; they work once the repo is public. */
 private const val SERVER_SETUP_COMMAND =
-    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash"
+    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/claude/tailscale-pair/server/setup.sh | sudo bash"
 private const val SERVER_GUIDE_URL = "https://github.com/traveler3022/Hermes-Pocket/tree/main/server"
 
 /**

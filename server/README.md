@@ -37,8 +37,8 @@ At the end it prints the username and password. Running it again is safe: the lo
 In the app, open **Settings → Server**:
 
 1. Tap **Sign in to Tailscale** and log in with the same account as the server.
-2. Tap your server in the device list. Within 15 minutes of step 1 the app signs in by itself.
-3. Later, or for another phone: run the setup command again, then tap the server. Or enter the username and password from step 1 and tap **Sign in**.
+2. Tap your server in the device list, then **Connect**. Within 15 minutes of step 1 the app signs in by itself. If the setup command is still running, the app waits for it.
+3. Later, or for another phone: run the setup command again, then tap **Connect**. Or tap **Enter the login by hand**, enter the username and password from step 1 and tap **Sign in**.
 
 The app keeps the login encrypted on the phone and signs in again by itself.
 
