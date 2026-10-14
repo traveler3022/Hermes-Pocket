@@ -1029,4 +1029,23 @@
     <string name="skill_scan_verdict">نتیجه: %1$s</string>
     <string name="skill_install_anyway">با این حال نصب کن</string>
     <string name="skill_update_hub">به‌روزرسانی skillهای هاب</string>
+    <string name="plugin_catalog">کاتالوگ پلاگین‌ها</string>
+    <string name="plugin_catalog_search">جستجو در کاتالوگ</string>
+    <string name="plugin_catalog_unavailable">کاتالوگ اینجا در دسترس نیست: %1$s</string>
+    <string name="plugin_installed">نصب شده</string>
+    <string name="plugin_install">نصب</string>
+    <string name="plugin_add_url">نصب از آدرس</string>
+    <string name="plugin_add_url_hint">آدرس git یا owner/repo یک پلاگین Hermes.</string>
+    <string name="plugin_force">جایگزین نصب قبلی با همین نام</string>
+    <string name="plugin_update">به‌روزرسانی</string>
+    <string name="plugin_update_available">به‌روزرسانی (نسخهٔ جدید)</string>
+    <string name="plugin_settings">تنظیمات</string>
+    <string name="plugin_settings_title">تنظیمات %1$s</string>
+    <string name="plugin_secret_set">%1$s: تنظیم شده (در .env با نام %2$s)</string>
+    <string name="plugin_secret_unset">%1$s: تنظیم نشده — %2$s را در .env سرور اضافه کنید</string>
+    <string name="plugin_remove_title">%1$s حذف شود؟</string>
+    <string name="plugin_remove_body">نصب این پلاگین از سرور پاک می‌شود. بعداً می‌توانید دوباره نصبش کنید.</string>
+    <string name="plugin_consent_title">%1$s دسترسی بیشتری می‌خواهد</string>
+    <string name="plugin_consent_body">این به‌روزرسانی ابزار، hook یا مجوز تازه اضافه می‌کند.</string>
+    <string name="plugin_consent_accept">اجازه بده و به‌روز کن</string>
 </resources>

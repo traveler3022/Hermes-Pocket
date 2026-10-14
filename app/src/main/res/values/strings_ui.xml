@@ -1031,4 +1031,23 @@
     <string name="skill_scan_verdict">Verdict: %1$s</string>
     <string name="skill_install_anyway">Install anyway</string>
     <string name="skill_update_hub">Update hub skills</string>
+    <string name="plugin_catalog">Plugin catalog</string>
+    <string name="plugin_catalog_search">Search the catalog</string>
+    <string name="plugin_catalog_unavailable">The catalog isn’t available here: %1$s</string>
+    <string name="plugin_installed">Installed</string>
+    <string name="plugin_install">Install</string>
+    <string name="plugin_add_url">Install from URL</string>
+    <string name="plugin_add_url_hint">A git URL or owner/repo of a Hermes plugin.</string>
+    <string name="plugin_force">Replace an existing install of the same name</string>
+    <string name="plugin_update">Update</string>
+    <string name="plugin_update_available">Update (new version)</string>
+    <string name="plugin_settings">Settings</string>
+    <string name="plugin_settings_title">%1$s settings</string>
+    <string name="plugin_secret_set">%1$s: set (in .env as %2$s)</string>
+    <string name="plugin_secret_unset">%1$s: not set — add %2$s in the server’s .env</string>
+    <string name="plugin_remove_title">Remove %1$s?</string>
+    <string name="plugin_remove_body">Deletes this plugin’s install from the server. You can install it again later.</string>
+    <string name="plugin_consent_title">%1$s wants more access</string>
+    <string name="plugin_consent_body">This update adds new tools, hooks or permissions.</string>
+    <string name="plugin_consent_accept">Allow and update</string>
 </resources>
