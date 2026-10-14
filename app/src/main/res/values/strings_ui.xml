@@ -982,4 +982,11 @@
     <string name="whats_new_got_it">Got it</string>
     <string name="app_update_new_test_build">New test build (branch %1$s, built %2$s)</string>
     <string name="app_update_commit_unknown">This build’s commit is unknown, so it may already be this one. Downloading still works.</string>
+    <string name="attach_files">Files</string>
+    <string name="attach_take_photo">Take photo</string>
+    <string name="attach_no_camera">No camera app found</string>
+    <string name="btw_title">Side question</string>
+    <string name="btw_question">Question</string>
+    <string name="btw_answering">Answering from a snapshot of this chat…</string>
+    <string name="btw_failed">The side question failed: %1$s</string>
 </resources>

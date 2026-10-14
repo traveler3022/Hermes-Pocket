@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -124,6 +125,10 @@ internal class ChatSlashDelegate(
             postStatus(if (method == GatewayMethods.PROMPT_BTW) "/btw <question>" else "/$name <prompt>")
             return
         }
+        if (method == GatewayMethods.PROMPT_BTW) {
+            askSideQuestion(arg, sessionId)
+            return
+        }
         val result = gatewayClient.request(
             method = method,
             params = buildJsonObject {
@@ -135,10 +140,46 @@ internal class ChatSlashDelegate(
         postStatus(
             when {
                 taskId == null -> "/$name: no task started"
-                method == GatewayMethods.PROMPT_BTW -> "btw $taskId — answering from a snapshot of this chat"
                 else -> "bg $taskId started"
             },
         )
+    }
+
+    /**
+     * `/btw`: opens the side-question sheet at once, loading; btw.complete with this task id
+     * fills in the answer (ChatViewModel). A failed start shows in the sheet too.
+     */
+    private suspend fun askSideQuestion(question: String, sessionId: String) {
+        val asked = SideQuestionUi(question = question)
+        state.update { it.copy(sideQuestion = asked, isSending = false) }
+        val taskId = try {
+            val result = gatewayClient.request(
+                method = GatewayMethods.PROMPT_BTW,
+                params = buildJsonObject {
+                    put("session_id", sessionId)
+                    put("text", question)
+                },
+            ) as? JsonObject
+            (result?.get("task_id") as? JsonPrimitive)?.contentOrNull
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "[Chat] prompt.btw failed")
+            state.update { s ->
+                if (s.sideQuestion === asked) s.copy(sideQuestion = asked.copy(error = e.message ?: e.toString())) else s
+            }
+            return
+        }
+        state.update { s ->
+            // Closed, or another question asked meanwhile: leave that one alone. A task id
+            // already there means btw.complete beat this answer and filled the sheet itself.
+            val open = s.sideQuestion
+            when {
+                open == null || open.question != question || open.taskId != null -> s
+                taskId == null -> s.copy(sideQuestion = open.copy(error = "no task started"))
+                else -> s.copy(sideQuestion = open.copy(taskId = taskId))
+            }
+        }
     }
 
     private fun applyResult(

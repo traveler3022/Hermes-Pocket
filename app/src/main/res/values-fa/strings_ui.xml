@@ -980,4 +980,11 @@
     <string name="whats_new_got_it">متوجه شدم</string>
     <string name="app_update_new_test_build">نسخهٔ آزمایشی جدید (شاخهٔ %1$s، ساخته‌شده %2$s)</string>
     <string name="app_update_commit_unknown">کامیتِ این نسخه معلوم نیست، پس شاید همین نسخه باشد. دانلود همچنان کار می‌کند.</string>
+    <string name="attach_files">فایل‌ها</string>
+    <string name="attach_take_photo">گرفتن عکس</string>
+    <string name="attach_no_camera">برنامهٔ دوربین پیدا نشد</string>
+    <string name="btw_title">سؤال فرعی</string>
+    <string name="btw_question">سؤال</string>
+    <string name="btw_answering">در حال پاسخ از روی نسخه‌ای از همین گفتگو…</string>
+    <string name="btw_failed">سؤال فرعی انجام نشد: %1$s</string>
 </resources>

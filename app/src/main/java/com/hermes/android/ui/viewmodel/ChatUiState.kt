@@ -245,7 +245,22 @@ data class ChatUiState(
     /** The agent's live status line (thinking.delta: a wait notice, a spinner
      *  phrase). Replaced, never appended; blank when there is none. */
     val thinkingStatus: String = "",
+    /** The `/btw` side question open in its sheet; null when the sheet is closed. */
+    val sideQuestion: SideQuestionUi? = null,
 )
+
+/**
+ * A `/btw` side question (prompt.btw): answered from a snapshot of the chat, the answer
+ * arriving later as btw.complete with the same [taskId] (null until prompt.btw answers).
+ */
+data class SideQuestionUi(
+    val question: String,
+    val taskId: String? = null,
+    val answer: String? = null,
+    val error: String? = null,
+) {
+    val isLoading: Boolean get() = answer == null && error == null
+}
 
 /**
  * A file or image already uploaded to the gateway (over the loopback

@@ -747,7 +747,14 @@ class ChatViewModel @Inject constructor(
 
     // ── Attachments (delegated) ──────────────────────────────────────────
 
-    fun attachFromUri(uri: Uri) = attachmentDelegate.attachFromUri(_uiState, uri)
+    fun attachFromUris(uris: List<Uri>) = attachmentDelegate.attachFromUris(_uiState, uris)
+
+    /** [grant] is the pasted content, kept alive until its images are copied. */
+    fun attachPastedImages(uris: List<Uri>, grant: Any) = attachmentDelegate.attachPasted(_uiState, uris, grant)
+
+    fun newCameraPhotoUri(): Uri? = attachmentDelegate.newCameraPhotoUri()
+
+    fun closeSideQuestion() = _uiState.update { it.copy(sideQuestion = null) }
 
     fun downloadFile(url: String, filename: String) = attachmentDelegate.downloadFile(_uiState, url, filename)
 
@@ -1189,14 +1196,30 @@ class ChatViewModel @Inject constructor(
             }
 
             is GatewayEvent.BtwComplete -> {
-                val question = event.question?.takeIf { it.isNotBlank() }?.let { " \"$it\"" }.orEmpty()
-                val msg = ChatMessage.Status(
-                    id = "btw-${event.taskId}",
-                    timestamp = System.currentTimeMillis(),
-                    text = "[btw$question] ${event.text}",
-                    isError = false,
-                )
-                _uiState.update { it.copy(messages = it.messages + msg) }
+                // The open sheet's question takes its answer; matched by task id, or by the
+                // question while prompt.btw has not answered with the id yet.
+                val open = _uiState.value.sideQuestion
+                if (open != null && open.isLoading && (
+                        open.taskId == event.taskId ||
+                            (open.taskId == null && event.question == open.question)
+                        )
+                ) {
+                    _uiState.update { s ->
+                        if (s.sideQuestion == open) {
+                            s.copy(sideQuestion = open.copy(taskId = event.taskId, answer = event.text))
+                        } else s
+                    }
+                } else {
+                    // Sheet closed before the answer came: it lands in the chat as it always did.
+                    val question = event.question?.takeIf { it.isNotBlank() }?.let { " \"$it\"" }.orEmpty()
+                    val msg = ChatMessage.Status(
+                        id = "btw-${event.taskId}",
+                        timestamp = System.currentTimeMillis(),
+                        text = "[btw$question] ${event.text}",
+                        isError = false,
+                    )
+                    _uiState.update { it.copy(messages = it.messages + msg) }
+                }
             }
 
             is GatewayEvent.SessionInfo -> {
