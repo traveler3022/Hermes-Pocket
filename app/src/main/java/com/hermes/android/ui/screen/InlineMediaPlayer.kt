@@ -5,6 +5,8 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -64,7 +66,6 @@ import com.hermes.android.R
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.ui.icons.filled.Download
 import com.hermes.android.ui.icons.filled.Fullscreen
-import com.hermes.android.ui.icons.filled.MusicNote
 import com.hermes.android.ui.viewer.FileViewerActivity
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -170,8 +171,8 @@ private fun rememberInlineItem(url: String): InlineItem {
 }
 
 /**
- * Audio in a chat bubble: play/pause, a seek bar and elapsed/total. The title opens the
- * full viewer.
+ * Audio in a chat bubble, laid out like Telegram's: a round play/pause button, then the title
+ * (opens the full viewer), the seek bar and elapsed/total under it.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -181,50 +182,58 @@ internal fun InlineAudioPlayer(url: String, name: String, onDownload: () -> Unit
     val player = item.player
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
-        Column(modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.MusicNote, contentDescription = null,
-                    modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            item.pause()
-                            FileViewerActivity.open(context, url, name)
-                        }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                )
-                DownloadButton(onDownload)
-            }
-            // Time runs left to right in any language, as in the viewer.
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+        // Time runs left to right in any language, as in the viewer.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(
+                modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (player == null) {
+                    FilledIconButton(onClick = item::play, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.play),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                } else {
+                    PlayPauseButton(
+                        player, modifier = Modifier.size(48.dp), iconSize = 28.dp,
+                        colors = IconButtonDefaults.filledIconButtonColors(),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    item.pause()
+                                    FileViewerActivity.open(context, url, name)
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                        DownloadButton(onDownload)
+                    }
                     if (player == null) {
-                        IconButton(onClick = item::play, modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.play))
-                        }
-                        Slider(value = 0f, onValueChange = {}, enabled = false, modifier = Modifier.weight(1f))
+                        Slider(value = 0f, onValueChange = {}, enabled = false, modifier = Modifier.fillMaxWidth())
                     } else {
-                        PlayPauseButton(player, modifier = Modifier.size(40.dp), iconSize = 24.dp)
-                        ProgressSlider(player, Modifier.weight(1f))
-                        ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                            PositionAndDurationText(player, Modifier.padding(horizontal = 8.dp))
+                        ProgressSlider(player, Modifier.fillMaxWidth())
+                        ProvideTextStyle(
+                            MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        ) {
+                            PositionAndDurationText(player, Modifier.padding(horizontal = 4.dp))
                         }
+                        ErrorText(player, modifier = Modifier.padding(horizontal = 4.dp), color = MaterialTheme.colorScheme.error)
                     }
                 }
-            }
-            if (player != null) {
-                ErrorText(player, modifier = Modifier.padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.error)
             }
         }
     }
