@@ -563,7 +563,7 @@ private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () ->
             val path = when {
                 !device.online -> stringResource(R.string.offline)
                 device.direct -> stringResource(R.string.direct)
-                device.relay.isNotEmpty() -> stringResource(R.string.via_relay, device.relay)
+                device.relay.isNotEmpty() -> stringResource(R.string.via_relay, relayCity(device.relay))
                 else -> null
             }
             Text(
@@ -574,6 +574,30 @@ private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () ->
         }
     }
 }
+
+/** Tailscale relay (DERP) region codes, e.g. `tor`, as city names; an unknown code stays as is. */
+@Composable
+private fun relayCity(code: String): String {
+    val city = RELAY_CITIES[code.lowercase()] ?: return code
+    return com.hermes.android.ui.i18n.t(city.first, city.second)
+}
+
+private val RELAY_CITIES = mapOf(
+    "nyc" to ("New York" to "نیویورک"), "sfo" to ("San Francisco" to "سان‌فرانسیسکو"),
+    "sin" to ("Singapore" to "سنگاپور"), "fra" to ("Frankfurt" to "فرانکفورت"),
+    "syd" to ("Sydney" to "سیدنی"), "blr" to ("Bangalore" to "بنگلور"),
+    "tok" to ("Tokyo" to "توکیو"), "sao" to ("São Paulo" to "سائوپائولو"),
+    "lhr" to ("London" to "لندن"), "dfw" to ("Dallas" to "دالاس"),
+    "sea" to ("Seattle" to "سیاتل"), "tor" to ("Toronto" to "تورنتو"),
+    "hnl" to ("Honolulu" to "هونولولو"), "nai" to ("Nairobi" to "نایروبی"),
+    "mad" to ("Madrid" to "مادرید"), "ord" to ("Chicago" to "شیکاگو"),
+    "lax" to ("Los Angeles" to "لس‌آنجلس"), "par" to ("Paris" to "پاریس"),
+    "mia" to ("Miami" to "میامی"), "waw" to ("Warsaw" to "ورشو"),
+    "dbi" to ("Dubai" to "دبی"), "jnb" to ("Johannesburg" to "ژوهانسبورگ"),
+    "hkg" to ("Hong Kong" to "هنگ‌کنگ"), "den" to ("Denver" to "دنور"),
+    "ams" to ("Amsterdam" to "آمستردام"), "nue" to ("Nuremberg" to "نورنبرگ"),
+    "hel" to ("Helsinki" to "هلسینکی"), "ash" to ("Ashburn" to "اشبرن"),
+)
 
 /** Tailscale's login page in a browser tab on top of the app, so the app can come back by itself. */
 private fun openInBrowserTab(context: Context, url: String) {
@@ -657,6 +681,11 @@ private fun ServerConfigCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    text = stringResource(R.string.server_pair_set_up_before),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 OutlinedButton(onClick = onCancelConnect, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.cancel))
                 }
@@ -720,7 +749,7 @@ private fun ServerConfigCard(
 
 /** The repo's server setup (server/setup.sh) and its guide; they work once the repo is public. */
 private const val SERVER_SETUP_COMMAND =
-    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/claude/tailscale-pair/server/setup.sh | sudo bash"
+    "curl -fsSL https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server/setup.sh | sudo bash"
 private const val SERVER_GUIDE_URL = "https://github.com/traveler3022/Hermes-Pocket/tree/main/server"
 
 /**

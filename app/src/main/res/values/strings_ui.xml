@@ -958,4 +958,5 @@
     <string name="server_pair_connecting">Connecting…</string>
     <string name="server_pair_waiting">Waiting for the server. If the setup command is still running, this goes on by itself once it has finished.</string>
     <string name="server_pair_manual">Enter the login by hand</string>
+    <string name="server_pair_set_up_before">Set up the server before? Run the setup command again, or tap Cancel and enter the login by hand.</string>
 </resources>

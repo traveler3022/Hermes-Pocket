@@ -23,7 +23,7 @@
 # Guide: server/README.md
 
 # Where this script's companion file (pair.py) is downloaded from: the same branch as this script.
-HERMES_POCKET_SERVER=https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/claude/tailscale-pair/server
+HERMES_POCKET_SERVER=https://raw.githubusercontent.com/traveler3022/Hermes-Pocket/main/server
 
 hermes_setup() {
     set -euo pipefail
