@@ -1029,7 +1029,9 @@ fun ChatScreen(
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
                     onSteer = viewModel::steerAgent,
-                    onAttachFile = viewModel::attachFromUri,
+                    onAttachFiles = viewModel::attachFromUris,
+                    onPasteImages = viewModel::attachPastedImages,
+                    newCameraPhotoUri = viewModel::newCameraPhotoUri,
                     onRemoveAttachment = viewModel::removeAttachment,
                     activeModel = modelPickerState.activeModel,
                     onModelClick = { showModelSheet = true },
@@ -1089,6 +1091,10 @@ fun ChatScreen(
             approval = approval,
             onRespond = viewModel::respondToApproval,
         )
+    }
+
+    uiState.sideQuestion?.let { sideQuestion ->
+        SideQuestionSheet(sideQuestion = sideQuestion, onDismiss = viewModel::closeSideQuestion)
     }
 
     if (showChanges) {

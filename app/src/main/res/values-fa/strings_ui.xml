@@ -957,4 +957,11 @@
     <string name="server_pair_waiting">منتظر سرور… اگر دستور نصب هنوز در حال اجراست، بعد از تمام شدنش خودش ادامه می‌دهد.</string>
     <string name="server_pair_manual">ورود دستی با نام کاربری و رمز</string>
     <string name="server_pair_set_up_before">قبلاً سرور را راه انداخته‌ای؟ دستور نصب را یک بار دیگر بزن، یا «لغو» را بزن و ورود دستی را انتخاب کن.</string>
+    <string name="attach_files">فایل‌ها</string>
+    <string name="attach_take_photo">گرفتن عکس</string>
+    <string name="attach_no_camera">برنامهٔ دوربین پیدا نشد</string>
+    <string name="btw_title">سؤال فرعی</string>
+    <string name="btw_question">سؤال</string>
+    <string name="btw_answering">در حال پاسخ از روی نسخه‌ای از همین گفتگو…</string>
+    <string name="btw_failed">سؤال فرعی انجام نشد: %1$s</string>
 </resources>
