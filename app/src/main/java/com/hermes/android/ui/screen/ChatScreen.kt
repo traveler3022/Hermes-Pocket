@@ -943,6 +943,7 @@ fun ChatScreen(
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                                 readPreview = viewModel::readPreviewFile,
+                                readServerHtml = viewModel::readServerHtml,
                                 resolvePreviewUrl = viewModel::resolvePreviewUrl,
                                 previewShareUri = viewModel::previewShareUri,
                                 onPreviewSend = viewModel::sendHiddenPrompt,

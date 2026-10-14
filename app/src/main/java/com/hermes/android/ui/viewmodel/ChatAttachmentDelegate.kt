@@ -359,6 +359,24 @@ internal class ChatAttachmentDelegate(
     private val maxPreviewBytes = 5 * 1024 * 1024
 
     /**
+     * The text of an HTML file on the remote gateway, for the inline HTML card. WebView can't
+     * load it by URL: a tailnet host is reached only through the app's Tailscale proxy, which
+     * OkHttp uses and WebView doesn't, and the gateway serves files as downloads. Null when it
+     * can't be read, is binary or is too large.
+     */
+    suspend fun readServerHtml(url: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val file = gatewayClient.fetchFile(url)
+            if (file.length() > maxPreviewBytes) return@withContext null
+            val bytes = file.readBytes()
+            if (bytes.contains(0.toByte())) null else bytes.toString(Charsets.UTF_8)
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] HTML file unreadable: ${redactCredentials(url)}")
+            null
+        }
+    }
+
+    /**
      * A URI another app can read a `::preview` file from, for Share: the built-in Linux's own
      * documents provider (no copy), or a copy in the cache for a remote gateway's file.
      */

@@ -672,6 +672,8 @@ class ChatViewModel @Inject constructor(
     suspend fun readPreviewFile(file: String): String? =
         attachmentDelegate.readPreviewFile(file, _uiState.value.sessionCwd)
 
+    suspend fun readServerHtml(url: String): String? = attachmentDelegate.readServerHtml(url)
+
     suspend fun previewShareUri(file: String): android.net.Uri? =
         attachmentDelegate.previewShareUri(file, _uiState.value.sessionCwd)
 

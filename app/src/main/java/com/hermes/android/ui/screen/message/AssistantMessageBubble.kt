@@ -68,6 +68,8 @@ internal fun AssistantMessageBubble(
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     /** Text of an HTML file for a `::preview` (null: unreadable), and a page's hidden prompt. */
     readPreview: suspend (file: String) -> String? = { null },
+    /** Text of a gateway HTML file for the inline HTML card; null keeps loading it by URL. */
+    readServerHtml: (suspend (url: String) -> String?)? = null,
     resolvePreviewUrl: (file: String) -> String = { it },
     previewShareUri: suspend (file: String) -> android.net.Uri? = { null },
     onPreviewSend: (String) -> Unit = {},
@@ -173,6 +175,7 @@ internal fun AssistantMessageBubble(
                                         is ContentBlock.Html -> HtmlBlockCard(
                                             url = block.url, name = block.name,
                                             onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                            readServerHtml = readServerHtml,
                                         )
                                         is ContentBlock.Preview -> InlinePreviewFrame(
                                             file = block.file,

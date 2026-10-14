@@ -349,10 +349,24 @@ internal fun HtmlBlockCard(
     url: String,
     name: String,
     onOpen: () -> Unit,
+    /** Text of a gateway file; null loads every page by URL. */
+    readServerHtml: (suspend (url: String) -> String?)? = null,
 ) {
     // HTML is renderable in-app: show it inline in a WebView, with a button to
     // open it full screen in the file viewer for interaction-heavy pages.
     var expanded by remember { mutableStateOf(true) }
+    // A remote gateway's file is fetched and shown as text, as the full-screen viewer does:
+    // WebView can't reach a tailnet host (only OkHttp goes through the app's Tailscale proxy),
+    // and the gateway serves files as downloads.
+    val reader = readServerHtml?.takeIf { url.substringBefore('?').endsWith("/api/files/download") }
+    var serverHtml by remember(url) { mutableStateOf<String?>(null) }
+    var serverFailed by remember(url) { mutableStateOf(false) }
+    if (reader != null) {
+        LaunchedEffect(url) {
+            val text = reader(url)
+            if (text == null) serverFailed = true else serverHtml = text
+        }
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
@@ -384,7 +398,14 @@ internal fun HtmlBlockCard(
                     )
                 }
             }
-            if (expanded) {
+            if (expanded && serverFailed) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.couldnt_load) + name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (expanded) {
                 Spacer(Modifier.height(8.dp))
                 AndroidView(
                     factory = { ctx ->
@@ -402,7 +423,13 @@ internal fun HtmlBlockCard(
                         // to each other).
                         // Load only when the URL changes: update can rerun on recomposition,
                         // and a reload there would restart the page.
-                        if (it.tag != url) {
+                        if (reader != null) {
+                            val html = serverHtml
+                            if (html != null && it.tag != html) {
+                                it.tag = html
+                                it.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                            }
+                        } else if (it.tag != url) {
                             it.tag = url
                             it.settings.allowFileAccess = url.startsWith("file:")
                             it.loadUrl(url)
