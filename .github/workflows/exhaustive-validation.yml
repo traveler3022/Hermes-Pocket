@@ -20,6 +20,7 @@ on:
     paths:
       - .github/workflows/exhaustive-validation.yml
       - scripts/exhaustive_feature_audit.py
+      - app/src/androidTest/**
 
 permissions:
   contents: read
@@ -140,8 +141,12 @@ jobs:
           script: |
             set +e
             mkdir -p build/exhaustive-validation
-            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
-            instrumentation_rc=$?
+            # Bound instrumentation runtime so a blocked device/test cannot consume the entire job.
+            set -o pipefail
+            timeout --signal=TERM --kill-after=30s 10m ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee build/exhaustive-validation/instrumentation-gradle.log
+            instrumentation_rc=${PIPESTATUS[0]}
+            adb devices -l > build/exhaustive-validation/adb-devices-after-tests.txt 2>&1 || true
+            adb logcat -d -v threadtime > build/exhaustive-validation/instrumentation-logcat.txt 2>&1 || true
 
             adb logcat -c
             adb shell am force-stop com.hermes.android.debug
