@@ -144,14 +144,13 @@ class TermuxCommandExecutor @Inject constructor(
             )
         }
 
-        val intent = Intent(ACTION_RUN_COMMAND).apply {
-            component = ComponentName(TERMUX_PACKAGE, RUN_COMMAND_SERVICE_CLASS)
-            putExtra(EXTRA_COMMAND_PATH, executablePath)
-            putExtra(EXTRA_ARGUMENTS, arguments)
-            putExtra(EXTRA_WORKDIR, workingDirectory)
-            putExtra(EXTRA_BACKGROUND, background)
-            if (resultIntent != null) putExtra(EXTRA_PENDING_INTENT, resultIntent)
-        }
+        val intent = buildRunCommandIntent(
+            executablePath = executablePath,
+            arguments = arguments,
+            workingDirectory = workingDirectory,
+            background = background,
+            resultIntent = resultIntent,
+        )
 
         return try {
             val component = startRunCommandService(intent)
@@ -311,6 +310,25 @@ class TermuxCommandExecutor @Inject constructor(
         const val EXTRA_WORKDIR = "com.termux.RUN_COMMAND_WORKDIR"
         const val EXTRA_BACKGROUND = "com.termux.RUN_COMMAND_BACKGROUND"
         const val EXTRA_PENDING_INTENT = "com.termux.RUN_COMMAND_PENDING_INTENT"
+
+        /**
+         * Builds the exact RUN_COMMAND contract shared by production dispatch and Android tests.
+         * Kept side-effect-free so intent extras can be verified without mocking Android services.
+         */
+        internal fun buildRunCommandIntent(
+            executablePath: String,
+            arguments: Array<String>,
+            workingDirectory: String,
+            background: Boolean,
+            resultIntent: PendingIntent? = null,
+        ): Intent = Intent(ACTION_RUN_COMMAND).apply {
+            component = ComponentName(TERMUX_PACKAGE, RUN_COMMAND_SERVICE_CLASS)
+            putExtra(EXTRA_COMMAND_PATH, executablePath)
+            putExtra(EXTRA_ARGUMENTS, arguments)
+            putExtra(EXTRA_WORKDIR, workingDirectory)
+            putExtra(EXTRA_BACKGROUND, background)
+            if (resultIntent != null) putExtra(EXTRA_PENDING_INTENT, resultIntent)
+        }
 
         private const val PROBE_TIMEOUT_MS = 8_000L
 
