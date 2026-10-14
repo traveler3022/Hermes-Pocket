@@ -4,10 +4,11 @@ This campaign is separate from routine per-commit CI. It validates a selected He
 
 ## Start a campaign
 
-1. Open Actions → Exhaustive Real-World Validation → Run workflow.
-2. Select claude/pairing or enter another branch, tag, or commit SHA.
-3. Keep live Gateway tests disabled unless secrets are configured for a disposable staging Gateway.
-4. Inspect the workflow summary and download the exhaustive-validation artifact.
+1. The first campaign starts automatically when the harness files change on claude/pairing.
+2. GitHub only exposes workflow_dispatch for manual launches after the workflow file is present on the repository default branch. To enable repeated manual runs, merge this workflow into that branch.
+3. For a manual run, select claude/pairing or enter another branch, tag, or commit SHA.
+4. Keep live Gateway tests disabled unless secrets are configured for a disposable staging Gateway.
+5. Inspect the workflow summary and download the exhaustive-validation artifact.
 
 The workflow records the resolved commit SHA and uploads the APK, JUnit XML, instrumentation output, startup timing, logcat, screenshot, memory snapshot, and source-derived feature matrix. It is deliberately separate from routine CI.
 
@@ -25,7 +26,7 @@ Then opt in when launching the workflow. These tests create real sessions and se
 
 - Architecture layer-boundary check.
 - Debug APK build and Gradle JVM/Robolectric test suite.
-- Android instrumentation tests on an arm64 emulator, matching the arm64-only tsbridge AAR.
+- Android instrumentation tests on API 35 x86_64; API 35 supports ARM ABI translation for the repository's arm64-only tsbridge AAR.
 - Real app launch, process-liveness check, ActivityManager startup timing, logcat capture, screenshot, and one memory snapshot.
 - Optional live Gateway reconnection and chat-switch suites.
 - Source-derived implementation inventory, candidate test references, and 12 validation dimensions per source unit.

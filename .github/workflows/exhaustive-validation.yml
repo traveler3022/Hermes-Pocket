@@ -20,7 +20,6 @@ on:
     paths:
       - .github/workflows/exhaustive-validation.yml
       - scripts/exhaustive_feature_audit.py
-      - docs/qa/EXHAUSTIVE_VALIDATION.md
 
 permissions:
   contents: read
@@ -128,13 +127,13 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace
 
-      # tsbridge is built for arm64-v8a, so use an arm64 system image.
+      # API 35 x86_64 images support ARM ABI translation; this avoids relying on a legacy arm64 system image.
       - name: Run Android instrumentation and real-app launch probes
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
-          arch: arm64-v8a
+          arch: x86_64
           profile: pixel_2
           disable-animations: true
           emulator-boot-timeout: 900
