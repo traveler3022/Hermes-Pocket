@@ -118,6 +118,11 @@
             android:name=".service.AgentStopReceiver"
             android:exported="false" />
 
+        <!-- "Reply" typed into a "Hermes replied" notification -->
+        <receiver
+            android:name=".service.NotificationReplyReceiver"
+            android:exported="false" />
+
         <!-- Termux's reply to a RUN_COMMAND, delivered through our own PendingIntent. -->
         <receiver
             android:name=".runtime.termux.TermuxResultReceiver"
