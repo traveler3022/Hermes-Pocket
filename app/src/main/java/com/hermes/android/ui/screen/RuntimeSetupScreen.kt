@@ -115,8 +115,8 @@ fun RuntimeSetupScreen(
     val installing by viewModel.installing.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
-    val isRemote = viewModel.isRemoteRuntime
     val runtimeChoice by viewModel.runtimeChoice.collectAsStateWithLifecycle()
+    val isRemote = runtimeChoice == RuntimeChoiceUi.RemoteServer
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -157,6 +157,13 @@ fun RuntimeSetupScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (isRemote) {
+                // Same switch as on-device mode, or the user is stuck on the server once picked.
+                RuntimeChoiceRow(
+                    selected = runtimeChoice,
+                    enabled = !installing,
+                    onSelect = { viewModel.selectRuntime(it) },
+                    showServer = true,
+                )
                 RemoteServerSetupContent(viewModel = viewModel, showDiagnostics = true)
             } else {
                 // ── On-device flow: built-in Linux or Termux ───────────────
@@ -386,6 +393,7 @@ internal fun RemoteServerSetupContent(
     val tailscaleUi by viewModel.tailscaleUi.collectAsStateWithLifecycle()
     val signedInAs by viewModel.remoteSignedInAs.collectAsStateWithLifecycle()
     val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
+    val connecting by viewModel.connecting.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val ready = isRemoteSetupReady(signedInAs, connection)
 
@@ -429,6 +437,9 @@ internal fun RemoteServerSetupContent(
         initialUrl = serverConfig.serverUrl,
         signedInAs = signedInAs,
         signingIn = signingIn,
+        connecting = connecting,
+        onConnect = { url -> viewModel.connectToServer(url) },
+        onCancelConnect = { viewModel.cancelConnect() },
         onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
         onSignOut = { viewModel.signOut() },
     )
@@ -552,7 +563,7 @@ private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () ->
             val path = when {
                 !device.online -> stringResource(R.string.offline)
                 device.direct -> stringResource(R.string.direct)
-                device.relay.isNotEmpty() -> stringResource(R.string.via_relay, device.relay)
+                device.relay.isNotEmpty() -> stringResource(R.string.via_relay, relayCity(device.relay))
                 else -> null
             }
             Text(
@@ -563,6 +574,30 @@ private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () ->
         }
     }
 }
+
+/** Tailscale relay (DERP) region codes, e.g. `tor`, as city names; an unknown code stays as is. */
+@Composable
+private fun relayCity(code: String): String {
+    val city = RELAY_CITIES[code.lowercase()] ?: return code
+    return com.hermes.android.ui.i18n.t(city.first, city.second)
+}
+
+private val RELAY_CITIES = mapOf(
+    "nyc" to ("New York" to "نیویورک"), "sfo" to ("San Francisco" to "سان‌فرانسیسکو"),
+    "sin" to ("Singapore" to "سنگاپور"), "fra" to ("Frankfurt" to "فرانکفورت"),
+    "syd" to ("Sydney" to "سیدنی"), "blr" to ("Bangalore" to "بنگلور"),
+    "tok" to ("Tokyo" to "توکیو"), "sao" to ("São Paulo" to "سائوپائولو"),
+    "lhr" to ("London" to "لندن"), "dfw" to ("Dallas" to "دالاس"),
+    "sea" to ("Seattle" to "سیاتل"), "tor" to ("Toronto" to "تورنتو"),
+    "hnl" to ("Honolulu" to "هونولولو"), "nai" to ("Nairobi" to "نایروبی"),
+    "mad" to ("Madrid" to "مادرید"), "ord" to ("Chicago" to "شیکاگو"),
+    "lax" to ("Los Angeles" to "لس‌آنجلس"), "par" to ("Paris" to "پاریس"),
+    "mia" to ("Miami" to "میامی"), "waw" to ("Warsaw" to "ورشو"),
+    "dbi" to ("Dubai" to "دبی"), "jnb" to ("Johannesburg" to "ژوهانسبورگ"),
+    "hkg" to ("Hong Kong" to "هنگ‌کنگ"), "den" to ("Denver" to "دنور"),
+    "ams" to ("Amsterdam" to "آمستردام"), "nue" to ("Nuremberg" to "نورنبرگ"),
+    "hel" to ("Helsinki" to "هلسینکی"), "ash" to ("Ashburn" to "اشبرن"),
+)
 
 /** Tailscale's login page in a browser tab on top of the app, so the app can come back by itself. */
 private fun openInBrowserTab(context: Context, url: String) {
@@ -592,6 +627,9 @@ private fun ServerConfigCard(
     initialUrl: String,
     signedInAs: String?,
     signingIn: Boolean,
+    connecting: Boolean,
+    onConnect: (url: String) -> Unit,
+    onCancelConnect: () -> Unit,
     onSignIn: (url: String, username: String, password: String) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -599,6 +637,8 @@ private fun ServerConfigCard(
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var manualLogin by rememberSaveable { mutableStateOf(false) }
+    val busy = signingIn || connecting
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -621,7 +661,7 @@ private fun ServerConfigCard(
                 placeholder = { Text("https://my-server.tail1234.ts.net") },
                 leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
                 singleLine = true,
-                enabled = !signingIn,
+                enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (signedInAs != null) {
@@ -632,7 +672,37 @@ private fun ServerConfigCard(
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.sign_out))
                 }
+            } else if (connecting) {
+                // Stays until the app is connected: the setup command may still be running.
+                Text(stringResource(R.string.server_pair_connecting), style = MaterialTheme.typography.bodyMedium)
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = stringResource(R.string.server_pair_waiting),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = stringResource(R.string.server_pair_set_up_before),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onCancelConnect, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.cancel))
+                }
             } else {
+                Text(stringResource(R.string.server_pair_hint), style = MaterialTheme.typography.bodyMedium)
+                Button(
+                    onClick = { onConnect(url) },
+                    enabled = !busy && url.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.connect))
+                }
+                TextButton(onClick = { manualLogin = !manualLogin }, enabled = !busy) {
+                    Text(stringResource(R.string.server_pair_manual))
+                }
+            }
+            if (signedInAs == null && !connecting && manualLogin) {
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },

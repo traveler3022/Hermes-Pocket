@@ -954,4 +954,9 @@
     <string name="pairing_revoke_confirm">Revoke %1$s\'s access?</string>
     <string name="pairing_clear_confirm">Clear every waiting request?</string>
     <string name="pairing_needs_code">From an older Hermes: approve it with the code the bot sent them.</string>
+    <string name="server_pair_hint">1. Run the setup command on your server (see How to set up your server, below).\n2. When it has finished, tap Connect. The app signs in by itself.</string>
+    <string name="server_pair_connecting">Connecting…</string>
+    <string name="server_pair_waiting">Waiting for the server. If the setup command is still running, this goes on by itself once it has finished.</string>
+    <string name="server_pair_manual">Enter the login by hand</string>
+    <string name="server_pair_set_up_before">Set up the server before? Run the setup command again, or tap Cancel and enter the login by hand.</string>
 </resources>

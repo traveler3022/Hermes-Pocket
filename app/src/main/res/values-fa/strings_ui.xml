@@ -952,4 +952,9 @@
     <string name="pairing_revoke_confirm">دسترسی %1$s لغو شود؟</string>
     <string name="pairing_clear_confirm">همه‌ی درخواست‌های منتظر پاک شوند؟</string>
     <string name="pairing_needs_code">از نسخه‌ی قدیمی‌تر Hermes: با کدی که ربات برایش فرستاده تأییدش کن.</string>
+    <string name="server_pair_hint">۱. دستور نصب را روی سرورت اجرا کن (پایین، «راه‌اندازی سرور»).\n۲. وقتی تمام شد، «اتصال» را بزن. اپ خودش وارد می‌شود.</string>
+    <string name="server_pair_connecting">در حال اتصال…</string>
+    <string name="server_pair_waiting">منتظر سرور… اگر دستور نصب هنوز در حال اجراست، بعد از تمام شدنش خودش ادامه می‌دهد.</string>
+    <string name="server_pair_manual">ورود دستی با نام کاربری و رمز</string>
+    <string name="server_pair_set_up_before">قبلاً سرور را راه انداخته‌ای؟ دستور نصب را یک بار دیگر بزن، یا «لغو» را بزن و ورود دستی را انتخاب کن.</string>
 </resources>

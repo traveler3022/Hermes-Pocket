@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.i18n.tForContext
 import com.hermes.android.runtime.DetectionResult
 import com.hermes.android.runtime.HermesRuntimeManager
 import com.hermes.android.runtime.InstallAction
@@ -15,9 +16,12 @@ import com.hermes.android.runtime.PrerequisiteResult
 import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
+import com.hermes.android.runtime.remote.PairResult
 import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import com.hermes.android.runtime.remote.WrongLoginException
+import com.hermes.android.runtime.remote.tailscale.TailscaleLoginNeeded
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
 import com.hermes.android.runtime.remote.tailscale.TailscaleStatus
 import com.hermes.android.service.HermesGatewayService
@@ -25,6 +29,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -39,6 +44,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.io.IOException
 import javax.inject.Inject
 
 /** Where Hermes runs: on the phone (built-in Linux or Termux) or on the user's own server. */
@@ -269,6 +275,95 @@ class RuntimeViewModel @Inject constructor(
         }
     }
 
+    private val _connecting = MutableStateFlow(false)
+
+    /** True from tapping Connect until the app is connected (or gives up). */
+    val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
+
+    /**
+     * Connect: signs in by itself through the server's pairing door ([RemoteAuth.pairAndSignIn]),
+     * then connects. The setup command may still be running when this is tapped, so it keeps
+     * knocking until the door opens (up to [PAIR_WAIT_MS]) and then waits for the connection.
+     */
+    fun connectToServer(serverUrl: String) {
+        if (serverUrl.isBlank()) {
+            _errorMessage.value = tForContext(
+                context,
+                "Tap your server in the Tailscale list first.",
+                "اول سرورت را در لیست Tailscale انتخاب کن.",
+            )
+            return
+        }
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+            _errorMessage.value = null
+            _connecting.value = true
+            try {
+                remoteServerSettings.save(serverUrl, "")
+                when (withTimeoutOrNull(PAIR_WAIT_MS) { knockUntilOpen(serverUrl) }) {
+                    is PairResult.Paired -> if (connectRemote()) {
+                        // "Connecting…" stays until the socket is really up (or failed and says why below).
+                        withTimeoutOrNull(CONNECT_WAIT_MS) {
+                            gatewayClient.connectionState.first { it is ConnectionState.Connected || it is ConnectionState.Failed }
+                        }
+                    }
+                    PairResult.NotOwner -> _errorMessage.value = tForContext(
+                        context,
+                        "This phone's Tailscale account is not the server's. Sign in to Tailscale with the server's account, or enter the Hermes login by hand.",
+                        "حساب Tailscale این گوشی با حساب سرور یکی نیست. با حساب سرور وارد Tailscale شو، یا نام کاربری و رمز هرمس را دستی وارد کن.",
+                    )
+                    PairResult.Closed, null -> _errorMessage.value = tForContext(
+                        context,
+                        "The server did not answer. Run the setup command on the server, wait until it finishes, then tap Connect again.",
+                        "سرور جواب نداد. دستور نصب را روی سرور اجرا کن، صبر کن تا تمام شود، بعد دوباره «اتصال» را بزن.",
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: TooOldHermesException) {
+                _errorMessage.value = "This server's Hermes is too old for app sign-in. Update it."
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Pairing failed")
+                _errorMessage.value = e.message ?: "Sign-in failed"
+            } finally {
+                _connecting.value = false
+            }
+        }
+    }
+
+    /** Stops waiting for the server after Connect. */
+    fun cancelConnect() {
+        if (!_connecting.value) return
+        signInJob?.cancel()
+        // A request already on its way finishes first; the screen need not wait for it.
+        _connecting.value = false
+    }
+
+    /**
+     * Asks the pairing door until it answers. While the setup command still runs, the server can be
+     * unreachable (dashboard restart, Serve, the HTTPS certificate) or have no door yet; both are
+     * waited out. An account that isn't the server's is final.
+     */
+    private suspend fun knockUntilOpen(serverUrl: String): PairResult {
+        while (true) {
+            try {
+                if (!remoteAuth.probe(serverUrl).nativeSignIn) throw TooOldHermesException()
+                val result = remoteAuth.pairAndSignIn(serverUrl)
+                if (result != PairResult.Closed) return result
+            } catch (e: WrongLoginException) {
+                throw e
+            } catch (e: TailscaleLoginNeeded) {
+                throw e
+            } catch (e: IOException) {
+                Timber.d("[Runtime] Server not ready yet: ${e.message}")
+            }
+            delay(PAIR_RETRY_MS)
+        }
+    }
+
+    /** The server answered, but its Hermes has no app sign-in. */
+    private class TooOldHermesException : Exception()
+
     /**
      * Signs in to the server at [serverUrl] with its Hermes [username] and [password], then
      * connects. The login is kept encrypted so the app can sign in again by itself.
@@ -317,8 +412,11 @@ class RuntimeViewModel @Inject constructor(
         }
     }
 
-    /** Detects the server and connects, first dropping a socket that may still use the old setup. */
-    private suspend fun connectRemote() {
+    /**
+     * Detects the server and connects, first dropping a socket that may still use the old setup.
+     * False when the gateway was not started (the reason is in [errorMessage]).
+     */
+    private suspend fun connectRemote(): Boolean {
         // An already-connected client ignores a new URL, so the old socket has to go first.
         gatewayClient.disconnect()
         gatewayClient.forgetEndpoint()
@@ -329,10 +427,12 @@ class RuntimeViewModel @Inject constructor(
                 // the sign-in is still kept and "Try again" connects.
                 runCatching { HermesGatewayService.start(context) }
                     .onFailure { Timber.w(it, "[Runtime] Could not start the gateway service yet") }
+                return true
             }
             is DetectionResult.Missing -> _errorMessage.value = result.instructions
             is DetectionResult.Incompatible -> _errorMessage.value = result.reason
         }
+        return false
     }
 
     /**
@@ -563,5 +663,12 @@ class RuntimeViewModel @Inject constructor(
     private companion object {
         /** How long the app waits for Tailscale's login in the browser before it stops watching. */
         const val TAILSCALE_LOGIN_WAIT_MS = 10 * 60_000L
+
+        /** How long Connect keeps knocking on the pairing door, and how often. */
+        const val PAIR_WAIT_MS = 5 * 60_000L
+        const val PAIR_RETRY_MS = 3_000L
+
+        /** After pairing, how long Connect waits for the gateway connection. */
+        const val CONNECT_WAIT_MS = 60_000L
     }
 }

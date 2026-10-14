@@ -27,19 +27,20 @@ If you are logged in as root, leave out `sudo`. The script ([setup.sh](setup.sh)
 2. If Tailscale prints a link to turn on HTTPS, open it and turn HTTPS on. The script waits.
 3. gives the Hermes dashboard a username, a password and a signing secret, saved in `~/.hermes-remote.env` (only that user can read it),
 4. runs the dashboard as the `hermes-dashboard` service on `127.0.0.1`, so it starts again after a reboot,
-5. shares it inside your tailnet with `tailscale serve`.
+5. shares it inside your tailnet with `tailscale serve`,
+6. opens a pairing door for 15 minutes: the first phone that asks while signed in to Tailscale with the server's own account gets the login by itself. Tailscale itself says which account a request comes from. After one phone, or 15 minutes, the door closes and removes itself.
 
-At the end it prints the username and password. Running it again is safe: the login is kept.
+At the end it prints the username and password. Running it again is safe: the login is kept, and the door opens again for 15 minutes.
 
 ## 2. Connect the app
 
 In the app, open **Settings → Server**:
 
 1. Tap **Sign in to Tailscale** and log in with the same account as the server.
-2. Tap your server in the device list.
-3. Enter the username and password from step 1, then tap **Sign in**.
+2. Tap your server in the device list, then **Connect**. Within 15 minutes of step 1 the app signs in by itself. If the setup command is still running, the app waits for it.
+3. Later, or for another phone: run the setup command again, then tap **Connect**. Or tap **Enter the login by hand**, enter the username and password from step 1 and tap **Sign in**.
 
-The app keeps the login encrypted on the phone and signs in again by itself, so you type it once.
+The app keeps the login encrypted on the phone and signs in again by itself.
 
 ## Change the password
 
