@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import android.os.SystemClock
 import android.app.Activity
 import android.content.Context
 import android.content.ActivityNotFoundException
@@ -141,19 +142,31 @@ internal fun InputBar(
     // (Modifier.contentReceiver); [text] stays the truth both ways.
     // [lastSynced] is the last text both sides agreed on: a [text] equal to it is only our own
     // typing coming back (maybe a keystroke late), and must not overwrite the box.
+    // [recentTyped]: what was typed in the last moment, with when. A [text] that is one of
+    // them is a late echo of a keystroke already overtaken (typing "ab" fast can bring back
+    // "a"), not a change from outside, so it must not take the box back a step.
     val fieldState = rememberTextFieldState(text)
     var lastSynced by remember { mutableStateOf(text) }
+    val recentTyped = remember { ArrayDeque<Pair<String, Long>>() }
     val currentOnTextChange by rememberUpdatedState(onTextChange)
     LaunchedEffect(fieldState, text) {
-        if (text != lastSynced && fieldState.text.toString() != text) {
-            fieldState.setTextAndPlaceCursorAtEnd(text)
+        val now = SystemClock.uptimeMillis()
+        while (recentTyped.isNotEmpty() && now - recentTyped.first().second > ECHO_WINDOW_MS) {
+            recentTyped.removeFirst()
         }
-        lastSynced = text
+        val lateEcho = recentTyped.any { it.first == text }
+        if (!lateEcho && text != lastSynced && fieldState.text.toString() != text) {
+            fieldState.setTextAndPlaceCursorAtEnd(text)
+            recentTyped.clear()
+        }
+        if (!lateEcho) lastSynced = text
     }
     LaunchedEffect(fieldState) {
         snapshotFlow { fieldState.text.toString() }.collect { typed ->
             if (typed != lastSynced) {
                 lastSynced = typed
+                recentTyped.addLast(typed to SystemClock.uptimeMillis())
+                if (recentTyped.size > 32) recentTyped.removeFirst()
                 currentOnTextChange(typed)
             }
         }
@@ -466,3 +479,6 @@ private fun pastedImageReceiver(
         return transferableContent.consume { it.uri in taken && it.text == null && it.htmlText == null }
     }
 }
+
+/** How long a typed value counts as possibly echoed back late from the view model. */
+private const val ECHO_WINDOW_MS = 500L
