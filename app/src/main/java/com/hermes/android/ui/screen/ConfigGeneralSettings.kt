@@ -99,6 +99,9 @@ internal fun GeneralSettingsSection(
                 onClick = { onOpen(SettingsSection.ADVANCED) },
             )
         }
+        SettingsCardGroup {
+            AssistantSettingCard()
+        }
     }
 }
 

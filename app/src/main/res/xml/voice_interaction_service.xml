@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lists Hermes under Settings → Default apps → Digital assistant app. The system
+    rejects the service unless both sessionService and recognitionService are named.
+-->
+<voice-interaction-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.hermes.android.assistant.HermesAssistantSessionService"
+    android:recognitionService="com.hermes.android.assistant.HermesRecognitionService"
+    android:supportsAssist="true" />

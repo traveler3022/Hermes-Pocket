@@ -154,6 +154,9 @@ fun ChatScreen(
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
+    // The phone's assistant gesture: a new object per invocation, until taken.
+    assistOpen: Any? = null,
+    onAssistTaken: () -> Unit = {},
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
     // The model catalogue and the switch itself already live in ConfigViewModel
@@ -404,6 +407,16 @@ fun ChatScreen(
         if (!sharedText.isNullOrBlank()) {
             viewModel.updateInputText(sharedText)
             onSharedTextTaken()
+        }
+    }
+
+    // Opened by the assistant gesture: a new chat, and the voice input asks at once.
+    var voiceRequest by remember { mutableStateOf<Any?>(null) }
+    LaunchedEffect(assistOpen) {
+        if (assistOpen != null) {
+            viewModel.openAssistantChat()
+            voiceRequest = assistOpen
+            onAssistTaken()
         }
     }
 
@@ -1033,6 +1046,8 @@ fun ChatScreen(
                     onRemoveAttachment = viewModel::removeAttachment,
                     activeModel = modelPickerState.activeModel,
                     onModelClick = { showModelSheet = true },
+                    voiceRequest = voiceRequest,
+                    onVoiceRequestTaken = { voiceRequest = null },
                 )
             }
         }

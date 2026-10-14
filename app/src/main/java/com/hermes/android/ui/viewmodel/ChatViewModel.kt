@@ -100,6 +100,9 @@ class ChatViewModel @Inject constructor(
     private var resumeJob: Job? = null
     // The connect path opening a chat by itself; a requested one cancels it.
     private var autoPickJob: Job? = null
+    // The assistant gesture came before the socket was up: the connect path opens a
+    // new chat instead of picking one.
+    private var newChatOnConnect = false
 
     private val attachmentDelegate = ChatAttachmentDelegate(
         gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope,
@@ -293,6 +296,10 @@ class ChatViewModel @Inject constructor(
                         val activeId = _uiState.value.activeSessionId
                         val requested = requestedSessionId
                         when {
+                            newChatOnConnect -> {
+                                newChatOnConnect = false
+                                newConversation()
+                            }
                             // The asked-for chat opens instead; retried here when it
                             // could not reach the gateway before the socket was up.
                             requested != null -> if (resumeJob?.isActive != true) resumeSession(requested)
@@ -389,8 +396,30 @@ class ChatViewModel @Inject constructor(
         resumeSession(sessionId)
     }
 
+    /**
+     * Opened by the phone's assistant gesture: a new chat, in place of whatever the
+     * screen was about to open by itself or on request. Before the gateway is up the
+     * new chat waits for the connect path, since session.new needs the socket.
+     */
+    fun openAssistantChat() {
+        requestedSessionId = null
+        resumeJob?.cancel()
+        autoPickJob?.cancel()
+        if (gatewayClient.connectionState.value is ConnectionState.Connected) {
+            newChatOnConnect = false
+            newConversation()
+        } else {
+            // Cleared now, so what is said and sent meanwhile waits for the new
+            // chat rather than going to the one on screen.
+            if (_uiState.value.editingMessageId != null) cancelEditing()
+            clearForNewChat()
+            newChatOnConnect = true
+        }
+    }
+
     fun resumeSession(sessionId: String) {
         requestedSessionId = sessionId
+        newChatOnConnect = false
         // An edit belongs to the chat it started in.
         if (_uiState.value.editingMessageId != null) cancelEditing()
         autoPickJob?.cancel()
@@ -436,23 +465,28 @@ class ChatViewModel @Inject constructor(
     fun newConversation() {
         if (_uiState.value.editingMessageId != null) cancelEditing()
         viewModelScope.launch {
-            streamingDelegate.reset()
-            _uiState.update { it.copy(
-                messages = emptyList(),
-                activeSessionId = null,
-                activeSessionKey = null,
-                // The new chat's folder comes with its session.info, not the last chat's.
-                sessionCwd = null,
-                activeTodos = emptyList(),
-                pendingApproval = null,
-                // Starting a new chat mid-turn dropped the session id while isSending
-                // stayed true; if session.new then failed nothing ever cleared it and
-                // the composer stayed locked.
-                isSending = false,
-                thinkingStatus = "",
-            ) }
+            clearForNewChat()
             sessionDelegate.create(_uiState)
         }
+    }
+
+    /** The screen of a new chat, before its session exists. */
+    private fun clearForNewChat() {
+        streamingDelegate.reset()
+        _uiState.update { it.copy(
+            messages = emptyList(),
+            activeSessionId = null,
+            activeSessionKey = null,
+            // The new chat's folder comes with its session.info, not the last chat's.
+            sessionCwd = null,
+            activeTodos = emptyList(),
+            pendingApproval = null,
+            // Starting a new chat mid-turn dropped the session id while isSending
+            // stayed true; if session.new then failed nothing ever cleared it and
+            // the composer stayed locked.
+            isSending = false,
+            thinkingStatus = "",
+        ) }
     }
 
     // ── Sending messages ─────────────────────────────────────────────────
