@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window's idle `::preview` WebViews, kept on the Compose host view. -->
+    <item name="preview_webview_pool" type="id" />
+</resources>
