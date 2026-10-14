@@ -27,7 +27,8 @@ permissions:
 
 concurrency:
   group: exhaustive-validation-${{ github.ref }}
-  cancel-in-progress: false
+  # Prefer validating the newest commit over waiting behind a stale emulator run.
+  cancel-in-progress: true
 
 jobs:
   validate:
