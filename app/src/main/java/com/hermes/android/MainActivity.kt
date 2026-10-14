@@ -104,6 +104,8 @@ class MainActivity : ComponentActivity() {
                             themeModeState = themeModeState,
                             appLanguageState = appLanguageState,
                         )
+                        // Once after an app update: that version's release notes.
+                        com.hermes.android.ui.screen.WhatsNewDialog()
                     }
                 }
             }

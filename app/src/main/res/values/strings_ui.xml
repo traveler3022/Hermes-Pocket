@@ -959,4 +959,19 @@
     <string name="server_pair_waiting">Waiting for the server. If the setup command is still running, this goes on by itself once it has finished.</string>
     <string name="server_pair_manual">Enter the login by hand</string>
     <string name="server_pair_set_up_before">Set up the server before? Run the setup command again, or tap Cancel and enter the login by hand.</string>
+    <string name="app_update_download_and_install">Download and install</string>
+    <string name="app_update_downloading">Downloading…</string>
+    <string name="app_update_downloading_percent">Downloading… %1$d%%</string>
+    <string name="app_update_downloaded">Downloaded. Android asks you to confirm the install.</string>
+    <string name="app_update_install">Install</string>
+    <string name="app_update_allow_installs">Allow “Install unknown apps” for Hermes Pocket, then tap Install again.</string>
+    <string name="app_update_try_again">Try again</string>
+    <string name="app_update_failed_network">The download stopped. Check the connection and try again, or open the release in the browser.</string>
+    <string name="app_update_failed_not_apk">What arrived is not the release APK. Try again, or open the release in the browser.</string>
+    <string name="app_update_failed_wrong_app">This APK is not an update for this install: it is another app or signed with another key, so Android would refuse it. Open the release in the browser.</string>
+    <string name="app_update_failed_storage">Not enough free space for the download.</string>
+    <string name="app_update_installer_unavailable">The installer could not be opened. Open the release in the browser instead.</string>
+    <string name="app_update_debug_build_note">This is a test build. The release installs beside it as a separate app, not over it.</string>
+    <string name="whats_new_in_version">What’s new in %1$s</string>
+    <string name="whats_new_got_it">Got it</string>
 </resources>

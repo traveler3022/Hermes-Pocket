@@ -29,6 +29,10 @@
     <!-- Vibrate — notification feedback for tool approvals -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- App update: hand a release APK the user downloaded in About to the system installer.
+         The user still allows "install unknown apps" for us and confirms every install. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!--
         Android 11+ (API 30+) package visibility: apps cannot see other installed
         packages unless they are declared in a <queries> block. Termux must be

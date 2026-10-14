@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,15 +29,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
 import com.hermes.android.domain.updates.AppRelease
 import com.hermes.android.domain.updates.AppUpdates
+import com.hermes.android.domain.updates.DownloadProblem
 import com.hermes.android.domain.updates.UpdateCheck
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HxIcons
@@ -45,6 +51,7 @@ import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.viewmodel.AboutUiState
+import com.hermes.android.ui.viewmodel.AppDownload
 import com.hermes.android.ui.viewmodel.AboutViewModel
 import com.hermes.android.ui.viewmodel.HermesUpdate
 
@@ -60,6 +67,21 @@ import com.hermes.android.ui.viewmodel.HermesUpdate
 internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+
+    // The installer and the "install unknown apps" switch are system screens; a phone
+    // without one must not crash, it falls back to the browser link.
+    LaunchedEffect(viewModel) {
+        viewModel.launches.collect { intent ->
+            runCatching { context.startActivity(intent) }
+                .onFailure {
+                    timber.log.Timber.w(it, "[Update] could not open ${intent.action}")
+                    viewModel.onLaunchFailed()
+                }
+        }
+    }
+    // Back from "install unknown apps": install if the user allowed it.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
     Column(
         modifier = Modifier
@@ -130,6 +152,11 @@ internal fun AboutSection(viewModel: AboutViewModel = hiltViewModel()) {
                     is UpdateCheck.Available -> AvailableRelease(
                         release = result.release,
                         installed = state.installedVersion,
+                        download = state.appDownload,
+                        isDebugBuild = state.isDebugBuild,
+                        onDownload = viewModel::downloadUpdate,
+                        onCancel = viewModel::cancelDownload,
+                        onInstall = viewModel::install,
                         onOpen = { uriHandler.openUri(result.release.pageUrl) },
                     )
                 }
@@ -160,6 +187,11 @@ private fun UpdateNote(text: String, isProblem: Boolean = false) {
 private fun AvailableRelease(
     release: AppRelease,
     installed: String,
+    download: AppDownload,
+    isDebugBuild: Boolean,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onInstall: () -> Unit,
     onOpen: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
@@ -206,7 +238,19 @@ private fun AvailableRelease(
             )
         }
 
-        Button(onClick = onOpen) {
+        // In-app download when the release carries an APK; the release page stays as
+        // the fallback for everything this cannot do.
+        if (release.apk != null) {
+            if (isDebugBuild) UpdateNote(text = stringResource(R.string.app_update_debug_build_note))
+            AppDownloadControls(
+                download = download,
+                onDownload = onDownload,
+                onCancel = onCancel,
+                onInstall = onInstall,
+            )
+        }
+
+        val openRelease: @Composable () -> Unit = {
             Icon(
                 HxIcons.ExternalLink,
                 contentDescription = null,
@@ -217,6 +261,74 @@ private fun AvailableRelease(
                 modifier = Modifier.padding(start = HxSpace.sm),
             )
         }
+        if (release.apk != null) {
+            OutlinedButton(onClick = onOpen) { openRelease() }
+        } else {
+            Button(onClick = onOpen) { openRelease() }
+        }
+    }
+}
+
+@Composable
+private fun AppDownloadControls(
+    download: AppDownload,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onInstall: () -> Unit,
+) {
+    when (download) {
+        AppDownload.Idle -> Button(onClick = onDownload) {
+            Text(stringResource(R.string.app_update_download_and_install))
+        }
+
+        is AppDownload.Downloading -> Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+            val percent = download.percent
+            if (percent != null) {
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                UpdateNote(text = stringResource(R.string.app_update_downloading_percent, percent))
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                UpdateNote(text = stringResource(R.string.app_update_downloading))
+            }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel_2)) }
+        }
+
+        is AppDownload.Ready -> Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+            UpdateNote(
+                text = stringResource(
+                    if (download.needsPermission) {
+                        R.string.app_update_allow_installs
+                    } else {
+                        R.string.app_update_downloaded
+                    },
+                ),
+                isProblem = download.needsPermission,
+            )
+            Button(onClick = onInstall) { Text(stringResource(R.string.app_update_install)) }
+        }
+
+        is AppDownload.Failed -> Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
+            UpdateNote(
+                text = stringResource(
+                    when (download.problem) {
+                        DownloadProblem.Network -> R.string.app_update_failed_network
+                        DownloadProblem.NotAnApk -> R.string.app_update_failed_not_apk
+                        DownloadProblem.WrongApp -> R.string.app_update_failed_wrong_app
+                        DownloadProblem.Storage -> R.string.app_update_failed_storage
+                    },
+                ),
+                isProblem = true,
+            )
+            Button(onClick = onDownload) { Text(stringResource(R.string.app_update_try_again)) }
+        }
+
+        AppDownload.InstallerUnavailable -> UpdateNote(
+            text = stringResource(R.string.app_update_installer_unavailable),
+            isProblem = true,
+        )
     }
 }
 
