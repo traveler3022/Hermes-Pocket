@@ -129,6 +129,13 @@ jobs:
           ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace
 
       # API 35 x86_64 images support ARM ABI translation; this avoids relying on a legacy arm64 system image.
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
       - name: Run Android instrumentation and real-app launch probes
         uses: reactivecircus/android-emulator-runner@v2
         with:
