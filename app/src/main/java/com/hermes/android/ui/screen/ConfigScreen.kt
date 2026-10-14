@@ -122,6 +122,7 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToWebhooks: () -> Unit = {},
     onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToMcp: () -> Unit = {},
@@ -197,6 +198,7 @@ fun ConfigScreen(
                     state = uiState,
                     onOpen = { section = it },
                     onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToWebhooks = onNavigateToWebhooks,
                 )
                 SettingsSection.APPEARANCE -> GeneralTab(
                     themeModeState = themeModeState,

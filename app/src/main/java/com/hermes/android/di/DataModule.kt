@@ -15,6 +15,7 @@ import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
 import com.hermes.android.data.ToolsetSetupRepository
 import com.hermes.android.data.McpServerSwitchRepository
+import com.hermes.android.data.WebhooksRepository
 import com.hermes.android.data.SkillsAdminRepository
 import com.hermes.android.data.PluginCatalogRepository
 import com.hermes.android.data.ServerKanbanRepository
@@ -30,6 +31,7 @@ import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.domain.messaging.MessagingGateway
 import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
+import com.hermes.android.domain.messaging.Webhooks
 import com.hermes.android.domain.tools.ToolsetSetup
 import com.hermes.android.domain.tools.McpServerSwitch
 import com.hermes.android.domain.tools.SkillsAdmin
@@ -103,6 +105,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindMcpServerSwitch(impl: McpServerSwitchRepository): McpServerSwitch
+
+    @Binds
+    abstract fun bindWebhooks(impl: WebhooksRepository): Webhooks
 
     @Binds
     abstract fun bindSkillsAdmin(impl: SkillsAdminRepository): SkillsAdmin
