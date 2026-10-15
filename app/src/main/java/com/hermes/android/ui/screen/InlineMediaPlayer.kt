@@ -5,8 +5,6 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -22,8 +20,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,11 +53,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import androidx.media3.ui.compose.material3.Player as Media3Player
 import androidx.media3.ui.compose.material3.PlayerDefaults
-import androidx.media3.ui.compose.material3.buttons.PlayPauseButton
 import androidx.media3.ui.compose.material3.indicator.DurationText
-import androidx.media3.ui.compose.material3.indicator.PositionAndDurationText
-import androidx.media3.ui.compose.material3.indicator.ProgressSlider
-import androidx.media3.ui.compose.material3.text.ErrorText
 import com.hermes.android.R
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.ui.icons.filled.Download
@@ -177,72 +169,23 @@ private fun rememberInlineItem(url: String, contentType: Int): InlineItem {
 }
 
 /**
- * Audio in a chat bubble, laid out like Telegram's: a round play/pause button, then the title
- * (opens the full viewer), the seek bar and elapsed/total under it.
+ * Audio in a chat bubble: [InlineAudioCard]. The player is made on the first play; the title
+ * opens the full viewer.
  */
-@OptIn(UnstableApi::class)
 @Composable
 internal fun InlineAudioPlayer(url: String, name: String, onDownload: () -> Unit) {
     val context = LocalContext.current
     val item = rememberInlineItem(url, C.AUDIO_CONTENT_TYPE_MUSIC)
-    val player = item.player
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) {
-        // Time runs left to right in any language, as in the viewer.
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(
-                modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (player == null) {
-                    FilledIconButton(onClick = item::play, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.play),
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
-                } else {
-                    PlayPauseButton(
-                        player, modifier = Modifier.size(48.dp), iconSize = 28.dp,
-                        colors = IconButtonDefaults.filledIconButtonColors(),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    item.pause()
-                                    FileViewerActivity.open(context, url, name)
-                                }
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                        )
-                        DownloadButton(onDownload)
-                    }
-                    if (player == null) {
-                        Slider(value = 0f, onValueChange = {}, enabled = false, modifier = Modifier.fillMaxWidth())
-                    } else {
-                        ProgressSlider(player, Modifier.fillMaxWidth())
-                        ProvideTextStyle(
-                            MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        ) {
-                            PositionAndDurationText(player, Modifier.padding(horizontal = 4.dp))
-                        }
-                        ErrorText(player, modifier = Modifier.padding(horizontal = 4.dp), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        }
-    }
+    InlineAudioCard(
+        player = item.player,
+        name = name,
+        onPlay = item::play,
+        onOpen = {
+            item.pause()
+            FileViewerActivity.open(context, url, name)
+        },
+        onDownload = onDownload,
+    )
 }
 
 /**
