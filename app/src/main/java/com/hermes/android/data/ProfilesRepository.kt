@@ -6,6 +6,7 @@ import com.hermes.android.domain.profiles.HermesProfiles.Details
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.ProfileScope
+import com.hermes.android.gateway.hermesPythonCommand
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
@@ -127,7 +128,7 @@ class ProfilesRepository @Inject constructor(
         """.trimIndent()
         val result = gatewayClient.request(
             GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive("printf %s '${b64(script)}' | base64 -d | python3 -")),
+            mapOf("command" to JsonPrimitive(hermesPythonCommand(script))),
             trackSession = false,
         ) as? JsonObject
         val code = result?.str("code")?.toIntOrNull() ?: -1

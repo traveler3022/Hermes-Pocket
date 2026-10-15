@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import android.util.Base64
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.hermesPythonCommand
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -69,15 +70,11 @@ private val YAML_COMPAT = """
 """.trimIndent()
 
 /**
- * shell.exec command that runs [script] with `python3 -`.
- *
- * The gateway's safety filter answers 4005 for both `python3 -c` ("script
- * execution via -e/-c flag") and `python3 - <<EOF` ("script execution via
- * heredoc"), so the script travels base64-encoded and is piped into
- * python's stdin instead.
+ * shell.exec command that runs [script] in Hermes' Python
+ * ([hermesPythonCommand]) with the `yaml` stand-in above.
  */
 fun pythonStdinCommand(script: String): String =
-    "printf %s '${b64(YAML_COMPAT + "\n" + script)}' | base64 -d | python3 -"
+    hermesPythonCommand(YAML_COMPAT + "\n" + script)
 
 /**
  * Run [script] on the server ([pythonStdinCommand] through shell.exec) and
