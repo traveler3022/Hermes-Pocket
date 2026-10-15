@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Files of a remote gateway handed to another app (Share, open with): copies made for
-     sharing, and RemoteFiles' copies on disk. -->
+     sharing, and RemoteFiles' copies on disk. updates/: a downloaded app release APK for
+     the system installer. `attach` holds the composer's camera photos (the camera app
+     writes them through this provider) and copies of pasted images. -->
 <paths>
     <cache-path name="shared" path="shared/" />
     <cache-path name="server" path="server-files/" />
+    <cache-path name="updates" path="updates/" />
+    <cache-path name="attach" path="attach/" />
 </paths>

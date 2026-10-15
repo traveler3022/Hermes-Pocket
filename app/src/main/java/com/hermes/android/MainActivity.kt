@@ -44,6 +44,10 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
 
+    /** Where markdown tables remember the column widths a reader dragged to. */
+    @javax.inject.Inject
+    lateinit var tableColumnWidths: com.hermes.android.domain.markdown.TableColumnWidths
+
     /** Latest notification tap that reached the running activity (onNewIntent). */
     private val notificationOpen = mutableStateOf<NotificationOpen?>(null)
 
@@ -54,6 +58,13 @@ class MainActivity : ComponentActivity() {
      * from Tasks.
      */
     private val pendingShare = mutableStateOf<String?>(null)
+
+    /**
+     * The assistant gesture (long-press Home) opened the app, until the chat has
+     * taken it: a new chat with voice input started. Same rules as [pendingShare],
+     * so a rotation doesn't open yet another chat.
+     */
+    private val pendingAssist = mutableStateOf<AssistOpen?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +84,10 @@ class MainActivity : ComponentActivity() {
         requestTermuxPermissionWhenSelected()
 
         pendingShare.value = if (savedInstanceState?.getBoolean(KEY_SHARE_TAKEN) == true) null else extractSharedText(intent)
+        pendingAssist.value = if (
+            savedInstanceState?.getBoolean(KEY_ASSIST_TAKEN, true) == false ||
+            (savedInstanceState == null && isFreshAssist(intent))
+        ) AssistOpen() else null
         // Set when the user taps an agent-activity notification ("task done"):
         // opens the app straight into the session the result belongs to.
         val notificationSessionId = intent?.getStringExtra(
@@ -83,27 +98,35 @@ class MainActivity : ComponentActivity() {
         val appLanguageState = AppLanguageState(this)
 
         setContent {
-            ProvideAppLanguage(appLanguageState.language) {
-                Hermes2Theme(
-                    themeMode = themeModeState.mode,
-                    colorTheme = themeModeState.colorTheme,
-                    warmMode = themeModeState.warmMode,
-                    appFont = themeModeState.appFont,
-                    fontScalePct = themeModeState.fontScalePct,
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background,
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.hermes.android.ui.component.LocalTableColumnWidths provides tableColumnWidths,
+            ) {
+                ProvideAppLanguage(appLanguageState.language) {
+                    Hermes2Theme(
+                        themeMode = themeModeState.mode,
+                        colorTheme = themeModeState.colorTheme,
+                        warmMode = themeModeState.warmMode,
+                        appFont = themeModeState.appFont,
+                        fontScalePct = themeModeState.fontScalePct,
                     ) {
-                        HermesNavHost(
-                            startInSetup = !setupState.isComplete,
-                            sharedText = pendingShare.value,
-                            onSharedTextTaken = { pendingShare.value = null },
-                            notificationSessionId = notificationSessionId,
-                            notificationOpen = notificationOpen.value,
-                            themeModeState = themeModeState,
-                            appLanguageState = appLanguageState,
-                        )
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            HermesNavHost(
+                                startInSetup = !setupState.isComplete,
+                                sharedText = pendingShare.value,
+                                onSharedTextTaken = { pendingShare.value = null },
+                                notificationSessionId = notificationSessionId,
+                                notificationOpen = notificationOpen.value,
+                                assistOpen = pendingAssist.value,
+                                onAssistTaken = { pendingAssist.value = null },
+                                themeModeState = themeModeState,
+                                appLanguageState = appLanguageState,
+                            )
+                            // Once after an app update: that version's release notes.
+                            com.hermes.android.ui.screen.WhatsNewDialog()
+                        }
                     }
                 }
             }
@@ -121,11 +144,15 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra(com.hermes.android.service.AgentActivityNotifier.EXTRA_SESSION_ID)
             ?.takeIf { it.isNotBlank() }
             ?.let { notificationOpen.value = NotificationOpen(it) }
+        if (isFreshAssist(intent)) {
+            pendingAssist.value = AssistOpen()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(KEY_SHARE_TAKEN, pendingShare.value == null)
+        outState.putBoolean(KEY_ASSIST_TAKEN, pendingAssist.value == null)
     }
 
     override fun onStart() {
@@ -190,6 +217,11 @@ class MainActivity : ComponentActivity() {
             .onFailure { timber.log.Timber.w(it, "[Main] battery optimization dialog unavailable") }
     }
 
+    /** Reopened from Recents, the old assist intent comes again; that is no new invocation. */
+    private fun isFreshAssist(intent: Intent?): Boolean =
+        com.hermes.android.assistant.AssistantLaunch.isAssistIntent(intent) &&
+            ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+
     private fun extractSharedText(intent: Intent?): String? {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             return intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -201,6 +233,7 @@ class MainActivity : ComponentActivity() {
         const val PREFS_NAME = "hermes_prefs"
         const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
         const val KEY_SHARE_TAKEN = "share_taken"
+        const val KEY_ASSIST_TAKEN = "assist_taken"
         const val TERMUX_RUN_COMMAND = "com.termux.permission.RUN_COMMAND"
     }
 }
@@ -213,6 +246,7 @@ class MainActivity : ComponentActivity() {
  * - `chat` — main chat screen
  * - `config` — settings & configuration
  * - `platforms` — platform credentials
+ * - `webhooks` — webhook routes of the messaging gateway
  * - `plugins` — plugin management
  * - `sessions` — session list & switcher
  * - `skills` — skill management
@@ -226,6 +260,8 @@ private fun HermesNavHost(
     onSharedTextTaken: () -> Unit = {},
     notificationSessionId: String? = null,
     notificationOpen: NotificationOpen? = null,
+    assistOpen: AssistOpen? = null,
+    onAssistTaken: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -284,26 +320,23 @@ private fun HermesNavHost(
             com.hermes.android.ui.screen.ChatScreen(
                 onNavigateToSettings = { navController.navigate("config") },
                 onNavigateToSessions = { navController.navigate("sessions") },
-                onNavigateToTasks = { navController.navigate("tasks") },
                 onNavigateToRuntime = { navController.navigate("runtime") },
                 onNavigateToCron = { navController.navigate("cron") },
                 onNavigateToGroups = { navController.navigate("groups") },
                 onNavigateToKanban = { navController.navigate("kanban") },
+                onNavigateToMedia = { navController.navigate("media") },
                 sharedText = shared,
                 onSharedTextTaken = onSharedTextTaken,
                 resumeSessionId = resumeId,
+                assistOpen = assistOpen,
+                onAssistTaken = onAssistTaken,
                 themeModeState = themeModeState,
             )
         }
 
-        composable("tasks") {
-            com.hermes.android.ui.screen.TasksScreen(
+        composable("media") {
+            com.hermes.android.ui.screen.MediaScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
-                onOpenInChat = { sessionId ->
-                    navController.navigate("chat?resumeSessionId=$sessionId") {
-                        popUpTo("chat") { inclusive = true }
-                    }
-                },
             )
         }
 
@@ -311,6 +344,7 @@ private fun HermesNavHost(
             com.hermes.android.ui.screen.ConfigScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onNavigateToPlatforms = { navController.navigate("platforms") },
+                onNavigateToWebhooks = { navController.navigate("webhooks") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
                 onNavigateToMcp = { navController.navigate("mcp") },
@@ -320,6 +354,7 @@ private fun HermesNavHost(
                 onNavigateToStorage = { navController.navigate("storage") },
                 onNavigateToProjects = { navController.navigate("projects") },
                 onNavigateToSetup = { navController.navigate("setup") },
+                onNavigateToLearning = { navController.navigate("learning") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
             )
@@ -343,6 +378,18 @@ private fun HermesNavHost(
 
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("webhooks") {
+            com.hermes.android.ui.screen.WebhooksScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("learning") {
+            com.hermes.android.ui.screen.LearningScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
@@ -455,7 +502,26 @@ private fun HermesNavHost(
             popUpTo("chat") { inclusive = true }
         }
     }
+
+    // The assistant gesture while another page is open: back to the chat, which
+    // then opens the new chat and the voice input. Dropped during the first-run
+    // setup: a voice prompt popping up once it is done would come out of nowhere.
+    LaunchedEffect(assistOpen) {
+        if (assistOpen == null) return@LaunchedEffect
+        val route = navController.currentDestination?.route ?: return@LaunchedEffect
+        if (route == "setup") {
+            onAssistTaken()
+            return@LaunchedEffect
+        }
+        if (route.startsWith("chat")) return@LaunchedEffect
+        navController.navigate("chat") {
+            popUpTo("chat") { inclusive = true }
+        }
+    }
 }
+
+/** One assistant invocation; a class, not data, so a second long-press still counts. */
+private class AssistOpen
 
 /** One notification tap; a class, not data, so tapping the same chat again still counts. */
 private class NotificationOpen(val sessionId: String)

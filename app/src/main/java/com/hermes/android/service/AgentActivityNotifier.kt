@@ -38,6 +38,7 @@ class AgentActivityNotifier @Inject constructor(
     /** A live chat turn finished while the app was backgrounded. */
     fun showTurnComplete(sessionId: String?, preview: String, sessionTitle: String? = null) {
         show(
+            replyable = true,
             key = sessionId ?: "turn",
             title = sessionTitle?.takeIf { it.isNotBlank() }
                 ?: tForContext(context, "Hermes replied", "پاسخ Hermes آماده است"),
@@ -61,9 +62,17 @@ class AgentActivityNotifier @Inject constructor(
         )
     }
 
-    private fun show(key: String, title: String, status: String, preview: String, sessionId: String?) {
+    private fun show(
+        key: String,
+        title: String,
+        status: String,
+        preview: String,
+        sessionId: String?,
+        replyable: Boolean = false,
+    ) {
         val text = plainText(preview).take(600).ifEmpty { return }
         Timber.i("[AgentNotify] $title (key=$key, session=$sessionId)")
+        val id = key.hashCode()
 
         val notification = HermesNotifications.builder(context, CHANNEL_ID)
             .setContentTitle(title)
@@ -75,11 +84,59 @@ class AgentActivityNotifier @Inject constructor(
             .setGroup(GROUP_RESULTS)
             .setShowWhen(true)
             .setAutoCancel(true)
+            .apply {
+                // Answer the chat from the shade, as in a messenger.
+                if (replyable && !sessionId.isNullOrBlank()) {
+                    addAction(NotificationReplyReceiver.replyAction(context, sessionId, id, title))
+                }
+            }
             .build()
 
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(key.hashCode(), notification)
+        manager().notify(id, notification)
     }
+
+    /** A reply typed into notification [id] is on its way; shows the text so it is not lost from view. */
+    fun showReplySending(id: Int, sessionId: String, title: String, text: String) {
+        val notification = HermesNotifications.builder(context, CHANNEL_ID)
+            .setContentTitle(title.ifBlank { "Hermes" })
+            .setContentText(text.lineSequence().first().take(140))
+            .setSubText(tForContext(context, "Sending…", "در حال ارسال…"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setContentIntent(HermesNotifications.openApp(context, sessionId))
+            .setGroup(GROUP_RESULTS)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setProgress(0, 0, true)
+            .build()
+        manager().notify(id, notification)
+    }
+
+    /**
+     * A reply from notification [id] did not reach Hermes: keeps [text] on screen with
+     * Retry (the same text) and Reply (a new one), and a tap that opens the chat.
+     */
+    fun showReplyFailed(id: Int, sessionId: String, title: String, text: String, reason: String) {
+        val heading = tForContext(context, "Reply not sent", "پاسخ ارسال نشد")
+        val notification = HermesNotifications.builder(context, CHANNEL_ID)
+            .setContentTitle(if (title.isBlank()) heading else "$heading · $title")
+            .setContentText(text.lineSequence().first().take(140))
+            .setSubText(reason.take(80))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\n\n$reason"))
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setContentIntent(HermesNotifications.openApp(context, sessionId))
+            .setGroup(GROUP_RESULTS)
+            .setShowWhen(true)
+            .addAction(NotificationReplyReceiver.retryAction(context, sessionId, id, title, text))
+            .addAction(NotificationReplyReceiver.replyAction(context, sessionId, id, title))
+            .build()
+        manager().notify(id, notification)
+    }
+
+    fun cancel(id: Int) = manager().cancel(id)
+
+    private fun manager(): NotificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     /** Replies are Markdown; a notification shows plain text. */
     private fun plainText(markdown: String): String = markdown

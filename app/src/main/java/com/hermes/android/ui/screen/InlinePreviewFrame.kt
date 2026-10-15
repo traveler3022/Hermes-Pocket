@@ -2,10 +2,13 @@ package com.hermes.android.ui.screen
 
 import android.annotation.SuppressLint
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -41,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +54,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.hermes.android.R
@@ -174,6 +179,56 @@ private class PreviewBridge(
     }
 }
 
+/**
+ * Idle WebViews shared by every preview in one window. A preview scrolled out of the chat list
+ * hands its WebView back here and the next preview on screen takes it, instead of each mount
+ * building a new one (the costly part) and destroying it on the way out.
+ */
+internal class PreviewWebViewPool(private val capacity: Int = 2) {
+    private val idle = ArrayDeque<WebView>()
+
+    fun obtain(context: Context): WebView {
+        while (true) {
+            val view = idle.removeFirstOrNull() ?: return WebView(context)
+            if (view.context === context) return view
+            view.destroy()
+        }
+    }
+
+    fun recycle(view: WebView) {
+        view.stopLoading()
+        view.removeJavascriptInterface(PREVIEW_BRIDGE)
+        view.loadUrl("about:blank")
+        (view.parent as? ViewGroup)?.removeView(view)
+        if (idle.size < capacity) idle.addLast(view) else view.destroy()
+    }
+
+    fun clear() {
+        idle.forEach { it.destroy() }
+        idle.clear()
+    }
+}
+
+/** The pool of the window this composition draws in; emptied when that window goes away. */
+@Composable
+private fun rememberPreviewWebViewPool(): PreviewWebViewPool {
+    val host = LocalView.current
+    return remember(host) {
+        host.getTag(R.id.preview_webview_pool) as? PreviewWebViewPool
+            ?: PreviewWebViewPool().also { pool ->
+                host.setTag(R.id.preview_webview_pool, pool)
+                host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: View) = Unit
+                    override fun onViewDetachedFromWindow(v: View) {
+                        v.removeOnAttachStateChangeListener(this)
+                        if (v.getTag(R.id.preview_webview_pool) === pool) v.setTag(R.id.preview_webview_pool, null)
+                        pool.clear()
+                    }
+                })
+            }
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 internal fun InlinePreviewFrame(
@@ -190,8 +245,11 @@ internal fun InlinePreviewFrame(
     val shareFailed = stringResource(R.string.couldnt_share_the_file)
     var doc by remember(file) { mutableStateOf<String?>(null) }
     var failed by remember(file) { mutableStateOf(false) }
-    var measured by remember(file) { mutableStateOf<Int?>(null) }
-    var contentWidth by remember(file) { mutableStateOf<Int?>(null) }
+    // Saved, so a preview scrolled back into the list opens at its measured size instead of
+    // starting from the default and jumping once the page reports.
+    var measured by rememberSaveable(file) { mutableStateOf<Int?>(null) }
+    var contentWidth by rememberSaveable(file) { mutableStateOf<Int?>(null) }
+    val pool = rememberPreviewWebViewPool()
     // One token per mount: only the document this mount injected can size the frame or speak.
     val token = remember { UUID.randomUUID().toString().replace("-", "") }
     val currentOnSend by rememberUpdatedState(onSend)
@@ -295,7 +353,7 @@ internal fun InlinePreviewFrame(
             }
             AndroidView(
                 factory = { ctx ->
-                    WebView(ctx).apply {
+                    pool.obtain(ctx).apply {
                         settings.javaScriptEnabled = true
                         settings.allowFileAccess = false
                         settings.allowContentAccess = false
@@ -309,7 +367,7 @@ internal fun InlinePreviewFrame(
                         loadDataWithBaseURL(null, framed, "text/html", "utf-8", null)
                     }
                 },
-                onRelease = { it.destroy() },
+                onRelease = { pool.recycle(it) },
                 modifier = Modifier
                     .then(contentWidth?.let { Modifier.widthIn(max = it.dp) } ?: Modifier)
                     .fillMaxWidth()

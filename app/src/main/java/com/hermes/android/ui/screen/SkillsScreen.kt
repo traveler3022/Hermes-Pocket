@@ -81,6 +81,57 @@ fun SkillsScreen(
             viewModel.clearError()
         }
     }
+    LaunchedEffect(uiState.noticeMessage) {
+        uiState.noticeMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearNotice()
+        }
+    }
+
+    uiState.pendingUninstallSkill?.let { name ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelUninstallSkill() },
+            title = { Text(stringResource(R.string.skill_uninstall_title, name)) },
+            text = { Text(stringResource(R.string.skill_uninstall_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.uninstallSkill(name) }) {
+                    Text(stringResource(R.string.skill_uninstall), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelUninstallSkill() }) { Text(stringResource(R.string.cancel_2)) }
+            },
+        )
+    }
+
+    uiState.pendingScan?.let { (name, scan) ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelScannedInstall() },
+            title = { Text(stringResource(R.string.skill_scan_title, name)) },
+            text = {
+                Text(
+                    listOfNotNull(
+                        scan.verdict?.let { stringResource(R.string.skill_scan_verdict, it) },
+                        scan.summary,
+                        scan.policyReason,
+                        scan.findings.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+                    ).joinToString("\n\n"),
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                // The server's own policy says no: nothing to confirm.
+                if (scan.policy != "block") {
+                    TextButton(onClick = { viewModel.confirmScannedInstall() }) {
+                        Text(stringResource(R.string.skill_install_anyway))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelScannedInstall() }) { Text(stringResource(R.string.cancel_2)) }
+            },
+        )
+    }
 
     if (uiState.inspectedSkillName != null) {
         AlertDialog(
@@ -175,6 +226,9 @@ fun SkillsScreen(
         },
         onBack = onNavigateBack,
         actions = {
+            IconButton(onClick = { viewModel.updateHubSkills() }) {
+                Icon(Icons.Default.CloudDownload, contentDescription = stringResource(R.string.skill_update_hub))
+            }
             IconButton(onClick = { viewModel.reloadSkills() }) {
                 Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.reload))
             }
@@ -256,6 +310,13 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
         icon = Icons.Default.AutoAwesome,
         onClick = { viewModel.inspectSkill(skill.name) },
         trailing = {
+          androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            skill.enabled?.let { on ->
+                androidx.compose.material3.Switch(
+                    checked = on,
+                    onCheckedChange = { viewModel.setEnabled(skill.name, it) },
+                )
+            }
             Box {
                 IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
                     Icon(
@@ -274,8 +335,15 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.install_from_hub)) },
                         leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                        onClick = { viewModel.installSkill(skill.name); menuExpanded = false },
+                        onClick = { viewModel.scanThenInstall(skill.name); menuExpanded = false },
                     )
+                    if (skill.provenance == "hub") {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.skill_uninstall), color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = { viewModel.requestUninstallSkill(skill.name); menuExpanded = false },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         leadingIcon = {
@@ -289,6 +357,7 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                     )
                 }
             }
+          }
         },
     )
 }

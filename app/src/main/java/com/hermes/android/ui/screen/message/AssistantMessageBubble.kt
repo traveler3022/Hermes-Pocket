@@ -48,6 +48,7 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.component.preprocessAssistantMarkdown
 import com.hermes.android.ui.viewer.FileViewerActivity
 import com.hermes.android.ui.viewmodel.ChatMessage
 
@@ -67,6 +68,8 @@ internal fun AssistantMessageBubble(
     onDownloadFile: (url: String, name: String) -> Unit = { _, _ -> },
     /** Text of an HTML file for a `::preview` (null: unreadable), and a page's hidden prompt. */
     readPreview: suspend (file: String) -> String? = { null },
+    /** Text of a gateway HTML file for the inline HTML card; null keeps loading it by URL. */
+    readServerHtml: (suspend (url: String) -> String?)? = null,
     resolvePreviewUrl: (file: String) -> String = { it },
     previewShareUri: suspend (file: String) -> android.net.Uri? = { null },
     onPreviewSend: (String) -> Unit = {},
@@ -118,10 +121,13 @@ internal fun AssistantMessageBubble(
                             TypingDots(modifier = Modifier.padding(vertical = 4.dp))
                         }
                     } else {
+                        // Reasoning blocks, stray backticks, prose wrapped in fences and
+                        // unmatched citation markers are cleaned up before parsing.
+                        val cleanMd = remember(message.text) { preprocessAssistantMarkdown(message.text) }
                         val displayMd = if (!isResponseExpanded && isLongResponse) {
-                            message.text.take(800) + "\n\n\u2026"
+                            cleanMd.take(800) + "\n\n\u2026"
                         } else {
-                            message.text
+                            cleanMd
                         }
                         val blocks = remember(displayMd) {
                             parseContentBlocks(displayMd).map { block ->
@@ -169,6 +175,7 @@ internal fun AssistantMessageBubble(
                                         is ContentBlock.Html -> HtmlBlockCard(
                                             url = block.url, name = block.name,
                                             onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                            readServerHtml = readServerHtml,
                                         )
                                         is ContentBlock.Preview -> InlinePreviewFrame(
                                             file = block.file,
@@ -183,16 +190,12 @@ internal fun AssistantMessageBubble(
                                                 )
                                             },
                                         )
-                                        is ContentBlock.Video -> ArtifactCard(
-                                            emoji = "\uD83C\uDFAC", name = block.name,
-                                            actionLabel = stringResource(R.string.play),
-                                            onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                        is ContentBlock.Video -> InlineVideoPlayer(
+                                            url = block.url, name = block.name,
                                             onDownload = { onDownloadFile(block.url, block.name) },
                                         )
-                                        is ContentBlock.Audio -> ArtifactCard(
-                                            emoji = "\uD83C\uDFB5", name = block.name,
-                                            actionLabel = stringResource(R.string.play),
-                                            onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                        is ContentBlock.Audio -> InlineAudioPlayer(
+                                            url = block.url, name = block.name,
                                             onDownload = { onDownloadFile(block.url, block.name) },
                                         )
                                         is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.outlined.Folder
+import com.hermes.android.ui.icons.outlined.PermMedia
 import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.icons.filled.Inventory2
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -344,42 +345,37 @@ internal val HermesAmber = Color(0xFFF0B429)
 private val BadgeTextOnAmber = Color(0xFF1A1205)
 
 /**
- * The four destinations of frame `7b`, wired to callbacks the host screen owns.
+ * The drawer's destinations (frame `7b`), wired to callbacks the host screen owns.
  * Kept here so the drawer, the badge source and the labels stay in one place.
  */
 @Composable
 internal fun rememberWorkspaceDestinations(
-    waitingCount: Int,
-    onWorkbench: () -> Unit,
     onAgent: () -> Unit,
     onScheduled: () -> Unit,
     onGroups: () -> Unit,
+    onMedia: () -> Unit,
     onFiles: () -> Unit,
     onKanban: (() -> Unit)? = null,
 ): List<WorkspaceDestination> {
-    val workbench = stringResource(R.string.workbench)
     val agent = stringResource(R.string.agent)
     val scheduled = stringResource(R.string.scheduled_2)
     val groups = stringResource(R.string.group_chats)
+    val media = stringResource(R.string.media)
     val files = stringResource(R.string.files)
     val kanban = stringResource(R.string.kanban)
     // Remembered, as the name says: a new list on every call made the drawer
     // recompose along with the chat behind it.
     return remember(
-        waitingCount, workbench, agent, scheduled, groups, files, kanban,
-        onWorkbench, onAgent, onScheduled, onGroups, onFiles, onKanban,
+        agent, scheduled, groups, media, files, kanban,
+        onAgent, onScheduled, onGroups, onMedia, onFiles, onKanban,
     ) {
+        // The board is the work desk now, so it leads when it is switched on.
         listOfNotNull(
-            WorkspaceDestination(
-                label = workbench,
-                icon = HxIcons.LayoutGrid,
-                badge = waitingCount,
-                onClick = onWorkbench,
-            ),
+            onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it) },
             WorkspaceDestination(agent, HxIcons.Bot, null, onAgent),
             WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
             WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups),
-            onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it) },
+            WorkspaceDestination(media, Icons.Outlined.PermMedia, null, onMedia),
             WorkspaceDestination(files, Icons.Outlined.Folder, null, onFiles),
         )
     }

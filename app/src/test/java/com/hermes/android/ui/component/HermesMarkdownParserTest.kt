@@ -82,11 +82,56 @@ class HermesMarkdownParserTest {
     @Test
     fun `a table needs its separator row and ends at the first non-table line`() {
         assertEquals(
-            listOf(MdBlock.Table(listOf(listOf("a", "b"), listOf("1", "2")), hasHeader = true)),
+            listOf(
+                MdBlock.Table(
+                    listOf(listOf("a", "b"), listOf("1", "2")),
+                    hasHeader = true,
+                    aligns = listOf(TableAlign.None, TableAlign.None),
+                ),
+            ),
             parseMdBlocks("| a | b |\n|---|---|\n| 1 | 2 |"),
         )
         // Without the separator it is just text.
         assertEquals(listOf(MdBlock.Para("| a | b |")), parseMdBlocks("| a | b |"))
+    }
+
+    @Test
+    fun `a separator without colons leaves every column at the default alignment`() {
+        val table = parseMdBlocks("| a | b |\n| --- | --- |\n| 1 | 2 |").single() as MdBlock.Table
+        assertEquals(listOf(TableAlign.None, TableAlign.None), table.aligns)
+    }
+
+    @Test
+    fun `colons in the separator set left, center and right per column`() {
+        val table = parseMdBlocks("| a | b | c | d |\n|:---|:---:|---:|---|\n| 1 | 2 | 3 | 4 |")
+            .single() as MdBlock.Table
+        assertEquals(
+            listOf(TableAlign.Left, TableAlign.Center, TableAlign.Right, TableAlign.None),
+            table.aligns,
+        )
+        assertEquals(listOf(listOf("a", "b", "c", "d"), listOf("1", "2", "3", "4")), table.rows)
+        // A separator without outer pipes and with spaces around the cells counts too.
+        val bare = parseMdBlocks("| a | b |\n :-- | --: ").single() as MdBlock.Table
+        assertEquals(listOf(TableAlign.Left, TableAlign.Right), bare.aligns)
+    }
+
+    @Test
+    fun `rows with more or fewer cells than the separator keep their own cells`() {
+        val table = parseMdBlocks("| a | b |\n|:--|--:|\n| 1 | 2 | 3 |\n| 4 |").single() as MdBlock.Table
+        assertEquals(listOf(TableAlign.Left, TableAlign.Right), table.aligns)
+        assertEquals(listOf(listOf("a", "b"), listOf("1", "2", "3"), listOf("4")), table.rows)
+    }
+
+    @Test
+    fun `a table with aligned columns parses the same while it streams in`() {
+        val doc = "Intro\n\n| name | size |\n|:-----|-----:|\n| a | 1 |\n| b | 22 |\n\nend"
+        val incremental = IncrementalMdParser()
+        for (length in 1..doc.length) {
+            val prefix = doc.substring(0, length)
+            assertEquals("prefix of $length chars", parseMdBlocks(prefix), incremental.parse(prefix))
+        }
+        val table = incremental.parse(doc).filterIsInstance<MdBlock.Table>().single()
+        assertEquals(listOf(TableAlign.Left, TableAlign.Right), table.aligns)
     }
 
     @Test
@@ -146,7 +191,11 @@ class HermesMarkdownParserTest {
         assertEquals(
             listOf(
                 MdBlock.Quote(1, "note"),
-                MdBlock.Table(listOf(listOf("x", "y"), listOf("1", "2")), hasHeader = true),
+                MdBlock.Table(
+                    listOf(listOf("x", "y"), listOf("1", "2")),
+                    hasHeader = true,
+                    aligns = listOf(TableAlign.None, TableAlign.None),
+                ),
             ),
             item.children,
         )
@@ -360,5 +409,22 @@ class HermesMarkdownParserTest {
         assertEquals(false, isRtlText("ab آب"))
         assertEquals(true, isRtlText("آب ab"))
         assertNull(isRtlText("12345 !?"))
+    }
+
+    @Test
+    fun `a GitHub alert takes the quote lines under its marker as blocks`() {
+        assertEquals(
+            listOf(
+                MdBlock.Alert(AlertKind.Warning, listOf(MdBlock.Para("Back up first.\nThen run it."), MdBlock.ListItem(0, null, null, "one"))),
+                MdBlock.Para("After."),
+            ),
+            parseMdBlocks("> [!WARNING]\n> Back up first.\n> Then run it.\n>\n> - one\n\nAfter."),
+        )
+    }
+
+    @Test
+    fun `alert text on the marker line is the first body line, and a plain quote stays a quote`() {
+        assertEquals(listOf(MdBlock.Alert(AlertKind.Note, listOf(MdBlock.Para("Short note.")))), parseMdBlocks("> [!note] Short note."))
+        assertEquals(listOf(MdBlock.Quote(1, "[!NOTES] not an alert")), parseMdBlocks("> [!NOTES] not an alert"))
     }
 }

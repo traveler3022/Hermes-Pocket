@@ -148,7 +148,15 @@ class HermesApplication : Application(), Configuration.Provider, ImageLoaderFact
         val files = remoteFiles.get()
         return ImageLoader.Builder(this)
             .okHttpClient { files.client }
-            .components { add(ServerImageFetcher.Factory(files)) }
+            .components {
+                add(ServerImageFetcher.Factory(files))
+                // GIFs move: without a decoder for them Coil shows only the first frame.
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    add(coil.decode.ImageDecoderDecoder.Factory())
+                } else {
+                    add(coil.decode.GifDecoder.Factory())
+                }
+            }
             .build()
     }
 

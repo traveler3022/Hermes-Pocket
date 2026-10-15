@@ -26,6 +26,9 @@ internal sealed class MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock()
     data class Code(val language: String, val code: String) : MdBlock()
     data class Quote(val depth: Int, val text: String) : MdBlock()
+
+    /** A GitHub alert: `> [!NOTE]` and the quote lines under it, parsed as blocks of their own. */
+    data class Alert(val kind: AlertKind, val children: List<MdBlock>) : MdBlock()
     /**
      * [text] is the item's first paragraph; [children] are the blocks indented under it
      * after a blank line (a second paragraph, a quote, a table). Nested items are not
@@ -44,10 +47,24 @@ internal sealed class MdBlock {
 
     /** `[^label]: text`. Parsed where it stands; [HermesMarkdown] moves them all to the end. */
     data class Footnote(val label: String, val text: String) : MdBlock()
-    data class Table(val rows: List<List<String>>, val hasHeader: Boolean) : MdBlock()
+    /**
+     * [aligns] holds one entry per column of the `|:--|:-:|--:|` separator row; a row
+     * with more cells than that leaves the extra ones at [TableAlign.None].
+     */
+    data class Table(
+        val rows: List<List<String>>,
+        val hasHeader: Boolean,
+        val aligns: List<TableAlign> = emptyList(),
+    ) : MdBlock()
     data class Para(val text: String) : MdBlock()
     data object Rule : MdBlock()
 }
+
+/** GitHub's five alert kinds, as in Hermes Desktop. */
+internal enum class AlertKind { Note, Tip, Important, Warning, Caution }
+
+/** A table column's alignment from its separator cell: `---`, `:---`, `:---:`, `---:`. */
+internal enum class TableAlign { None, Left, Center, Right }
 
 internal data class InlineStyle(
     val linkColor: Color,
@@ -135,6 +152,7 @@ private val ruleRe = Regex("^(?:\\s*[-*_]){3,}\\s*$")
 private val tableSepRe = Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
 private val footnoteDefRe = Regex("^\\[\\^([^\\]\\s]+)]:\\s*(.*)$")
 private val definitionRe = Regex("^:\\s+(.*)$")
+private val alertMarkerRe = Regex("^\\[!(note|tip|important|warning|caution)]\\s*(.*)$", RegexOption.IGNORE_CASE)
 
 /** Nesting deeper than this is drawn at this depth, so an over-indented line cannot push text off screen. */
 private const val MaxListDepth = 6
@@ -161,6 +179,7 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
         val number = numberRe.matchEntire(trimmed)
         val footnote = footnoteDefRe.matchEntire(trimmed)
         val definition = definitionRe.matchEntire(trimmed)?.groupValues?.get(1)
+        val alert = if (trimmed.startsWith(">")) alertMarkerRe.matchEntire(trimmed.removePrefix(">").trim()) else null
 
         when {
             trimmed.startsWith("```") || trimmed.startsWith("~~~") -> {
@@ -188,6 +207,21 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
                 i++
             }
 
+            // `> [!NOTE]`: the quote lines under it are the alert's body. Text after the
+            // marker on its own line is accepted as the body's first line, as Desktop does.
+            alert != null -> {
+                flush()
+                val body = ArrayList<String>()
+                alert.groupValues[2].takeIf { it.isNotBlank() }?.let(body::add)
+                i++
+                while (i < lines.size && lines[i].trimStart().startsWith(">")) {
+                    body.add(lines[i].trimStart().removePrefix(">").removePrefix(" "))
+                    i++
+                }
+                val kind = AlertKind.valueOf(alert.groupValues[1].lowercase().replaceFirstChar { it.uppercase() })
+                out.add(MdBlock.Alert(kind, parseMdBlocks(body.joinToString("\n"))))
+            }
+
             trimmed.startsWith(">") -> {
                 flush()
                 var depth = 0
@@ -206,12 +240,13 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
                 flush()
                 val rows = ArrayList<List<String>>()
                 rows.add(splitRow(trimmed))
+                val aligns = splitRow(lines[i + 1]).map(::tableAlign)
                 i += 2
                 while (i < lines.size && lines[i].trimStart().startsWith("|")) {
                     rows.add(splitRow(lines[i].trimStart()))
                     i++
                 }
-                out.add(MdBlock.Table(rows, hasHeader = true))
+                out.add(MdBlock.Table(rows, hasHeader = true, aligns = aligns))
             }
 
             bullet != null -> {
@@ -350,6 +385,18 @@ private fun listItemBody(lines: List<String>, start: Int, first: String, indent:
 
 private fun splitRow(line: String): List<String> =
     line.trim().trim('|').split('|').map { it.trim() }
+
+/** One trimmed separator cell → its column alignment. */
+private fun tableAlign(cell: String): TableAlign {
+    val left = cell.startsWith(':')
+    val right = cell.endsWith(':')
+    return when {
+        left && right -> TableAlign.Center
+        right -> TableAlign.Right
+        left -> TableAlign.Left
+        else -> TableAlign.None
+    }
+}
 
 // ── Inline ───────────────────────────────────────────────────────────────
 

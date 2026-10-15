@@ -146,14 +146,17 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSessions: () -> Unit = {},
-    onNavigateToTasks: () -> Unit = {},
     onNavigateToRuntime: () -> Unit = {},
     onNavigateToCron: () -> Unit = {},
     onNavigateToGroups: () -> Unit = {},
     onNavigateToKanban: () -> Unit = {},
+    onNavigateToMedia: () -> Unit = {},
     sharedText: String? = null,
     onSharedTextTaken: () -> Unit = {},
     resumeSessionId: String? = null,
+    // The phone's assistant gesture: a new object per invocation, until taken.
+    assistOpen: Any? = null,
+    onAssistTaken: () -> Unit = {},
     themeModeState: com.hermes.android.ui.theme.ThemeModeState? = null,
     viewModel: ChatViewModel = hiltViewModel(),
     // The model catalogue and the switch itself already live in ConfigViewModel
@@ -407,6 +410,16 @@ fun ChatScreen(
         }
     }
 
+    // Opened by the assistant gesture: a new chat, and the voice input asks at once.
+    var voiceRequest by remember { mutableStateOf<Any?>(null) }
+    LaunchedEffect(assistOpen) {
+        if (assistOpen != null) {
+            viewModel.openAssistantChat()
+            voiceRequest = assistOpen
+            onAssistTaken()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -450,8 +463,6 @@ fun ChatScreen(
                     },
                     unreadOf = { session -> sessionActivity[session.id]?.unreadReplies ?: 0 },
                     destinations = rememberWorkspaceDestinations(
-                        waitingCount = if (uiState.pendingApproval != null) 1 else 0,
-                        onWorkbench = { closeDrawerThen(onNavigateToTasks) },
                         onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
@@ -460,6 +471,7 @@ fun ChatScreen(
                         } else {
                             null
                         },
+                        onMedia = { closeDrawerThen(onNavigateToMedia) },
                         onFiles = {
                             closeDrawerThen {
                                 if (!openLinuxFiles(context, viewModel.linuxFiles)) {
@@ -930,6 +942,7 @@ fun ChatScreen(
                                 onBranch = { viewModel.branchSession() },
                                 onDownloadFile = { url, name -> viewModel.downloadFile(url, name) },
                                 readPreview = viewModel::readPreviewFile,
+                                readServerHtml = viewModel::readServerHtml,
                                 resolvePreviewUrl = viewModel::resolvePreviewUrl,
                                 previewShareUri = viewModel::previewShareUri,
                                 onPreviewSend = viewModel::sendHiddenPrompt,
@@ -1029,10 +1042,14 @@ fun ChatScreen(
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopGeneration,
                     onSteer = viewModel::steerAgent,
-                    onAttachFile = viewModel::attachFromUri,
+                    onAttachFiles = viewModel::attachFromUris,
+                    onPasteImages = viewModel::attachPastedImages,
+                    newCameraPhotoUri = viewModel::newCameraPhotoUri,
                     onRemoveAttachment = viewModel::removeAttachment,
                     activeModel = modelPickerState.activeModel,
                     onModelClick = { showModelSheet = true },
+                    voiceRequest = voiceRequest,
+                    onVoiceRequestTaken = { voiceRequest = null },
                 )
             }
         }
@@ -1089,6 +1106,10 @@ fun ChatScreen(
             approval = approval,
             onRespond = viewModel::respondToApproval,
         )
+    }
+
+    uiState.sideQuestion?.let { sideQuestion ->
+        SideQuestionSheet(sideQuestion = sideQuestion, onDismiss = viewModel::closeSideQuestion)
     }
 
     if (showChanges) {

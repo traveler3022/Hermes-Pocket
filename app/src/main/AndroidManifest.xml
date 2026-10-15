@@ -29,6 +29,10 @@
     <!-- Vibrate — notification feedback for tool approvals -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- App update: hand a release APK the user downloaded in About to the system installer.
+         The user still allows "install unknown apps" for us and confirms every install. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!--
         Android 11+ (API 30+) package visibility: apps cannot see other installed
         packages unless they are declared in a <queries> block. Termux must be
@@ -76,7 +80,38 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <!-- The assist gesture on phones that send ACTION_ASSIST: new chat, voice input on. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- Hermes as the phone's digital assistant (Default apps → Digital assistant app).
+             BIND_VOICE_INTERACTION / BIND_RECOGNITION_SERVICE: only the system can bind them. -->
+        <service
+            android:name=".assistant.HermesAssistantService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+        </service>
+
+        <service
+            android:name=".assistant.HermesAssistantSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".assistant.HermesRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_RECOGNITION_SERVICE" />
 
         <!-- Gateway Foreground Service (ADR-004). specialUse, not dataSync: from Android 15 a
              dataSync service may not start from BOOT_COMPLETED and gets six foreground hours a day. -->
@@ -116,6 +151,11 @@
         <!-- "Stop" on the "Hermes is working" notification -->
         <receiver
             android:name=".service.AgentStopReceiver"
+            android:exported="false" />
+
+        <!-- "Reply" typed into a "Hermes replied" notification -->
+        <receiver
+            android:name=".service.NotificationReplyReceiver"
             android:exported="false" />
 
         <!-- Termux's reply to a RUN_COMMAND, delivered through our own PendingIntent. -->

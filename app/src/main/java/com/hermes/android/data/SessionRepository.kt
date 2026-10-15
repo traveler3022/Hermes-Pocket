@@ -131,6 +131,26 @@ class SessionRepository @Inject constructor(
 
     // ── Chats ──────────────────────────────────────────────────────────────
 
+    /**
+     * A reply typed somewhere other than the chat screen (a notification). The chat may not
+     * be live on this gateway any more (a restart, a reaped session), so it is attached first:
+     * session.resume reuses the live session when there is one. Not tracked, so a reconnect
+     * keeps resuming the chat that is open in the app.
+     */
+    override suspend fun replyFromOutside(sessionId: String, text: String) {
+        val liveId = attach(sessionId, trackSession = false).liveId
+        gatewayClient.request(
+            GatewayMethods.PROMPT_SUBMIT,
+            buildJsonObject {
+                put("text", text)
+                put("session_id", liveId)
+            }.toElementMap(),
+            timeoutMs = 20_000,
+            trackSession = false,
+        )
+        Timber.i("[Repo] reply from outside the chat sent to $liveId")
+    }
+
     /** The STORED id of the chat the server used last, or null when it has none. */
     override suspend fun mostRecentId(): String? =
         (gatewayClient.request(GatewayMethods.SESSION_MOST_RECENT) as? JsonObject)?.get("session_id").sessionIdOrNull()

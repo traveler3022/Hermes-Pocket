@@ -1,8 +1,10 @@
 package com.hermes.android.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -12,20 +14,33 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -41,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import com.hermes.android.R
+import com.hermes.android.domain.markdown.TableColumnWidths
+import com.hermes.android.domain.markdown.markdownTableKey
+import com.hermes.android.ui.icons.filled.Lightbulb
 
 /**
  * Native-Compose markdown renderer for Hermes assistant/tool output.
@@ -300,6 +318,8 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
 
         is MdBlock.Table -> MdTable(block, body, inlineStyle, theme.rule, muted)
 
+        is MdBlock.Alert -> MdAlert(block, theme)
+
         is MdBlock.Para -> BlockRow(block.text) {
             MdText(
                 raw = block.text,
@@ -309,6 +329,59 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
             )
         }
     }
+}
+
+/**
+ * A GitHub alert (`> [!NOTE]`), drawn as Hermes Desktop draws it: a bordered box
+ * whose first line is the kind's icon and name in its accent colour, then the body.
+ */
+@Composable
+private fun MdAlert(block: MdBlock.Alert, theme: MdTheme) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // Desktop's Tailwind accents: the 600 shade on light, the 400 shade on dark.
+    val (icon, label, accent) = when (block.kind) {
+        AlertKind.Note -> Triple(Icons.Filled.Info, R.string.md_alert_note, if (dark) Color(0xFF60A5FA) else Color(0xFF2563EB))
+        AlertKind.Tip -> Triple(Icons.Filled.Lightbulb, R.string.md_alert_tip, if (dark) Color(0xFF34D399) else Color(0xFF059669))
+        AlertKind.Important -> Triple(Icons.Filled.Info, R.string.md_alert_important, if (dark) Color(0xFFA78BFA) else Color(0xFF7C3AED))
+        AlertKind.Warning -> Triple(Icons.Filled.Warning, R.string.md_alert_warning, if (dark) Color(0xFFFBBF24) else Color(0xFFD97706))
+        AlertKind.Caution -> Triple(Icons.Filled.Warning, R.string.md_alert_caution, if (dark) Color(0xFFFB7185) else Color(0xFFE11D48))
+    }
+    val firstText = block.children.firstOrNull()?.let(::blockText).orEmpty()
+    BlockRow(firstText) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, theme.rule, RoundedCornerShape(8.dp))
+                .background(theme.codeBg.copy(alpha = 0.25f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(label),
+                    style = theme.body.copy(color = accent, fontWeight = FontWeight.SemiBold, fontSize = theme.base * 0.93f),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            block.children.forEach { MdBlockView(it, theme) }
+        }
+    }
+}
+
+/** The words a block reads by, for picking its direction. */
+private fun blockText(block: MdBlock): String = when (block) {
+    is MdBlock.Heading -> block.text
+    is MdBlock.Quote -> block.text
+    is MdBlock.ListItem -> block.text
+    is MdBlock.Definition -> block.term
+    is MdBlock.Footnote -> block.text
+    is MdBlock.Para -> block.text
+    is MdBlock.Alert -> block.children.firstOrNull()?.let(::blockText).orEmpty()
+    is MdBlock.Table -> block.rows.firstOrNull()?.joinToString(" ").orEmpty()
+    is MdBlock.Code, MdBlock.Rule -> ""
 }
 
 /**
@@ -376,6 +449,20 @@ private fun CodeBlock(
     }
 }
 
+/**
+ * Where [MdTable] keeps the column widths a reader dragged to. Null (the default,
+ * as in previews and tests) still lets a table be resized, just not remembered.
+ */
+val LocalTableColumnWidths = staticCompositionLocalOf<TableColumnWidths?> { null }
+
+/**
+ * A markdown table whose columns can be resized, as in Hermes Desktop: drag the
+ * seam after a header cell, double-tap it to go back to the default widths.
+ *
+ * A drag moves exactly one seam: the two columns either side trade width and
+ * keep their sum, so the table never changes size under the finger. The widths
+ * are remembered by the table's header row (see [markdownTableKey]).
+ */
 @Composable
 private fun MdTable(
     block: MdBlock.Table,
@@ -384,6 +471,17 @@ private fun MdTable(
     rule: Color,
     muted: Color,
 ) {
+    val store = LocalTableColumnWidths.current
+    val header = if (block.hasHeader) block.rows.firstOrNull().orEmpty() else emptyList()
+    val columns = block.rows.maxOfOrNull { it.size } ?: 0
+    val key = remember(header) { if (header.size >= 2) markdownTableKey(header) else null }
+    var widths by remember(key, columns) {
+        mutableStateOf(key?.let { store?.read(it, columns) } ?: List(columns) { TableCellWidth.value })
+    }
+    val density = LocalDensity.current
+    // In a right-to-left table the columns run the other way, so a drag does too.
+    val rtlTable = LocalLayoutDirection.current == LayoutDirection.Rtl
+
     // The scroll container hands its child unbounded width, where a divider
     // that fills the width would collapse to nothing; the column is pinned to
     // its widest row so the dividers span the table.
@@ -394,23 +492,52 @@ private fun MdTable(
             .background(inlineStyle.codeBg.copy(alpha = 0.45f))
             .horizontalScroll(rememberScrollState()),
     ) {
+        // Columns follow the layout direction, so a right-to-left screen mirrors the
+        // whole table: markdown's left and right are taken as the table's start and
+        // end and mirror with it. Center is the same both ways, and a column with no
+        // colon keeps each cell at the side its own words start on.
         Column(Modifier.width(IntrinsicSize.Max)) {
             block.rows.forEachIndexed { index, row ->
-                val header = index == 0 && block.hasHeader
+                val isHeader = index == 0 && block.hasHeader
                 Row(
-                    Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    Modifier
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                        .height(IntrinsicSize.Min),
                 ) {
-                    row.forEach { cell ->
+                    row.forEachIndexed { column, cell ->
+                        if (column > 0) {
+                            if (isHeader && column < columns) {
+                                ColumnSeam(
+                                    color = rule,
+                                    onDrag = { dx ->
+                                        val delta = with(density) { dx.toDp().value } * if (rtlTable) -1 else 1
+                                        widths = resizeSeam(widths, column - 1, delta, MinColumnWidth.value)
+                                    },
+                                    onDragEnd = { if (key != null) store?.write(key, widths) },
+                                    onReset = {
+                                        if (key != null) store?.clear(key)
+                                        widths = List(columns) { TableCellWidth.value }
+                                    },
+                                )
+                            } else {
+                                Spacer(Modifier.width(SeamWidth))
+                            }
+                        }
                         MdText(
                             raw = cell,
-                            style = if (header) {
+                            style = if (isHeader) {
                                 style.copy(fontWeight = FontWeight.Bold)
                             } else {
                                 style.copy(color = muted)
                             },
                             inlineStyle = inlineStyle,
-                            modifier = Modifier.width(TableCellWidth),
+                            modifier = Modifier.width((widths.getOrNull(column) ?: TableCellWidth.value).dp),
+                            align = when (block.aligns.getOrElse(column) { TableAlign.None }) {
+                                TableAlign.None -> TextAlign.Start
+                                TableAlign.Center -> TextAlign.Center
+                                TableAlign.Left -> if (rtlTable) TextAlign.Right else TextAlign.Left
+                                TableAlign.Right -> if (rtlTable) TextAlign.Left else TextAlign.Right
+                            },
                         )
                     }
                 }
@@ -419,6 +546,40 @@ private fun MdTable(
                 }
             }
         }
+    }
+}
+
+/**
+ * The gap between two header cells, and the handle for resizing them: a drag
+ * hands its distance (px, screen direction) to [onDrag], a double tap resets.
+ */
+@Composable
+private fun ColumnSeam(
+    color: Color,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onReset: () -> Unit,
+) {
+    val drag by rememberUpdatedState(onDrag)
+    val end by rememberUpdatedState(onDragEnd)
+    val reset by rememberUpdatedState(onReset)
+    Box(
+        Modifier
+            .width(SeamWidth)
+            .fillMaxHeight()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = { end() },
+                    onDragCancel = { end() },
+                ) { change, dx ->
+                    change.consume()
+                    drag(dx)
+                }
+            }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { reset() }) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Spacer(Modifier.width(1.dp).fillMaxHeight().background(color))
     }
 }
 
@@ -439,6 +600,7 @@ private fun MdText(
     style: TextStyle,
     inlineStyle: InlineStyle,
     modifier: Modifier = Modifier,
+    align: TextAlign = TextAlign.Start,
 ) {
     val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
     val direction = remember(raw) {
@@ -452,7 +614,7 @@ private fun MdText(
         text = text,
         style = style.copy(
             textDirection = direction,
-            textAlign = TextAlign.Start,
+            textAlign = align,
         ),
         modifier = modifier,
     )
@@ -460,6 +622,12 @@ private fun MdText(
 
 private val DefaultFontSize = 14.sp
 private val TableCellWidth = 132.dp
+
+/** Gap between two table columns; between header cells it is the resize handle. */
+private val SeamWidth = 20.dp
+
+/** A column can't be dragged narrower than this, as in Desktop. */
+private val MinColumnWidth = 48.dp
 private const val MaxQuoteBars = 3
 
 private fun bulletFor(depth: Int): String = when (depth % 3) {

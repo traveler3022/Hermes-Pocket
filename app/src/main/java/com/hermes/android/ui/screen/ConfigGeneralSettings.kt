@@ -25,6 +25,7 @@ import com.hermes.android.ui.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.Link
+import com.hermes.android.ui.icons.filled.Code
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Terminal
 import androidx.compose.material3.Card
@@ -67,6 +68,7 @@ internal fun GeneralSettingsSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToPlatforms: () -> Unit,
+    onNavigateToWebhooks: () -> Unit,
 ) {
     SettingsFolder {
         SettingsCardGroup {
@@ -93,11 +95,21 @@ internal fun GeneralSettingsSection(
             )
             com.hermes.android.ui.design.GroupDivider()
             SettingsNavRow(
+                title = stringResource(R.string.webhooks_title),
+                subtitle = stringResource(R.string.webhooks_nav_subtitle),
+                icon = Icons.Default.Code,
+                onClick = onNavigateToWebhooks,
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
                 title = stringResource(R.string.advanced),
                 subtitle = stringResource(R.string.env_mcp_console_log),
                 icon = Icons.Default.Terminal,
                 onClick = { onOpen(SettingsSection.ADVANCED) },
             )
+        }
+        SettingsCardGroup {
+            AssistantSettingCard()
         }
     }
 }

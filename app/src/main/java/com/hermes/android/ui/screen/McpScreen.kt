@@ -221,6 +221,7 @@ fun McpScreen(
                 onSignIn = { selected = null; viewModel.signIn(name) },
                 onApiKey = { selected = null; keyFor = name },
                 onRemove = { selected = null; removing = name },
+                onSetEnabled = { viewModel.setEnabled(name, it) },
                 onDismiss = { selected = null },
             )
         }
@@ -336,6 +337,7 @@ private fun ServerDialog(
     onSignIn: () -> Unit,
     onApiKey: () -> Unit,
     onRemove: () -> Unit,
+    onSetEnabled: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val status = server.statusWith(probe)
@@ -384,6 +386,18 @@ private fun ServerDialog(
                     }
                 }
                 if (server.plugin == null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.mcp_server_enabled),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        androidx.compose.material3.Switch(
+                            checked = server.enabled,
+                            onCheckedChange = onSetEnabled,
+                            enabled = !busy,
+                        )
+                    }
                     OutlinedButton(onClick = onApiKey, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.set_api_key))
                     }

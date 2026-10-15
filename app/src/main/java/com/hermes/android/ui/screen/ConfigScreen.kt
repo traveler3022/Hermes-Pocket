@@ -122,6 +122,7 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
+    onNavigateToWebhooks: () -> Unit = {},
     onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
     onNavigateToMcp: () -> Unit = {},
@@ -131,6 +132,7 @@ fun ConfigScreen(
     onNavigateToStorage: () -> Unit = {},
     onNavigateToProjects: () -> Unit = {},
     onNavigateToSetup: () -> Unit = {},
+    onNavigateToLearning: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
@@ -196,12 +198,13 @@ fun ConfigScreen(
                     state = uiState,
                     onOpen = { section = it },
                     onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToWebhooks = onNavigateToWebhooks,
                 )
                 SettingsSection.APPEARANCE -> GeneralTab(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                 )
-                SettingsSection.MEMORY -> MemorySection(uiState, viewModel)
+                SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
                 SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
                 SettingsSection.PROVIDERS -> ProvidersSection(

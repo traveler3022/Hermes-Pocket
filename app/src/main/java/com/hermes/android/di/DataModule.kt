@@ -4,7 +4,10 @@ import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.data.LearningRepository
 import com.hermes.android.data.MemoryProvidersRepository
+import com.hermes.android.data.MessagingGatewayRepository
+import com.hermes.android.data.PrefsTableColumnWidths
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
@@ -12,6 +15,10 @@ import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
 import com.hermes.android.data.ToolsetSetupRepository
+import com.hermes.android.data.McpServerSwitchRepository
+import com.hermes.android.data.WebhooksRepository
+import com.hermes.android.data.SkillsAdminRepository
+import com.hermes.android.data.PluginCatalogRepository
 import com.hermes.android.data.ServerKanbanRepository
 import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.SetupState
@@ -22,11 +29,18 @@ import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
+import com.hermes.android.domain.messaging.MessagingGateway
 import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
+import com.hermes.android.domain.messaging.Webhooks
 import com.hermes.android.domain.tools.ToolsetSetup
+import com.hermes.android.domain.tools.McpServerSwitch
+import com.hermes.android.domain.tools.SkillsAdmin
+import com.hermes.android.domain.tools.PluginCatalog
 import com.hermes.android.domain.kanban.KanbanRepository
+import com.hermes.android.domain.markdown.TableColumnWidths
 import com.hermes.android.domain.media.MediaPlayers
+import com.hermes.android.domain.memory.LearningJourney
 import com.hermes.android.domain.memory.MemoryProviders
 import com.hermes.android.domain.notify.AppVisibility
 import com.hermes.android.domain.notify.ApprovalAlerts
@@ -63,6 +77,9 @@ abstract class DataModule {
     @Singleton
     abstract fun bindTaskRegistry(impl: PrefsTaskRegistry): TaskRegistry
 
+    @Binds
+    abstract fun bindTableColumnWidths(impl: PrefsTableColumnWidths): TableColumnWidths
+
     // One SessionRepository (a singleton) behind each of the views the screens use.
     @Binds
     abstract fun bindChatSessions(impl: SessionRepository): ChatSessions
@@ -92,10 +109,25 @@ abstract class DataModule {
     abstract fun bindToolsetSetup(impl: ToolsetSetupRepository): ToolsetSetup
 
     @Binds
+    abstract fun bindMcpServerSwitch(impl: McpServerSwitchRepository): McpServerSwitch
+
+    @Binds
+    abstract fun bindWebhooks(impl: WebhooksRepository): Webhooks
+
+    @Binds
+    abstract fun bindSkillsAdmin(impl: SkillsAdminRepository): SkillsAdmin
+
+    @Binds
+    abstract fun bindPluginCatalog(impl: PluginCatalogRepository): PluginCatalog
+
+    @Binds
     abstract fun bindTelegramSetup(impl: TelegramSetupRepository): TelegramSetup
 
     @Binds
     abstract fun bindMessagingPairing(impl: PairingRepository): MessagingPairing
+
+    @Binds
+    abstract fun bindMessagingGateway(impl: MessagingGatewayRepository): MessagingGateway
 
     @Binds
     abstract fun bindSetupProgress(impl: SetupState): SetupProgress
@@ -111,6 +143,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindMemoryProviders(impl: MemoryProvidersRepository): MemoryProviders
+
+    @Binds
+    abstract fun bindLearningJourney(impl: LearningRepository): LearningJourney
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

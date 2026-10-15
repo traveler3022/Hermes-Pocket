@@ -1,6 +1,8 @@
 package com.hermes.android.ui.screen
 
+import android.os.SystemClock
 import android.app.Activity
+import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -8,7 +10,18 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.content.MediaType
+import androidx.compose.foundation.content.ReceiveContentListener
+import androidx.compose.foundation.content.TransferableContent
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,8 +43,11 @@ import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.Mic
+import com.hermes.android.ui.icons.filled.PhotoCamera
 import com.hermes.android.ui.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +57,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +80,7 @@ import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.i18n.SlashCommandDescriptions
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun InputBar(
     text: String,
@@ -70,20 +92,87 @@ internal fun InputBar(
     onSend: () -> Unit,
     onStop: () -> Unit,
     onSteer: () -> Unit = {},
-    onAttachFile: (Uri) -> Unit = {},
+    onAttachFiles: (List<Uri>) -> Unit = {},
+    /** Images pasted into the box, with the pasted content that lends their read grant. */
+    onPasteImages: (List<Uri>, Any) -> Unit = { _, _ -> },
+    /** A new file for the camera to write its photo to; null when none could be made. */
+    newCameraPhotoUri: () -> Uri? = { null },
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
     activeModel: String? = null,
     onModelClick: () -> Unit = {},
+    // Set when the assistant gesture opened the chat: start voice input once.
+    voiceRequest: Any? = null,
+    onVoiceRequestTaken: () -> Unit = {},
 ) {
+    // Several files at once; each goes the way a single one always did.
     val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri -> uri?.let(onAttachFile) }
+        ActivityResultContracts.GetMultipleContents(),
+    ) { uris -> if (uris.isNotEmpty()) onAttachFiles(uris) }
+    // The camera app writes into a file of ours (no CAMERA permission: the app declares none,
+    // so TakePicture needs none). Saved, as the app can be killed while the camera is open.
+    var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        val uri = cameraUri
+        cameraUri = null
+        if (saved && uri != null) onAttachFiles(listOf(uri))
+    }
+    var attachMenuOpen by remember { mutableStateOf(false) }
     // Voice input: Android's own recognizer (the system's speech dialog), so no
     // microphone permission here. No language is asked for: the recognizer uses the
     // one the user set on the phone. What was said lands in the box to check before sending.
     val context = LocalContext.current
     val speechPrompt = stringResource(R.string.speak)
     val noSpeech = stringResource(R.string.speech_recognition_isnt_available_on)
+    val noCamera = stringResource(R.string.attach_no_camera)
+    val takePhoto = {
+        newCameraPhotoUri()?.let { uri ->
+            cameraUri = uri
+            try {
+                camera.launch(uri)
+            } catch (e: ActivityNotFoundException) {
+                cameraUri = null
+                Toast.makeText(context, noCamera, Toast.LENGTH_LONG).show()
+            }
+        }
+        Unit
+    }
+    // The box as a TextFieldState, as only that kind of field takes pasted images
+    // (Modifier.contentReceiver); [text] stays the truth both ways.
+    // [lastSynced] is the last text both sides agreed on: a [text] equal to it is only our own
+    // typing coming back (maybe a keystroke late), and must not overwrite the box.
+    // [recentTyped]: what was typed in the last moment, with when. A [text] that is one of
+    // them is a late echo of a keystroke already overtaken (typing "ab" fast can bring back
+    // "a"), not a change from outside, so it must not take the box back a step.
+    val fieldState = rememberTextFieldState(text)
+    var lastSynced by remember { mutableStateOf(text) }
+    val recentTyped = remember { ArrayDeque<Pair<String, Long>>() }
+    val currentOnTextChange by rememberUpdatedState(onTextChange)
+    LaunchedEffect(fieldState, text) {
+        val now = SystemClock.uptimeMillis()
+        while (recentTyped.isNotEmpty() && now - recentTyped.first().second > ECHO_WINDOW_MS) {
+            recentTyped.removeFirst()
+        }
+        val lateEcho = recentTyped.any { it.first == text }
+        if (!lateEcho && text != lastSynced && fieldState.text.toString() != text) {
+            fieldState.setTextAndPlaceCursorAtEnd(text)
+            recentTyped.clear()
+        }
+        if (!lateEcho) lastSynced = text
+    }
+    LaunchedEffect(fieldState) {
+        snapshotFlow { fieldState.text.toString() }.collect { typed ->
+            if (typed != lastSynced) {
+                lastSynced = typed
+                recentTyped.addLast(typed to SystemClock.uptimeMillis())
+                if (recentTyped.size > 32) recentTyped.removeFirst()
+                currentOnTextChange(typed)
+            }
+        }
+    }
+    val currentOnPasteImages by rememberUpdatedState(onPasteImages)
+    val imageReceiver = remember(context) { pastedImageReceiver(context) { uris, grant -> currentOnPasteImages(uris, grant) } }
     val voiceInput = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -103,6 +192,12 @@ internal fun InputBar(
             voiceInput.launch(intent)
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, noSpeech, Toast.LENGTH_LONG).show()
+        }
+    }
+    LaunchedEffect(voiceRequest) {
+        if (voiceRequest != null) {
+            onVoiceRequestTaken()
+            startVoiceInput()
         }
     }
     // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
@@ -212,11 +307,12 @@ internal fun InputBar(
                 .padding(4.dp),
         ) {
             TextField(
-                value = text,
-                onValueChange = onTextChange,
-                modifier = Modifier.fillMaxWidth(),
+                state = fieldState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .contentReceiver(imageReceiver),
                 placeholder = { Text(stringResource(R.string.ask_hermes)) },
-                maxLines = 4,
+                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -231,18 +327,38 @@ internal fun InputBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                IconButton(
-                    onClick = { filePicker.launch("*/*") },
-                    enabled = !isAttaching,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    if (isAttaching) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.attach_file),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                Box {
+                    IconButton(
+                        onClick = { attachMenuOpen = true },
+                        enabled = !isAttaching,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        if (isAttaching) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = stringResource(R.string.attach_file),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.attach_files)) },
+                            leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },
+                            onClick = {
+                                attachMenuOpen = false
+                                filePicker.launch("*/*")
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.attach_take_photo)) },
+                            leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
+                            onClick = {
+                                attachMenuOpen = false
+                                takePhoto()
+                            },
                         )
                     }
                 }
@@ -329,3 +445,40 @@ internal fun InputBar(
         }
     }
 }
+
+/**
+ * Takes the images pasted into the composer, from the clipboard or a keyboard's image
+ * (Gboard stickers, GIFs), and hands them to [onImages]; text and anything else stays for
+ * the box. Drag and drop is left out: its grant works differently.
+ * Adapted from Hy4ri/hermes-mobile (Apache-2.0).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun pastedImageReceiver(
+    context: Context,
+    onImages: (List<Uri>, Any) -> Unit,
+): ReceiveContentListener = object : ReceiveContentListener {
+    override fun onReceive(transferableContent: TransferableContent): TransferableContent? {
+        if (!transferableContent.hasMediaType(MediaType.Image)) return transferableContent
+        if (transferableContent.source != TransferableContent.Source.Clipboard &&
+            transferableContent.source != TransferableContent.Source.Keyboard
+        ) {
+            return transferableContent
+        }
+        val clip = transferableContent.clipEntry.clipData
+        val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.filter { uri ->
+            uri.scheme == "content" && try {
+                context.contentResolver.getType(uri)?.startsWith("image/", ignoreCase = true) == true
+            } catch (e: RuntimeException) {
+                false
+            }
+        }
+        if (uris.isEmpty()) return transferableContent
+        onImages(uris, transferableContent)
+        val taken = uris.toSet()
+        // An item with text as well keeps it for the box.
+        return transferableContent.consume { it.uri in taken && it.text == null && it.htmlText == null }
+    }
+}
+
+/** How long a typed value counts as possibly echoed back late from the view model. */
+private const val ECHO_WINDOW_MS = 500L

@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
@@ -97,6 +98,7 @@ import com.hermes.android.ui.viewmodel.ToolOption
 internal fun MemorySection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
+    onOpenLearning: () -> Unit = {},
 ) {
     if (state.isLoadingMemory) {
         LoadingIndicator(stringResource(R.string.loading_memory))
@@ -122,6 +124,7 @@ internal fun MemorySection(
                 Text(stringResource(R.string.refresh_2))
             }
         }
+        LearningEntryCard(onOpenLearning)
         MemoryFileCard(
             icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
             title = "USER.md",
@@ -174,3 +177,33 @@ internal fun MemoryFileCard(
     }
 }
 
+
+/** Opens the learning graph: the skills the agent made or used and what it remembered, over time. */
+@Composable
+private fun LearningEntryCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.learning_title), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(R.string.learning_open_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -74,8 +75,66 @@ class ProfilesRepository @Inject constructor(
             if (copyFrom != null) put("clone_from", JsonPrimitive(copyFrom))
             if (!copyKeys) put("mirror_credentials", JsonPrimitive(false))
         }
-        gatewayClient.request(GatewayMethods.PROFILES_CREATE, params, trackSession = false)
+        val result = gatewayClient.request(GatewayMethods.PROFILES_CREATE, params, trackSession = false) as? JsonObject
+        val path = result?.str("path").orEmpty()
+        if (copyFrom == null && copyKeys && path.isNotEmpty()) {
+            try {
+                copyCustomProviders(path)
+            } catch (e: Exception) {
+                Timber.w(e, "[Profiles] custom providers not copied to %s", name)
+            }
+        }
     }
+
+    /**
+     * The server's key copy brings the launch model (`model.provider: custom:<name>`) and the
+     * `.env`/`auth.json` keys, but only a `providers:` gateway travels with it
+     * (`launch_model_seed`). A custom endpoint added in this app lives in the
+     * `custom_providers:` list, so the new profile answered "Unknown provider 'custom:<name>'".
+     * Copies that list's entries the new profile [profileDir] does not have yet.
+     */
+    private suspend fun copyCustomProviders(profileDir: String) {
+        val script = """
+            import base64, os, pathlib
+            try:
+                from ruamel.yaml import YAML
+                y = YAML()
+                y.width = 2**31 - 1
+                load = lambda p: y.load(p.read_text(encoding='utf-8'))
+                dump = lambda d, f: y.dump(d, f)
+            except ImportError:
+                import yaml
+                load = lambda p: yaml.safe_load(p.read_text(encoding='utf-8'))
+                dump = lambda d, f: yaml.safe_dump(d, f, sort_keys=False, allow_unicode=True)
+            dst_dir = pathlib.Path(base64.b64decode('${b64(profileDir)}').decode())
+            src = dst_dir.parent.parent / 'config.yaml'
+            dst = dst_dir / 'config.yaml'
+            s = (load(src) if src.is_file() else None) or {}
+            custom = [c for c in (s.get('custom_providers') or []) if isinstance(c, dict) and c.get('name')]
+            if custom:
+                d = (load(dst) if dst.is_file() else None) or {}
+                have = d.get('custom_providers')
+                if not isinstance(have, list):
+                    have = []
+                names = {c.get('name') for c in have if isinstance(c, dict)}
+                have.extend(c for c in custom if c.get('name') not in names)
+                d['custom_providers'] = have
+                tmp = dst.with_name(dst.name + '.tmp')
+                with tmp.open('w', encoding='utf-8') as f:
+                    dump(d, f)
+                os.chmod(tmp, 0o600)
+                os.replace(tmp, dst)
+        """.trimIndent()
+        val result = gatewayClient.request(
+            GatewayMethods.SHELL_EXEC,
+            mapOf("command" to JsonPrimitive("printf %s '${b64(script)}' | base64 -d | python3 -")),
+            trackSession = false,
+        ) as? JsonObject
+        val code = result?.str("code")?.toIntOrNull() ?: -1
+        if (code != 0) throw IllegalStateException(result?.str("stderr")?.lines()?.lastOrNull { it.isNotBlank() } ?: "exit $code")
+    }
+
+    private fun b64(s: String): String = java.util.Base64.getEncoder().encodeToString(s.toByteArray(Charsets.UTF_8))
 
     override suspend fun describe(name: String): Details {
         val result = gatewayClient.request(
