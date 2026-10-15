@@ -196,7 +196,9 @@ private fun LearningTimeline(state: LearningViewModel.UiState, viewModel: Learni
                     modifier = Modifier.padding(top = HxSpace.md),
                 )
             }
-            items(nodes, key = { it.id }) { node ->
+            // Prefixed: a skill named "stats" or "categories" shared its key with the rows
+            // above, and two items under one key crash the list.
+            items(nodes, key = { "node:${it.id}" }) { node ->
                 NodeRow(
                     node = node,
                     date = node.timestamp?.let { Instant.ofEpochSecond(it).atZone(zone).format(dayFormat) },

@@ -172,7 +172,9 @@ fun WebhooksScreen(
                 }
             }
             // Routes are listed even with the platform off: they stay saved and come back with it.
-            items(state.routes, key = { it.name }) { route ->
+            // Prefixed: a route named "base" or "error" shared its key with the rows above, and
+            // two items under one key crash the list.
+            items(state.routes, key = { "route:${it.name}" }) { route ->
                 RouteCard(
                     route = route,
                     busy = state.busy,
