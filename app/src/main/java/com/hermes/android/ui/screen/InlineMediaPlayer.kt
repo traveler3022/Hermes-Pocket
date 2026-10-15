@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -86,15 +87,72 @@ class InlinePlayback @Inject constructor(private val players: MediaPlayers) {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-    /** [player] starts playing: the one active before it pauses. */
+    /**
+     * Audio still playing after its chat item scrolled out of the list: kept here so a scroll
+     * doesn't stop the music, handed back by [adopt] when the item comes back. One at a time.
+     */
+    private var kept: Kept? = null
+
+    private inner class Kept(val url: String, val player: ExoPlayer, val lifecycle: Lifecycle) :
+        Player.Listener, LifecycleEventObserver {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) releaseKept()
+        }
+
+        // The item's own rule, kept while it is away: the screen stopping ends playback.
+        override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+            if (event == Lifecycle.Event.ON_STOP) releaseKept()
+        }
+
+        fun detach() {
+            player.removeListener(this)
+            lifecycle.removeObserver(this)
+        }
+    }
+
+    /** [player] starts playing: the one active before it pauses (a kept one nobody shows ends). */
     fun claim(player: Player) {
-        active?.takeIf { it !== player }?.pause()
+        val before = active?.takeIf { it !== player }
+        if (before != null && before === kept?.player) releaseKept() else before?.pause()
         active = player
     }
 
     /** [player] is being released: no longer the active one. */
     fun forget(player: Player) {
         if (active === player) active = null
+    }
+
+    /**
+     * Holds [player], playing [url], for its item that left the list, until the item is back
+     * ([adopt]), it ends, another player starts, or [lifecycle] (the item's screen) stops.
+     */
+    fun keep(url: String, player: ExoPlayer, lifecycle: Lifecycle) {
+        releaseKept()
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            forget(player)
+            player.release()
+            return
+        }
+        val entry = Kept(url, player, lifecycle)
+        kept = entry
+        player.addListener(entry)
+        lifecycle.addObserver(entry)
+    }
+
+    /** The kept player of [url], back to its item; null when none is kept for it. */
+    fun adopt(url: String): ExoPlayer? {
+        val entry = kept?.takeIf { it.url == url } ?: return null
+        kept = null
+        entry.detach()
+        return entry.player
+    }
+
+    private fun releaseKept() {
+        val entry = kept ?: return
+        kept = null
+        entry.detach()
+        forget(entry.player)
+        entry.player.release()
     }
 }
 
@@ -106,7 +164,8 @@ interface InlinePlaybackEntryPoint {
 
 /**
  * One chat item's player: none until the first play, released when the item leaves the
- * composition or the screen stops (back to its poster).
+ * composition or the screen stops (back to its poster). Audio that is playing when the item
+ * scrolls away goes on ([InlinePlayback.keep]) and is picked up again when it scrolls back.
  */
 private class InlineItem(
     private val playback: InlinePlayback,
@@ -121,6 +180,24 @@ private class InlineItem(
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) player?.let(playback::claim)
         }
+    }
+
+    init {
+        if (contentType == C.AUDIO_CONTENT_TYPE_MUSIC) {
+            playback.adopt(url)?.let {
+                it.addListener(listener)
+                player = it
+            }
+        }
+    }
+
+    /** The item left the list: playing audio is kept, anything else is released. */
+    fun leave(lifecycle: Lifecycle) {
+        val current = player ?: return
+        if (contentType != C.AUDIO_CONTENT_TYPE_MUSIC || !current.playWhenReady) return release()
+        player = null
+        current.removeListener(listener)
+        playback.keep(url, current, lifecycle)
     }
 
     fun play() {
@@ -156,8 +233,8 @@ private fun rememberInlineItem(url: String, contentType: Int): InlineItem {
             .inlinePlayback()
         InlineItem(playback, context.applicationContext, url, contentType)
     }
-    DisposableEffect(item) { onDispose { item.release() } }
     val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(item) { onDispose { item.leave(lifecycleOwner.lifecycle) } }
     DisposableEffect(lifecycleOwner, item) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) item.release()
