@@ -581,6 +581,9 @@ class LinuxDesktop @Inject constructor(
             // The Chrome for Testing that older builds put here was a second 400 MB browser.
             "[ \"\$(readlink /usr/local/bin/chromium)\" != /opt/chrome/chrome ] || rm -f /usr/local/bin/chromium; " +
             "rm -rf /opt/chrome; " +
+            // Hermes never fetches that Chromium itself here: HERMES_DISABLE_LAZY_INSTALLS also
+            // skips `hermes update`'s default packages. A named `pm install` is explicit, so it runs.
+            "[ -n \"\$($HermesChromium)\" ] || hermes pm install chromium; " +
             "npm install -g --no-fund --no-audit $AgentBrowserSpec"
 
         const val VerifyCommand =
