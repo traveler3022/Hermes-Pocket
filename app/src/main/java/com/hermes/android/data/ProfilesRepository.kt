@@ -168,6 +168,16 @@ class ProfilesRepository @Inject constructor(
         if (failed.isNotEmpty()) throw IllegalStateException("Not saved: ${failed.joinToString()}")
     }
 
+    override suspend fun saveSoul(name: String, soul: String) {
+        val result = gatewayClient.request(
+            GatewayMethods.PROFILES_CONFIGURE,
+            mapOf("name" to JsonPrimitive(name), "soul" to JsonPrimitive(soul)),
+            trackSession = false,
+        ) as? JsonObject
+        val applied = (result?.get("applied") as? JsonObject)?.get("soul") as? JsonPrimitive
+        if (applied?.contentOrNull != "true") throw IllegalStateException("Not saved: soul")
+    }
+
     /**
      * Renames [old] to [new]. For the default profile only its shown name changes (its id
      * stays `default`). The gateway has no RPC for this; the CLI does it

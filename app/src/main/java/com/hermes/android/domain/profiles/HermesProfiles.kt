@@ -25,6 +25,9 @@ interface HermesProfiles {
 
     suspend fun save(name: String, description: String, soul: String)
 
+    /** Writes only SOUL.md of profile [name]; its description stays as it is. */
+    suspend fun saveSoul(name: String, soul: String)
+
     suspend fun rename(old: String, new: String)
 
     suspend fun delete(name: String)
