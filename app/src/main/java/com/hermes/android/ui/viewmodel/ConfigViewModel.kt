@@ -134,32 +134,36 @@ class ConfigViewModel @Inject constructor(
 
     /** Read back the real current values so the controls reflect saved state. */
     fun loadBehaviorConfig() {
+        // Both through config.get, like approvals.mode below: it reads the open
+        // profile's config, and `reasoning` is the same read the chat's thinking
+        // control uses (no session = the global default).
         viewModelScope.launch {
             try {
-                val out = execPython(
-                    """
-                    import json, yaml, pathlib
-                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
-                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
-                    d = d or {}
-                    agent = d.get('agent') or {}
-                    display = d.get('display') or {}
-                    print(json.dumps({
-                        'reasoning': str(agent.get('reasoning_effort', '') or 'medium'),
-                        'personality': str(display.get('personality') or ''),
-                    }))
-                    """.trimIndent()
-                )
-                val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
                 _uiState.value = _uiState.value.copy(
-                    reasoning = (obj?.get("reasoning") as? JsonPrimitive)?.contentOrNull ?: "medium",
-                    personality = (obj?.get("personality") as? JsonPrimitive)?.contentOrNull ?: "",
+                    reasoning = sessionRepository.reasoningLevel(liveSessionId = null),
                 )
             } catch (e: Exception) {
-                Timber.w(e, "[Config] Failed to load behavior config")
+                Timber.w(e, "[Config] Failed to load reasoning")
+            }
+        }
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(personality = readPersonality())
+            } catch (e: Exception) {
+                Timber.w(e, "[Config] Failed to load personality")
             }
         }
         loadApprovalMode()
+    }
+
+    /** The effective personality; Hermes answers "none" when none is active. */
+    private suspend fun readPersonality(): String {
+        val result = gatewayClient.request(
+            GatewayMethods.CONFIG_GET,
+            buildJsonObject { put("key", "personality") }.toMap(),
+        )
+        val name = ((result as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        return if (name == "none") "" else name
     }
 
     // approvals.mode goes through config.get/config.set, not a config.yaml
@@ -228,23 +232,25 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
-    /** display.personality — a name referencing agent.personalities (or a built-in). */
+    /**
+     * display.personality — a name referencing agent.personalities (or a built-in).
+     * config.set validates the name (an unknown one answers with the available
+     * list), writes the open profile's config and updates live sessions. Its write
+     * result isn't reported, so the value shown is read back.
+     */
     fun setPersonality(value: String) {
         viewModelScope.launch {
             try {
-                execPython(
-                    """
-                    import base64, yaml, pathlib
-                    p = pathlib.Path.home() / '.hermes' / 'config.yaml'
-                    d = yaml.safe_load(p.read_text()) if p.exists() else {}
-                    d = d or {}
-                    d.setdefault('display', {})['personality'] = base64.b64decode('${b64(value)}').decode()
-                    p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print('OK')
-                    """.trimIndent()
+                gatewayClient.request(
+                    GatewayMethods.CONFIG_SET,
+                    buildJsonObject {
+                        put("key", "personality")
+                        put("value", value.trim())
+                    }.toMap(),
                 )
-                _uiState.value = _uiState.value.copy(personality = value)
-                Timber.i("[Config] display.personality set to $value")
+                val saved = readPersonality()
+                _uiState.value = _uiState.value.copy(personality = saved)
+                Timber.i("[Config] personality set to ${saved.ifEmpty { "none" }}")
             } catch (e: Exception) {
                 Timber.e(e, "[Config] Failed to set personality")
                 _uiState.value = _uiState.value.copy(
