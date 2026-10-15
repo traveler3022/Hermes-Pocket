@@ -517,21 +517,27 @@ class LinuxDesktop @Inject constructor(
         const val AgentBrowserSpec = "agent-browser@^0.26.0"
 
         /**
-         * `apk add` set for the desktop. The Linux's repo has the X server (Xvfb) and the
-         * libraries, but not Chromium, a VNC server or the X tools: [PostInstall] brings those.
-         * The library list is what the [DebianPackages] programs load from this Linux (checked
-         * with ldd on Alpaquita); the rest are Chrome's and the CDP proxy's.
+         * `apk add` set for the desktop. The Linux's repo has the libraries, but not Chromium, a
+         * VNC server or the X tools: [PostInstall] brings those. The library list is what the
+         * [DebianPackages] programs load from this Linux (checked with ldd on Alpaquita); the
+         * rest are Chrome's and the CDP proxy's.
+         *
+         * Left out on purpose: xvfb (Xvnc is the X server; xvfb pulled mesa and its ~180 MB
+         * LLVM), gtk+3.0 (Chromium starts without it), and mesa-gbm and cups-libs (the first
+         * pulls all of mesa, the second gcc, ~160 MB, for avahi's libssp). Chromium's libgbm and
+         * libcups come from Debian instead, whose builds need neither.
          */
         val Packages = listOf(
-            "xvfb", "xauth", "fontconfig", "font-dejavu", "python3", "unzip",
+            "xauth", "fontconfig", "font-dejavu", "python3", "unzip",
             // Xvnc, xdotool, openbox, xprop, xclip, xterm
             "cairo", "freetype", "glib", "harfbuzz", "libjpeg-turbo", "libpng", "libssl3", "libx11",
             "libxaw", "libxcursor", "libxdamage", "libxext", "libxfixes", "libxft", "libxi",
             "libxinerama", "libxkbcommon", "libxml2", "libxmu", "libxpm", "libxrandr", "libxrender",
             "libxt", "libxtst", "libncursesw", "pango", "zlib", "dbus-libs", "linux-pam",
-            // Chrome for Testing
-            "nss", "gtk+3.0", "at-spi2-core", "libxcomposite", "mesa-gbm", "alsa-lib", "cups-libs",
-            "libdrm", "libxshmfence", "eudev-libs",
+            "libxfont2", "libcap2", "xkbcomp", "librsvg",
+            // Chromium
+            "nss", "at-spi2-core", "libatk-1.0", "libatk-bridge-2.0", "libxcomposite", "alsa-lib",
+            "libdrm", "libxshmfence", "eudev-libs", "gnutls", "expat", "libffi",
         )
 
         /**
@@ -557,6 +563,11 @@ class LinuxDesktop @Inject constructor(
                 "xdotool libxdo3 " +
                 "openbox libobrender32v5 libobt2v5 libstartup-notification0 libxcb-util1 libimlib2t64 " +
                 "x11-utils xclip xterm libutempter0 libtinfo6 " +
+                // Xvnc links libGL; glvnd's libGL only loads a GL driver when GLX is used.
+                "libgl1 libglx0 libglvnd0 " +
+                // Chromium links libgbm and libcups; Debian's need neither mesa nor gcc.
+                "libgbm1 libwayland-server0 libcups2t64 libavahi-client3 libavahi-common3 " +
+                "libgssapi-krb5-2 libkrb5-3 libk5crypto3 libkrb5support0 libkeyutils1 libcom-err2 " +
                 // The skill's screenshot tool; its libraries are all above or in this Linux.
                 "scrot"
 
