@@ -84,10 +84,11 @@ import javax.inject.Singleton
 class InlinePlayback @Inject constructor(private val players: MediaPlayers) {
     private var active: Player? = null
 
-    fun newPlayer(context: Context): ExoPlayer =
+    /** [contentType]: MUSIC for audio, MOVIE for video; phones pick their sound effects by it. */
+    fun newPlayer(context: Context, contentType: Int): ExoPlayer =
         players.playerBuilder(context.applicationContext)
             .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(contentType).build(),
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
@@ -115,7 +116,12 @@ interface InlinePlaybackEntryPoint {
  * One chat item's player: none until the first play, released when the item leaves the
  * composition or the screen stops (back to its poster).
  */
-private class InlineItem(private val playback: InlinePlayback, private val context: Context, private val url: String) {
+private class InlineItem(
+    private val playback: InlinePlayback,
+    private val context: Context,
+    private val url: String,
+    private val contentType: Int,
+) {
     var player by mutableStateOf<ExoPlayer?>(null)
         private set
 
@@ -126,7 +132,7 @@ private class InlineItem(private val playback: InlinePlayback, private val conte
     }
 
     fun play() {
-        val current = player ?: playback.newPlayer(context).also {
+        val current = player ?: playback.newPlayer(context, contentType).also {
             it.addListener(listener)
             it.setMediaItem(MediaItem.fromUri(url))
             it.prepare()
@@ -150,13 +156,13 @@ private class InlineItem(private val playback: InlinePlayback, private val conte
 }
 
 @Composable
-private fun rememberInlineItem(url: String): InlineItem {
+private fun rememberInlineItem(url: String, contentType: Int): InlineItem {
     val context = LocalContext.current
     val item = remember(url) {
         val playback = EntryPointAccessors
             .fromApplication(context.applicationContext, InlinePlaybackEntryPoint::class.java)
             .inlinePlayback()
-        InlineItem(playback, context.applicationContext, url)
+        InlineItem(playback, context.applicationContext, url, contentType)
     }
     DisposableEffect(item) { onDispose { item.release() } }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -178,7 +184,7 @@ private fun rememberInlineItem(url: String): InlineItem {
 @Composable
 internal fun InlineAudioPlayer(url: String, name: String, onDownload: () -> Unit) {
     val context = LocalContext.current
-    val item = rememberInlineItem(url)
+    val item = rememberInlineItem(url, C.AUDIO_CONTENT_TYPE_MUSIC)
     val player = item.player
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -248,7 +254,7 @@ internal fun InlineAudioPlayer(url: String, name: String, onDownload: () -> Unit
 @Composable
 internal fun InlineVideoPlayer(url: String, name: String, onDownload: () -> Unit) {
     val context = LocalContext.current
-    val item = rememberInlineItem(url)
+    val item = rememberInlineItem(url, C.AUDIO_CONTENT_TYPE_MOVIE)
     val player = item.player
     val openViewer = {
         item.pause()
