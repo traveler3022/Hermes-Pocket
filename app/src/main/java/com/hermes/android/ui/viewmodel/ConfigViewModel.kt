@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayEvent
@@ -48,6 +49,7 @@ class ConfigViewModel @Inject constructor(
     private val sessionRepository: ChatSessions,
     private val modelSwitcher: ModelSwitcher,
     private val connectionJournal: com.hermes.android.diagnostics.ConnectionJournal,
+    private val profiles: HermesProfiles,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -263,11 +265,7 @@ class ConfigViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingSoul = true)
             try {
-                val result = gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf("command" to JsonPrimitive("cat ~/.hermes/SOUL.md 2>/dev/null || echo ''")),
-                )
-                val soul = (result as? JsonObject)?.get("stdout")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
+                val soul = profiles.describe(soulProfile()).soul
                 _uiState.value = _uiState.value.copy(soulMd = soul, isLoadingSoul = false)
             } catch (e: Exception) {
                 Timber.w(e, "[Config] Failed to load SOUL.md")
@@ -276,17 +274,13 @@ class ConfigViewModel @Inject constructor(
         }
     }
 
+    /** SOUL.md belongs to the open profile; null is the gateway's own, which Hermes calls `default`. */
+    private fun soulProfile(): String = profiles.active.value ?: "default"
+
     fun saveSoul(content: String) {
         viewModelScope.launch {
             try {
-                execPython(
-                    """
-                    import base64, pathlib
-                    p = pathlib.Path.home() / '.hermes' / 'SOUL.md'
-                    p.write_text(base64.b64decode('${b64(content)}').decode())
-                    print('OK')
-                    """.trimIndent()
-                )
+                profiles.saveSoul(soulProfile(), content)
                 _uiState.value = _uiState.value.copy(soulMd = content, errorMessage = "SOUL.md saved")
                 Timber.i("[Config] SOUL.md saved")
             } catch (e: Exception) {
