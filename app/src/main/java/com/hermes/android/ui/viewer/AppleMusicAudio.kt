@@ -4,6 +4,14 @@
 // NowPlayingContentAppleMusic.kt.
 package com.hermes.android.ui.viewer
 
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.aspectRatio
+import android.media.AudioManager
+import androidx.compose.animation.Crossfade
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.mutableFloatStateOf
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.width
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -103,11 +111,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.compose.material3.buttons.PlayPauseButton
-import androidx.media3.ui.compose.material3.buttons.SeekBackButton
-import androidx.media3.ui.compose.material3.buttons.SeekForwardButton
 import androidx.media3.ui.compose.material3.text.ErrorText
 import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
+import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
+import androidx.media3.ui.compose.state.rememberSeekBackButtonState
+import androidx.media3.ui.compose.state.rememberSeekForwardButtonState
 import androidx.media3.ui.compose.state.rememberProgressStateWithTickInterval
 import com.hermes.android.R
 import com.hermes.android.ui.component.ZoomableImage
@@ -153,7 +161,12 @@ internal fun AppleMusicAudio(player: Player, name: String, onBack: () -> Unit, o
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MeshFallback)) {
         val artworkHeight = minOf(maxWidth, maxHeight * ARTWORK_MAX_HEIGHT_FRACTION)
         val artworkFade = artworkHeight * ARTWORK_FADE_FRACTION
-        val mesh = rememberAppleMusicMesh(artwork, seed = name.hashCode())
+        // No artwork: the page still gets a colour, read off the app's own accent colours.
+        val scheme = MaterialTheme.colorScheme
+        val placeholderArt = remember(scheme.primary, scheme.tertiary, scheme.secondary) {
+            placeholderArtwork(scheme.primary, scheme.tertiary, scheme.secondary)
+        }
+        val mesh = rememberAppleMusicMesh(artwork ?: placeholderArt, seed = name.hashCode())
         AppleMusicMeshBackdrop(mesh = mesh, seam = artworkHeight)
 
         Box(
@@ -169,10 +182,19 @@ internal fun AppleMusicAudio(player: Player, name: String, onBack: () -> Unit, o
                     modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = artworkFade),
                 )
             } else {
-                Icon(
-                    Icons.Filled.MusicNote, contentDescription = null,
-                    modifier = Modifier.size(120.dp), tint = Color.White.copy(alpha = 0.35f),
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.62f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.MusicNote, contentDescription = null,
+                        modifier = Modifier.fillMaxSize(0.45f), tint = Color.White.copy(alpha = 0.55f),
+                    )
+                }
             }
             if (flags.buffering) CircularProgressIndicator(color = Color.White)
         }
@@ -227,6 +249,8 @@ internal fun AppleMusicAudio(player: Player, name: String, onBack: () -> Unit, o
             AppleMusicProgress(player)
             Spacer(Modifier.height(22.dp))
             AppleMusicTransportRow(player)
+            Spacer(Modifier.height(28.dp))
+            AppleMusicVolumeRow()
             ErrorText(
                 player,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -270,7 +294,7 @@ private fun AppleMusicProgress(player: Player) {
             modifier = Modifier.weight(1f), textAlign = TextAlign.Left,
         )
         Text(
-            duration?.let { "-" + formatTime((it - elapsed).coerceAtLeast(0L)) } ?: "--:--",
+            duration?.let(::formatTime) ?: "--:--",
             style = MaterialTheme.typography.bodyMedium, color = SecondaryText,
             modifier = Modifier.weight(1f), textAlign = TextAlign.Right,
         )
@@ -281,25 +305,108 @@ private fun AppleMusicProgress(player: Player) {
 @OptIn(UnstableApi::class)
 @Composable
 private fun AppleMusicTransportRow(player: Player) {
-    val white = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+    val back = rememberSeekBackButtonState(player)
+    val playPause = rememberPlayPauseButtonState(player)
+    val forward = rememberSeekForwardButtonState(player)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(TRANSPORT_GAP, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SeekBackButton(
-            player, modifier = Modifier.appleMusicPressInflate().size(56.dp).clip(CircleShape),
-            iconSize = 40.dp, colors = white,
-        )
-        PlayPauseButton(
-            player, modifier = Modifier.appleMusicPressInflate().size(76.dp).clip(CircleShape),
-            iconSize = 60.dp, colors = white,
-        )
-        SeekForwardButton(
-            player, modifier = Modifier.appleMusicPressInflate().size(56.dp).clip(CircleShape),
-            iconSize = 40.dp, colors = white,
+        TransportGlyph(AppleMusicIcons.FastRewind, null, back.isEnabled, 56.dp, 46.dp, back::onClick)
+        Box(
+            modifier = Modifier
+                .appleMusicPressInflate()
+                .size(76.dp)
+                .clip(CircleShape)
+                .clickable(enabled = playPause.isEnabled, onClick = playPause::onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Crossfade(targetState = playPause.showPlay, label = "audioPlayPause") { showPlay ->
+                Icon(
+                    if (showPlay) AppleMusicIcons.PlayArrow else AppleMusicIcons.Pause,
+                    contentDescription = stringResource(if (showPlay) R.string.play else R.string.pause),
+                    tint = Color.White,
+                    modifier = Modifier.size(66.dp),
+                )
+            }
+        }
+        TransportGlyph(AppleMusicIcons.FastForward, null, forward.isEnabled, 56.dp, 46.dp, forward::onClick)
+    }
+}
+
+@Composable
+private fun TransportGlyph(
+    icon: ImageVector,
+    description: String?,
+    enabled: Boolean,
+    size: Dp,
+    iconSize: Dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .appleMusicPressInflate()
+            .size(size)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon, contentDescription = description,
+            tint = Color.White.copy(alpha = if (enabled) 1f else 0.4f),
+            modifier = Modifier.size(iconSize),
         )
     }
+}
+
+/**
+ * The phone's media volume on the same thin bar, as in Apple Music. Polled once a second so the
+ * volume keys show up here too; dragging sets it without the system volume panel.
+ */
+@Composable
+private fun AppleMusicVolumeRow() {
+    val context = LocalContext.current
+    val audio = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager } ?: return
+    val max = remember(audio) { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+    if (max <= 0) return
+    var level by remember(audio) { mutableFloatStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max) }
+    LaunchedEffect(audio) {
+        while (true) {
+            delay(VOLUME_POLL_MS)
+            level = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+        }
+    }
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(AppleMusicIcons.VolumeDown, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Box(modifier = Modifier.weight(1f).height(18.dp), contentAlignment = Alignment.Center) {
+            AppleMusicThinSlider(
+                value = level,
+                enabled = true,
+                activeColor = TrackActive,
+                onValueChange = { fraction ->
+                    val clamped = fraction.coerceIn(0f, 1f)
+                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, (clamped * max).roundToInt(), 0)
+                    level = clamped
+                },
+                onValueChangeFinished = {},
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Icon(AppleMusicIcons.VolumeUp, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** A 2x2 picture of [a], [b] and [c] for the mesh to read when the file has no artwork. */
+private fun placeholderArtwork(a: Color, b: Color, c: Color): ImageBitmap {
+    val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+    bitmap.setPixel(0, 0, a.toArgb())
+    bitmap.setPixel(1, 0, b.toArgb())
+    bitmap.setPixel(0, 1, c.toArgb())
+    bitmap.setPixel(1, 1, lerp(a, Color.Black, 0.5f).toArgb())
+    return bitmap.asImageBitmap()
 }
 
 private fun formatTime(ms: Long): String {
@@ -732,3 +839,4 @@ private const val TOP_WASH_MAX_ALPHA = 0.65f
 
 private val TRANSPORT_GAP = 58.dp
 private const val PROGRESS_TICK_MS = 250L
+private const val VOLUME_POLL_MS = 1_000L
