@@ -16,6 +16,13 @@ cat "$OUT/instrumentation-gradle.log"
 adb devices -l > "$OUT/adb-devices-after-tests.txt" 2>&1 || true
 adb logcat -d -v threadtime > "$OUT/instrumentation-logcat.txt" 2>&1 || true
 
+# connectedDebugAndroidTest uninstalls the app when it finishes, so the launch probe below
+# found no app ("Activity class ... does not exist") on every run. Put the built APK back.
+if ! adb install -r app/build/outputs/apk/debug/app-debug.apk > "$OUT/reinstall.txt" 2>&1; then
+  echo "::error::Could not reinstall the debug APK for the launch probe (see reinstall.txt)."
+  cat "$OUT/reinstall.txt"
+fi
+
 adb logcat -c || true
 adb shell am force-stop com.hermes.android.debug || true
 if adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.hermes.android.debug/com.hermes.android.MainActivity > "$OUT/cold-start.txt" 2>&1; then

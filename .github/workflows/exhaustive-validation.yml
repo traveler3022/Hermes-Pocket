@@ -20,6 +20,7 @@ on:
     paths:
       - .github/workflows/exhaustive-validation.yml
       - scripts/exhaustive_feature_audit.py
+      - scripts/run-emulator-validation.sh
       - app/src/androidTest/**
 
 permissions:
