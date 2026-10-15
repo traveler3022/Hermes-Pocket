@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -18,24 +17,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.OptIn
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Fullscreen
 import com.hermes.android.ui.icons.filled.FullscreenExit
-import com.hermes.android.ui.icons.filled.MusicNote
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -69,15 +57,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -94,14 +79,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.ui.compose.material3.Player as Media3Player
 import androidx.media3.ui.compose.material3.PlayerDefaults
-import androidx.media3.ui.compose.material3.buttons.PlayPauseButton
-import androidx.media3.ui.compose.material3.buttons.SeekBackButton
-import androidx.media3.ui.compose.material3.buttons.SeekForwardButton
 import androidx.media3.ui.compose.material3.indicator.DurationText
-import androidx.media3.ui.compose.material3.indicator.PositionText
-import androidx.media3.ui.compose.material3.indicator.ProgressSlider
-import androidx.media3.ui.compose.material3.text.ErrorText
-import androidx.media3.ui.compose.state.rememberCurrentMediaItemState
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.media.MediaPlayers
 import com.hermes.android.gateway.GatewayClient
@@ -303,6 +281,13 @@ private fun FileViewerScreen(
     openExternally: () -> Unit,
     onBack: () -> Unit,
 ) {
+    if (kind == FileKind.AUDIO) {
+        // Full-bleed: the player draws its own back and open-elsewhere buttons over its artwork.
+        Box(modifier = Modifier.fillMaxSize().background(MeshFallback)) {
+            BackgroundAudio(uri, name) { player -> AppleMusicAudio(player, name, onBack, openExternally) }
+        }
+        return
+    }
     var fullscreen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
@@ -323,7 +308,7 @@ private fun FileViewerScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (kind) {
-                FileKind.AUDIO -> BackgroundAudio(uri, name) { player -> AudioControls(player, name) }
+                FileKind.AUDIO -> Unit
                 FileKind.VIDEO -> MediaViewer(uri, newPlayer) { player -> VideoPlayer(player, fullscreen) { fullscreen = it } }
                 FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes, openExternally)
                 FileKind.HTML -> HtmlViewer(uri, readBytes, openExternally)
@@ -496,82 +481,6 @@ private fun VideoPlayer(player: Player, fullscreen: Boolean, onFullscreen: (Bool
             },
         )
         if (flags.buffering) CircularProgressIndicator(Modifier.align(Alignment.Center))
-    }
-}
-
-/**
- * Audio: the file's embedded artwork (or a note icon), its title and artist when tagged,
- * then Media3's Material 3 slider, times and buttons.
- */
-@OptIn(UnstableApi::class)
-@Composable
-private fun AudioControls(player: Player, name: String) {
-    val flags = rememberPlaybackFlags(player)
-    val metadata = rememberCurrentMediaItemState(player).mediaMetadata
-    val artwork = remember(metadata.artworkData) {
-        metadata.artworkData?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
-    }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        var artworkOpen by remember { mutableStateOf(false) }
-        if (artworkOpen && metadata.artworkData != null) {
-            Dialog(
-                onDismissRequest = { artworkOpen = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-            ) {
-                ZoomableImage(
-                    model = metadata.artworkData,
-                    modifier = Modifier.background(Color.Black),
-                    onTap = { artworkOpen = false },
-                )
-            }
-        }
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(enabled = artwork != null) { artworkOpen = true },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (artwork != null) {
-                Image(artwork, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Icon(
-                    Icons.Filled.MusicNote, contentDescription = null,
-                    modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (flags.buffering) CircularProgressIndicator()
-        }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            metadata.title?.toString()?.takeIf { it.isNotBlank() } ?: name,
-            style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
-        )
-        metadata.artist?.toString()?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        }
-        Spacer(Modifier.height(24.dp))
-        ProgressSlider(player, Modifier.fillMaxWidth())
-        Row(modifier = Modifier.fillMaxWidth()) {
-            PositionText(player)
-            Spacer(Modifier.weight(1f))
-            DurationText(player)
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            SeekBackButton(player)
-            PlayPauseButton(
-                player, modifier = Modifier.size(72.dp), iconSize = 40.dp,
-                colors = IconButtonDefaults.filledIconButtonColors(),
-            )
-            SeekForwardButton(player)
-        }
-        ErrorText(player, modifier = Modifier.padding(top = 16.dp), color = MaterialTheme.colorScheme.error)
     }
 }
 
