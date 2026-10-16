@@ -115,9 +115,10 @@ internal fun AssistantMessageBubble(
                     }
                     // A turn can end on a tool rather than a sentence, leaving
                     // this message with no text at all. Only a turn still in
-                    // flight is waiting for words.
+                    // flight is waiting for words; once the thinking line is up
+                    // it is the live indicator, so the dots go.
                     if (message.text.isEmpty()) {
-                        if (message.isStreaming) {
+                        if (message.isStreaming && !hasTrace) {
                             TypingDots(modifier = Modifier.padding(vertical = 4.dp))
                         }
                     } else {
@@ -236,7 +237,7 @@ internal fun AssistantMessageBubble(
                         }
                     }
                     // An empty streaming reply already shows its dots above.
-                    if (message.isStreaming && message.text.isNotEmpty()) {
+                    if (message.isStreaming && message.text.isNotEmpty() && !hasTrace) {
                         Spacer(modifier = Modifier.height(4.dp))
                         TypingDots(dotSize = 4.dp)
                     }
