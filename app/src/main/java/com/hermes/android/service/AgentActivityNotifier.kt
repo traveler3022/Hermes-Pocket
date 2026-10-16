@@ -62,6 +62,28 @@ class AgentActivityNotifier @Inject constructor(
         )
     }
 
+    /** A Kanban task reached [status] (`done`, `blocked` or `review`) while the app was away. */
+    fun showKanbanTask(taskId: String, title: String, status: String, detail: String) {
+        val label = when (status) {
+            "done" -> tForContext(context, "Kanban task finished", "تسک کانبان تمام شد")
+            "blocked" -> tForContext(context, "Kanban task is stuck", "تسک کانبان گیر کرد")
+            else -> tForContext(context, "Kanban task needs review", "تسک کانبان منتظر بررسی است")
+        }
+        val text = listOf(title.ifBlank { taskId }, plainText(detail).take(400)).filter { it.isNotBlank() }.joinToString("\n")
+        val id = "kanban_$taskId".hashCode()
+        val notification = HermesNotifications.builder(context, CHANNEL_ID)
+            .setContentTitle(label)
+            .setContentText(text.lineSequence().first().take(140))
+            .setSubText(tForContext(context, "Kanban", "کانبان"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(HermesNotifications.openKanban(context))
+            .setGroup(GROUP_RESULTS)
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .build()
+        manager().notify(id, notification)
+    }
+
     private fun show(
         key: String,
         title: String,

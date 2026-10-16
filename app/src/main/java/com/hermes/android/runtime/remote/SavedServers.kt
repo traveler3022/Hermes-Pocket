@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
@@ -26,6 +27,8 @@ data class SavedServer(
     val name: String,
     /** Epoch millis of the last connection. */
     val lastUsed: Long,
+    /** The user gave [name] themselves; reconnecting keeps it. */
+    val renamed: Boolean = false,
 )
 
 /**
@@ -47,12 +50,23 @@ class SavedServers @Inject constructor(
     fun remember(url: String, name: String) {
         val key = keyOf(url) ?: return
         val old = _servers.value.firstOrNull { keyOf(it.url) == key }
+        val keepName = old != null && (old.renamed || name.isBlank())
         val entry = SavedServer(
             url = url.trim(),
-            name = name.ifBlank { old?.name.orEmpty() }.ifBlank { hostOf(url) },
+            name = (if (keepName) old?.name.orEmpty() else name).ifBlank { hostOf(url) },
             lastUsed = System.currentTimeMillis(),
+            renamed = old?.renamed == true,
         )
         write(listOf(entry) + _servers.value.filter { keyOf(it.url) != key })
+    }
+
+    /** Names [url] [name]; a blank name goes back to the host. Keeps its place in the list. */
+    @Synchronized
+    fun rename(url: String, name: String) {
+        val key = keyOf(url) ?: return
+        write(_servers.value.map {
+            if (keyOf(it.url) != key) it else it.copy(name = name.trim().ifBlank { hostOf(it.url) }, renamed = name.isNotBlank())
+        })
     }
 
     @Synchronized
@@ -68,6 +82,7 @@ class SavedServers @Inject constructor(
                     put("url", s.url)
                     put("name", s.name)
                     put("last_used", s.lastUsed)
+                    if (s.renamed) put("renamed", true)
                 })
             }
         }.toString()
@@ -85,6 +100,7 @@ class SavedServers @Inject constructor(
                     url = url,
                     name = o.str("name").ifBlank { hostOf(url) },
                     lastUsed = (o["last_used"] as? JsonPrimitive)?.longOrNull ?: 0L,
+                    renamed = (o["renamed"] as? JsonPrimitive)?.booleanOrNull == true,
                 )
             }
         }.onFailure { Timber.w(it, "[SavedServers] List unreadable; starting empty") }.getOrDefault(emptyList())

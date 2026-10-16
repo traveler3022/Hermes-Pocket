@@ -1,5 +1,6 @@
 package com.hermes.android.gateway
 
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -93,5 +94,23 @@ class ProfileScopeTest {
         val lookup = GatewayException("x", code = 4064, rpcMessage = "profile 'other' not found")
         assertEquals(true, gone.isUnknownProfile("writer"))
         assertEquals(false, lookup.isUnknownProfile("writer"))
+    }
+
+    @Test
+    fun `another server does not inherit the selection or what the last backend refused`() {
+        var now = "remote:https://a"
+        val servers = mockk<com.hermes.android.runtime.ServerIdentity> {
+            every { current() } answers { now }
+            every { changes } returns kotlinx.coroutines.flow.emptyFlow()
+        }
+        val perServer = ProfileScope(mockk(relaxed = true), servers)
+        perServer.select("writer")
+        perServer.refuse("projects.tree")
+        assertEquals("writer", perServer.profileFor("session.create", params()))
+        now = "proot_linux"
+        assertNull(perServer.profileFor("session.create", params()))
+        assertNull(perServer.active.value)
+        perServer.select("coder")
+        assertEquals("coder", perServer.profileFor("projects.tree", params()))
     }
 }

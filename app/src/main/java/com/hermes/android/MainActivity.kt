@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
      */
     private val pendingAssist = mutableStateOf<AssistOpen?>(null)
 
+    /** A tap on a Kanban notification, until the nav host has opened the board. */
+    private val pendingKanban = mutableStateOf<KanbanOpen?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -88,6 +91,7 @@ class MainActivity : ComponentActivity() {
             savedInstanceState?.getBoolean(KEY_ASSIST_TAKEN, true) == false ||
             (savedInstanceState == null && isFreshAssist(intent))
         ) AssistOpen() else null
+        if (savedInstanceState == null && isKanbanTap(intent)) pendingKanban.value = KanbanOpen()
         // Set when the user taps an agent-activity notification ("task done"):
         // opens the app straight into the session the result belongs to.
         val notificationSessionId = intent?.getStringExtra(
@@ -121,6 +125,8 @@ class MainActivity : ComponentActivity() {
                                 notificationOpen = notificationOpen.value,
                                 assistOpen = pendingAssist.value,
                                 onAssistTaken = { pendingAssist.value = null },
+                                kanbanOpen = pendingKanban.value,
+                                onKanbanTaken = { pendingKanban.value = null },
                                 themeModeState = themeModeState,
                                 appLanguageState = appLanguageState,
                             )
@@ -147,6 +153,7 @@ class MainActivity : ComponentActivity() {
         if (isFreshAssist(intent)) {
             pendingAssist.value = AssistOpen()
         }
+        if (isKanbanTap(intent)) pendingKanban.value = KanbanOpen()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -218,6 +225,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Reopened from Recents, the old assist intent comes again; that is no new invocation. */
+    private fun isKanbanTap(intent: Intent?): Boolean =
+        intent?.getBooleanExtra(com.hermes.android.service.HermesNotifications.EXTRA_OPEN_KANBAN, false) == true &&
+            ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0)
+
     private fun isFreshAssist(intent: Intent?): Boolean =
         com.hermes.android.assistant.AssistantLaunch.isAssistIntent(intent) &&
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
@@ -262,6 +273,8 @@ private fun HermesNavHost(
     notificationOpen: NotificationOpen? = null,
     assistOpen: AssistOpen? = null,
     onAssistTaken: () -> Unit = {},
+    kanbanOpen: KanbanOpen? = null,
+    onKanbanTaken: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
 ) {
@@ -503,6 +516,16 @@ private fun HermesNavHost(
         }
     }
 
+    // A Kanban notification tapped: open the board (not over the first-run setup).
+    LaunchedEffect(kanbanOpen) {
+        if (kanbanOpen == null) return@LaunchedEffect
+        val route = navController.currentDestination?.route
+        if (route != null && route != "setup" && route != "kanban") {
+            navController.navigate("kanban") { launchSingleTop = true }
+        }
+        onKanbanTaken()
+    }
+
     // The assistant gesture while another page is open: back to the chat, which
     // then opens the new chat and the voice input. Dropped during the first-run
     // setup: a voice prompt popping up once it is done would come out of nowhere.
@@ -522,6 +545,9 @@ private fun HermesNavHost(
 
 /** One assistant invocation; a class, not data, so a second long-press still counts. */
 private class AssistOpen
+
+/** One Kanban notification tap; a class, not data, so a second tap still counts. */
+private class KanbanOpen
 
 /** One notification tap; a class, not data, so tapping the same chat again still counts. */
 private class NotificationOpen(val sessionId: String)

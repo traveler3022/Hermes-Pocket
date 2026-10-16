@@ -50,6 +50,24 @@ object HermesNotifications {
         )
     }
 
+    /** Opens the app on the Kanban board. */
+    fun openKanban(context: Context): PendingIntent {
+        val intent = EntryPointAccessors.fromApplication(context, MainScreenEntryPoint::class.java)
+            .mainScreenIntent().create(context).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_OPEN_KANBAN, true)
+            }
+        return PendingIntent.getActivity(
+            context,
+            EXTRA_OPEN_KANBAN.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /** Intent extra: open the Kanban board. */
+    const val EXTRA_OPEN_KANBAN = "hermes.notification.open_kanban"
+
     /** Creates [channel] inside the shared "Hermes" group (idempotent). */
     fun ensureChannel(context: Context, channel: NotificationChannel) {
         val manager = context.getSystemService(NotificationManager::class.java)
