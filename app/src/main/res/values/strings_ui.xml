@@ -1100,4 +1100,8 @@
     <string name="moved_to_project">Moved to %1$s</string>
     <string name="move_to_project_failed">Could not move the chat</string>
     <string name="run_now">Run now</string>
+    <string name="saved_servers">Saved servers</string>
+    <string name="connected_now">Connected</string>
+    <string name="remove_saved_server">Remove saved server?</string>
+    <string name="remove_saved_server_body">%1$s leaves the list and its kept login is forgotten on this phone. The server itself is not touched.</string>
 </resources>

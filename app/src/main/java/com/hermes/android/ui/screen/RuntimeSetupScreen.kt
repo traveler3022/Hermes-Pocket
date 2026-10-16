@@ -25,6 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import com.hermes.android.runtime.remote.SavedServer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
@@ -426,6 +430,17 @@ internal fun RemoteServerSetupContent(
         textAlign = TextAlign.Center,
     )
 
+    val savedServerList by viewModel.savedServerList.collectAsStateWithLifecycle()
+    if (savedServerList.isNotEmpty()) {
+        SavedServersCard(
+            servers = savedServerList,
+            currentUrl = serverConfig.serverUrl,
+            connected = ready,
+            busy = connecting || signingIn,
+            onConnect = { viewModel.connectToSaved(it) },
+            onForget = { viewModel.forgetSaved(it) },
+        )
+    }
     TailscaleCard(
         ui = tailscaleUi,
         serverUrl = serverConfig.serverUrl,
@@ -468,6 +483,88 @@ internal fun RemoteServerSetupContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.continue_text))
+        }
+    }
+}
+
+/**
+ * Servers this phone connected to before. One tap connects again with the login kept for it, so
+ * whoever connected through Tailscale never needs to know the address.
+ */
+@Composable
+private fun SavedServersCard(
+    servers: List<SavedServer>,
+    currentUrl: String,
+    connected: Boolean,
+    busy: Boolean,
+    onConnect: (SavedServer) -> Unit,
+    onForget: (SavedServer) -> Unit,
+) {
+    var forgetTarget by remember { mutableStateOf<SavedServer?>(null) }
+    forgetTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { forgetTarget = null },
+            title = { Text(stringResource(R.string.remove_saved_server)) },
+            text = { Text(stringResource(R.string.remove_saved_server_body, target.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    forgetTarget = null
+                    onForget(target)
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { forgetTarget = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.saved_servers), style = MaterialTheme.typography.titleMedium)
+            servers.forEach { server ->
+                val current = connected && server.url.trim().trimEnd('/') == currentUrl.trim().trimEnd('/')
+                Surface(
+                    onClick = { if (!current && !busy) onConnect(server) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (current) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(vertical = 4.dp)) {
+                            Text(
+                                text = server.name + if (current) "  ✓" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = if (current) stringResource(R.string.connected_now) else server.url,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        IconButton(onClick = { forgetTarget = server }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.delete),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

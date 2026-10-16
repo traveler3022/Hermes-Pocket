@@ -89,18 +89,30 @@ class RemoteTokenStore @Inject constructor(
         prefs.edit().putString(KEY_BLOB, seal(text)).apply()
     }
 
-    /** The kept login, or null. */
+    /**
+     * The login kept for the server at [serverUrl] (its [remoteHttpBase]), or null. Each server keeps
+     * its own: a pairing door hands its login over only once, so switching to another saved server
+     * must not lose the first one's.
+     */
     @Synchronized
-    fun loadCredentials(): RemoteCredentials? {
-        val blob = prefs.getString(KEY_CREDENTIALS, null) ?: return null
-        return runCatching {
-            val o = Json.parseToJsonElement(open(blob)).jsonObject
-            RemoteCredentials(serverUrl = o.str("server_url"), username = o.str("username"), password = o.str("password"))
-        }.onFailure {
-            Timber.w(it, "[RemoteAuth] Stored login unreadable; dropping it")
-            prefs.edit().remove(KEY_CREDENTIALS).apply()
-        }.getOrNull()
+    fun loadCredentials(serverUrl: String): RemoteCredentials? {
+        prefs.getString(KEY_LOGIN_PREFIX + serverUrl, null)?.let { blob ->
+            readCredentials(blob)?.let { return it }
+            prefs.edit().remove(KEY_LOGIN_PREFIX + serverUrl).apply()
+        }
+        // The single slot older versions kept.
+        val legacy = prefs.getString(KEY_CREDENTIALS, null) ?: return null
+        val kept = readCredentials(legacy)
+        if (kept == null) prefs.edit().remove(KEY_CREDENTIALS).apply()
+        return kept?.takeIf { it.serverUrl == serverUrl }
     }
+
+    private fun readCredentials(blob: String): RemoteCredentials? = runCatching {
+        val o = Json.parseToJsonElement(open(blob)).jsonObject
+        RemoteCredentials(serverUrl = o.str("server_url"), username = o.str("username"), password = o.str("password"))
+    }.onFailure {
+        Timber.w(it, "[RemoteAuth] Stored login unreadable; dropping it")
+    }.getOrNull()
 
     @Synchronized
     fun saveCredentials(credentials: RemoteCredentials) {
@@ -109,13 +121,31 @@ class RemoteTokenStore @Inject constructor(
             put("username", credentials.username)
             put("password", credentials.password)
         }.toString()
-        prefs.edit().putString(KEY_CREDENTIALS, seal(text)).apply()
+        val edit = prefs.edit().putString(KEY_LOGIN_PREFIX + credentials.serverUrl, seal(text))
+        // The older single slot moves to its own server's key instead of being lost.
+        prefs.getString(KEY_CREDENTIALS, null)?.let { legacy ->
+            val kept = readCredentials(legacy)
+            if (kept != null && kept.serverUrl != credentials.serverUrl &&
+                !prefs.contains(KEY_LOGIN_PREFIX + kept.serverUrl)
+            ) {
+                edit.putString(KEY_LOGIN_PREFIX + kept.serverUrl, legacy)
+            }
+        }
+        edit.remove(KEY_CREDENTIALS).apply()
     }
 
-    /** Forgets the tokens and the kept login. */
+    /** Forgets the tokens and the login kept for [serverUrl] (other servers' logins stay). */
     @Synchronized
-    fun clear() {
-        prefs.edit().remove(KEY_BLOB).remove(KEY_CREDENTIALS).apply()
+    fun clear(serverUrl: String?) {
+        val edit = prefs.edit().remove(KEY_BLOB).remove(KEY_CREDENTIALS)
+        if (serverUrl != null) edit.remove(KEY_LOGIN_PREFIX + serverUrl)
+        edit.apply()
+    }
+
+    /** Forgets only the login kept for [serverUrl], as when that saved server is removed. */
+    @Synchronized
+    fun forgetLogin(serverUrl: String) {
+        prefs.edit().remove(KEY_LOGIN_PREFIX + serverUrl).apply()
     }
 
     private fun seal(text: String): String {
@@ -152,6 +182,7 @@ class RemoteTokenStore @Inject constructor(
         const val PREFS_NAME = "hermes_remote_auth"
         const val KEY_BLOB = "tokens"
         const val KEY_CREDENTIALS = "credentials"
+        const val KEY_LOGIN_PREFIX = "login:"
         const val KEY_ALIAS = "hermes_remote_tokens"
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

@@ -146,7 +146,7 @@ class RemoteAuth @Inject constructor(
             try {
                 // A login the door already handed over (the sign-in after it may have failed): the
                 // door is closed by now, so this is the only way to it.
-                store.loadCredentials()?.takeIf { it.serverUrl == base }?.let { kept ->
+                store.loadCredentials(base)?.let { kept ->
                     try {
                         return@withContext PairResult.Paired(passwordLoginBlocking(base, kept.username, kept.password))
                     } catch (e: WrongLoginException) {
@@ -176,8 +176,15 @@ class RemoteAuth @Inject constructor(
 
     /** Forgets the sign-in and the kept login on this phone. */
     fun signOut() {
-        store.clear()
+        store.clear(_session.value?.serverUrl)
         _session.value = null
+    }
+
+    /** Forgets the login kept for [serverUrl]; signs out first when it is the current server. */
+    fun forgetServer(serverUrl: String) {
+        val base = remoteHttpBase(serverUrl) ?: return
+        if (_session.value?.serverUrl == base) signOut()
+        store.forgetLogin(base)
     }
 
     /** An access token for [tokens]' server, refreshed first when it is about to lapse. */
@@ -258,7 +265,7 @@ class RemoteAuth @Inject constructor(
 
     /** With the kept login for [ended]'s server, signs in again; otherwise drops the sign-in. */
     private fun signInAgainBlocking(ended: RemoteTokens): RemoteTokens? {
-        val login = store.loadCredentials()?.takeIf { it.serverUrl == ended.serverUrl }
+        val login = store.loadCredentials(ended.serverUrl)
         if (login == null) {
             signOut()
             return null
