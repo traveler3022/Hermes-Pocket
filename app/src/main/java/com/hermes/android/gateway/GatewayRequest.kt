@@ -121,6 +121,7 @@ object GatewayMethods {
     const val PROJECTS_TREE = "projects.tree"
     const val PROJECT_FACTS = "project.facts"
     const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
+    const val SESSION_WORKSPACE_MOVE = "session.workspace.move"
 
     // Profiles: separate agents (own config, skills, memory, sessions) on one gateway.
     // Any other call picks one with a `profile` param (gateway/ProfileScope.kt).

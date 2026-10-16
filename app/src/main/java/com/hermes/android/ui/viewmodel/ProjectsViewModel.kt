@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.session.ChatSessions
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -31,6 +34,15 @@ class ProjectsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ProjectsUiState())
     val uiState = _uiState.asStateFlow()
+
+    /** Outcome of a move-to-project: the project's label, or null when it failed. */
+    sealed interface MoveResult {
+        data class Moved(val projectLabel: String) : MoveResult
+        data class Failed(val message: String?) : MoveResult
+    }
+
+    private val _moveResults = MutableSharedFlow<MoveResult>(extraBufferCapacity = 1)
+    val moveResults: SharedFlow<MoveResult> = _moveResults.asSharedFlow()
 
     fun load() {
         viewModelScope.launch {
@@ -91,6 +103,22 @@ class ProjectsViewModel @Inject constructor(
                 Timber.w(e, "[Projects] createProjectSession failed")
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
+        }
+    }
+
+    /** Moves a stored chat into [project]'s folder (`session.workspace.move`), as the desktop's "Move to project". */
+    fun moveSession(sessionId: String, project: Projects.ProjectSummary) {
+        if (project.path.isBlank()) return
+        viewModelScope.launch {
+            val result = try {
+                repository.moveSession(sessionId, project.path)
+                load()
+                MoveResult.Moved(project.label)
+            } catch (e: Exception) {
+                Timber.w(e, "[Projects] moveSession failed")
+                MoveResult.Failed(e.message)
+            }
+            _moveResults.emit(result)
         }
     }
 }

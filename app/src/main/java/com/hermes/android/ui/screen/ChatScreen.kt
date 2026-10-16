@@ -28,10 +28,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.filled.Settings
 import com.hermes.android.ui.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
@@ -165,6 +168,7 @@ fun ChatScreen(
     // here keeps one implementation of that rather than a second copy.
     modelPicker: com.hermes.android.ui.viewmodel.ModelPickerViewModel = hiltViewModel(),
     profilesViewModel: com.hermes.android.ui.viewmodel.ProfilesViewModel = hiltViewModel(),
+    projectsViewModel: com.hermes.android.ui.viewmodel.ProjectsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val modelPickerState by modelPicker.uiState.collectAsStateWithLifecycle()
@@ -183,6 +187,20 @@ fun ChatScreen(
     var showChanges by remember { mutableStateOf(false) }
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
+    var moveToProjectTarget by remember { mutableStateOf<SessionItem?>(null) }
+    val movedToText = stringResource(R.string.moved_to_project)
+    val moveFailedText = stringResource(R.string.move_to_project_failed)
+    LaunchedEffect(projectsViewModel) {
+        projectsViewModel.moveResults.collect { result ->
+            val text = when (result) {
+                is com.hermes.android.ui.viewmodel.ProjectsViewModel.MoveResult.Moved ->
+                    String.format(movedToText, result.projectLabel)
+                is com.hermes.android.ui.viewmodel.ProjectsViewModel.MoveResult.Failed ->
+                    listOfNotNull(moveFailedText, result.message).joinToString(": ")
+            }
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
+    }
     var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
     var showModelSheet by remember { mutableStateOf(false) }
     var showProfiles by remember { mutableStateOf(false) }
@@ -512,6 +530,11 @@ fun ChatScreen(
                                 }) { Text(if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    projectsViewModel.load()
+                                    moveToProjectTarget = target
+                                }) { Text(stringResource(R.string.move_to_project)) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
                                     viewModel.drawerShowDelete(target.id)
                                 }) {
                                     Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
@@ -521,6 +544,38 @@ fun ChatScreen(
                         confirmButton = {},
                         dismissButton = {
                             TextButton(onClick = { drawerMenuTarget = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
+
+                // ── Move to project: the desktop's session menu item ───────
+                moveToProjectTarget?.let { target ->
+                    val projectsState by projectsViewModel.uiState.collectAsStateWithLifecycle()
+                    // The "no project" bucket has no folder to move into.
+                    val targets = projectsState.projects.filter { it.path.isNotBlank() }
+                    AlertDialog(
+                        onDismissRequest = { moveToProjectTarget = null },
+                        title = { Text(stringResource(R.string.move_to_project)) },
+                        text = {
+                            when {
+                                projectsState.isLoading && targets.isEmpty() ->
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                targets.isEmpty() -> Text(stringResource(R.string.move_no_projects))
+                                else -> LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                                    items(targets, key = { it.id }) { project ->
+                                        TextButton(onClick = {
+                                            moveToProjectTarget = null
+                                            projectsViewModel.moveSession(target.id, project)
+                                        }) {
+                                            Text(project.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { moveToProjectTarget = null }) { Text(stringResource(R.string.cancel)) }
                         },
                     )
                 }

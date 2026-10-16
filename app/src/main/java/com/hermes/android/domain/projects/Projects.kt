@@ -12,6 +12,9 @@ interface Projects {
     /** Structured facts (manifests, package manager, verify commands) for a cwd. */
     suspend fun projectFacts(cwd: String): String?
 
+    /** Re-homes a stored chat into [cwd] (a project's folder), so it is listed under that project. */
+    suspend fun moveSession(sessionId: String, cwd: String)
+
     data class ProjectSummary(
         val id: String,
         val label: String,

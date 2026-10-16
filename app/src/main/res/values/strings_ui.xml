@@ -1095,4 +1095,8 @@
     <string name="media_empty">Nothing saved here yet</string>
     <string name="media_empty_caption">Files you save with Download in a chat show up here, in the phone\'s Download/Hermes folder.</string>
     <string name="no_app_opens_file">No app can open this file</string>
+    <string name="move_to_project">Move to project</string>
+    <string name="move_no_projects">No project with a folder to move into</string>
+    <string name="moved_to_project">Moved to %1$s</string>
+    <string name="move_to_project_failed">Could not move the chat</string>
 </resources>
