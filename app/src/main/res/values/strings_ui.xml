@@ -1117,4 +1117,6 @@
     <string name="voice_status_thinking">Thinking…</string>
     <string name="voice_status_speaking">Speaking — talk to interrupt</string>
     <string name="voice_status_off">Voice off</string>
+    <string name="voice_no_stt">No speech-to-text: set one on the server (hermes tools, Speech-to-Text), or install a speech recognizer on the phone.</string>
+    <string name="voice_not_sent">Hermes is not connected yet, so that was not sent.</string>
 </resources>

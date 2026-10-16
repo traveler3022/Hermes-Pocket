@@ -1115,4 +1115,6 @@
     <string name="voice_status_thinking">دارم فکر می‌کنم…</string>
     <string name="voice_status_speaking">دارم حرف می‌زنم — حرف بزنی قطع می‌کنم</string>
     <string name="voice_status_off">صدا خاموش</string>
+    <string name="voice_no_stt">تبدیل گفتار به متن در دسترس نیست: یکی روی سرور تنظیم کن (hermes tools، بخش Speech-to-Text) یا یک تشخیص گفتار روی گوشی نصب کن.</string>
+    <string name="voice_not_sent">هرمس هنوز وصل نیست، پس این پیام فرستاده نشد.</string>
 </resources>

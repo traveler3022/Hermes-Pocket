@@ -236,3 +236,19 @@ class IncrementalSpeechSentenceBuffer {
         return open
     }
 }
+
+// Reasoning blocks some models write into the reply itself (the chat hides them in
+// ui/component/MarkdownPreprocess; Hermes' agent/think_scrubber.py has the same tag set).
+private const val REASONING_TAGS = "think|thinking|reasoning|thought|reasoning_scratchpad|scratchpad|analysis"
+private val CLOSED_REASONING_RE = Regex("<($REASONING_TAGS)>[\\s\\S]*?</\\1>", RegexOption.IGNORE_CASE)
+private val OPEN_REASONING_RE = Regex("(^|\\n)[ \\t]*<($REASONING_TAGS)>[\\s\\S]*$", RegexOption.IGNORE_CASE)
+private val PARTIAL_TAG_AT_END_RE = Regex("(^|\\n)[ \\t]*<[a-z_]{0,21}$", RegexOption.IGNORE_CASE)
+
+/**
+ * The reply without its reasoning blocks, for the voice: a finished block is dropped, and one
+ * still streaming (or a tag still being typed) hides everything after it until it closes.
+ */
+fun stripReasoningForSpeech(text: String): String =
+    CLOSED_REASONING_RE.replace(text, " ")
+        .replace(OPEN_REASONING_RE, "$1")
+        .replace(PARTIAL_TAG_AT_END_RE, "$1")

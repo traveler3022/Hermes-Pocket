@@ -25,8 +25,10 @@ import kotlin.math.sqrt
  * (VOICE_COMMUNICATION, with the device's echo canceller and noise suppressor when it has them) so
  * Hermes' own voice is taken out of what the mic hears.
  *
- * Its level (0..1, for the screen) goes to the flow it is given. Levels are on the desktop's scale (byte-domain RMS / 42; int16 RMS / 10752), so its tuned
- * thresholds carry over unchanged.
+ * Its level (0..1, for the screen) goes to the flow it is given. Levels are on the desktop's
+ * scale (byte-domain RMS / 42; int16 RMS / 10752), so its tuned thresholds carry over unchanged.
+ *
+ * The barge-in [monitorBarge] calls its onSpeech on this IO thread.
  */
 class MicCapture(private val _level: MutableStateFlow<Float>) {
 
@@ -148,7 +150,7 @@ class MicCapture(private val _level: MutableStateFlow<Float>) {
                 recent.addLast(above to t)
                 while (recent.isNotEmpty() && t - recent.first().second > SUSTAINED_MS) recent.removeFirst()
                 val aboveCount = recent.count { it.first }
-                val span = if (recent.isEmpty()) 0 else t - recent.first().second
+                val span = if (recent.isEmpty()) 0L else t - recent.first().second
                 if (above && span >= SUSTAINED_MS * SUSTAINED_MAJORITY && aboveCount >= recent.size * SUSTAINED_MAJORITY) {
                     tripped = true
                     trippedAt = t

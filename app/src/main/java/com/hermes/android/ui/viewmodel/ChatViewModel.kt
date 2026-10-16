@@ -13,16 +13,16 @@ import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.asText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -622,6 +622,12 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopGeneration() {
+        val sessionId = endTurnOnScreen() ?: return
+        viewModelScope.launch { sessionRepository.stopTurn(sessionId) }
+    }
+
+    /** Settles the running turn on screen as stopped; the live session id to interrupt, if any. */
+    private fun endTurnOnScreen(): String? {
         // The state reset comes first and unconditionally. Stop is the only way out of
         // isSending, and returning early on a missing session id — which happens when a
         // new chat is started mid-turn and session.new then fails — left the button
@@ -637,8 +643,7 @@ class ChatViewModel @Inject constructor(
             isSending = false,
             thinkingStatus = "",
         ) }
-        if (sessionId == null) return
-        viewModelScope.launch { sessionRepository.stopTurn(sessionId) }
+        return sessionId
     }
 
     /**
@@ -761,23 +766,21 @@ class ChatViewModel @Inject constructor(
     @Volatile private var voiceBubbleId: String? = null
 
     private val voiceHost = object : com.hermes.android.voice.VoiceHost {
-        override val busy: StateFlow<Boolean> = _uiState
-            .map { it.isSending }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        override fun isBusy(): Boolean = _uiState.value.isSending
 
-        override fun replyText(): String {
-            val bubble = voiceBubbleId ?: return ""
+        override fun replyParts(): List<com.hermes.android.voice.VoiceHost.ReplyPart> {
+            val bubble = voiceBubbleId ?: return emptyList()
             val messages = _uiState.value.messages
             val start = messages.indexOfFirst { it.id == bubble }
-            if (start < 0) return ""
+            if (start < 0) return emptyList()
             return messages.drop(start + 1)
                 .takeWhile { it !is ChatMessage.User }
                 .filterIsInstance<ChatMessage.Assistant>()
-                .joinToString("\n\n") { it.text }
+                .map { com.hermes.android.voice.VoiceHost.ReplyPart(it.id, it.text) }
         }
 
-        override suspend fun submit(text: String, interrupted: Boolean): Boolean {
-            val sessionId = _uiState.value.activeSessionId ?: return false
+        override suspend fun submit(text: String, interrupted: Boolean): Boolean = withContext(Dispatchers.Main.immediate) {
+            val sessionId = _uiState.value.activeSessionId ?: return@withContext false
             val userMsg = ChatMessage.User(
                 id = UUID.randomUUID().toString(),
                 timestamp = System.currentTimeMillis(),
@@ -786,10 +789,15 @@ class ChatViewModel @Inject constructor(
             voiceBubbleId = userMsg.id
             _uiState.update { it.copy(messages = it.messages + userMsg, isSending = true, activeTodos = emptyList()) }
             sendPrompt(text, sessionId, bubbleId = userMsg.id, voiceTurn = true, interrupted = interrupted)
-            return true
+            true
         }
 
-        override fun interrupt() = stopGeneration()
+        // The Stop button's settling (on the main thread, where the streaming state lives), then
+        // the interrupt itself, waited for so the next spoken turn reaches the server after it.
+        override suspend fun interrupt() {
+            val sessionId = withContext(Dispatchers.Main.immediate) { endTurnOnScreen() } ?: return
+            sessionRepository.stopTurn(sessionId)
+        }
     }
 
     private val voice: com.hermes.android.voice.VoiceConversation? = voiceAudio?.let {

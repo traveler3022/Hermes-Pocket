@@ -27,17 +27,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,9 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Mic
-import com.hermes.android.ui.icons.filled.Stop
+import com.hermes.android.voice.VoiceProblem
 import com.hermes.android.voice.VoiceStatus
 import com.hermes.android.voice.VoiceUiState
 import kotlinx.coroutines.flow.StateFlow
@@ -68,27 +74,56 @@ internal fun VoiceModeScreen(
     val context = LocalContext.current
     val ui by state.collectAsState()
     val mic by level.collectAsState()
+    // The permission prompt is another activity: while it is up, this one stopping is not the user leaving.
+    var askingPermission by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        askingPermission = false
         if (granted) onStart() else onEnd()
     }
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             onStart()
         } else {
+            askingPermission = true
             permission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
     // A spoken stop phrase ends the conversation: close with it (an error stays up to be read).
     var seenActive by remember { mutableStateOf(false) }
-    LaunchedEffect(ui.status, ui.error) {
-        if (ui.status != VoiceStatus.Off) seenActive = true else if (seenActive && ui.error == null) onEnd()
+    LaunchedEffect(ui.status, ui.error, ui.problem) {
+        if (ui.status != VoiceStatus.Off) {
+            seenActive = true
+        } else if (seenActive && ui.error == null && ui.problem == null) {
+            onEnd()
+        }
+    }
+    // The mic is never left on behind the user's back: leaving the chat or the app ends it
+    // (Android cuts a background app's mic anyway).
+    val currentOnEnd by rememberUpdatedState(onEnd)
+    val currentlyAsking by rememberUpdatedState(askingPermission)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && !currentlyAsking) currentOnEnd()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            currentOnEnd()
+        }
     }
 
     Dialog(
         onDismissRequest = onEnd,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
+        // A hands-free conversation must not be cut by the screen timing out.
+        val view = LocalView.current
+        DisposableEffect(view) {
+            view.keepScreenOn = true
+            onDispose { view.keepScreenOn = false }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -156,7 +191,12 @@ internal fun VoiceModeScreen(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                     )
                 }
-                ui.error?.let {
+                val problem = when (ui.problem) {
+                    VoiceProblem.NoSpeechToText -> stringResource(R.string.voice_no_stt)
+                    VoiceProblem.NotSent -> stringResource(R.string.voice_not_sent)
+                    null -> null
+                }
+                (problem ?: ui.error)?.let {
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
@@ -184,7 +224,7 @@ internal fun VoiceModeScreen(
                         ),
                     ) {
                         Icon(
-                            if (ui.muted) Icons.Default.Stop else Icons.Default.Mic,
+                            Icons.Default.Mic,
                             contentDescription = stringResource(if (ui.muted) R.string.voice_unmute else R.string.voice_mute),
                         )
                     }

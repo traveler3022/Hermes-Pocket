@@ -7,6 +7,8 @@ import android.media.AudioManager
 import android.media.MediaDataSource
 import android.media.MediaPlayer
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +17,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -29,6 +32,7 @@ private val SPEECH_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
  * (barge-in) and makes the waiting [play] return.
  */
 class VoicePlayer {
+    private val main = Handler(Looper.getMainLooper())
     @Volatile private var stopCurrent: (() -> Unit)? = null
 
     /** True while audio is coming out of the speaker (drives the barge-in trigger). */
@@ -38,12 +42,13 @@ class VoicePlayer {
     suspend fun play(bytes: ByteArray): Unit = withContext(Dispatchers.Main) {
         suspendCancellableCoroutine<Unit> { cont ->
             val player = MediaPlayer()
-            val done = java.util.concurrent.atomic.AtomicBoolean(false)
+            val done = AtomicBoolean(false)
+            // Any thread (a barge-in comes from the mic's): the player itself is only touched on main.
             fun finish(error: Throwable? = null) {
                 if (!done.compareAndSet(false, true)) return
                 stopCurrent = null
                 isPlaying = false
-                runCatching { player.release() }
+                onMain { runCatching { player.release() } }
                 if (cont.isActive) if (error == null) cont.resume(Unit) else cont.resumeWithException(error)
             }
             stopCurrent = { finish() }
@@ -68,6 +73,10 @@ class VoicePlayer {
     /** Cuts the clip that is playing; its [play] returns normally. Safe from any thread. */
     fun stop() {
         stopCurrent?.invoke()
+    }
+
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post { block() }
     }
 
     private class BytesDataSource(private val data: ByteArray) : MediaDataSource() {

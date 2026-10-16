@@ -51,6 +51,11 @@
         <package android:name="com.termux" />
         <package android:name="com.termux.api" />
         <package android:name="com.termux.boot" />
+        <!-- The voice conversation listens through the phone's speech recognizer (voice/DeviceSpeechInput)
+             when the server has no speech-to-text; Android 11+ hides recognizers without this. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

@@ -11,34 +11,46 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 /** What the voice conversation needs from the open chat. */
 interface VoiceHost {
-    /** An agent turn is running. */
-    val busy: StateFlow<Boolean>
+    /** An agent turn is running; read straight from the chat's state, never a lagging copy. */
+    fun isBusy(): Boolean
 
-    /** The assistant text of the turn the last [submit] started, as far as it has streamed. */
-    fun replyText(): String
+    /** The assistant bubbles of the turn the last [submit] started, in order, as far as they have streamed. */
+    fun replyParts(): List<ReplyPart>
 
     /** Sends [text] as a spoken turn; [interrupted] when it cut Hermes off. False when refused. */
     suspend fun submit(text: String, interrupted: Boolean): Boolean
 
-    /** Stops the running turn (the Stop button). */
-    fun interrupt()
+    /** Stops the running turn (the Stop button) and returns once the server has been told. */
+    suspend fun interrupt()
+
+    class ReplyPart(val id: String, val text: String)
 }
 
 enum class VoiceStatus { Off, Listening, Transcribing, Thinking, Speaking }
+
+/** Known problems, worded by the screen in the user's language. */
+enum class VoiceProblem {
+    /** Neither the server nor the phone can turn speech into text. */
+    NoSpeechToText,
+
+    /** The chat had no live session to send the turn to. */
+    NotSent,
+}
 
 data class VoiceUiState(
     val status: VoiceStatus = VoiceStatus.Off,
@@ -51,6 +63,8 @@ data class VoiceUiState(
     val phoneVoice: Boolean = false,
     /** No server speech-to-text: the phone's recognizer listens, and a barge-in can't keep the first words. */
     val phoneListening: Boolean = false,
+    val problem: VoiceProblem? = null,
+    /** Any other failure, as the system worded it. */
     val error: String? = null,
 )
 
@@ -64,6 +78,9 @@ data class VoiceUiState(
  *
  * Turns are sent with `voice_turn`, which the gateway routes to `auxiliary.voice_chat` when the
  * user set a faster model there.
+ *
+ * The loop runs on [scope] (the main thread); the mic runs on IO and its barge-in callback only
+ * does what is safe from any thread.
  */
 class VoiceConversation(
     context: Context,
@@ -84,18 +101,23 @@ class VoiceConversation(
     private val deviceInput = DeviceSpeechInput(appContext, _level)
     private val player = VoicePlayer()
     private val route = VoiceAudioRoute(appContext)
-    private var localSpeech: LocalSpeech? = null
+    @Volatile private var localSpeech: LocalSpeech? = null
     private var job: Job? = null
 
     @Volatile private var endTakeNow = false
     private val unmuted = MutableStateFlow(true)
 
-    val active: Boolean get() = job?.isActive == true
+    private val anyPlaying: Boolean get() = player.isPlaying || localSpeech?.isPlaying == true
 
     fun start() {
-        if (active) return
-        _state.value = VoiceUiState(status = VoiceStatus.Listening)
+        if (job?.isActive == true) return
+        val previous = job
         job = scope.launch {
+            // A conversation ended a moment ago may still be putting the audio back; its last
+            // state ("off") must land before this one's first.
+            previous?.cancelAndJoin()
+            _state.value = VoiceUiState(status = VoiceStatus.Listening)
+            unmuted.value = true
             route.acquire()
             try {
                 run()
@@ -118,7 +140,6 @@ class VoiceConversation(
     /** Ends the conversation; a turn still running keeps going in the chat. */
     fun end() {
         job?.cancel()
-        job = null
         player.stop()
         localSpeech?.stop()
     }
@@ -127,7 +148,6 @@ class VoiceConversation(
         val muted = !_state.value.muted
         _state.update { it.copy(muted = muted) }
         unmuted.value = !muted
-        if (muted) endTakeNow = true
     }
 
     /** "I'm done talking": ends the take now instead of waiting for silence. */
@@ -135,14 +155,14 @@ class VoiceConversation(
         if (_state.value.status == VoiceStatus.Listening) endTakeNow = true
     }
 
-    fun clearError() = _state.update { it.copy(error = null) }
+    fun clearError() = _state.update { it.copy(error = null, problem = null) }
 
     private suspend fun run() {
         val serverStt = runCatching { audio.serverSttAvailable() }
-            .onFailure { Timber.w(it, "[Voice] STT probe failed") }
+            .onFailure { if (it is CancellationException) throw it else Timber.w(it, "[Voice] STT probe failed") }
             .getOrDefault(false)
         if (!serverStt && !deviceInput.available) {
-            _state.update { it.copy(error = NO_STT) }
+            _state.update { it.copy(problem = VoiceProblem.NoSpeechToText) }
             return
         }
         _state.update { it.copy(phoneListening = !serverStt) }
@@ -150,12 +170,12 @@ class VoiceConversation(
         var next: Utterance? = null
         while (currentCoroutineContext().isActive) {
             if (_state.value.muted) {
-                _state.update { it.copy(status = VoiceStatus.Listening) }
+                _state.update { it.copy(status = VoiceStatus.Listening, speaking = "") }
                 unmuted.first { it }
             }
-            val utterance = next ?: listen(serverStt) ?: continue
+            val utterance = next ?: listenUnlessMuted(serverStt) ?: continue
             next = null
-            _state.update { it.copy(heard = utterance.text, error = null) }
+            _state.update { it.copy(heard = utterance.text, error = null, problem = null) }
             if (isVoiceStopCommand(utterance.text)) return
             if (isVoiceHoldCommand(utterance.text)) continue
             next = runTurn(utterance, serverStt)
@@ -164,13 +184,29 @@ class VoiceConversation(
 
     private class Utterance(val text: String, val interrupted: Boolean)
 
+    /** [listen], dropped the moment Mute is tapped (the mic goes off at once). */
+    private suspend fun listenUnlessMuted(serverStt: Boolean): Utterance? = coroutineScope {
+        val take = async { listen(serverStt) }
+        val muteWatch = launch {
+            unmuted.first { !it }
+            take.cancel()
+        }
+        try {
+            take.await()
+        } catch (e: CancellationException) {
+            if (!isActive) throw e
+            null // muted
+        } finally {
+            muteWatch.cancel()
+        }
+    }
+
     /** One listening take → its transcript, or null when nothing usable was said. */
     private suspend fun listen(serverStt: Boolean): Utterance? {
         endTakeNow = false
         _state.update { it.copy(status = VoiceStatus.Listening, speaking = "") }
         val text = if (serverStt) {
             val take = mic.listen(endNow = { endTakeNow })
-            if (_state.value.muted) return null
             if (!take.heardSpeech) return null
             _state.update { it.copy(status = VoiceStatus.Transcribing) }
             transcribeOrReport(take.wav) ?: return null
@@ -186,7 +222,6 @@ class VoiceConversation(
                 return null
             }
         }
-        if (_state.value.muted) return null
         return text.trim().takeIf { it.isNotEmpty() }?.let { Utterance(it, interrupted = false) }
     }
 
@@ -207,7 +242,7 @@ class VoiceConversation(
      */
     private suspend fun runTurn(utterance: Utterance, serverStt: Boolean): Utterance? {
         if (!host.submit(utterance.text, utterance.interrupted)) {
-            _state.update { it.copy(error = "Hermes did not take the message") }
+            _state.update { it.copy(problem = VoiceProblem.NotSent) }
             delay(ERROR_BACKOFF_MS)
             return null
         }
@@ -215,82 +250,119 @@ class VoiceConversation(
 
         return coroutineScope {
             val barged = CompletableDeferred<Unit>()
+            val spoken = SpokenSoFar()
+            // Written by the mic thread before [barged] completes, read here after it.
             var echoSource = ""
-            val spoken = StringBuilder()
+            var interruptJob: Job? = null
+            var capture: ByteArray? = null
             val speakJob = launch { speakReply(spoken) }
             val bargeJob = launch {
                 if (_state.value.muted) return@launch
+                // Mute turns the mic off here too: no barge-in while muted.
+                // A failure is caught inside: a failed async child would take the whole turn down.
+                val monitor = async {
+                    try {
+                        mic.monitorBarge(
+                            isPlaying = { anyPlaying },
+                            onSpeech = {
+                                // On the mic thread: only what is safe from any thread.
+                                // Snapshot first: what was audible is what an echo would match.
+                                echoSource = if (anyPlaying) spoken.text else ""
+                                if (host.isBusy()) interruptJob = scope.launch { host.interrupt() }
+                                barged.complete(Unit)
+                                speakJob.cancel()
+                                player.stop()
+                                localSpeech?.stop()
+                                _state.update { it.copy(status = VoiceStatus.Listening, speaking = "") }
+                            },
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // No barge-in this turn; the reply still plays.
+                        Timber.w(e, "[Voice] barge-in monitor failed")
+                        null
+                    }
+                }
+                val muteWatch = launch {
+                    unmuted.first { !it }
+                    monitor.cancel()
+                }
                 try {
-                    captured = mic.monitorBarge(
-                        isPlaying = { player.isPlaying || localSpeech?.isPlaying == true },
-                        onSpeech = {
-                            // Snapshot first: what was audible is what an echo would match.
-                            echoSource = if (player.isPlaying || localSpeech?.isPlaying == true) spoken.toString() else ""
-                            barged.complete(Unit)
-                            player.stop()
-                            localSpeech?.stop()
-                            speakJob.cancel()
-                            if (host.busy.value) host.interrupt()
-                            _state.update { it.copy(status = VoiceStatus.Listening, speaking = "") }
-                        },
-                    )
+                    capture = monitor.await()
                 } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // No barge-in this turn; the reply still plays.
-                    Timber.w(e, "[Voice] barge-in monitor failed")
+                    if (!isActive) throw e // muted: no capture
+                } finally {
+                    muteWatch.cancel()
                 }
             }
             // Whichever comes first: the user talks over it, or the reply is spoken to the end.
-            val first = kotlinx.coroutines.selects.select<Boolean> {
+            val bargedIn = select<Boolean> {
                 barged.onAwait { true }
                 speakJob.onJoin { barged.isCompleted }
             }
-            if (!first) {
+            if (!bargedIn || !serverStt) {
+                // Spoken to the end; or the phone's recognizer, which can't take the clip,
+                // listens afresh right away.
                 bargeJob.cancelAndJoin()
-                return@coroutineScope null
-            }
-            if (!serverStt) {
-                // The phone's recognizer can't take the clip; it listens afresh right away.
-                bargeJob.cancelAndJoin()
+                interruptJob?.let { withTimeoutOrNull(INTERRUPT_SETTLE_TIMEOUT_MS) { it.join() } }
                 return@coroutineScope null
             }
             bargeJob.join()
-            val wav = captured ?: return@coroutineScope null
-            captured = null
+            val wav = capture ?: return@coroutineScope null
             _state.update { it.copy(status = VoiceStatus.Transcribing) }
             val text = transcribeOrReport(wav)?.trim().orEmpty()
             if (text.isEmpty()) return@coroutineScope null
             // Hermes hearing itself through the speaker: treat it as silence.
-            if (echoSource.isNotEmpty() && isTtsEcho(text, sanitizeTextForSpeech(echoSource))) return@coroutineScope null
-            // The interrupted turn has to settle before the next one can go.
-            withTimeoutOrNull(INTERRUPT_SETTLE_TIMEOUT_MS) { host.busy.first { !it } }
+            if (echoSource.isNotEmpty() && isTtsEcho(text, echoSource)) return@coroutineScope null
+            // The server hears about the interruption before the next turn goes.
+            interruptJob?.let { withTimeoutOrNull(INTERRUPT_SETTLE_TIMEOUT_MS) { it.join() } }
             Utterance(text, interrupted = true)
         }
     }
 
-    @Volatile private var captured: ByteArray? = null
+    /** The sentences handed to the voice so far; read from the mic thread on a barge-in. */
+    private class SpokenSoFar {
+        @Volatile var text: String = ""
+            private set
+
+        fun add(sentence: String) {
+            text = if (text.isEmpty()) sentence else "$text $sentence"
+        }
+    }
 
     /**
      * Speaks the reply while it streams: complete sentences go out as they form, and the next
-     * sentence's audio is fetched while the current one plays.
+     * sentence's audio is fetched while the current one plays. Each bubble is read from where it
+     * was left, so a bubble that changes once sealed doesn't shift the others.
      */
-    private suspend fun speakReply(spoken: StringBuilder) = coroutineScope {
+    private suspend fun speakReply(spoken: SpokenSoFar) = coroutineScope {
         val sentences = Channel<String>(Channel.UNLIMITED)
         launch {
             val buffer = IncrementalSpeechSentenceBuffer()
-            var consumed = 0
-            while (true) {
-                val text = host.replyText()
-                if (text.length < consumed) consumed = text.length
-                if (text.length > consumed) {
-                    buffer.append(text.substring(consumed)).forEach { sentences.send(it) }
-                    consumed = text.length
+            val consumed = HashMap<String, Int>()
+            suspend fun feed() {
+                for (part in host.replyParts()) {
+                    val text = stripReasoningForSpeech(part.text)
+                    val done = consumed[part.id]
+                    if (done == null) {
+                        // A new bubble starts a new paragraph.
+                        if (consumed.isNotEmpty()) buffer.append("\n\n").forEach { sentences.send(it) }
+                        consumed[part.id] = 0
+                    }
+                    val from = (consumed[part.id] ?: 0).coerceAtMost(text.length)
+                    if (text.length > from) {
+                        buffer.append(text.substring(from)).forEach { sentences.send(it) }
+                    }
+                    consumed[part.id] = maxOf(from, text.length)
                 }
-                if (!host.busy.value) {
-                    // One more read: the last delta may have landed with the turn's end.
-                    val last = host.replyText()
-                    if (last.length > consumed) buffer.append(last.substring(consumed)).forEach { sentences.send(it) }
+            }
+            while (true) {
+                val busy = host.isBusy()
+                feed()
+                if (!busy) {
+                    // Read once more after the turn ended: the last text lands with it.
+                    feed()
                     buffer.flush().forEach { sentences.send(it) }
                     sentences.close()
                     break
@@ -305,7 +377,7 @@ class VoiceConversation(
         }
         for ((sentence, clip) in clips) {
             _state.update { it.copy(status = VoiceStatus.Speaking, speaking = sentence) }
-            spoken.append(sentence).append(' ')
+            spoken.add(sentence)
             val audioClip = clip.await()
             try {
                 if (audioClip != null) {
@@ -342,7 +414,5 @@ class VoiceConversation(
         const val POLL_MS = 150L
         const val ERROR_BACKOFF_MS = 1_500L
         const val INTERRUPT_SETTLE_TIMEOUT_MS = 5_000L
-        const val NO_STT = "No speech-to-text: set one on the server (hermes tools → Speech-to-Text), " +
-            "or install a speech recognizer on the phone."
     }
 }
