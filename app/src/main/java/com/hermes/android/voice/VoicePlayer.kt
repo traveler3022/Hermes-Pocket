@@ -16,6 +16,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.IOException
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -100,11 +101,23 @@ class LocalSpeech(context: Context) {
     private val ready = kotlinx.coroutines.CompletableDeferred<Boolean>()
     private val tts = TextToSpeech(context.applicationContext) { status -> ready.complete(status == TextToSpeech.SUCCESS) }
 
+    /** The language set last; null until the first sentence. */
+    private var spokenPersian: Boolean? = null
+
     @Volatile var isPlaying: Boolean = false
         private set
 
     suspend fun speak(text: String) {
         if (!ready.await()) throw IOException("This phone has no text-to-speech engine")
+        // Persian text needs the engine's Persian voice; the phone's own language may be another.
+        val persian = PERSIAN_LETTER.containsMatchIn(text)
+        if (persian != spokenPersian) {
+            val result = tts.setLanguage(if (persian) PERSIAN else Locale.getDefault())
+            if (persian && result < TextToSpeech.LANG_AVAILABLE) {
+                throw IOException("This phone's text-to-speech has no Persian voice")
+            }
+            spokenPersian = persian
+        }
         tts.setAudioAttributes(SPEECH_ATTRIBUTES)
         suspendCancellableCoroutine<Unit> { cont ->
             val id = UUID.randomUUID().toString()
@@ -197,3 +210,6 @@ class VoiceAudioRoute(context: Context) {
         }.onFailure { Timber.w(it, "[Voice] audio route release") }
     }
 }
+
+private val PERSIAN: Locale = Locale.forLanguageTag("fa-IR")
+private val PERSIAN_LETTER = Regex("[\u0600-\u06FF]")
