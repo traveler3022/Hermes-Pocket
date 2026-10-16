@@ -1093,4 +1093,13 @@
     <string name="media_empty">هنوز چیزی اینجا ذخیره نشده</string>
     <string name="media_empty_caption">فایل‌هایی که در چت با دکمهٔ دانلود ذخیره می‌کنی اینجا می‌آیند؛ در پوشهٔ Download/Hermes گوشی.</string>
     <string name="no_app_opens_file">برنامه‌ای برای باز کردن این فایل نیست</string>
+    <string name="move_to_project">انتقال به پروژه</string>
+    <string name="move_no_projects">پروژه‌ای با پوشه برای انتقال نیست</string>
+    <string name="moved_to_project">به %1$s منتقل شد</string>
+    <string name="move_to_project_failed">انتقال گفتگو انجام نشد</string>
+    <string name="run_now">اجرا همین الان</string>
+    <string name="saved_servers">سرورهای ذخیره‌شده</string>
+    <string name="connected_now">وصل است</string>
+    <string name="remove_saved_server">سرور ذخیره‌شده حذف شود؟</string>
+    <string name="remove_saved_server_body">%1$s از لیست حذف می‌شود و ورود ذخیره‌شده‌اش روی این گوشی پاک می‌شود. به خود سرور دست زده نمی‌شود.</string>
 </resources>

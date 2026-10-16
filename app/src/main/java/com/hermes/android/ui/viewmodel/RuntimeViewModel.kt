@@ -20,6 +20,8 @@ import com.hermes.android.runtime.remote.PairResult
 import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import com.hermes.android.runtime.remote.SavedServer
+import com.hermes.android.runtime.remote.SavedServers
 import com.hermes.android.runtime.remote.WrongLoginException
 import com.hermes.android.runtime.remote.tailscale.TailscaleLoginNeeded
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
@@ -103,6 +105,7 @@ class RuntimeViewModel @Inject constructor(
     private val runtimeManager: HermesRuntimeManager,
     private val remoteServerSettings: RemoteServerSettings,
     private val remoteAuth: RemoteAuth,
+    private val savedServers: SavedServers,
     private val tailscale: TailscaleNode,
     private val gatewayClient: GatewayClient,
     @ApplicationContext private val context: Context,
@@ -275,6 +278,25 @@ class RuntimeViewModel @Inject constructor(
         }
     }
 
+    /** Servers this phone connected to before, newest first. */
+    val savedServerList: StateFlow<List<SavedServer>> = savedServers.servers
+
+    /** Connects to a saved server again: its kept login (or the pairing door) signs in by itself. */
+    fun connectToSaved(server: SavedServer) = connectToServer(server.url)
+
+    /** Removes a saved server and the login kept for it. */
+    fun forgetSaved(server: SavedServer) {
+        savedServers.forget(server.url)
+        remoteAuth.forgetServer(server.url)
+    }
+
+    /** Adds [serverUrl] to the saved servers once signing in to it worked. */
+    private fun rememberServer(serverUrl: String) {
+        val host = serverUrl.trim().substringAfter("://").substringBefore('/').substringBefore(':')
+        val device = tailscale.status.value.peers.firstOrNull { it.dnsName.trimEnd('.').equals(host, ignoreCase = true) }
+        savedServers.remember(serverUrl, device?.let { it.name.ifEmpty { it.dnsName.substringBefore('.') } }.orEmpty())
+    }
+
     private val _connecting = MutableStateFlow(false)
 
     /** True from tapping Connect until the app is connected (or gives up). */
@@ -301,10 +323,13 @@ class RuntimeViewModel @Inject constructor(
             try {
                 remoteServerSettings.save(serverUrl, "")
                 when (withTimeoutOrNull(PAIR_WAIT_MS) { knockUntilOpen(serverUrl) }) {
-                    is PairResult.Paired -> if (connectRemote()) {
-                        // "Connecting…" stays until the socket is really up (or failed and says why below).
-                        withTimeoutOrNull(CONNECT_WAIT_MS) {
-                            gatewayClient.connectionState.first { it is ConnectionState.Connected || it is ConnectionState.Failed }
+                    is PairResult.Paired -> {
+                        rememberServer(serverUrl)
+                        if (connectRemote()) {
+                            // "Connecting…" stays until the socket is really up (or failed and says why below).
+                            withTimeoutOrNull(CONNECT_WAIT_MS) {
+                                gatewayClient.connectionState.first { it is ConnectionState.Connected || it is ConnectionState.Failed }
+                            }
                         }
                     }
                     PairResult.NotOwner -> _errorMessage.value = tForContext(
@@ -388,6 +413,7 @@ class RuntimeViewModel @Inject constructor(
                     return@launch
                 }
                 remoteAuth.signInWithPassword(serverUrl, username.trim(), password)
+                rememberServer(serverUrl)
                 connectRemote()
             } catch (e: CancellationException) {
                 throw e
@@ -471,6 +497,11 @@ class RuntimeViewModel @Inject constructor(
     }
 
     init {
+        // The server an earlier version connected to: list it, so it is there to pick after a switch.
+        remoteServerSettings.config.value.serverUrl.takeIf {
+            it.isNotBlank() && savedServers.servers.value.isEmpty() && remoteAuth.isSignedInTo(it)
+        }?.let { rememberServer(it) }
+
         // Register log receiver
         val filter = android.content.IntentFilter("com.hermes.android.LOG_UPDATE")
         ContextCompat.registerReceiver(context, logReceiver, filter, ContextCompat.RECEIVER_EXPORTED)

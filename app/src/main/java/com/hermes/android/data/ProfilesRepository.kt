@@ -6,6 +6,7 @@ import com.hermes.android.domain.profiles.HermesProfiles.Details
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.ProfileScope
+import com.hermes.android.gateway.hermesPythonCommand
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
@@ -127,7 +128,7 @@ class ProfilesRepository @Inject constructor(
         """.trimIndent()
         val result = gatewayClient.request(
             GatewayMethods.SHELL_EXEC,
-            mapOf("command" to JsonPrimitive("printf %s '${b64(script)}' | base64 -d | python3 -")),
+            mapOf("command" to JsonPrimitive(hermesPythonCommand(script))),
             trackSession = false,
         ) as? JsonObject
         val code = result?.str("code")?.toIntOrNull() ?: -1
@@ -166,6 +167,16 @@ class ProfilesRepository @Inject constructor(
         val applied = result?.get("applied") as? JsonObject
         val failed = applied?.filterValues { (it as? JsonPrimitive)?.contentOrNull == "false" }?.keys.orEmpty()
         if (failed.isNotEmpty()) throw IllegalStateException("Not saved: ${failed.joinToString()}")
+    }
+
+    override suspend fun saveSoul(name: String, soul: String) {
+        val result = gatewayClient.request(
+            GatewayMethods.PROFILES_CONFIGURE,
+            mapOf("name" to JsonPrimitive(name), "soul" to JsonPrimitive(soul)),
+            trackSession = false,
+        ) as? JsonObject
+        val applied = (result?.get("applied") as? JsonObject)?.get("soul") as? JsonPrimitive
+        if (applied?.contentOrNull != "true") throw IllegalStateException("Not saved: soul")
     }
 
     /**
