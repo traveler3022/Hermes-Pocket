@@ -1,7 +1,12 @@
 package com.hermes.android.gateway
 
 import android.content.Context
+import com.hermes.android.runtime.ServerIdentity
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -33,11 +38,10 @@ import javax.inject.Singleton
 @Singleton
 class ProfileScope @Inject constructor(
     @ApplicationContext context: Context,
+    /** Null in tests: one selection for every server. */
+    private val servers: ServerIdentity? = null,
 ) {
     private val prefs = context.getSharedPreferences("profile_scope", Context.MODE_PRIVATE)
-
-    private val _active = MutableStateFlow(prefs.getString(KEY_ACTIVE, null)?.ifBlank { null })
-    val active: StateFlow<String?> = _active.asStateFlow()
 
     /** Session id (live or stored) → the profile it was opened in ("" = launch profile). */
     private val owners = ConcurrentHashMap<String, String>()
@@ -45,12 +49,54 @@ class ProfileScope @Inject constructor(
     /** Methods this backend refused a `profile` on, learned at run time (older backends). */
     private val refused = ConcurrentHashMap.newKeySet<String>()
 
+    /** The server whose selection [_active] holds; each server keeps its own (a profile is per install). */
+    @Volatile
+    private var server: String = servers?.current().orEmpty()
+
+    private val _active = MutableStateFlow(loadActive(server))
+    val active: StateFlow<String?> = _active.asStateFlow()
+
+    private val watcher = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        servers?.let { identity -> watcher.launch { identity.changes.collect { useServer(it) } } }
+    }
+
+    /**
+     * Another server is now the one talked to: its own selection comes back, and what the
+     * last backend refused is learned again. Also called before each call is scoped, so the
+     * first call to the new server never carries the old server's profile.
+     */
+    private fun useServer(key: String) {
+        if (key == server) return
+        synchronized(this) {
+            if (key == server) return
+            server = key
+            refused.clear()
+            _active.value = loadActive(key)
+        }
+    }
+
+    private fun keyFor(server: String) = if (server.isEmpty()) KEY_ACTIVE else "$KEY_ACTIVE@$server"
+
+    /** The selection saved for [server]; the old one-for-all selection becomes the first server's. */
+    private fun loadActive(server: String): String? {
+        val key = keyFor(server)
+        if (key != KEY_ACTIVE && !prefs.contains(key) && prefs.contains(KEY_ACTIVE)) {
+            val legacy = prefs.getString(KEY_ACTIVE, null)
+            prefs.edit().putString(key, legacy).remove(KEY_ACTIVE).apply()
+            return legacy?.ifBlank { null }
+        }
+        return prefs.getString(key, null)?.ifBlank { null }
+    }
+
     private val _switches = MutableSharedFlow<String?>(extraBufferCapacity = 1)
 
     /** Another profile was picked (not a rename of the open one): new chats go there. */
     val switches: SharedFlow<String?> = _switches.asSharedFlow()
 
     fun select(name: String?) {
+        servers?.let { useServer(it.current()) }
         val value = name?.trim()?.ifEmpty { null }
         if (value == _active.value) return
         store(value)
@@ -58,12 +104,14 @@ class ProfileScope @Inject constructor(
     }
 
     private fun store(value: String?) {
-        prefs.edit().putString(KEY_ACTIVE, value).apply()
+        servers?.let { useServer(it.current()) }
+        prefs.edit().putString(keyFor(server), value).apply()
         _active.value = value
     }
 
     /** The profile [params] should run in, or null to send them as they are. */
     internal fun profileFor(method: String, params: Map<String, JsonElement>): String? {
+        servers?.let { useServer(it.current()) }
         // profiles.* name their profile with `name`; a `profile` beside it would also
         // turn their own 4064 ("no such profile") into "the selection is gone".
         // Group Chat rooms belong to the whole install, not to one profile.

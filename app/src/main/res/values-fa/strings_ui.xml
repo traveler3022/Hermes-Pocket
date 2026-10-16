@@ -1105,4 +1105,5 @@
     <string name="server_update_confirm">دستور hermes update روی همان سروری اجرا می‌شود که هرمس روی آن است. هرمس آنجا دوباره راه می‌افتد و جوابی که در حال نوشتن است قطع می‌شود. گفتگوها و تنظیمات سر جایشان می‌مانند.</string>
     <string name="server_update_failed">به‌روزرسانی نشد — %1$s</string>
     <string name="server_update_running">در حال به‌روزرسانی روی سرور…</string>
+    <string name="rename_saved_server">تغییر اسم سرور</string>
 </resources>

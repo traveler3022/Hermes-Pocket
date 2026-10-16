@@ -1107,4 +1107,5 @@
     <string name="server_update_confirm">Runs hermes update on the server Hermes runs on. Hermes restarts there, and any reply in progress is cut off. Chats and settings stay.</string>
     <string name="server_update_failed">Update failed — %1$s</string>
     <string name="server_update_running">Updating on the server…</string>
+    <string name="rename_saved_server">Rename server</string>
 </resources>
