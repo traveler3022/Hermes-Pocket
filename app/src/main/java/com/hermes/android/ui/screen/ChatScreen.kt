@@ -188,6 +188,23 @@ fun ChatScreen(
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var moveToProjectTarget by remember { mutableStateOf<SessionItem?>(null) }
+    var voiceModeOpen by remember { mutableStateOf(false) }
+    val voiceState = viewModel.voiceState
+    val voiceLevel = viewModel.voiceLevel
+    if (voiceModeOpen && voiceState != null && voiceLevel != null) {
+        VoiceModeScreen(
+            state = voiceState,
+            level = voiceLevel,
+            onStart = { viewModel.startVoice() },
+            onEnd = {
+                viewModel.endVoice()
+                viewModel.clearVoiceError()
+                voiceModeOpen = false
+            },
+            onToggleMute = { viewModel.toggleVoiceMute() },
+            onFinishTake = { viewModel.finishVoiceTake() },
+        )
+    }
     val movedToText = stringResource(R.string.moved_to_project)
     val moveFailedText = stringResource(R.string.move_to_project_failed)
     LaunchedEffect(projectsViewModel) {
@@ -1105,6 +1122,7 @@ fun ChatScreen(
                     onModelClick = { showModelSheet = true },
                     voiceRequest = voiceRequest,
                     onVoiceRequestTaken = { voiceRequest = null },
+                    onVoiceMode = if (viewModel.voiceState != null) ({ voiceModeOpen = true }) else null,
                 )
             }
         }

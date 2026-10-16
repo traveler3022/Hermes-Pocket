@@ -15,10 +15,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +53,7 @@ class ChatViewModel @Inject constructor(
     downloads: com.hermes.android.domain.files.Downloads,
     private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
     private val kanban: com.hermes.android.domain.kanban.KanbanRepository? = null,
+    private val voiceAudio: com.hermes.android.domain.voice.VoiceAudio? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -689,6 +692,9 @@ class ChatViewModel @Inject constructor(
         /** The user bubble this send is, to take the row the server stored it as. */
         bubbleId: String? = null,
         onRefused: (() -> Unit)? = null,
+        /** A spoken turn: routed to `auxiliary.voice_chat`; [interrupted] when it cut Hermes off. */
+        voiceTurn: Boolean = false,
+        interrupted: Boolean = false,
     ) {
         viewModelScope.launch {
             try {
@@ -696,6 +702,8 @@ class ChatViewModel @Inject constructor(
                     put("text", text)
                     put("session_id", liveId)
                     if (hidden) put("display_kind", "hidden")
+                    if (voiceTurn) put("voice_turn", true)
+                    if (interrupted) put("interrupted", true)
                     if (truncateBeforeRowId != null) {
                         // A rewind (edit, retry) is aimed at the target's durable row id
                         // alone: ordinals drift — a steered message is stored wherever the
@@ -746,6 +754,57 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    // ── Voice conversation ──────────────────────────────────────────────
+
+    /** The bubble of the last spoken turn: its reply is what the voice reads. */
+    @Volatile private var voiceBubbleId: String? = null
+
+    private val voiceHost = object : com.hermes.android.voice.VoiceHost {
+        override val busy: StateFlow<Boolean> = _uiState
+            .map { it.isSending }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+        override fun replyText(): String {
+            val bubble = voiceBubbleId ?: return ""
+            val messages = _uiState.value.messages
+            val start = messages.indexOfFirst { it.id == bubble }
+            if (start < 0) return ""
+            return messages.drop(start + 1)
+                .takeWhile { it !is ChatMessage.User }
+                .filterIsInstance<ChatMessage.Assistant>()
+                .joinToString("\n\n") { it.text }
+        }
+
+        override suspend fun submit(text: String, interrupted: Boolean): Boolean {
+            val sessionId = _uiState.value.activeSessionId ?: return false
+            val userMsg = ChatMessage.User(
+                id = UUID.randomUUID().toString(),
+                timestamp = System.currentTimeMillis(),
+                text = text,
+            )
+            voiceBubbleId = userMsg.id
+            _uiState.update { it.copy(messages = it.messages + userMsg, isSending = true, activeTodos = emptyList()) }
+            sendPrompt(text, sessionId, bubbleId = userMsg.id, voiceTurn = true, interrupted = interrupted)
+            return true
+        }
+
+        override fun interrupt() = stopGeneration()
+    }
+
+    private val voice: com.hermes.android.voice.VoiceConversation? = voiceAudio?.let {
+        com.hermes.android.voice.VoiceConversation(context, viewModelScope, it, voiceHost)
+    }
+
+    /** Voice conversation state; null when this build has no voice. */
+    val voiceState: StateFlow<com.hermes.android.voice.VoiceUiState>? get() = voice?.state
+    val voiceLevel: StateFlow<Float>? get() = voice?.level
+
+    fun startVoice() = voice?.start()
+    fun endVoice() = voice?.end()
+    fun toggleVoiceMute() = voice?.toggleMute()
+    fun finishVoiceTake() = voice?.finishTake()
+    fun clearVoiceError() = voice?.clearError()
 
     // ── Attachments (delegated) ──────────────────────────────────────────
 
@@ -1289,6 +1348,7 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        voice?.end()
         reactionsDelegate.close()
         eventCollectionJob?.cancel()
         connectionWatchJob?.cancel()

@@ -11,6 +11,7 @@ import com.hermes.android.data.PrefsTableColumnWidths
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
+import com.hermes.android.data.VoiceAudioRepository
 import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
@@ -101,6 +102,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindProjects(impl: ProjectsRepository): Projects
+
+    @Binds
+    abstract fun bindVoiceAudio(impl: VoiceAudioRepository): com.hermes.android.domain.voice.VoiceAudio
 
     @Binds
     abstract fun bindProviderSetup(impl: ProviderSetupRepository): ProviderSetup

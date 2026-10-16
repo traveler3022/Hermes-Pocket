@@ -123,6 +123,9 @@ object GatewayMethods {
     const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
     const val SESSION_WORKSPACE_MOVE = "session.workspace.move"
 
+    // Voice conversation: only the status probe; audio goes through /api/audio/*.
+    const val VOICE_TOGGLE = "voice.toggle"
+
     // Profiles: separate agents (own config, skills, memory, sessions) on one gateway.
     // Any other call picks one with a `profile` param (gateway/ProfileScope.kt).
     const val PROFILES_LIST = "profiles.list"

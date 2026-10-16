@@ -1,0 +1,69 @@
+package com.hermes.android.voice
+
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/**
+ * Listening through the phone's own speech recognizer, for a server with no speech-to-text
+ * provider. It has its own endpointing; "" means nothing was said. It can't transcribe a clip,
+ * so a barge-in on this path only stops Hermes and then listens afresh.
+ */
+class DeviceSpeechInput(private val context: Context, private val level: MutableStateFlow<Float>) {
+
+    val available: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
+
+    suspend fun listenOnce(): String = withContext(Dispatchers.Main) {
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        try {
+            suspendCancellableCoroutine<String> { cont ->
+                recognizer.setRecognitionListener(object : RecognitionListener {
+                    override fun onResults(results: Bundle?) {
+                        level.value = 0f
+                        val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                        if (cont.isActive) cont.resume(text.trim())
+                    }
+
+                    override fun onError(error: Int) {
+                        level.value = 0f
+                        if (!cont.isActive) return
+                        when (error) {
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> cont.resume("")
+                            else -> cont.resumeWithException(IOException("Speech recognition failed ($error)"))
+                        }
+                    }
+
+                    override fun onRmsChanged(rmsdB: Float) {
+                        // About -2..10 dB from most recognizers.
+                        level.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                    }
+
+                    override fun onReadyForSpeech(params: Bundle?) = Unit
+                    override fun onBeginningOfSpeech() = Unit
+                    override fun onBufferReceived(buffer: ByteArray?) = Unit
+                    override fun onEndOfSpeech() = Unit
+                    override fun onPartialResults(partialResults: Bundle?) = Unit
+                    override fun onEvent(eventType: Int, params: Bundle?) = Unit
+                })
+                recognizer.startListening(
+                    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName),
+                )
+                // Cancellation lands in the finally below, on the main thread the recognizer needs.
+            }
+        } finally {
+            recognizer.destroy()
+        }
+    }
+}

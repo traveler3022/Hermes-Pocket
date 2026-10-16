@@ -4,6 +4,9 @@
 
     <!-- Network — WebSocket to tui_gateway, LLM API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice conversation with Hermes (the chat screen's voice mode). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Termux RUN_COMMAND permission (CRITICAL: Required to communicate with RunCommandService) -->

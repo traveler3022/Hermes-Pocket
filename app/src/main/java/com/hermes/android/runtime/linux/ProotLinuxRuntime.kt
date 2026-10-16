@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers", "/api/skills")
+                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/audio/transcribe", "/api/audio/speak")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -774,7 +774,7 @@ class ProotLinuxRuntime @Inject constructor(
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
                             app = FastAPI()
-                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp", "skills"):
+                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp", "skills", "audio"):
                                 try:
                                     module = importlib.import_module("hermes_cli.web_routers." + name)
                                     # skills has hub_router too, and it must come first (route order).

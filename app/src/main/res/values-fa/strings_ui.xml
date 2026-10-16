@@ -1102,4 +1102,17 @@
     <string name="connected_now">وصل است</string>
     <string name="remove_saved_server">سرور ذخیره‌شده حذف شود؟</string>
     <string name="remove_saved_server_body">%1$s از لیست حذف می‌شود و ورود ذخیره‌شده‌اش روی این گوشی پاک می‌شود. به خود سرور دست زده نمی‌شود.</string>
+    <string name="voice_conversation">گفتگوی صوتی</string>
+    <string name="voice_phone_voice_note">هرمس صدایی ندارد (بخش tts در config.yaml)، پس صدای خود گوشی حرف می‌زند.</string>
+    <string name="voice_phone_listening_note">سرور تبدیل گفتار به متن ندارد، پس گوشی گوش می‌دهد؛ وسط حرف هرمس که بپری ساکت می‌شود، بعد حرفت را دوباره بگو.</string>
+    <string name="voice_done_talking">حرفم تمام شد</string>
+    <string name="voice_mute">بی‌صدا</string>
+    <string name="voice_unmute">باصدا</string>
+    <string name="voice_end">پایان گفتگوی صوتی</string>
+    <string name="voice_status_muted">میکروفون خاموش</string>
+    <string name="voice_status_listening">گوش می‌دهم…</string>
+    <string name="voice_status_transcribing">گرفتم…</string>
+    <string name="voice_status_thinking">دارم فکر می‌کنم…</string>
+    <string name="voice_status_speaking">دارم حرف می‌زنم — حرف بزنی قطع می‌کنم</string>
+    <string name="voice_status_off">صدا خاموش</string>
 </resources>

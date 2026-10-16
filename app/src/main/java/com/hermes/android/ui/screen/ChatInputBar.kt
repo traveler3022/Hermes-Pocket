@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
+import com.hermes.android.ui.icons.filled.GraphicEq
 import com.hermes.android.ui.icons.filled.Mic
 import com.hermes.android.ui.icons.filled.PhotoCamera
 import com.hermes.android.ui.icons.filled.Stop
@@ -103,6 +104,8 @@ internal fun InputBar(
     // Set when the assistant gesture opened the chat: start voice input once.
     voiceRequest: Any? = null,
     onVoiceRequestTaken: () -> Unit = {},
+    /** Opens the hands-free voice conversation; null hides its button. */
+    onVoiceMode: (() -> Unit)? = null,
 ) {
     // Several files at once; each goes the way a single one always did.
     val filePicker = rememberLauncherForActivityResult(
@@ -426,7 +429,17 @@ internal fun InputBar(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    IconButton(
+                    // An empty box: the voice conversation in Send's place, as ChatGPT has it.
+                    if (onVoiceMode != null && text.isBlank() && pendingAttachments.isEmpty()) IconButton(
+                        onClick = onVoiceMode,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            contentDescription = stringResource(R.string.voice_conversation),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    } else IconButton(
                         onClick = onSend,
                         // An attachment-only message (no typed text) is valid —
                         // sendMessage() already handles it — so the button must
