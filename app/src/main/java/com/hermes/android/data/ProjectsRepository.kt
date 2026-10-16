@@ -43,7 +43,13 @@ class ProjectsRepository @Inject constructor(
             ProjectSummary(
                 id = p.str("id"),
                 label = p.str("label").ifBlank { p.str("id") },
-                path = p.str("path"),
+                // A project with no primary folder still has repo folders; the first one is its root,
+                // as the desktop's projectRootCwd picks it.
+                path = p.str("path").ifBlank {
+                    (p["repos"] as? JsonArray)?.firstNotNullOfOrNull { r ->
+                        (r as? JsonObject)?.str("path")?.takeIf { it.isNotBlank() }
+                    }.orEmpty()
+                },
                 sessionCount = p.str("sessionCount").toIntOrNull() ?: 0,
                 lastActive = p.str("lastActive").toDoubleOrNull() ?: 0.0,
             )
@@ -90,6 +96,17 @@ class ProjectsRepository @Inject constructor(
         return facts.entries.joinToString("\n") { (k, v) ->
             "$k: ${(v as? JsonPrimitive)?.contentOrNull ?: v.toString()}"
         }
+    }
+
+    /** `session.workspace.move`: the server replaces the chat's cwd and git identity; a live agent follows. */
+    override suspend fun moveSession(sessionId: String, cwd: String) {
+        gatewayClient.request(
+            GatewayMethods.SESSION_WORKSPACE_MOVE,
+            buildJsonObject {
+                put("session_key", sessionId)
+                put("cwd", cwd)
+            }.toElementMap(),
+        )
     }
 
     private fun JsonObject.str(key: String): String =
