@@ -56,6 +56,9 @@ class HermesGatewayService : Service() {
     lateinit var foregroundState: AppForegroundState
 
     @Inject
+    lateinit var kanbanAlertMonitor: KanbanAlertMonitor
+
+    @Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -88,6 +91,7 @@ class HermesGatewayService : Service() {
         // the background connection (ChatViewModel's collector dies with the
         // UI; this one doesn't). Idempotent across restarts.
         agentEventObserver.start(scope)
+        kanbanAlertMonitor.start(scope)
 
         if (renderJob?.isActive != true) {
             renderJob = scope.launch {
