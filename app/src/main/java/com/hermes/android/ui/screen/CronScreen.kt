@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AutoAwesome
@@ -76,6 +77,12 @@ fun CronScreen(
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+    LaunchedEffect(uiState.notice) {
+        uiState.notice?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearNotice()
         }
     }
 
@@ -145,7 +152,7 @@ fun CronScreen(
                 verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
             ) {
                 items(uiState.jobs, key = { it.id }) { job ->
-                    CronJobRow(job, viewModel)
+                    CronJobRow(job, viewModel, uiState.runningJobIds)
                 }
             }
         }
@@ -177,7 +184,7 @@ fun CronScreen(
 }
 
 @Composable
-private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
+private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Set<String>) {
     // Deleting asked nothing: one tap beside Edit and the job was gone for good.
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) {
@@ -278,6 +285,26 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel) {
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                val running = job.id in runningJobIds
+                IconButton(
+                    onClick = { viewModel.runJobNow(job.id) },
+                    enabled = !running,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    if (running) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = stringResource(R.string.run_now),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                }
                 IconButton(onClick = { viewModel.startEditJob(job) }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Edit,
