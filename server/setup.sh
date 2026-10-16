@@ -263,13 +263,13 @@ After=network.target tailscaled.service
 [Service]
 ExecStart=$py -I $pair_dir/pair.py $pair_dir/pair.sock $env_file $pair_dir/owner $pair_seconds
 ExecStopPost=-+$tailscale_bin serve --set-path $pair_path off
-ExecStopPost=+/bin/rm -rf $pair_dir
 RuntimeMaxSec=$((pair_seconds + 60))
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=$pair_dir
+RuntimeDirectory=${pair_dir#/run/}
+RuntimeDirectoryMode=0700
 EOF
         systemctl daemon-reload
         if ! systemctl start "$pair_service"; then
