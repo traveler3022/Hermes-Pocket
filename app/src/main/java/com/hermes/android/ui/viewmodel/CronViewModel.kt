@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.cron.CronBlueprints
+import com.hermes.android.domain.cron.CronJobs
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.contentOrNull
 class CronViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val blueprints: CronBlueprints,
+    private val cronJobs: CronJobs,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CronUiState())
@@ -109,17 +111,14 @@ class CronViewModel @Inject constructor(
     }
 
     /**
-     * cron.manage has no update verb, so the edit goes through `hermes cron edit` (cli.exec),
-     * as the dashboard's PUT does: the job keeps its id, run history, skills, delivery target
-     * and model pin, which the old add-then-remove lost.
+     * cron.manage has no update verb, so the edit goes through the dashboard's job route, as
+     * the dashboard's own page does: the job keeps its id, run history, skills, delivery
+     * target and model pin.
      */
     fun updateJob(jobId: String, name: String, schedule: String, prompt: String) {
         viewModelScope.launch {
             try {
-                // `--opt=value`: a prompt that starts with "-" is not taken for a flag.
-                val argv = listOf("cron", "edit", jobId, "--name=$name", "--schedule=$schedule") +
-                    listOfNotNull(prompt.takeIf { it.isNotBlank() }?.let { "--prompt=$it" })
-                cli(argv, 60)
+                cronJobs.update(jobId, name, schedule, prompt)
                 Timber.i("[Cron] Job updated: $jobId")
                 _uiState.value = _uiState.value.copy(editingJob = null)
                 loadJobs()
@@ -134,18 +133,18 @@ class CronViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Run now: `hermes cron run` runs the job to the end in that process (the dashboard's
-     * trigger does the same), so this waits for it; the outcome line is shown afterwards.
-     */
+    /** Run now: the dashboard's trigger runs the job to the end, so this waits for it. */
     fun runJobNow(jobId: String) {
         if (jobId in _uiState.value.runningJobIds) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(runningJobIds = _uiState.value.runningJobIds + jobId)
             try {
-                val out = cli(listOf("cron", "run", jobId), RUN_TIMEOUT_S)
-                // The CLI's last line is its verdict ("Ran now: succeeded.", "Running in background.").
-                val verdict = out.lines().lastOrNull { it.isNotBlank() }?.trim()
+                val outcome = cronJobs.runNow(jobId)
+                val verdict = when (outcome.status) {
+                    "ok" -> "Ran now: succeeded."
+                    null -> "Ran now."
+                    else -> "Ran now: ${outcome.status}" + (outcome.error?.let { " — $it" } ?: ".")
+                }
                 _uiState.value = _uiState.value.copy(notice = verdict)
             } catch (e: CancellationException) {
                 throw e
@@ -157,26 +156,6 @@ class CronViewModel @Inject constructor(
             }
             loadJobs()
         }
-    }
-
-    /** `hermes <argv>` through cli.exec; a non-zero exit throws with the CLI's last line. */
-    private suspend fun cli(argv: List<String>, timeoutS: Int): String {
-        val result = gatewayClient.request(
-            GatewayMethods.CLI_EXEC,
-            mapOf(
-                "argv" to kotlinx.serialization.json.JsonArray(argv.map { JsonPrimitive(it) }),
-                "timeout" to JsonPrimitive(timeoutS),
-            ),
-            timeoutMs = timeoutS * 1000L + 30_000L,
-            trackSession = false,
-        ) as? JsonObject ?: throw IllegalStateException("cli.exec: no result")
-        fun str(key: String) = (result[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
-        if (str("blocked") == "true") throw IllegalStateException(str("hint"))
-        val output = str("output")
-        if (str("code") != "0") {
-            throw IllegalStateException(output.lines().lastOrNull { it.isNotBlank() }?.trim() ?: "hermes ${argv.take(2).joinToString(" ")} failed")
-        }
-        return output
     }
 
     /** Returns the new job id. A rejected job comes back as {"error": …} inside a success reply. */
@@ -359,10 +338,6 @@ class CronViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(notice = null)
     }
 
-    private companion object {
-        /** cli.exec's own ceiling. */
-        const val RUN_TIMEOUT_S = 600
-    }
 }
 
 data class CronUiState(
