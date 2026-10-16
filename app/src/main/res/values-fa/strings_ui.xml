@@ -1097,4 +1097,5 @@
     <string name="move_no_projects">پروژه‌ای با پوشه برای انتقال نیست</string>
     <string name="moved_to_project">به %1$s منتقل شد</string>
     <string name="move_to_project_failed">انتقال گفتگو انجام نشد</string>
+    <string name="run_now">اجرا همین الان</string>
 </resources>

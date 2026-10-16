@@ -1099,4 +1099,5 @@
     <string name="move_no_projects">No project with a folder to move into</string>
     <string name="moved_to_project">Moved to %1$s</string>
     <string name="move_to_project_failed">Could not move the chat</string>
+    <string name="run_now">Run now</string>
 </resources>
