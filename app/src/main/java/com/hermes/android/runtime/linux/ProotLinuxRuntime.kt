@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/learning", "/api/mcp/servers", "/api/skills")
+                allowed = ("/api/cron/blueprints", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -774,11 +774,12 @@ class ProotLinuxRuntime @Inject constructor(
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
                             app = FastAPI()
-                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "status", "mcp", "skills"):
+                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "analytics", "status", "mcp", "skills"):
                                 try:
                                     module = importlib.import_module("hermes_cli.web_routers." + name)
-                                    # skills has hub_router too, and it must come first (route order).
-                                    for attr in ("hub_router", "router"):
+                                    # skills has hub_router too, and it must come first (route order);
+                                    # config_env keeps GET /api/config and the schema on config_router.
+                                    for attr in ("hub_router", "config_router", "router"):
                                         if hasattr(module, attr):
                                             app.include_router(getattr(module, attr))
                                 except Exception:
@@ -791,7 +792,12 @@ class ProotLinuxRuntime @Inject constructor(
                         path = str(params.get("path") or "/")
                         if ".." in path or not path.split("?")[0].startswith(allowed):
                             return server._err(rid, 4004, "not available here: " + path)
-                        response = client().request(method, path, json=params.get("body"))
+                        headers = {}
+                        if path.split("?")[0] == "/api/env/reveal":
+                            # The route wants the dashboard session token; this process is the dashboard here.
+                            from hermes_cli import web_server
+                            headers["Authorization"] = "Bearer " + web_server._SESSION_TOKEN
+                        response = client().request(method, path, json=params.get("body"), headers=headers)
                         return server._ok(rid, {"status": response.status_code, "body": response.json() if response.content else None})
                     except Exception as exc:
                         log.exception("dashboard call failed")
