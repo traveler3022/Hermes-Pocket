@@ -610,7 +610,8 @@ private fun MdText(
             null -> TextDirection.Content
         }
     }
-    Text(
+    // Fades its newest words in while a reply streams; a plain Text otherwise.
+    RevealingText(
         text = text,
         style = style.copy(
             textDirection = direction,
