@@ -1105,8 +1105,6 @@
     <string name="remove_saved_server">Remove saved server?</string>
     <string name="remove_saved_server_body">%1$s leaves the list and its kept login is forgotten on this phone. The server itself is not touched.</string>
     <string name="voice_conversation">Voice conversation</string>
-    <string name="voice_use_phone_voice">Phone voice</string>
-    <string name="voice_use_hermes_voice">Hermes voice</string>
     <string name="voice_phone_voice_note">Hermes has no voice set (tts. in config.yaml), so the phone\'s own voice speaks.</string>
     <string name="voice_phone_listening_note">The server has no speech-to-text, so the phone listens; talking over Hermes stops it, then say it again.</string>
     <string name="voice_done_talking">I\'m done</string>

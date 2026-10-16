@@ -812,7 +812,6 @@ class ChatViewModel @Inject constructor(
     fun endVoice() = voice?.end()
     fun toggleVoiceMute() = voice?.toggleMute()
     fun finishVoiceTake() = voice?.finishTake()
-    fun toggleVoicePhoneVoice() = voice?.togglePhoneVoice()
     fun clearVoiceError() = voice?.clearError()
 
     // ── Attachments (delegated) ──────────────────────────────────────────

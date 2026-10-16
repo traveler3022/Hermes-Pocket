@@ -203,7 +203,6 @@ fun ChatScreen(
             },
             onToggleMute = { viewModel.toggleVoiceMute() },
             onFinishTake = { viewModel.finishVoiceTake() },
-            onTogglePhoneVoice = { viewModel.toggleVoicePhoneVoice() },
         )
     }
     val movedToText = stringResource(R.string.moved_to_project)
