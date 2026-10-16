@@ -3,6 +3,7 @@ package com.hermes.android.di
 import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.CronJobsRepository
+import com.hermes.android.data.ServerHermesUpdatesRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.LearningRepository
@@ -28,6 +29,7 @@ import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.domain.updates.ServerHermesUpdates
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
@@ -145,6 +147,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindCronJobs(impl: CronJobsRepository): CronJobs
+
+    @Binds
+    abstract fun bindServerHermesUpdates(impl: ServerHermesUpdatesRepository): ServerHermesUpdates
 
     @Binds
     abstract fun bindMemoryProviders(impl: MemoryProvidersRepository): MemoryProviders

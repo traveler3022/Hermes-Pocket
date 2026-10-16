@@ -1104,4 +1104,7 @@
     <string name="connected_now">Connected</string>
     <string name="remove_saved_server">Remove saved server?</string>
     <string name="remove_saved_server_body">%1$s leaves the list and its kept login is forgotten on this phone. The server itself is not touched.</string>
+    <string name="server_update_confirm">Runs hermes update on the server Hermes runs on. Hermes restarts there, and any reply in progress is cut off. Chats and settings stay.</string>
+    <string name="server_update_failed">Update failed — %1$s</string>
+    <string name="server_update_running">Updating on the server…</string>
 </resources>

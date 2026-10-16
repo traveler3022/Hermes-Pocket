@@ -1102,4 +1102,7 @@
     <string name="connected_now">وصل است</string>
     <string name="remove_saved_server">سرور ذخیره‌شده حذف شود؟</string>
     <string name="remove_saved_server_body">%1$s از لیست حذف می‌شود و ورود ذخیره‌شده‌اش روی این گوشی پاک می‌شود. به خود سرور دست زده نمی‌شود.</string>
+    <string name="server_update_confirm">دستور hermes update روی همان سروری اجرا می‌شود که هرمس روی آن است. هرمس آنجا دوباره راه می‌افتد و جوابی که در حال نوشتن است قطع می‌شود. گفتگوها و تنظیمات سر جایشان می‌مانند.</string>
+    <string name="server_update_failed">به‌روزرسانی نشد — %1$s</string>
+    <string name="server_update_running">در حال به‌روزرسانی روی سرور…</string>
 </resources>
