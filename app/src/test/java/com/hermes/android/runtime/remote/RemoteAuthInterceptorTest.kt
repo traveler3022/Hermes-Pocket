@@ -90,7 +90,8 @@ class RemoteAuthInterceptorTest {
     private fun storeWith(tokens: RemoteTokens) = mockk<RemoteTokenStore> {
         every { load() } returns tokens
         every { save(any()) } just Runs
-        every { clear() } just Runs
+        every { clear(any()) } just Runs
+        every { loadCredentials(any()) } returns null
     }
 
     private fun clientFor(store: RemoteTokenStore) =
