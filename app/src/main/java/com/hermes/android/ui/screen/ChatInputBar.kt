@@ -80,6 +80,13 @@ import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.i18n.SlashCommandDescriptions
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -106,6 +113,14 @@ internal fun InputBar(
     onVoiceRequestTaken: () -> Unit = {},
     /** Opens the hands-free voice conversation; null hides its button. */
     onVoiceMode: (() -> Unit)? = null,
+    /** The mic is taking dictation into the box. */
+    dictating: Boolean = false,
+    /** Starts in-app dictation; null uses the system's speech dialog instead. */
+    onStartDictation: (() -> Unit)? = null,
+    /** The mic tapped again: what is being said still lands, then it stops. */
+    onFinishDictation: () -> Unit = {},
+    /** Stops at once, as the screen goes. */
+    onStopDictation: () -> Unit = {},
 ) {
     // Several files at once; each goes the way a single one always did.
     val filePicker = rememberLauncherForActivityResult(
@@ -197,10 +212,37 @@ internal fun InputBar(
             Toast.makeText(context, noSpeech, Toast.LENGTH_LONG).show()
         }
     }
+    // Dictation needs the mic permission (the dialog didn't); refused, the dialog still works.
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val start = onStartDictation
+        if (granted && start != null) start() else startVoiceInput()
+    }
+    val toggleMic = {
+        val start = onStartDictation
+        when {
+            dictating -> onFinishDictation()
+            start == null -> startVoiceInput()
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> start()
+            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    // The mic is never left on behind the user's back.
+    val currentOnStopDictation by rememberUpdatedState(onStopDictation)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) currentOnStopDictation()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            currentOnStopDictation()
+        }
+    }
     LaunchedEffect(voiceRequest) {
         if (voiceRequest != null) {
             onVoiceRequestTaken()
-            startVoiceInput()
+            if (!dictating) toggleMic()
         }
     }
     // `/` list: the gateway catalog (commands.catalog) minus the commands the app has
@@ -420,13 +462,13 @@ internal fun InputBar(
                     }
                 } else {
                     IconButton(
-                        onClick = startVoiceInput,
+                        onClick = toggleMic,
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
                             Icons.Default.Mic,
                             contentDescription = stringResource(R.string.voice_input),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (dictating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     // An empty box: the voice conversation in Send's place, as ChatGPT has it.
