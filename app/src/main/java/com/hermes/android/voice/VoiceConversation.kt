@@ -108,8 +108,8 @@ class VoiceConversation(
 
     @Volatile private var endTakeNow = false
 
-    /** The phone's voice (the default), or Hermes' when chosen on the screen; kept for the next conversation too. */
-    @Volatile private var preferPhoneVoice = true
+    /** The phone's voice, chosen on the screen; kept for the next conversation too. */
+    @Volatile private var preferPhoneVoice = false
     private val unmuted = MutableStateFlow(true)
 
     private val anyPlaying: Boolean get() = player.isPlaying || localSpeech?.isPlaying == true
