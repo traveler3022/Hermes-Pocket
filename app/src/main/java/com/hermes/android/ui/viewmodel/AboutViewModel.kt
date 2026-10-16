@@ -36,6 +36,8 @@ data class AboutUiState(
     val hermesVersion: String? = null,
     val canUpdateHermes: Boolean = false,
     val hermesUpdate: HermesUpdate = HermesUpdate.Idle,
+    /** The launch check found a newer build and the dialog is up. */
+    val showPrompt: Boolean = false,
 )
 
 /** Fetching the app's release APK and handing it to the system installer. */
@@ -88,14 +90,7 @@ class AboutViewModel @Inject constructor(
     /** Set while the user is on the "install unknown apps" screen we sent them to. */
     private var awaitingInstallPermission = false
 
-    /**
-     * Asks GitHub what the newest release is.
-     *
-     * Only ever on request. A check on every open would mean the app calling
-     * out to a third party without being asked — cheap in bytes, but not the
-     * kind of thing a client for a self-hosted agent should do behind its
-     * user's back.
-     */
+    /** Asks GitHub what the newest release is; the button on the About screen. */
     fun check() {
         if (_uiState.value.isChecking) return
         viewModelScope.launch {
@@ -103,6 +98,33 @@ class AboutViewModel @Inject constructor(
             val result = releases.check()
             _uiState.value = _uiState.value.copy(isChecking = false, result = result)
         }
+    }
+
+    /**
+     * The check on app launch, at most once every three days. It stays quiet unless a
+     * newer build exists; then the dialog comes up. A failed check is retried on the
+     * next launch.
+     */
+    fun autoCheck() {
+        if (_uiState.value.isChecking || !releases.isAutoCheckDue()) return
+        _uiState.update { it.copy(isChecking = true) }
+        viewModelScope.launch {
+            val result = releases.check()
+            if (result !is UpdateCheck.Failed) releases.markAutoChecked()
+            _uiState.update {
+                it.copy(
+                    isChecking = false,
+                    result = result,
+                    showPrompt = result is UpdateCheck.Available,
+                )
+            }
+        }
+    }
+
+    /** "Later" on the launch dialog; a download still running stops with it. */
+    fun dismissPrompt() {
+        if (downloadJob?.isActive == true) cancelDownload()
+        _uiState.update { it.copy(showPrompt = false) }
     }
 
     /** Download the available release's APK into the app's cache; cancel with [cancelDownload]. */

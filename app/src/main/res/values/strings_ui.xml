@@ -1104,4 +1104,6 @@
     <string name="connected_now">Connected</string>
     <string name="remove_saved_server">Remove saved server?</string>
     <string name="remove_saved_server_body">%1$s leaves the list and its kept login is forgotten on this phone. The server itself is not touched.</string>
+    <string name="app_update_prompt_title">A new version is out</string>
+    <string name="app_update_later">Later</string>
 </resources>

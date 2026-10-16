@@ -1102,4 +1102,6 @@
     <string name="connected_now">وصل است</string>
     <string name="remove_saved_server">سرور ذخیره‌شده حذف شود؟</string>
     <string name="remove_saved_server_body">%1$s از لیست حذف می‌شود و ورود ذخیره‌شده‌اش روی این گوشی پاک می‌شود. به خود سرور دست زده نمی‌شود.</string>
+    <string name="app_update_prompt_title">نسخهٔ جدید آمده</string>
+    <string name="app_update_later">بعداً</string>
 </resources>

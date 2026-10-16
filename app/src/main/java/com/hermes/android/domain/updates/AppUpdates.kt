@@ -27,6 +27,15 @@ interface AppUpdates {
     suspend fun check(): UpdateCheck
 
     /**
+     * Whether the check on launch is due: none has answered yet, or the last one that
+     * answered is [AUTO_CHECK_INTERVAL_MS] old. A failed check does not count.
+     */
+    fun isAutoCheckDue(): Boolean
+
+    /** A check on launch answered; the next one waits [AUTO_CHECK_INTERVAL_MS]. */
+    fun markAutoChecked()
+
+    /**
      * Downloads [apk] into the app's cache, replacing the previous download there.
      * Cancel the calling coroutine to stop it. [onProgress] gets bytes so far and the
      * total (0 when unknown).
@@ -54,6 +63,9 @@ interface AppUpdates {
 
     companion object {
         const val PROJECT_URL = "https://github.com/traveler3022/Hermes-Pocket"
+
+        /** Three days between checks on launch. */
+        const val AUTO_CHECK_INTERVAL_MS = 3L * 24 * 60 * 60 * 1000
     }
 }
 
