@@ -808,73 +808,12 @@ class ChatViewModel @Inject constructor(
     val voiceState: StateFlow<com.hermes.android.voice.VoiceUiState>? get() = voice?.state
     val voiceLevel: StateFlow<Float>? get() = voice?.level
 
-    fun startVoice() {
-        stopDictation()
-        voice?.start()
-    }
+    fun startVoice() = voice?.start()
     fun endVoice() = voice?.end()
     fun toggleVoiceMute() = voice?.toggleMute()
     fun finishVoiceTake() = voice?.finishTake()
     fun toggleVoicePhoneVoice() = voice?.togglePhoneVoice()
     fun clearVoiceError() = voice?.clearError()
-
-    // ── Dictation ────────────────────────────────────────────────────────
-    // The mic button: the phone's recognizer, kept listening. Each stretch of speech goes
-    // into the box the moment the speaker pauses, then it listens on, so a long talk with
-    // pauses keeps every part (the system's speech dialog kept only the last).
-
-    private val dictationInput = com.hermes.android.voice.DeviceSpeechInput(context, MutableStateFlow(0f))
-    private var dictationJob: Job? = null
-    private var dictationFinishing = false
-    private val _dictating = MutableStateFlow(false)
-    val dictating: StateFlow<Boolean> = _dictating.asStateFlow()
-
-    /** False when the phone has no recognizer to use here (the caller falls back to the dialog). */
-    val dictationAvailable: Boolean get() = dictationInput.available
-
-    fun startDictation() {
-        if (dictationJob?.isActive == true) return
-        dictationJob = viewModelScope.launch {
-            _dictating.value = true
-            dictationFinishing = false
-            try {
-                var silentTakes = 0
-                while (!dictationFinishing && silentTakes < DICTATION_SILENT_TAKES) {
-                    val said = try {
-                        dictationInput.listenOnce()
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Timber.w(e, "[Dictation] recognition failed")
-                        break
-                    }
-                    if (said.isBlank()) {
-                        silentTakes++
-                        continue
-                    }
-                    silentTakes = 0
-                    _uiState.update {
-                        it.copy(inputText = if (it.inputText.isBlank()) said else it.inputText.trimEnd() + " " + said)
-                    }
-                }
-            } finally {
-                _dictating.value = false
-            }
-        }
-    }
-
-    /** The mic tapped again: the words of the take under way still land, then it stops. */
-    fun finishDictation() {
-        if (dictationJob?.isActive != true) return
-        dictationFinishing = true
-        dictationInput.finish()
-    }
-
-    /** Stops at once (leaving the screen, the voice conversation taking the mic). */
-    fun stopDictation() {
-        dictationJob?.cancel()
-        dictationJob = null
-    }
 
     // ── Attachments (delegated) ──────────────────────────────────────────
 
@@ -1404,9 +1343,6 @@ class ChatViewModel @Inject constructor(
     private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 
     companion object {
-        /** Listening ends after this many takes in a row with nothing said. */
-        private const val DICTATION_SILENT_TAKES = 2
-
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"

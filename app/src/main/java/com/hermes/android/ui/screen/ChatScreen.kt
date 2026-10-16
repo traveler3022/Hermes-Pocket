@@ -1105,8 +1105,6 @@ fun ChatScreen(
                 }
 
                 // Input bar
-                val dictating by viewModel.dictating.collectAsStateWithLifecycle()
-                val dictationAvailable = remember(viewModel) { viewModel.dictationAvailable }
                 InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
@@ -1126,10 +1124,6 @@ fun ChatScreen(
                     voiceRequest = voiceRequest,
                     onVoiceRequestTaken = { voiceRequest = null },
                     onVoiceMode = if (viewModel.voiceState != null) ({ voiceModeOpen = true }) else null,
-                    dictating = dictating,
-                    onStartDictation = if (dictationAvailable) viewModel::startDictation else null,
-                    onFinishDictation = viewModel::finishDictation,
-                    onStopDictation = viewModel::stopDictation,
                 )
             }
         }

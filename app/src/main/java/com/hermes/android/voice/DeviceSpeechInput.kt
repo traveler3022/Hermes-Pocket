@@ -43,18 +43,9 @@ class DeviceSpeechInput(private val context: Context, private val level: Mutable
 
     val available: Boolean get() = recognizer() != null
 
-    /** The recognizer of the take under way; touched on the main thread only. */
-    private var active: SpeechRecognizer? = null
-
-    /** Ends the take under way now; what was said so far still comes back from [listenOnce]. */
-    fun finish() {
-        active?.stopListening()
-    }
-
     suspend fun listenOnce(): String = withContext(Dispatchers.Main) {
         val component = recognizer() ?: throw IOException("This phone has no speech recognizer")
         val recognizer = SpeechRecognizer.createSpeechRecognizer(context, component)
-        active = recognizer
         try {
             suspendCancellableCoroutine<String> { cont ->
                 recognizer.setRecognitionListener(object : RecognitionListener {
@@ -93,7 +84,6 @@ class DeviceSpeechInput(private val context: Context, private val level: Mutable
                 // Cancellation lands in the finally below, on the main thread the recognizer needs.
             }
         } finally {
-            if (active === recognizer) active = null
             level.value = 0f
             recognizer.destroy()
         }
