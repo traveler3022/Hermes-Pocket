@@ -63,6 +63,8 @@ data class VoiceUiState(
     val phoneVoice: Boolean = false,
     /** No server speech-to-text: the phone's recognizer listens, and a barge-in can't keep the first words. */
     val phoneListening: Boolean = false,
+    /** The user chose the phone's voice over Hermes' own. */
+    val phoneVoiceChosen: Boolean = false,
     val problem: VoiceProblem? = null,
     /** Any other failure, as the system worded it. */
     val error: String? = null,
@@ -105,6 +107,9 @@ class VoiceConversation(
     private var job: Job? = null
 
     @Volatile private var endTakeNow = false
+
+    /** The phone's voice, chosen on the screen; kept for the next conversation too. */
+    @Volatile private var preferPhoneVoice = false
     private val unmuted = MutableStateFlow(true)
 
     private val anyPlaying: Boolean get() = player.isPlaying || localSpeech?.isPlaying == true
@@ -116,7 +121,7 @@ class VoiceConversation(
             // A conversation ended a moment ago may still be putting the audio back; its last
             // state ("off") must land before this one's first.
             previous?.cancelAndJoin()
-            _state.value = VoiceUiState(status = VoiceStatus.Listening)
+            _state.value = VoiceUiState(status = VoiceStatus.Listening, phoneVoiceChosen = preferPhoneVoice)
             unmuted.value = true
             route.acquire()
             try {
@@ -153,6 +158,12 @@ class VoiceConversation(
     /** "I'm done talking": ends the take now instead of waiting for silence. */
     fun finishTake() {
         if (_state.value.status == VoiceStatus.Listening) endTakeNow = true
+    }
+
+    /** Hermes' voice ⇄ the phone's; takes effect from the next sentence. */
+    fun togglePhoneVoice() {
+        preferPhoneVoice = !preferPhoneVoice
+        _state.update { it.copy(phoneVoiceChosen = preferPhoneVoice) }
     }
 
     fun clearError() = _state.update { it.copy(error = null, problem = null) }
@@ -398,7 +409,7 @@ class VoiceConversation(
 
     /** Hermes' voice for [sentence], or null to use the phone's (and keep using it from then on). */
     private suspend fun fetchServerVoice(sentence: String): VoiceAudio.SpokenAudio? {
-        if (_state.value.phoneVoice) return null
+        if (preferPhoneVoice || _state.value.phoneVoice) return null
         return try {
             audio.speak(sentence)
         } catch (e: CancellationException) {

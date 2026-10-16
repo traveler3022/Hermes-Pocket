@@ -70,6 +70,7 @@ internal fun VoiceModeScreen(
     onEnd: () -> Unit,
     onToggleMute: () -> Unit,
     onFinishTake: () -> Unit,
+    onTogglePhoneVoice: () -> Unit,
 ) {
     val context = LocalContext.current
     val ui by state.collectAsState()
@@ -179,7 +180,7 @@ internal fun VoiceModeScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 val notes = listOfNotNull(
-                    stringResource(R.string.voice_phone_voice_note).takeIf { ui.phoneVoice },
+                    stringResource(R.string.voice_phone_voice_note).takeIf { ui.phoneVoice && !ui.phoneVoiceChosen },
                     stringResource(R.string.voice_phone_listening_note).takeIf { ui.phoneListening },
                 )
                 notes.forEach {
@@ -207,6 +208,9 @@ internal fun VoiceModeScreen(
                 }
                 if (ui.status == VoiceStatus.Listening && !ui.muted && !ui.phoneListening) {
                     TextButton(onClick = onFinishTake) { Text(stringResource(R.string.voice_done_talking)) }
+                }
+                TextButton(onClick = onTogglePhoneVoice) {
+                    Text(stringResource(if (ui.phoneVoiceChosen) R.string.voice_use_hermes_voice else R.string.voice_use_phone_voice))
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(
