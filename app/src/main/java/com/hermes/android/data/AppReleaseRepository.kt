@@ -309,6 +309,17 @@ class AppReleaseRepository @Inject constructor(
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
+    override fun isAutoCheckDue(): Boolean {
+        val last = prefs.getLong(KEY_LAST_AUTO_CHECK, 0L)
+        val now = System.currentTimeMillis()
+        // A clock set back past the last check must not silence it for years.
+        return last <= 0L || last > now || now - last >= AppUpdates.AUTO_CHECK_INTERVAL_MS
+    }
+
+    override fun markAutoChecked() {
+        prefs.edit().putLong(KEY_LAST_AUTO_CHECK, System.currentTimeMillis()).apply()
+    }
+
     // ── What's New ───────────────────────────────────────────────────────────
 
     override suspend fun pendingWhatsNew(): AppRelease? = withContext(Dispatchers.IO) {
@@ -414,6 +425,7 @@ class AppReleaseRepository @Inject constructor(
 
         private const val PREFS_NAME = "app_updates"
         private const val KEY_WHATS_NEW_CODE = "whats_new_version_code"
+        private const val KEY_LAST_AUTO_CHECK = "last_auto_check_ms"
         private const val NONE = -1
     }
 }

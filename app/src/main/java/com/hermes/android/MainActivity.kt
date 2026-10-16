@@ -132,6 +132,11 @@ class MainActivity : ComponentActivity() {
                             )
                             // Once after an app update: that version's release notes.
                             com.hermes.android.ui.screen.WhatsNewDialog()
+                            // On launch, every few days: a newer build to download and install.
+                            // Not during first-run setup, which has enough on screen.
+                            if (setupState.isComplete) {
+                                com.hermes.android.ui.screen.UpdatePromptDialog()
+                            }
                         }
                     }
                 }

@@ -185,7 +185,7 @@ private fun UpdateNote(text: String, isProblem: Boolean = false) {
 }
 
 @Composable
-private fun AvailableRelease(
+internal fun AvailableRelease(
     release: AppRelease,
     installed: String,
     download: AppDownload,

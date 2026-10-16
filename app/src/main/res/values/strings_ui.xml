@@ -1135,4 +1135,6 @@
     <string name="server_update_failed">Update failed — %1$s</string>
     <string name="server_update_running">Updating on the server…</string>
     <string name="rename_saved_server">Rename server</string>
+    <string name="app_update_prompt_title">A new version is out</string>
+    <string name="app_update_later">Later</string>
 </resources>

@@ -1133,4 +1133,6 @@
     <string name="server_update_failed">به‌روزرسانی نشد — %1$s</string>
     <string name="server_update_running">در حال به‌روزرسانی روی سرور…</string>
     <string name="rename_saved_server">تغییر اسم سرور</string>
+    <string name="app_update_prompt_title">نسخهٔ جدید آمده</string>
+    <string name="app_update_later">بعداً</string>
 </resources>
