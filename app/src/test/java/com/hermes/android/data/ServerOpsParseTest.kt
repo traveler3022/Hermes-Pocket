@@ -85,3 +85,58 @@ class ServerOpsParseTest {
         assertEquals(21600L, share.autoDeleteSeconds)
     }
 }
+
+class ModelSlotsParseTest {
+
+    @Test
+    fun `auxiliary tasks and main model`() {
+        val aux = parseAuxiliary(
+            Json.parseToJsonElement(
+                """
+                {"tasks": [
+                  {"task": "vision", "provider": "auto", "model": "", "base_url": "", "reasoning_effort": null, "local_endpoint": false},
+                  {"task": "title_generation", "provider": "openrouter", "model": "google/gemini-flash", "base_url": ""},
+                  {"task": "my_plugin", "provider": "auto", "model": "", "label": "Plugin job", "hint": "Does a thing",
+                   "inherit_from": "compression", "effective": {"provider": "openrouter", "model": "x/y", "base_url": ""}}
+                ],
+                 "main": {"provider": "custom:9router", "model": "oc/deepseek"}}
+                """.trimIndent(),
+            ),
+        )
+        assertEquals(3, aux.tasks.size)
+        assertTrue(aux.tasks[0].isAuto)
+        assertFalse(aux.tasks[1].isAuto)
+        assertEquals("Plugin job", aux.tasks[2].label)
+        assertEquals("x/y", aux.tasks[2].effectiveModel)
+        assertEquals("custom:9router", aux.mainProvider)
+    }
+
+    @Test
+    fun `moa round trip keeps the other preset fields`() {
+        // Shape from GET /api/model/moa on Hermes 0.21.7.
+        val moa = parseMoa(
+            Json.parseToJsonElement(
+                """
+                {"default_preset": "default", "active_preset": "",
+                 "presets": {"default": {"enabled": true,
+                   "reference_models": [{"provider": "openai-codex", "model": "gpt-5.5", "enabled": true},
+                                        {"provider": "openrouter", "model": "deepseek/deepseek-v4-pro", "enabled": false}],
+                   "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
+                   "reference_temperature": 0.7, "aggregator_temperature": null, "reference_timeout": null,
+                   "degraded_reference_policy": "loud", "fanout": "user_turn"}},
+                 "reference_models": [], "privacy_filter": ""}
+                """.trimIndent(),
+            ),
+        )
+        val preset = moa.presets.getValue("default")
+        assertEquals(2, preset.referenceModels.size)
+        assertFalse(preset.referenceModels[1].enabled)
+        assertEquals("anthropic/claude-opus-4.8", preset.aggregator.model)
+        val body = moaBody(moa)
+        val sent = (body["presets"] as JsonObject)["default"] as JsonObject
+        assertEquals("0.7", sent["reference_temperature"].toString())
+        assertEquals("\"loud\"", sent["degraded_reference_policy"].toString())
+        assertEquals("\"user_turn\"", sent["fanout"].toString())
+        assertEquals(parseMoa(body), moa)
+    }
+}

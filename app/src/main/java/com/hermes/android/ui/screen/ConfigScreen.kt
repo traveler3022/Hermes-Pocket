@@ -213,6 +213,8 @@ fun ConfigScreen(
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
                 SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
+                SettingsSection.AUX_MODELS -> AuxModelsSection(snackbarHostState)
+                SettingsSection.MOA -> MoaSection(snackbarHostState)
                 SettingsSection.PROVIDERS -> ProvidersSection(
                     configState = uiState,
                     configViewModel = viewModel,
@@ -272,6 +274,8 @@ internal enum class SettingsSection(
     CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ", ADVANCED),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
+    AUX_MODELS("Task models", "مدل کارهای جانبی", MODELS),
+    MOA("Mixture of Agents", "ترکیب چند مدل (MoA)", MODELS),
     PROVIDERS("Providers", "پرووایدرها", MODELS),
     PROVIDER_KEYS("API key", "کلید API", PROVIDERS),
     PROVIDER_ACCOUNTS("Sign in with account", "ورود با حساب", PROVIDERS),

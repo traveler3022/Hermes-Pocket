@@ -36,6 +36,7 @@ import com.hermes.android.ui.icons.filled.Language
 import com.hermes.android.ui.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import com.hermes.android.ui.icons.filled.Psychology
+import com.hermes.android.ui.icons.filled.SmartToy
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -349,6 +350,20 @@ internal fun ModelsTab(
                     subtitle = state.reasoning,
                     icon = Icons.Default.Lightbulb,
                     onClick = { onOpen(SettingsSection.REASONING) },
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 54.dp), thickness = 0.5.dp)
+                SettingsNavRow(
+                    title = stringResource(R.string.aux_title),
+                    subtitle = stringResource(R.string.aux_nav_subtitle),
+                    icon = Icons.Default.SmartToy,
+                    onClick = { onOpen(SettingsSection.AUX_MODELS) },
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 54.dp), thickness = 0.5.dp)
+                SettingsNavRow(
+                    title = stringResource(R.string.moa_title),
+                    subtitle = stringResource(R.string.moa_nav_subtitle),
+                    icon = Icons.Default.Psychology,
+                    onClick = { onOpen(SettingsSection.MOA) },
                 )
             }
         }

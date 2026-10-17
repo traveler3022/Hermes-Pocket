@@ -8,6 +8,7 @@ import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.AchievementsRepository
 import com.hermes.android.data.ServerOpsRepository
+import com.hermes.android.data.ModelSlotsRepository
 import com.hermes.android.data.LearningRepository
 import com.hermes.android.data.MemoryProvidersRepository
 import com.hermes.android.data.MessagingGatewayRepository
@@ -34,6 +35,7 @@ import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.achievements.Achievements
 import com.hermes.android.domain.ops.ServerOps
+import com.hermes.android.domain.config.ModelSlots
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
 import com.hermes.android.domain.updates.ServerHermesUpdates
@@ -181,6 +183,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindServerOps(impl: ServerOpsRepository): ServerOps
+
+    @Binds
+    abstract fun bindModelSlots(impl: ModelSlotsRepository): ModelSlots
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

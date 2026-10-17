@@ -64,6 +64,13 @@ internal fun ModelPickerSheet(
     onToggleFavorite: (ModelOption) -> Unit,
     onReasoningLevelChange: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** False where no effort applies (a task or MoA slot): the Effort row is left out. */
+    showEffort: Boolean = true,
+    /** Header of the main page; the sheet is also used to pick a task's or preset's model. */
+    title: String? = null,
+    /** Adds an "Automatic" row on top that hands the choice back to Hermes. */
+    autoOption: (() -> Unit)? = null,
+    autoSelected: Boolean = false,
 ) {
     var page by remember { mutableStateOf<ModelSheetPage>(ModelSheetPage.Main) }
     var query by remember { mutableStateOf("") }
@@ -93,7 +100,23 @@ internal fun ModelPickerSheet(
         ) {
             when (val current = page) {
                 ModelSheetPage.Main -> {
-                    item { SheetHeader(stringResource(R.string.model), onBack = null) }
+                    item { SheetHeader(title ?: stringResource(R.string.model), onBack = null) }
+                    if (autoOption != null) {
+                        item {
+                            ListItem(
+                                modifier = Modifier.clickable(onClick = autoOption),
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = {
+                                    Text(
+                                        stringResource(R.string.aux_auto),
+                                        color = if (autoSelected) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                                    )
+                                },
+                                supportingContent = { Text(stringResource(R.string.aux_auto_desc)) },
+                                leadingContent = { SelectedMark(autoSelected) },
+                            )
+                        }
+                    }
                     if (favorites.isEmpty()) {
                         item {
                             SheetHint(
@@ -114,9 +137,11 @@ internal fun ModelPickerSheet(
                             onToggleStar = { onToggleFavorite(model) },
                         )
                     }
-                    item {
-                        NavRow(stringResource(R.string.effort), reasoningLevelLabel(reasoningLevel)) {
-                            open(ModelSheetPage.Effort)
+                    if (showEffort) {
+                        item {
+                            NavRow(stringResource(R.string.effort), reasoningLevelLabel(reasoningLevel)) {
+                                open(ModelSheetPage.Effort)
+                            }
                         }
                     }
                     item { SheetSection(stringResource(R.string.providers)) }
