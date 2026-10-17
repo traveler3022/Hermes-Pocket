@@ -435,7 +435,7 @@ private fun CodeBlock(
                     .horizontalScroll(rememberScrollState()),
             ) {
                 Text(
-                    text = block.code,
+                    text = rememberHighlightedCode(block.code, block.language, codeBg),
                     style = style.copy(
                         fontFamily = FontFamily.Monospace,
                         color = onCode,

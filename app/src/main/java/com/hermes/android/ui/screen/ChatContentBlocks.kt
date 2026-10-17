@@ -141,6 +141,7 @@ import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
+import com.hermes.android.ui.component.rememberHighlightedCode
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -246,10 +247,12 @@ internal fun CodeBlockCard(
     code: String,
     onCopyCode: (String) -> Unit,
 ) {
+    val cardColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val highlighted = rememberHighlightedCode(code, language, cardColor)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = cardColor,
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Row(
@@ -272,7 +275,7 @@ internal fun CodeBlockCard(
                 }
             }
             Text(
-                text = code,
+                text = highlighted,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier
                     .fillMaxWidth()
