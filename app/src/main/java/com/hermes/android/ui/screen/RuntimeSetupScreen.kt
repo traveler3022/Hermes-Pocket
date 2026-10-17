@@ -29,6 +29,7 @@ import com.hermes.android.runtime.remote.SavedServer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
@@ -439,6 +440,7 @@ internal fun RemoteServerSetupContent(
             busy = connecting || signingIn,
             onConnect = { viewModel.connectToSaved(it) },
             onForget = { viewModel.forgetSaved(it) },
+            onRename = { server, name -> viewModel.renameSaved(server, name) },
         )
     }
     TailscaleCard(
@@ -499,8 +501,34 @@ private fun SavedServersCard(
     busy: Boolean,
     onConnect: (SavedServer) -> Unit,
     onForget: (SavedServer) -> Unit,
+    onRename: (SavedServer, String) -> Unit,
 ) {
     var forgetTarget by remember { mutableStateOf<SavedServer?>(null) }
+    var renameTarget by remember { mutableStateOf<SavedServer?>(null) }
+    renameTarget?.let { target ->
+        var name by remember(target.url) { mutableStateOf(target.name) }
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text(stringResource(R.string.rename_saved_server)) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    supportingText = { Text(target.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    renameTarget = null
+                    onRename(target, name)
+                }) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
     forgetTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { forgetTarget = null },
@@ -552,6 +580,14 @@ private fun SavedServersCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        IconButton(onClick = { renameTarget = server }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.rename_saved_server),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                         IconButton(onClick = { forgetTarget = server }) {

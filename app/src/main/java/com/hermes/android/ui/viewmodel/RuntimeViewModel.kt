@@ -285,6 +285,8 @@ class RuntimeViewModel @Inject constructor(
     fun connectToSaved(server: SavedServer) = connectToServer(server.url)
 
     /** Removes a saved server and the login kept for it. */
+    fun renameSaved(server: SavedServer, name: String) = savedServers.rename(server.url, name)
+
     fun forgetSaved(server: SavedServer) {
         savedServers.forget(server.url)
         remoteAuth.forgetServer(server.url)

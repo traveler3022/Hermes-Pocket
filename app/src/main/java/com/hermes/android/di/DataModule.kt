@@ -2,6 +2,8 @@ package com.hermes.android.di
 
 import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.CronBlueprintsRepository
+import com.hermes.android.data.CronJobsRepository
+import com.hermes.android.data.ServerHermesUpdatesRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.LearningRepository
@@ -15,6 +17,8 @@ import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
 import com.hermes.android.data.ToolsetSetupRepository
+import com.hermes.android.data.EnvKeysRepository
+import com.hermes.android.data.ConfigEditorRepository
 import com.hermes.android.data.McpServerSwitchRepository
 import com.hermes.android.data.WebhooksRepository
 import com.hermes.android.data.SkillsAdminRepository
@@ -26,6 +30,8 @@ import com.hermes.android.data.StorageCleaner
 import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.cron.CronBlueprints
+import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.domain.updates.ServerHermesUpdates
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
 import com.hermes.android.domain.groups.GroupRooms
@@ -34,6 +40,8 @@ import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
 import com.hermes.android.domain.messaging.Webhooks
 import com.hermes.android.domain.tools.ToolsetSetup
+import com.hermes.android.domain.config.EnvKeys
+import com.hermes.android.domain.config.ConfigEditor
 import com.hermes.android.domain.tools.McpServerSwitch
 import com.hermes.android.domain.tools.SkillsAdmin
 import com.hermes.android.domain.tools.PluginCatalog
@@ -109,6 +117,12 @@ abstract class DataModule {
     abstract fun bindToolsetSetup(impl: ToolsetSetupRepository): ToolsetSetup
 
     @Binds
+    abstract fun bindEnvKeys(impl: EnvKeysRepository): EnvKeys
+
+    @Binds
+    abstract fun bindConfigEditor(impl: ConfigEditorRepository): ConfigEditor
+
+    @Binds
     abstract fun bindMcpServerSwitch(impl: McpServerSwitchRepository): McpServerSwitch
 
     @Binds
@@ -140,6 +154,12 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindCronBlueprints(impl: CronBlueprintsRepository): CronBlueprints
+
+    @Binds
+    abstract fun bindCronJobs(impl: CronJobsRepository): CronJobs
+
+    @Binds
+    abstract fun bindServerHermesUpdates(impl: ServerHermesUpdatesRepository): ServerHermesUpdates
 
     @Binds
     abstract fun bindMemoryProviders(impl: MemoryProvidersRepository): MemoryProviders

@@ -34,6 +34,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.hermes.android.R
+import androidx.compose.material.icons.Icons
+import com.hermes.android.ui.icons.filled.Description
+import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
@@ -45,6 +48,7 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 internal fun AdvancedSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
+    onOpen: (SettingsSection) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -53,6 +57,21 @@ internal fun AdvancedSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = stringResource(R.string.env_keys_title),
+                subtitle = stringResource(R.string.env_keys_subtitle),
+                icon = Icons.Default.Key,
+                onClick = { onOpen(SettingsSection.ENV_KEYS) },
+            )
+            com.hermes.android.ui.design.GroupDivider()
+            SettingsNavRow(
+                title = stringResource(R.string.config_editor_title),
+                subtitle = stringResource(R.string.config_editor_subtitle),
+                icon = Icons.Default.Description,
+                onClick = { onOpen(SettingsSection.CONFIG_EDITOR) },
+            )
+        }
         var editingEnv by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Person
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Settings
 import com.hermes.android.ui.icons.filled.Extension
 import androidx.compose.material.icons.filled.Star
 import com.hermes.android.ui.icons.filled.SwapHoriz
@@ -208,6 +209,14 @@ internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -
                         color = MaterialTheme.colorScheme.outline,
                     )
                 }
+            }
+            // The row opens the same sheet, but a visible gear says "this has settings".
+            IconButton(onClick = onClick) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = stringResource(R.string.toolset_settings),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Switch(
                 checked = tool.enabled,

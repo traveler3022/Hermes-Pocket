@@ -185,7 +185,7 @@ private fun UpdateNote(text: String, isProblem: Boolean = false) {
 }
 
 @Composable
-private fun AvailableRelease(
+internal fun AvailableRelease(
     release: AppRelease,
     installed: String,
     download: AppDownload,
@@ -356,7 +356,7 @@ private fun AppDownloadControls(
     }
 }
 
-/** Hermes Agent itself: its version, and an in-place update for the built-in Linux. */
+/** Hermes Agent itself: its version, and an in-place update (built-in Linux, or the server through its dashboard). */
 @Composable
 private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
     var confirming by remember { mutableStateOf(false) }
@@ -400,7 +400,11 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                    if (update.message.isNotBlank()) UpdateNote(text = update.message)
+                    if (update.message.isNotBlank()) {
+                        UpdateNote(text = update.message)
+                    } else if (state.hermesOnServer) {
+                        UpdateNote(text = stringResource(R.string.server_update_running))
+                    }
                 }
                 is HermesUpdate.Done -> UpdateNote(
                     text = if (update.changed) {
@@ -410,7 +414,10 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
                     },
                 )
                 is HermesUpdate.Failed -> UpdateNote(
-                    text = stringResource(R.string.update_failed_hermes_is_being_started, update.reason),
+                    text = stringResource(
+                        if (state.hermesOnServer) R.string.server_update_failed else R.string.update_failed_hermes_is_being_started,
+                        update.reason,
+                    ),
                     isProblem = true,
                 )
             }
@@ -423,7 +430,9 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
             title = { Text(stringResource(R.string.update_the_hermes_core_2)) },
             text = {
                 Text(
-                    stringResource(R.string.hermes_stops_for_a_few_minutes_while_it),
+                    stringResource(
+                        if (state.hermesOnServer) R.string.server_update_confirm else R.string.hermes_stops_for_a_few_minutes_while_it,
+                    ),
                 )
             },
             confirmButton = {

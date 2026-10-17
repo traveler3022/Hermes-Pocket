@@ -237,7 +237,9 @@ fun ConfigScreen(
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToMcp = onNavigateToMcp,
                 )
-                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
+                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel, onOpen = { section = it })
+                SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState)
+                SettingsSection.CONFIG_EDITOR -> ConfigEditorSection(snackbarHostState)
                 SettingsSection.ABOUT -> AboutSection()
             }
         }
@@ -260,6 +262,8 @@ internal enum class SettingsSection(
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),
     MEMORY("Memory", "حافظه", PERSONALITY),
     ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
+    ENV_KEYS(".env keys", "کلیدهای .env", ADVANCED),
+    CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ", ADVANCED),
     MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     PROVIDERS("Providers", "پرووایدرها", MODELS),
