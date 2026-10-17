@@ -20,6 +20,7 @@ import com.hermes.android.data.ToolsetSetupRepository
 import com.hermes.android.data.EnvKeysRepository
 import com.hermes.android.data.ConfigEditorRepository
 import com.hermes.android.data.McpServerSwitchRepository
+import com.hermes.android.data.UsageAnalyticsRepository
 import com.hermes.android.data.WebhooksRepository
 import com.hermes.android.data.SkillsAdminRepository
 import com.hermes.android.data.PluginCatalogRepository
@@ -38,6 +39,7 @@ import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.domain.messaging.MessagingGateway
 import com.hermes.android.domain.messaging.MessagingPairing
 import com.hermes.android.domain.messaging.TelegramSetup
+import com.hermes.android.domain.analytics.UsageAnalytics
 import com.hermes.android.domain.messaging.Webhooks
 import com.hermes.android.domain.tools.ToolsetSetup
 import com.hermes.android.domain.config.EnvKeys
@@ -127,6 +129,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindWebhooks(impl: WebhooksRepository): Webhooks
+
+    @Binds
+    abstract fun bindUsageAnalytics(impl: UsageAnalyticsRepository): UsageAnalytics
 
     @Binds
     abstract fun bindSkillsAdmin(impl: SkillsAdminRepository): SkillsAdmin

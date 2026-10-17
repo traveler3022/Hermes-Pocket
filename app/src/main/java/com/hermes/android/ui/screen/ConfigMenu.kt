@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.icons.filled.BarChart
 import com.hermes.android.ui.icons.filled.DataUsage
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
@@ -52,6 +53,7 @@ internal fun SettingsMenu(
     onNavigateToSetup: () -> Unit = {},
     onNavigateToLinux: () -> Unit = {},
     onNavigateToStorage: () -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -183,6 +185,12 @@ internal fun SettingsMenu(
                 subtitle = stringResource(R.string.app_and_hermes_core_versions),
                 icon = Icons.Default.Info,
                 onClick = { onOpen(SettingsSection.ABOUT) },
+            ),
+            DomainSpec(
+                title = stringResource(R.string.analytics_title),
+                subtitle = stringResource(R.string.analytics_nav_subtitle),
+                icon = Icons.Default.BarChart,
+                onClick = onNavigateToAnalytics,
             ),
             DomainSpec(
                 title = stringResource(R.string.storage),

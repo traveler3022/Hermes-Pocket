@@ -1135,4 +1135,20 @@
     <string name="rename_saved_server">تغییر اسم سرور</string>
     <string name="app_update_prompt_title">نسخهٔ جدید آمده</string>
     <string name="app_update_later">بعداً</string>
+    <string name="analytics_title">مصرف و هزینه</string>
+    <string name="analytics_subtitle">توکن، هزینه، مدل‌ها، مهارت‌ها و ابزارها</string>
+    <string name="analytics_nav_subtitle">توکن، هزینه و ارائه‌دهنده‌ها</string>
+    <string name="analytics_days">%d روز</string>
+    <string name="analytics_empty">در این بازه هنوز گفتگویی نبوده.</string>
+    <string name="analytics_sessions">گفتگو</string>
+    <string name="analytics_cost">هزینه</string>
+    <string name="analytics_cost_estimated">هزینه (تخمینی)</string>
+    <string name="analytics_cache">خواندن از کش</string>
+    <string name="analytics_reasoning">استدلال</string>
+    <string name="analytics_daily_cost">هزینهٔ هر روز</string>
+    <string name="analytics_model_line">ورودی %1$s · خروجی %2$s · %3$d گفتگو · %4$d فراخوانی</string>
+    <string name="analytics_auxiliary">کارهای فرعی (فشرده‌سازی، بینایی…)</string>
+    <string name="analytics_no_models">مصرفی برای مدل‌ها ثبت نشده.</string>
+    <string name="analytics_no_skills">در این بازه مهارتی استفاده نشده.</string>
+    <string name="analytics_no_tools">در این بازه ابزاری استفاده نشده.</string>
 </resources>

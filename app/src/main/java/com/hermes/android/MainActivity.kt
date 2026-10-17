@@ -262,6 +262,7 @@ class MainActivity : ComponentActivity() {
  * - `chat` — main chat screen
  * - `config` — settings & configuration
  * - `platforms` — platform credentials
+ * - `analytics` — token and cost statistics, opened from Settings
  * - `webhooks` — webhook routes of the messaging gateway
  * - `plugins` — plugin management
  * - `sessions` — session list & switcher
@@ -363,6 +364,7 @@ private fun HermesNavHost(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onNavigateToPlatforms = { navController.navigate("platforms") },
                 onNavigateToWebhooks = { navController.navigate("webhooks") },
+                onNavigateToAnalytics = { navController.navigate("analytics") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
                 onNavigateToMcp = { navController.navigate("mcp") },
@@ -396,6 +398,12 @@ private fun HermesNavHost(
 
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("analytics") {
+            com.hermes.android.ui.screen.AnalyticsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }

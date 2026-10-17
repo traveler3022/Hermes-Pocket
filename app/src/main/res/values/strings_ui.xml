@@ -1137,4 +1137,20 @@
     <string name="rename_saved_server">Rename server</string>
     <string name="app_update_prompt_title">A new version is out</string>
     <string name="app_update_later">Later</string>
+    <string name="analytics_title">Usage and cost</string>
+    <string name="analytics_subtitle">Tokens, cost, models, skills and tools</string>
+    <string name="analytics_nav_subtitle">Tokens, cost and providers</string>
+    <string name="analytics_days">%d days</string>
+    <string name="analytics_empty">No sessions in this period yet.</string>
+    <string name="analytics_sessions">sessions</string>
+    <string name="analytics_cost">cost</string>
+    <string name="analytics_cost_estimated">cost (est.)</string>
+    <string name="analytics_cache">cache read</string>
+    <string name="analytics_reasoning">reasoning</string>
+    <string name="analytics_daily_cost">Cost per day</string>
+    <string name="analytics_model_line">in %1$s · out %2$s · %3$d sessions · %4$d calls</string>
+    <string name="analytics_auxiliary">Side jobs (compression, vision…)</string>
+    <string name="analytics_no_models">No model usage recorded.</string>
+    <string name="analytics_no_skills">No skills used in this period.</string>
+    <string name="analytics_no_tools">No tools used in this period.</string>
 </resources>
