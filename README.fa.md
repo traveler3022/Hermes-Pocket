@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/traveler3022/Hermes-Pocket/releases/latest/download/app-release.apk"><img alt="دانلود APK" src="https://img.shields.io/badge/⬇_Download_APK-0EA5E9?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.hermes.android%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ftraveler3022%2FHermes-Pocket%22%2C%22author%22%3A%22traveler3022%22%2C%22name%22%3A%22Hermes%20Pocket%22%7D"><img alt="Get it on Obtainium" src="docs/badge_obtainium.png" height="28"></a>
   <br>
   <a href="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml"><img alt="Build" src="https://github.com/traveler3022/Hermes-Pocket/actions/workflows/build-apk.yml/badge.svg"></a>
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
@@ -118,6 +119,7 @@
 ## شروع
 
 1. **[APK آخرین نسخه رو دانلود کن](https://github.com/traveler3022/Hermes-Pocket/releases/latest/download/app-release.apk)** و نصبش کن.
+   اگه می‌خوای آپدیت‌ها خودکار برسه، به‌جاش از [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.hermes.android%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ftraveler3022%2FHermes-Pocket%22%2C%22author%22%3A%22traveler3022%22%2C%22name%22%3A%22Hermes%20Pocket%22%7D) نصبش کن.
 2. اپ رو باز کن، **شروع** رو بزن و انتخاب کن Hermes کجا اجرا بشه:
    - **لینوکس داخلی**: **نصب Hermes** رو بزن و تا خودش رو راه بندازه اپ رو باز نگه دار
      (یک بار حدود ۱ گیگ جای خالی و اینترنت پایدار).
