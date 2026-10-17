@@ -49,7 +49,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.design.GroupDivider
-import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.design.StatTile
@@ -171,194 +170,198 @@ internal fun ControlCenterMenu(
             UpdateBanner(onUpdate = { onOpen(SettingsSection.ABOUT) })
         }
 
-        // ── Agent ──
-        CcGroup(t("Agent", "ایجنت")) {
-            CcRow(
-                title = stringResource(R.string.personality),
-                icon = Icons.Default.Face,
-                tint = agentTint,
-                value = state.personality.ifBlank { t("Default", "پیش‌فرض") },
-                monoValue = state.personality.isNotBlank(),
-                onClick = { onOpen(SettingsSection.PERSONALITY) },
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.models),
-                icon = Icons.Default.Psychology,
-                tint = agentTint,
-                subtitle = state.activeModel?.let { "${state.activeProvider ?: "?"} / $it" },
-                onClick = { onOpen(SettingsSection.MODELS) },
-            )
-        }
-
-        // ── Capabilities & permissions ──
-        CcGroup(t("Capabilities & permissions", "قابلیت‌ها و مجوزها")) {
-            CcRow(
-                title = stringResource(R.string.tools),
-                icon = Icons.Default.Key,
-                tint = capabilityTint,
-                value = if (toolsTotal > 0) t("$toolsOn of $toolsTotal", "$toolsOn از $toolsTotal") else null,
-                onClick = { onOpen(SettingsSection.TOOLSETS) },
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.command_approval_2),
-                icon = Icons.Default.Security,
-                tint = capabilityTint,
-                value = t(state.approvalMode, approvalModeFa(state.approvalMode)),
-                onClick = { onOpen(SettingsSection.APPROVAL) },
-            )
-            CcDivider()
-            CcRow(
-                title = t("Skills", "مهارت‌ها"),
-                icon = Icons.Default.AutoAwesome,
-                tint = capabilityTint,
-                onClick = onNavigateToSkills,
-            )
-            CcDivider()
-            CcRow(
-                title = t("Plugins", "افزونه‌ها"),
-                icon = Icons.Default.Extension,
-                tint = capabilityTint,
-                onClick = onNavigateToPlugins,
-            )
-            CcDivider()
-            CcRow(
-                title = t("MCP servers", "سرورهای MCP"),
-                icon = Icons.Default.Link,
-                tint = capabilityTint,
-                onClick = onNavigateToMcp,
-            )
-        }
-
-        // ── Work ──
-        CcGroup(t("Work", "کارها")) {
-            CcRow(
-                title = stringResource(R.string.projects),
-                icon = Icons.Default.Folder,
-                tint = workTint,
-                subtitle = stringResource(R.string.browse_sessions_by_project),
-                onClick = onNavigateToProjects,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.scheduler),
-                icon = Icons.Default.Schedule,
-                tint = workTint,
-                subtitle = stringResource(R.string.scheduled_agent_jobs),
-                onClick = onNavigateToCron,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.kanban_board),
-                icon = Icons.Default.WorkOutline,
-                tint = workTint,
-                onClick = { onOpen(SettingsSection.KANBAN) },
-            )
-        }
-
-        // ── Messengers & connections ──
-        CcGroup(t("Messengers & connections", "پیام‌رسان‌ها و اتصالات")) {
-            CcRow(
-                title = stringResource(R.string.platforms),
-                icon = Icons.Default.Forum,
-                tint = agentTint,
-                subtitle = stringResource(R.string.telegram_discord_slack),
-                onClick = onNavigateToPlatforms,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.webhooks_title),
-                icon = Icons.Default.Code,
-                tint = agentTint,
-                onClick = onNavigateToWebhooks,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.assistant_title),
-                icon = Icons.Default.Mic,
-                tint = agentTint,
-                value = if (isPhoneAssistant) t("On", "فعال") else t("Not set", "تنظیم نشده"),
-                onClick = { onOpen(SettingsSection.PHONE_ASSISTANT) },
-            )
-        }
-
-        // ── App ──
-        CcGroup(t("App", "برنامه")) {
-            CcRow(
-                title = stringResource(R.string.appearance),
-                icon = Icons.Default.Palette,
-                tint = systemTint,
-                value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
-                onClick = { onOpen(SettingsSection.APPEARANCE) },
-            )
-            if (appLanguageState != null) {
+        // One card for every group: no section titles, groups split by a full-width line.
+        Spacer(Modifier.height(4.dp))
+        SettingsGroup {
+            // ── Agent ──
+            CcGroup(first = true) {
+                CcRow(
+                    title = stringResource(R.string.personality),
+                    icon = Icons.Default.Face,
+                    tint = agentTint,
+                    value = state.personality.ifBlank { t("Default", "پیش‌فرض") },
+                    monoValue = state.personality.isNotBlank(),
+                    onClick = { onOpen(SettingsSection.PERSONALITY) },
+                )
                 CcDivider()
                 CcRow(
-                    title = stringResource(R.string.language),
-                    icon = Icons.Default.Language,
-                    tint = systemTint,
-                    value = languageLabel(appLanguageState.language),
-                    onClick = { onOpen(SettingsSection.LANGUAGE) },
+                    title = stringResource(R.string.models),
+                    icon = Icons.Default.Psychology,
+                    tint = agentTint,
+                    subtitle = state.activeModel?.let { "${state.activeProvider ?: "?"} / $it" },
+                    onClick = { onOpen(SettingsSection.MODELS) },
                 )
             }
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.analytics_title),
-                icon = Icons.Default.BarChart,
-                tint = systemTint,
-                value = state.insights?.let { t("${it.sessions} sessions", "${it.sessions} جلسه") },
-                onClick = onNavigateToAnalytics,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.achievements_title),
-                icon = Icons.Default.Star,
-                tint = systemTint,
-                onClick = onNavigateToAchievements,
-            )
-        }
 
-        // ── System ──
-        CcGroup(t("System", "سیستم")) {
-            CcRow(
-                title = stringResource(R.string.updates),
-                icon = Icons.Default.CloudDownload,
-                tint = systemTint,
-                subtitle = stringResource(R.string.app_and_hermes_core_versions),
-                onClick = { onOpen(SettingsSection.ABOUT) },
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.linux),
-                icon = Icons.Default.Terminal,
-                tint = systemTint,
-                subtitle = stringResource(R.string.terminal_files_packages),
-                onClick = onNavigateToLinux,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.storage),
-                icon = Icons.Default.DataUsage,
-                tint = systemTint,
-                onClick = onNavigateToStorage,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.ops_title),
-                icon = Icons.Default.Build,
-                tint = systemTint,
-                subtitle = stringResource(R.string.ops_nav_subtitle),
-                onClick = onNavigateToOps,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.advanced),
-                icon = Icons.Default.Settings,
-                tint = systemTint,
-                subtitle = stringResource(R.string.env_mcp_console_log),
-                onClick = { onOpen(SettingsSection.ADVANCED) },
-            )
+            // ── Capabilities & permissions ──
+            CcGroup {
+                CcRow(
+                    title = stringResource(R.string.tools),
+                    icon = Icons.Default.Key,
+                    tint = capabilityTint,
+                    value = if (toolsTotal > 0) t("$toolsOn of $toolsTotal", "$toolsOn از $toolsTotal") else null,
+                    onClick = { onOpen(SettingsSection.TOOLSETS) },
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.command_approval_2),
+                    icon = Icons.Default.Security,
+                    tint = capabilityTint,
+                    value = t(state.approvalMode, approvalModeFa(state.approvalMode)),
+                    onClick = { onOpen(SettingsSection.APPROVAL) },
+                )
+                CcDivider()
+                CcRow(
+                    title = t("Skills", "مهارت‌ها"),
+                    icon = Icons.Default.AutoAwesome,
+                    tint = capabilityTint,
+                    onClick = onNavigateToSkills,
+                )
+                CcDivider()
+                CcRow(
+                    title = t("Plugins", "افزونه‌ها"),
+                    icon = Icons.Default.Extension,
+                    tint = capabilityTint,
+                    onClick = onNavigateToPlugins,
+                )
+                CcDivider()
+                CcRow(
+                    title = t("MCP servers", "سرورهای MCP"),
+                    icon = Icons.Default.Link,
+                    tint = capabilityTint,
+                    onClick = onNavigateToMcp,
+                )
+            }
+
+            // ── Work ──
+            CcGroup {
+                CcRow(
+                    title = stringResource(R.string.projects),
+                    icon = Icons.Default.Folder,
+                    tint = workTint,
+                    subtitle = stringResource(R.string.browse_sessions_by_project),
+                    onClick = onNavigateToProjects,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.scheduler),
+                    icon = Icons.Default.Schedule,
+                    tint = workTint,
+                    subtitle = stringResource(R.string.scheduled_agent_jobs),
+                    onClick = onNavigateToCron,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.kanban_board),
+                    icon = Icons.Default.WorkOutline,
+                    tint = workTint,
+                    onClick = { onOpen(SettingsSection.KANBAN) },
+                )
+            }
+
+            // ── Messengers & connections ──
+            CcGroup {
+                CcRow(
+                    title = stringResource(R.string.platforms),
+                    icon = Icons.Default.Forum,
+                    tint = agentTint,
+                    subtitle = stringResource(R.string.telegram_discord_slack),
+                    onClick = onNavigateToPlatforms,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.webhooks_title),
+                    icon = Icons.Default.Code,
+                    tint = agentTint,
+                    onClick = onNavigateToWebhooks,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.assistant_title),
+                    icon = Icons.Default.Mic,
+                    tint = agentTint,
+                    value = if (isPhoneAssistant) t("On", "فعال") else t("Not set", "تنظیم نشده"),
+                    onClick = { onOpen(SettingsSection.PHONE_ASSISTANT) },
+                )
+            }
+
+            // ── App ──
+            CcGroup {
+                CcRow(
+                    title = stringResource(R.string.appearance),
+                    icon = Icons.Default.Palette,
+                    tint = systemTint,
+                    value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
+                    onClick = { onOpen(SettingsSection.APPEARANCE) },
+                )
+                if (appLanguageState != null) {
+                    CcDivider()
+                    CcRow(
+                        title = stringResource(R.string.language),
+                        icon = Icons.Default.Language,
+                        tint = systemTint,
+                        value = languageLabel(appLanguageState.language),
+                        onClick = { onOpen(SettingsSection.LANGUAGE) },
+                    )
+                }
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.analytics_title),
+                    icon = Icons.Default.BarChart,
+                    tint = systemTint,
+                    value = state.insights?.let { t("${it.sessions} sessions", "${it.sessions} جلسه") },
+                    onClick = onNavigateToAnalytics,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.achievements_title),
+                    icon = Icons.Default.Star,
+                    tint = systemTint,
+                    onClick = onNavigateToAchievements,
+                )
+            }
+
+            // ── System ──
+            CcGroup {
+                CcRow(
+                    title = stringResource(R.string.updates),
+                    icon = Icons.Default.CloudDownload,
+                    tint = systemTint,
+                    subtitle = stringResource(R.string.app_and_hermes_core_versions),
+                    onClick = { onOpen(SettingsSection.ABOUT) },
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.linux),
+                    icon = Icons.Default.Terminal,
+                    tint = systemTint,
+                    subtitle = stringResource(R.string.terminal_files_packages),
+                    onClick = onNavigateToLinux,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.storage),
+                    icon = Icons.Default.DataUsage,
+                    tint = systemTint,
+                    onClick = onNavigateToStorage,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.ops_title),
+                    icon = Icons.Default.Build,
+                    tint = systemTint,
+                    subtitle = stringResource(R.string.ops_nav_subtitle),
+                    onClick = onNavigateToOps,
+                )
+                CcDivider()
+                CcRow(
+                    title = stringResource(R.string.advanced),
+                    icon = Icons.Default.Settings,
+                    tint = systemTint,
+                    subtitle = stringResource(R.string.env_mcp_console_log),
+                    onClick = { onOpen(SettingsSection.ADVANCED) },
+                )
+            }
         }
     }
 }
@@ -403,11 +406,11 @@ private fun ConnectionCard(
     }
 }
 
-/** Section title + one rounded group of rows. */
+/** One group of rows inside the shared card; a full-width line marks where it starts. */
 @Composable
-private fun CcGroup(title: String, content: @Composable () -> Unit) {
-    SectionHeader(text = title)
-    SettingsGroup { content() }
+private fun CcGroup(first: Boolean = false, content: @Composable () -> Unit) {
+    if (!first) GroupDivider(startIndent = 0.dp)
+    content()
 }
 
 /** Divider aligned with the row text (row padding 16 + icon 34 + gap 12). */
