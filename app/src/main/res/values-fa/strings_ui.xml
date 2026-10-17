@@ -1281,4 +1281,15 @@
     <string name="moa_fanout_step">در هر مرحله</string>
     <string name="moa_save">ذخیره</string>
     <string name="moa_discard">لغو تغییرها</string>
+    <string name="subagent_ended">تمام شد</string>
+    <string name="subagent_tools">%1$d ابزار</string>
+    <string name="subagent_last_tool">الان: %1$s</string>
+    <string name="subagent_waiting_log">منتظر اولین قدمش…</string>
+    <string name="subagent_steer_hint">چیزی بگویید (در قدم بعدی می‌خواند)</string>
+    <string name="subagent_steer">ارسال</string>
+    <string name="subagent_stop">توقف این زیرعامل</string>
+    <string name="subagent_no_steer">دیگر راهنمایی قبول نمی‌کند.</string>
+    <string name="subagent_queued">فرستاده شد؛ در قدم بعدی می‌خواند</string>
+    <string name="subagent_rejected">دیگر راهنمایی قبول نمی‌کند</string>
+    <string name="subagent_stopped">زیرعامل متوقف شد</string>
 </resources>

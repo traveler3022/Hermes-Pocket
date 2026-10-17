@@ -105,6 +105,10 @@ object GatewayMethods {
     const val MESSAGE_REACT = "message.react"
 
     // Delegation v1 (Task Desk)
+    const val SUBAGENT_LIST = "subagent.list"
+    const val SUBAGENT_TAIL = "subagent.tail"
+    const val SUBAGENT_STEER = "subagent.steer"
+    const val SUBAGENT_INTERRUPT = "subagent.interrupt"
     const val SESSION_ACTIVE_LIST = "session.active_list"
     const val SESSION_ACTIVATE = "session.activate"
     const val SESSION_CLOSE = "session.close"

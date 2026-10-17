@@ -1283,4 +1283,15 @@
     <string name="moa_fanout_step">Every step</string>
     <string name="moa_save">Save</string>
     <string name="moa_discard">Discard</string>
+    <string name="subagent_ended">Ended</string>
+    <string name="subagent_tools">%1$d tools</string>
+    <string name="subagent_last_tool">now: %1$s</string>
+    <string name="subagent_waiting_log">Waiting for its first step…</string>
+    <string name="subagent_steer_hint">Tell it something (it reads it on its next step)</string>
+    <string name="subagent_steer">Send</string>
+    <string name="subagent_stop">Stop this sub-agent</string>
+    <string name="subagent_no_steer">It no longer takes guidance.</string>
+    <string name="subagent_queued">Sent; it reads it on its next step</string>
+    <string name="subagent_rejected">It no longer takes guidance</string>
+    <string name="subagent_stopped">Sub-agent stopped</string>
 </resources>

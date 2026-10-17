@@ -130,6 +130,8 @@ internal fun MessageBubble(
     onDeleteMessage: ((messageId: String) -> Unit)? = null,
     reactionsEnabled: Boolean = false,
     onReact: ((messageId: String, emoji: String?) -> Unit)? = null,
+    /** Opens the sub-agent sheet; null where there is no live chat to ask. */
+    onOpenSubagent: ((subagentId: String, text: String) -> Unit)? = null,
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -212,13 +214,27 @@ internal fun MessageBubble(
             val isLongSubagent = message.text.length > 120
             var subagentExpanded by remember { mutableStateOf(false) }
             val subagentAccent = MaterialTheme.colorScheme.secondary
+            // Cards named by the server's subagent_id ("sa-<n>-<hex>", tools/delegate_tool.py) open
+            // the sheet (log, steer, stop); a card without one has a random local id.
+            val subagentId = message.id.removePrefix("subagent-").takeIf { message.id.startsWith("subagent-sa-") }
+            val openSheet = if (subagentId != null && onOpenSubagent != null) {
+                { onOpenSubagent(subagentId, message.text) }
+            } else {
+                null
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(subagentAccent.copy(alpha = 0.06f))
                     .border(1.dp, subagentAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                    .clickable(enabled = isLongSubagent) { subagentExpanded = !subagentExpanded },
+                    .clickable(enabled = openSheet != null || isLongSubagent) {
+                        if (openSheet != null) {
+                            openSheet()
+                        } else {
+                            subagentExpanded = !subagentExpanded
+                        }
+                    },
             ) {
                 Row(
                     modifier = Modifier

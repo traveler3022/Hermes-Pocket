@@ -16,6 +16,8 @@ import com.hermes.android.domain.session.SessionContext
 import com.hermes.android.domain.session.SteerResult
 import com.hermes.android.domain.session.StoredMessages
 import com.hermes.android.domain.session.SubagentRow
+import com.hermes.android.domain.session.LiveSubagent
+import com.hermes.android.domain.session.SubagentTail
 import com.hermes.android.domain.session.TaskHistoryRow
 import com.hermes.android.domain.session.TaskRow
 import com.hermes.android.domain.session.TranscriptEntry
@@ -549,6 +551,65 @@ class SessionRepository @Inject constructor(
             buildJsonObject { put("paused", paused) }.toElementMap(),
         ) as? JsonObject
         return result?.bool("paused") ?: paused
+    }
+
+    // ── One chat's sub-agents (inspect, steer, stop) ───────────────────────
+
+    override suspend fun subagents(sessionId: String): List<LiveSubagent> {
+        val result = gatewayClient.request(
+            GatewayMethods.SUBAGENT_LIST,
+            buildJsonObject { put("session_id", sessionId) }.toElementMap(),
+        ) as? JsonObject ?: return emptyList()
+        return (result["subagents"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map {
+            LiveSubagent(
+                subagentId = it.str("subagent_id"),
+                goal = it.str("goal"),
+                model = it.str("model"),
+                status = it.str("status"),
+                toolCount = it.str("tool_count").toIntOrNull() ?: 0,
+                lastTool = it.str("last_tool"),
+                acceptingSteer = it.bool("accepting_steer") ?: false,
+                startedAt = it.str("started_at").toDoubleOrNull(),
+            )
+        }.filter { it.subagentId.isNotEmpty() }
+    }
+
+    override suspend fun subagentTail(sessionId: String, subagentId: String): SubagentTail {
+        val result = gatewayClient.request(
+            GatewayMethods.SUBAGENT_TAIL,
+            buildJsonObject {
+                put("session_id", sessionId)
+                put("subagent_id", subagentId)
+            }.toElementMap(),
+        ) as? JsonObject ?: return SubagentTail(false, "", false)
+        return SubagentTail(
+            available = result.bool("available") ?: false,
+            text = (result["text"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+            truncated = result.bool("truncated") ?: false,
+        )
+    }
+
+    override suspend fun steerSubagent(sessionId: String, subagentId: String, text: String): Boolean {
+        val result = gatewayClient.request(
+            GatewayMethods.SUBAGENT_STEER,
+            buildJsonObject {
+                put("session_id", sessionId)
+                put("subagent_id", subagentId)
+                put("text", text)
+            }.toElementMap(),
+        ) as? JsonObject
+        return result?.str("status") == "queued"
+    }
+
+    override suspend fun interruptSubagent(sessionId: String, subagentId: String): Boolean {
+        val result = gatewayClient.request(
+            GatewayMethods.SUBAGENT_INTERRUPT,
+            buildJsonObject {
+                put("session_id", sessionId)
+                put("subagent_id", subagentId)
+            }.toElementMap(),
+        ) as? JsonObject
+        return result?.bool("found") ?: false
     }
 
     // ── Context window (breakdown + manual compression) ────────────────────

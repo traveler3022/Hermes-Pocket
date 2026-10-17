@@ -169,8 +169,10 @@ fun ChatScreen(
     modelPicker: com.hermes.android.ui.viewmodel.ModelPickerViewModel = hiltViewModel(),
     profilesViewModel: com.hermes.android.ui.viewmodel.ProfilesViewModel = hiltViewModel(),
     projectsViewModel: com.hermes.android.ui.viewmodel.ProjectsViewModel = hiltViewModel(),
+    subagents: com.hermes.android.ui.viewmodel.SubagentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val subagentSheet by subagents.sheet.collectAsStateWithLifecycle()
     val modelPickerState by modelPicker.uiState.collectAsStateWithLifecycle()
     val notification by viewModel.notification.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
@@ -189,6 +191,20 @@ fun ChatScreen(
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var moveToProjectTarget by remember { mutableStateOf<SessionItem?>(null) }
     val movedToText = stringResource(R.string.moved_to_project)
+    val subagentTexts = mapOf(
+        com.hermes.android.ui.viewmodel.SubagentViewModel.QUEUED to stringResource(R.string.subagent_queued),
+        com.hermes.android.ui.viewmodel.SubagentViewModel.REJECTED to stringResource(R.string.subagent_rejected),
+        com.hermes.android.ui.viewmodel.SubagentViewModel.STOPPED to stringResource(R.string.subagent_stopped),
+        com.hermes.android.ui.viewmodel.SubagentViewModel.ALREADY_ENDED to stringResource(R.string.subagent_ended),
+    )
+    LaunchedEffect(subagents) {
+        subagents.messages.collect { key -> snackbarHostState.showSnackbar(subagentTexts[key] ?: key) }
+    }
+    // Another chat opened: the sheet's child belongs to the old one.
+    LaunchedEffect(uiState.activeSessionId) {
+        val open = subagents.sheet.value
+        if (open != null && open.sessionId != uiState.activeSessionId) subagents.close()
+    }
     val moveFailedText = stringResource(R.string.move_to_project_failed)
     LaunchedEffect(projectsViewModel) {
         projectsViewModel.moveResults.collect { result ->
@@ -1005,6 +1021,9 @@ fun ChatScreen(
                                 onDeleteMessage = { id -> deleteFromMessageId = id },
                                 reactionsEnabled = themeModeState?.messageReactions == true,
                                 onReact = viewModel::reactToMessage,
+                                onOpenSubagent = uiState.activeSessionId?.let { sid ->
+                                    { subagentId: String, text: String -> subagents.open(sid, subagentId, text) }
+                                },
                             )
                             }
                         }
@@ -1151,6 +1170,15 @@ fun ChatScreen(
                 onSave = { viewModel.downloadFile(it, "") },
             )
         }
+    }
+
+    subagentSheet?.let { sheet ->
+        SubagentSheet(
+            sheet = sheet,
+            onSteer = subagents::steer,
+            onStop = subagents::stop,
+            onDismiss = subagents::close,
+        )
     }
 
     // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
