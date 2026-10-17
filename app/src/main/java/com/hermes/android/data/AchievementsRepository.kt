@@ -3,6 +3,7 @@ package com.hermes.android.data
 import com.hermes.android.domain.achievements.Achievement
 import com.hermes.android.domain.achievements.AchievementBoard
 import com.hermes.android.domain.achievements.Achievements
+import com.hermes.android.domain.achievements.Tier
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -52,8 +53,8 @@ internal fun parseAchievementBoard(result: JsonElement): AchievementBoard {
             description = row.text("description").orEmpty(),
             category = row.text("category") ?: "Other",
             state = state,
-            tier = row.text("tier"),
-            nextTier = row.text("next_tier"),
+            tier = Tier.fromHermes(row.text("tier")),
+            nextTier = Tier.fromHermes(row.text("next_tier")),
             progress = row.number("progress") ?: 0,
             nextThreshold = row.number("next_threshold"),
             percent = (row.number("progress_pct") ?: 0).toInt().coerceIn(0, 100),
