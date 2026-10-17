@@ -220,6 +220,12 @@ class TailscaleNode @Inject constructor(
         }
     }
 
+    override fun stalled(host: String) {
+        if (proxy == null || !isTailnetHost(host)) return
+        Timber.i("[Tailscale] connection to $host stalled; checking the relay and the direct path")
+        goThread.execute { runCatching { Tsbridge.rebind() } }
+    }
+
     private suspend fun <T> onGo(block: () -> T): T = withContext(Dispatchers.IO) {
         try {
             goThread.submit(Callable { block() }).get()
