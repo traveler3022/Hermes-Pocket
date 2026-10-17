@@ -61,7 +61,7 @@ class UsageAnalyticsRepository @Inject constructor(
                     cost = d.costOf("actual_cost", "estimated_cost"),
                 )
             },
-            models = (models ?: usage.list("by_model")).objects().mapNotNull { m ->
+            models = (models?.objects() ?: usage.list("by_model")).mapNotNull { m ->
                 val model = m.str("model") ?: return@mapNotNull null
                 ModelUse(
                     model = model,
