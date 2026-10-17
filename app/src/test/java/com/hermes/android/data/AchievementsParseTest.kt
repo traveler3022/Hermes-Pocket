@@ -44,8 +44,8 @@ class AchievementsParseTest {
 
         val cook = board.items[0]
         assertEquals(Achievement.State.UNLOCKED, cook.state)
-        assertEquals(Tier.SILVER, cook.tier)
-        assertEquals(Tier.GOLD, cook.nextTier)
+        assertEquals(Tier.Silver, cook.tier)
+        assertEquals(Tier.Gold, cook.nextTier)
         assertEquals(640L, cook.progress)
         assertEquals(1200L, cook.nextThreshold)
         assertEquals(53, cook.percent)
@@ -71,10 +71,10 @@ class AchievementsParseTest {
 
     @Test
     fun tierNamesMapToTheLadderInOrder() {
-        assertEquals(Tier.OLYMPIAN, Tier.fromHermes("Olympian"))
-        assertEquals(Tier.GOLD, Tier.fromHermes("gold"))
+        assertEquals(Tier.Olympian, Tier.fromHermes("Olympian"))
+        assertEquals(Tier.Gold, Tier.fromHermes("gold"))
         assertNull(Tier.fromHermes("Mythic"))
         assertNull(Tier.fromHermes(null))
-        assertTrue(Tier.COPPER < Tier.SILVER && Tier.DIAMOND < Tier.OLYMPIAN)
+        assertTrue(Tier.COPPER < Tier.Silver && Tier.DIAMOND < Tier.Olympian)
     }
 }

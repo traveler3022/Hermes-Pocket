@@ -1,6 +1,13 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -33,15 +40,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -109,7 +120,7 @@ private fun AchievementList(state: AchievementsViewModel.UiState, viewModel: Ach
             .filter { state.filter == null || it.category == state.filter }
             .sortedWith(
                 compareBy<Achievement> { it.state.ordinal }
-                    .thenByDescending { tierRank(it.tier) }
+                    .thenByDescending { Tier.rank(it.tier) }
                     .thenByDescending { it.percent },
             )
     }
@@ -193,12 +204,27 @@ private fun ScanRow(state: AchievementsViewModel.UiState, onRescan: () -> Unit) 
 private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () -> Unit) {
     val unlocked = item.state == Achievement.State.UNLOCKED
     val secret = item.state == Achievement.State.SECRET
-    val medal = tierColor(item.tier)
+    val medal by animateColorAsState(tierColor(item.tier), label = "medal_colour")
+    // The medal pops in when its card appears, and flips once each time the card is tapped.
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+    }
+    var taps by remember { mutableIntStateOf(0) }
+    val flip by animateFloatAsState(
+        targetValue = if (unlocked) taps * 360f else 0f,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "medal_flip",
+    )
+    val camera = 12f * LocalDensity.current.density
     val persian = stringResource(R.string.ui_language) == "fa"
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (unlocked) 0.7f else 0.35f),
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(HxRadius.md)).clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(HxRadius.md)).clickable {
+            taps++
+            onClick()
+        },
     ) {
         Row(
             modifier = Modifier.padding(HxSpace.inner).animateContentSize(),
@@ -207,6 +233,14 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
             Box(
                 modifier = Modifier
                     .size(44.dp)
+                    .graphicsLayer {
+                        val scale = 0.4f + 0.6f * pop.value
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = pop.value.coerceIn(0f, 1f)
+                        rotationY = flip
+                        cameraDistance = camera
+                    }
                     .clip(CircleShape)
                     .background(
                         if (unlocked) medal.copy(alpha = 0.22f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
@@ -281,28 +315,24 @@ private fun TierBadge(tier: Tier, color: Color) {
     )
 }
 
-/** Rank for sorting; no medal ranks below all of them. */
-private fun tierRank(tier: Tier?): Int = tier?.ordinal ?: -1
-
 private fun tierColor(tier: Tier?): Color = when (tier) {
-    Tier.COPPER -> Color(0xFFB87333)
-    Tier.SILVER -> Color(0xFF9EA7B0)
-    Tier.GOLD -> Color(0xFFE0A800)
-    Tier.DIAMOND -> Color(0xFF4FC3F7)
-    Tier.OLYMPIAN -> Color(0xFFAB47BC)
-    null -> Color(0xFF8D8D8D)
+    Tier.Copper -> Color(0xFFB87333)
+    Tier.Silver -> Color(0xFF9EA7B0)
+    Tier.Gold -> Color(0xFFE0A800)
+    Tier.Diamond -> Color(0xFF4FC3F7)
+    Tier.Olympian -> Color(0xFFAB47BC)
+    is Tier.Unknown, null -> Color(0xFF8D8D8D)
 }
 
 @Composable
-private fun tierName(tier: Tier): String = stringResource(
-    when (tier) {
-        Tier.COPPER -> R.string.tier_copper
-        Tier.SILVER -> R.string.tier_silver
-        Tier.GOLD -> R.string.tier_gold
-        Tier.DIAMOND -> R.string.tier_diamond
-        Tier.OLYMPIAN -> R.string.tier_olympian
-    },
-)
+private fun tierName(tier: Tier): String = when (tier) {
+    Tier.Copper -> stringResource(R.string.tier_copper)
+    Tier.Silver -> stringResource(R.string.tier_silver)
+    Tier.Gold -> stringResource(R.string.tier_gold)
+    Tier.Diamond -> stringResource(R.string.tier_diamond)
+    Tier.Olympian -> stringResource(R.string.tier_olympian)
+    is Tier.Unknown -> tier.hermesName
+}
 
 @Composable
 private fun achievementCategoryName(category: String): String = when (category) {

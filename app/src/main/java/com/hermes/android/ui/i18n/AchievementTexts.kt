@@ -48,11 +48,12 @@ internal object AchievementTexts {
     private val ALL_OF = Regex("""Requirement: (.+)\.""")
 
     private fun tierFa(tier: Tier): String = when (tier) {
-        Tier.COPPER -> "مس"
-        Tier.SILVER -> "نقره"
-        Tier.GOLD -> "طلا"
-        Tier.DIAMOND -> "الماس"
-        Tier.OLYMPIAN -> "المپیایی"
+        Tier.Copper -> "مس"
+        Tier.Silver -> "نقره"
+        Tier.Gold -> "طلا"
+        Tier.Diamond -> "الماس"
+        Tier.Olympian -> "المپیایی"
+        is Tier.Unknown -> tier.hermesName
     }
 
     private const val SECRET_CRITERIA =
