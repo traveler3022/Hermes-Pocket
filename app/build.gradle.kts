@@ -189,6 +189,7 @@ dependencies {
     // Coil (image loading for HermesMarkdown)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.latex.renderer)
 
     // Testing
     testImplementation(libs.junit)

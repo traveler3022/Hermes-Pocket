@@ -427,4 +427,38 @@ class HermesMarkdownParserTest {
         assertEquals(listOf(MdBlock.Alert(AlertKind.Note, listOf(MdBlock.Para("Short note.")))), parseMdBlocks("> [!note] Short note."))
         assertEquals(listOf(MdBlock.Quote(1, "[!NOTES] not an alert")), parseMdBlocks("> [!NOTES] not an alert"))
     }
+
+    // ── Math ─────────────────────────────────────────────────────────────
+
+    private fun mathIds(text: String) =
+        inline(text, style).getStringAnnotations(0, text.length)
+            .map { it.item }
+            .filter { it.startsWith(INLINE_MATH_PREFIX) }
+            .map { it.removePrefix(INLINE_MATH_PREFIX) }
+
+    @Test
+    fun `display math on one line or across lines`() {
+        assertEquals(listOf(MdBlock.Math("x^2")), parseMdBlocks("\$\$x^2\$\$"))
+        assertEquals(
+            listOf(MdBlock.Para("Area:"), MdBlock.Math("A = \\pi r^2"), MdBlock.Para("done")),
+            parseMdBlocks("Area:\n$$\nA = \\pi r^2\n$$\ndone"),
+        )
+        assertEquals(listOf(MdBlock.Math("a+b")), parseMdBlocks("\\[\na+b\n\\]"))
+    }
+
+    @Test
+    fun `unclosed display math mid-stream keeps what has arrived`() {
+        assertEquals(listOf(MdBlock.Math("\\frac{1}{2")), parseMdBlocks("$$\n\\frac{1}{2"))
+    }
+
+    @Test
+    fun `inline math in a sentence, prices stay text`() {
+        assertEquals(listOf("x^2"), mathIds("so \$x^2\$ grows"))
+        assertEquals(listOf("a+b"), mathIds("and \\(a+b\\) too"))
+        assertEquals(emptyList<String>(), mathIds("it costs \$5 and \$10 now"))
+        assertEquals(emptyList<String>(), mathIds("cheap: \$ 5 \$"))
+        assertEquals(emptyList<String>(), mathIds("escaped \\\$x\$ here"))
+        // The source stays in the text, so copying a reply keeps the formula.
+        assertEquals("so x^2 grows", inline("so \$x^2\$ grows", style).text)
+    }
 }

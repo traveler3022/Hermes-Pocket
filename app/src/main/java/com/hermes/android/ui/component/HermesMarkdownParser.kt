@@ -1,5 +1,6 @@
 package com.hermes.android.ui.component
 
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -57,6 +58,9 @@ internal sealed class MdBlock {
         val aligns: List<TableAlign> = emptyList(),
     ) : MdBlock()
     data class Para(val text: String) : MdBlock()
+
+    /** Display math: `$$…$$` or `\[…\]`, drawn as a formula on its own line. */
+    data class Math(val latex: String) : MdBlock()
     data object Rule : MdBlock()
 }
 
@@ -179,6 +183,7 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
         val number = numberRe.matchEntire(trimmed)
         val footnote = footnoteDefRe.matchEntire(trimmed)
         val definition = definitionRe.matchEntire(trimmed)?.groupValues?.get(1)
+        val displayMath = displayMathOpen(trimmed)
         val alert = if (trimmed.startsWith(">")) alertMarkerRe.matchEntire(trimmed.removePrefix(">").trim()) else null
 
         when {
@@ -199,6 +204,11 @@ internal fun parseMdBlocks(md: String): List<MdBlock> {
 
             ruleRe.matches(line) -> {
                 flush(); out.add(MdBlock.Rule); i++
+            }
+
+            displayMath != null -> {
+                flush()
+                i = readDisplayMath(lines, i, displayMath.first, displayMath.second, out)
             }
 
             heading != null -> {
@@ -337,8 +347,47 @@ private fun isListLine(trimmed: String): Boolean = bulletRe.matches(trimmed) || 
 /** A line that starts a block of its own, so it cannot run on as part of a paragraph above it. */
 private fun opensBlock(trimmed: String): Boolean =
     trimmed.startsWith("```") || trimmed.startsWith("~~~") || trimmed.startsWith(">") ||
+        displayMathOpen(trimmed) != null ||
         trimmed.startsWith("|") || headingRe.matches(trimmed) || ruleRe.matches(trimmed) ||
         isListLine(trimmed) || footnoteDefRe.matches(trimmed) || definitionRe.matches(trimmed)
+
+/** The open/close marks of display math starting [trimmed], or null when it starts none. */
+private fun displayMathOpen(trimmed: String): Pair<String, String>? = when {
+    trimmed.startsWith("$$") -> "$$" to "$$"
+    trimmed.startsWith("\\[") -> "\\[" to "\\]"
+    else -> null
+}
+
+/**
+ * Reads display math opened on line [start] into [out] and returns the line after it.
+ * The formula may sit on one line (`$$x^2$$`) or span several up to the line holding
+ * [close]. Text after the closing mark on that line is kept as a paragraph. Unclosed
+ * math (mid-stream) takes the rest of the message, like an unclosed code fence.
+ */
+private fun readDisplayMath(lines: List<String>, start: Int, open: String, close: String, out: MutableList<MdBlock>): Int {
+    val first = lines[start].trimStart().removePrefix(open)
+    val body = StringBuilder()
+    var rest = ""
+    var i = start
+    var line = first
+    while (true) {
+        val end = line.indexOf(close)
+        if (end >= 0) {
+            body.append(line, 0, end)
+            rest = line.substring(end + close.length).trim()
+            i++
+            break
+        }
+        body.append(line).append('\n')
+        i++
+        if (i >= lines.size) break
+        line = lines[i]
+    }
+    val latex = body.toString().trim()
+    if (latex.isNotEmpty()) out.add(MdBlock.Math(latex))
+    if (rest.isNotEmpty()) out.add(MdBlock.Para(rest))
+    return i
+}
 
 private class ListItemBody(val text: String, val children: List<MdBlock>, val next: Int)
 
@@ -464,9 +513,32 @@ internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnota
         ) { append(label) }
     }
 
+    fun math(latex: String) {
+        appendInlineContent(INLINE_MATH_PREFIX + latex, latex)
+    }
+
     while (i < text.length) {
         val c = text[i]
         when {
+            // `\(x\)` and `$$x$$` inside a sentence: checked before escapes eat the `\(`.
+            text.startsWith("\\(", i) && text.indexOf("\\)", i + 2) > i + 2 -> {
+                val end = text.indexOf("\\)", i + 2)
+                math(text.substring(i + 2, end).trim())
+                i = end + 2
+            }
+
+            text.startsWith("$$", i) && text.indexOf("$$", i + 2) > i + 2 -> {
+                val end = text.indexOf("$$", i + 2)
+                math(text.substring(i + 2, end).trim())
+                i = end + 2
+            }
+
+            c == '$' && inlineMathEnd(text, i) > i -> {
+                val end = inlineMathEnd(text, i)
+                math(text.substring(i + 1, end))
+                i = end + 1
+            }
+
             c == '\\' && i + 1 < text.length && !text[i + 1].isLetterOrDigit() -> {
                 append(text[i + 1]); i += 2
             }
@@ -663,6 +735,34 @@ internal fun isRtlText(text: String): Boolean? {
         ltr > rtl -> false
         else -> first
     }
+}
+
+/** Id prefix of the inline content holding a `$…$` formula; the rest of the id is its LaTeX. */
+internal const val INLINE_MATH_PREFIX = "math:"
+
+/**
+ * Where the `$…$` formula opened at [start] closes, or -1. Pandoc's rule, so prices
+ * stay text: no space just inside either `$`, and no digit right after the closing
+ * one ("$5 and $10" is not a formula). The formula stays on one line.
+ */
+internal fun inlineMathEnd(text: String, start: Int): Int {
+    if (start > 0 && text[start - 1] == '\\') return -1
+    val first = text.getOrNull(start + 1) ?: return -1
+    if (first.isWhitespace() || first == '$') return -1
+    var j = start + 1
+    while (j < text.length) {
+        when (text[j]) {
+            '\n' -> return -1
+            '\\' -> { j += 2; continue }
+            '$' -> {
+                val before = text[j - 1]
+                val after = text.getOrNull(j + 1)
+                return if (!before.isWhitespace() && (after == null || !after.isDigit())) j else -1
+            }
+        }
+        j++
+    }
+    return -1
 }
 
 /** `*` / `_` may open emphasis only at a word boundary with non-space content. */

@@ -1,5 +1,14 @@
 package com.hermes.android.ui.component
 
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.unit.em
+import com.hrm.latex.renderer.LatexAutoWrap
+import com.hrm.latex.renderer.measure.rememberLatexMeasurer
+import com.hrm.latex.renderer.model.LatexConfig
+import com.hrm.latex.renderer.model.LatexTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -207,6 +216,8 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
 
         is MdBlock.Code -> CodeBlock(block, body, base, theme.codeBg, theme.onCode, muted)
 
+        is MdBlock.Math -> MathBlock(block.latex, base * 1.15f, body.color)
+
         is MdBlock.Rule -> Spacer(
             Modifier
                 .padding(vertical = 10.dp)
@@ -381,7 +392,7 @@ private fun blockText(block: MdBlock): String = when (block) {
     is MdBlock.Para -> block.text
     is MdBlock.Alert -> block.children.firstOrNull()?.let(::blockText).orEmpty()
     is MdBlock.Table -> block.rows.firstOrNull()?.joinToString(" ").orEmpty()
-    is MdBlock.Code, MdBlock.Rule -> ""
+    is MdBlock.Code, is MdBlock.Math, MdBlock.Rule -> ""
 }
 
 /**
@@ -616,9 +627,64 @@ private fun MdText(
             textDirection = direction,
             textAlign = align,
         ),
+        inlineContent = inlineMath(text, style),
         modifier = modifier,
     )
 }
+
+/**
+ * The `$…$` formulas of [text], measured and drawn by the LaTeX renderer at the
+ * size and colour of the words around them. A formula the renderer cannot read
+ * is shown as its LaTeX source.
+ */
+@Composable
+private fun inlineMath(text: AnnotatedString, style: TextStyle): Map<String, InlineTextContent> {
+    val ids = remember(text) {
+        text.getStringAnnotations(INLINE_CONTENT_TAG, 0, text.length)
+            .map { it.item }
+            .filter { it.startsWith(INLINE_MATH_PREFIX) }
+            .distinct()
+    }
+    if (ids.isEmpty()) return emptyMap()
+    val measurer = rememberLatexMeasurer()
+    val config = remember(style.fontSize, style.color) {
+        LatexConfig(fontSize = style.fontSize, theme = LatexTheme.light(color = style.color))
+    }
+    return remember(ids, measurer, config) {
+        ids.associateWith { id ->
+            val latex = id.removePrefix(INLINE_MATH_PREFIX)
+            measurer.inlineContent(latex, config) ?: sourceFallback(latex, style)
+        }
+    }
+}
+
+/** Shows a formula's LaTeX as plain text, roughly as wide as its characters. */
+private fun sourceFallback(latex: String, style: TextStyle): InlineTextContent =
+    InlineTextContent(
+        Placeholder(
+            width = (latex.length * 0.6f).em,
+            height = 1.3.em,
+            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+        ),
+    ) {
+        Text(latex, style = style.copy(fontFamily = FontFamily.Monospace), maxLines = 1)
+    }
+
+/** A display formula, centred on its own line; a long one wraps at its operators. */
+@Composable
+private fun MathBlock(latex: String, size: TextUnit, color: Color) {
+    val config = remember(size, color) {
+        LatexConfig(fontSize = size, theme = LatexTheme.light(color = color))
+    }
+    // Formulas read left to right in a Persian reply too.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+            LatexAutoWrap(latex = latex, config = config)
+        }
+    }
+}
+
+private const val INLINE_CONTENT_TAG = "androidx.compose.foundation.text.inlineContent"
 
 private val DefaultFontSize = 14.sp
 private val TableCellWidth = 132.dp

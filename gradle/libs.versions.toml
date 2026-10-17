@@ -4,6 +4,7 @@ agp = "8.13.2"
 kotlin = "2.3.21"
 ksp = "2.3.12"
 coil = "2.7.0"
+latex = "1.5.6"
 
 # AndroidX
 coreKtx = "1.18.0"
@@ -104,6 +105,8 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 # Coil (image loading for markdown)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
+# LaTeX formulas in replies, drawn by Compose (MIT)
+latex-renderer = { group = "io.github.huarangmeng", name = "latex-renderer", version.ref = "latex" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
