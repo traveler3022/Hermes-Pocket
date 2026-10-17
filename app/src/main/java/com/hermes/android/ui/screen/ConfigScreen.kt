@@ -134,6 +134,7 @@ fun ConfigScreen(
     onNavigateToProjects: () -> Unit = {},
     onNavigateToSetup: () -> Unit = {},
     onNavigateToLearning: () -> Unit = {},
+    onNavigateToAchievements: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
@@ -195,6 +196,7 @@ fun ConfigScreen(
                     onNavigateToSetup = onNavigateToSetup,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToProjects = onNavigateToProjects,
+                    onNavigateToAchievements = onNavigateToAchievements,
                 )
                 SettingsSection.GENERAL_SETTINGS -> GeneralSettingsSection(
                     state = uiState,

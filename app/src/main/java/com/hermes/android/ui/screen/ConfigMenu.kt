@@ -20,6 +20,7 @@ import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Palette
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Star
 import com.hermes.android.ui.icons.filled.Schedule
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.SwapHoriz
@@ -54,6 +55,7 @@ internal fun SettingsMenu(
     onNavigateToLinux: () -> Unit = {},
     onNavigateToStorage: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToAchievements: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -191,6 +193,12 @@ internal fun SettingsMenu(
                 subtitle = stringResource(R.string.analytics_nav_subtitle),
                 icon = Icons.Default.BarChart,
                 onClick = onNavigateToAnalytics,
+            ),
+            DomainSpec(
+                title = stringResource(R.string.achievements_title),
+                subtitle = stringResource(R.string.achievements_nav_subtitle),
+                icon = Icons.Default.Star,
+                onClick = onNavigateToAchievements,
             ),
             DomainSpec(
                 title = stringResource(R.string.storage),
