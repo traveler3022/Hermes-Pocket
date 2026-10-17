@@ -46,8 +46,6 @@ import com.hermes.android.ui.design.hxAssistantMaxWidth
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.HermesMarkdown
-import com.hermes.android.ui.component.StreamingRevealHost
-import com.hermes.android.ui.component.streamingBlockReveal
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.component.preprocessAssistantMarkdown
 import com.hermes.android.ui.viewer.FileViewerActivity
@@ -145,84 +143,75 @@ internal fun AssistantMessageBubble(
                         }
                         // One selection over the whole reply, so a selection runs from prose
                         // into code and on past it (each text run used to have its own).
-                        // While streaming, newly arrived words fade in (not under
-                        // the system's "Remove animations").
-                        val reduceMotion = com.hermes.android.ui.screen.rememberReduceMotion()
-                        StreamingRevealHost(streaming = message.isStreaming, enabled = !reduceMotion) {
-                            SelectionContainer {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    blocks.forEach { block ->
-                                        when (block) {
-                                            // Rendered as markdown while streaming too.
-                                            // The plain-Text fallback here dated from
-                                            // when this renderer was a TextView behind
-                                            // AndroidView and re-laid out the whole view
-                                            // per token; it is pure Compose now, and the
-                                            // fallback's only remaining effect was
-                                            // showing raw ** and ## until the turn ended.
-                                            is ContentBlock.Text -> HermesMarkdown(
-                                                markdown = block.markdown,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                ),
-                                            )
-                                            is ContentBlock.Image -> InlineImageBlock(
-                                                alt = block.alt, url = block.url,
-                                                onImageClick = onImageClick,
-                                                onSave = { onDownloadFile(block.url, block.alt) },
-                                            )
-                                            is ContentBlock.Code -> Box(Modifier.streamingBlockReveal()) {
-                                                CodeBlockCard(
-                                                    language = block.language, code = block.code,
-                                                    onCopyCode = onCopyCode,
+                        SelectionContainer {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                blocks.forEach { block ->
+                                    when (block) {
+                                        // Rendered as markdown while streaming too.
+                                        // The plain-Text fallback here dated from
+                                        // when this renderer was a TextView behind
+                                        // AndroidView and re-laid out the whole view
+                                        // per token; it is pure Compose now, and the
+                                        // fallback's only remaining effect was
+                                        // showing raw ** and ## until the turn ended.
+                                        is ContentBlock.Text -> HermesMarkdown(
+                                            markdown = block.markdown,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                        )
+                                        is ContentBlock.Image -> InlineImageBlock(
+                                            alt = block.alt, url = block.url,
+                                            onImageClick = onImageClick,
+                                            onSave = { onDownloadFile(block.url, block.alt) },
+                                        )
+                                        is ContentBlock.Code -> CodeBlockCard(
+                                            language = block.language, code = block.code,
+                                            onCopyCode = onCopyCode,
+                                        )
+                                        is ContentBlock.Mermaid -> MermaidBlockCard(
+                                            code = block.code, onCopyCode = onCopyCode,
+                                        )
+                                        is ContentBlock.Html -> HtmlBlockCard(
+                                            url = block.url, name = block.name,
+                                            onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
+                                            readServerHtml = readServerHtml,
+                                        )
+                                        is ContentBlock.Preview -> InlinePreviewFrame(
+                                            file = block.file,
+                                            initialHeight = block.height,
+                                            streaming = message.isStreaming,
+                                            readPreview = readPreview,
+                                            onSend = onPreviewSend,
+                                            shareUri = { previewShareUri(block.file) },
+                                            onOpen = {
+                                                FileViewerActivity.open(
+                                                    assistantContext, resolvePreviewUrl(block.file), block.file.substringAfterLast('/'),
                                                 )
-                                            }
-                                            is ContentBlock.Mermaid -> Box(Modifier.streamingBlockReveal()) {
-                                                MermaidBlockCard(
-                                                    code = block.code, onCopyCode = onCopyCode,
-                                                )
-                                            }
-                                            is ContentBlock.Html -> HtmlBlockCard(
-                                                url = block.url, name = block.name,
-                                                onOpen = { FileViewerActivity.open(assistantContext, block.url, block.name) },
-                                                readServerHtml = readServerHtml,
+                                            },
+                                        )
+                                        is ContentBlock.Video -> InlineVideoPlayer(
+                                            url = block.url, name = block.name,
+                                            onDownload = { onDownloadFile(block.url, block.name) },
+                                        )
+                                        is ContentBlock.Audio -> InlineAudioPlayer(
+                                            url = block.url, name = block.name,
+                                            onDownload = { onDownloadFile(block.url, block.name) },
+                                        )
+                                        is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
+                                            ArtifactCard(
+                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                actionLabel = stringResource(R.string.download),
+                                                onAction = { onDownloadFile(block.url, block.name) },
+                                                onDownload = null,
                                             )
-                                            is ContentBlock.Preview -> InlinePreviewFrame(
-                                                file = block.file,
-                                                initialHeight = block.height,
-                                                streaming = message.isStreaming,
-                                                readPreview = readPreview,
-                                                onSend = onPreviewSend,
-                                                shareUri = { previewShareUri(block.file) },
-                                                onOpen = {
-                                                    FileViewerActivity.open(
-                                                        assistantContext, resolvePreviewUrl(block.file), block.file.substringAfterLast('/'),
-                                                    )
-                                                },
-                                            )
-                                            is ContentBlock.Video -> InlineVideoPlayer(
-                                                url = block.url, name = block.name,
+                                        } else {
+                                            ArtifactCard(
+                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                actionLabel = stringResource(R.string.open),
+                                                onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                                 onDownload = { onDownloadFile(block.url, block.name) },
                                             )
-                                            is ContentBlock.Audio -> InlineAudioPlayer(
-                                                url = block.url, name = block.name,
-                                                onDownload = { onDownloadFile(block.url, block.name) },
-                                            )
-                                            is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
-                                                ArtifactCard(
-                                                    emoji = "\uD83D\uDCC4", name = block.name,
-                                                    actionLabel = stringResource(R.string.download),
-                                                    onAction = { onDownloadFile(block.url, block.name) },
-                                                    onDownload = null,
-                                                )
-                                            } else {
-                                                ArtifactCard(
-                                                    emoji = "\uD83D\uDCC4", name = block.name,
-                                                    actionLabel = stringResource(R.string.open),
-                                                    onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
-                                                    onDownload = { onDownloadFile(block.url, block.name) },
-                                                )
-                                            }
                                         }
                                     }
                                 }
