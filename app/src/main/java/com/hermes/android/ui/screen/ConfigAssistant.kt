@@ -88,7 +88,7 @@ internal fun AssistantSettingCard() {
     }
 }
 
-private fun holdsAssistantRole(context: Context): Boolean {
+internal fun holdsAssistantRole(context: Context): Boolean {
     val roles = context.getSystemService(RoleManager::class.java) ?: return false
     return runCatching {
         roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)

@@ -299,6 +299,16 @@ internal fun PersonalityCard(
                 placeholder = { Text(stringResource(R.string.enter_preset_name)) },
                 singleLine = true,
             )
+            // The three presets the hint names, one tap to fill the field (still saved with Save).
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("helpful", "kawaii", "pirate").forEach { preset ->
+                    androidx.compose.material3.FilterChip(
+                        selected = personalityText == preset,
+                        onClick = { personalityText = preset },
+                        label = { Text(preset) },
+                    )
+                }
+            }
             if (personalityText != state.personality) {
                 TextButton(
                     onClick = { viewModel.setPersonality(personalityText) },

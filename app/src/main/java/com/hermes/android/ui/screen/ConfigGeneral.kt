@@ -62,39 +62,7 @@ internal fun GeneralTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (appLanguageState != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.language),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AppLanguage.entries.forEach { lang ->
-                            val label = when (lang) {
-                                AppLanguage.AUTO -> stringResource(R.string.auto)
-                                AppLanguage.ENGLISH -> "English"
-                                AppLanguage.FARSI -> "فارسی"
-                            }
-                            androidx.compose.material3.FilterChip(
-                                selected = appLanguageState.language == lang,
-                                onClick = { appLanguageState.updateLanguage(lang) },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        // Language now has its own row on the Control Center root (LanguageSection).
 
         if (themeModeState != null) {
             Text(
@@ -213,8 +181,6 @@ internal fun GeneralTab(
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    KanbanSettingRow()
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = stringResource(R.string.font),
                         style = MaterialTheme.typography.titleSmall,
@@ -275,7 +241,7 @@ internal fun GeneralTab(
 
 /** Kanban, off unless turned on: shows the board, and on the built-in Linux runs it too. */
 @Composable
-private fun KanbanSettingRow(
+internal fun KanbanSettingRow(
     viewModel: com.hermes.android.ui.viewmodel.KanbanSettingViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val on by viewModel.on.collectAsStateWithLifecycle()

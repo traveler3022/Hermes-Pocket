@@ -185,18 +185,25 @@ fun ConfigScreen(
                 .fillMaxSize()
         ) {
             when (section) {
-                null -> SettingsMenu(
+                null -> ControlCenterMenu(
                     state = uiState,
                     connection = connection,
                     serverUrl = connectionTitle,
+                    themeModeState = themeModeState,
+                    appLanguageState = appLanguageState,
                     onOpen = { section = it },
                     onNavigateToRuntime = onNavigateToRuntime,
-                    onNavigateToLinux = onNavigateToLinux,
-                    onNavigateToStorage = onNavigateToStorage,
-                    onNavigateToAnalytics = onNavigateToAnalytics,
                     onNavigateToSetup = onNavigateToSetup,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToProjects = onNavigateToProjects,
+                    onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToWebhooks = onNavigateToWebhooks,
+                    onNavigateToPlugins = onNavigateToPlugins,
+                    onNavigateToSkills = onNavigateToSkills,
+                    onNavigateToMcp = onNavigateToMcp,
+                    onNavigateToLinux = onNavigateToLinux,
+                    onNavigateToStorage = onNavigateToStorage,
+                    onNavigateToAnalytics = onNavigateToAnalytics,
                     onNavigateToAchievements = onNavigateToAchievements,
                     onNavigateToOps = onNavigateToOps,
                 )
@@ -249,6 +256,9 @@ fun ConfigScreen(
                 SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState)
                 SettingsSection.CONFIG_EDITOR -> ConfigEditorSection(snackbarHostState)
                 SettingsSection.ABOUT -> AboutSection()
+                SettingsSection.LANGUAGE -> LanguageSection(appLanguageState)
+                SettingsSection.PHONE_ASSISTANT -> PhoneAssistantSection()
+                SettingsSection.KANBAN -> KanbanSection()
             }
         }
     }
@@ -265,14 +275,14 @@ internal enum class SettingsSection(
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
     APPEARANCE("Appearance", "ظاهر"),
-    APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
-    PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
+    APPROVAL("Command Approval", "تأیید فرمان‌ها"),
+    PERSONALITY("Personality", "شخصیت"),
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),
     MEMORY("Memory", "حافظه", PERSONALITY),
-    ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
+    ADVANCED("Advanced", "پیشرفته"),
     ENV_KEYS(".env keys", "کلیدهای .env", ADVANCED),
     CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ", ADVANCED),
-    MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    MODELS("Models & Providers", "مدل و پرووایدر"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     AUX_MODELS("Task models", "مدل کارهای جانبی", MODELS),
     MOA("Mixture of Agents", "ترکیب چند مدل (MoA)", MODELS),
@@ -280,6 +290,9 @@ internal enum class SettingsSection(
     PROVIDER_KEYS("API key", "کلید API", PROVIDERS),
     PROVIDER_ACCOUNTS("Sign in with account", "ورود با حساب", PROVIDERS),
     TOOLS("Tools", "ابزارها"),
-    TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
+    TOOLSETS("Toolsets", "گروه\u200Cهای ابزار"),
     ABOUT("Updates", "به\u200Cروزرسانی"),
+    LANGUAGE("Language", "زبان"),
+    PHONE_ASSISTANT("Phone assistant", "دستیار گوشی"),
+    KANBAN("Kanban board", "تابلوی کانبان"),
 }

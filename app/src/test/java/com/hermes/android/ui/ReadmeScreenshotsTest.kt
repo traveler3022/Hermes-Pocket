@@ -54,7 +54,7 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.screen.BuiltInLinuxDetectedContent
 import com.hermes.android.ui.screen.RuntimeChoiceRow
-import com.hermes.android.ui.screen.SettingsMenu
+import com.hermes.android.ui.screen.ControlCenterMenu
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ConfigUiState
 import com.hermes.android.ui.viewmodel.GatewayConnectionUi
@@ -256,18 +256,33 @@ private fun ControlCenter() {
         onBack = {},
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            SettingsMenu(
+            ControlCenterMenu(
                 state = ConfigUiState(
                     activeProvider = "openrouter",
                     activeModel = "claude-sonnet-4.5",
+                    approvalMode = "smart",
+                    personality = "helpful",
                     insights = InsightsData(days = 30, sessions = 42, messages = 610),
                 ),
                 connection = GatewayConnectionUi(state = ChatConnectionState.Connected),
                 serverUrl = t("Built-in Linux", "لینوکس داخلی"),
+                themeModeState = null,
+                appLanguageState = null,
                 onOpen = {},
                 onNavigateToRuntime = {},
+                onNavigateToSetup = {},
                 onNavigateToCron = {},
                 onNavigateToProjects = {},
+                onNavigateToPlatforms = {},
+                onNavigateToWebhooks = {},
+                onNavigateToPlugins = {},
+                onNavigateToSkills = {},
+                onNavigateToMcp = {},
+                onNavigateToLinux = {},
+                onNavigateToStorage = {},
+                onNavigateToAnalytics = {},
+                onNavigateToAchievements = {},
+                onNavigateToOps = {},
             )
         }
     }
