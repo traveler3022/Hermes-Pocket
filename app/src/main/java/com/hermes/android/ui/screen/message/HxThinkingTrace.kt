@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -455,11 +457,31 @@ private fun HxThinkingSheetContent(
     isComplete: Boolean,
     elapsedSeconds: Long?,
 ) {
+    val scroll = rememberScrollState()
+    // While the model is still thinking, keep the newest step in view: the
+    // timeline runs oldest-to-newest (like the chat itself), so without this
+    // the latest thought streams in below the fold where it can't be found.
+    // Following stops as soon as the reader drags the sheet, so scrolling up
+    // to read an earlier thought isn't yanked back down by the next token;
+    // it resumes once they let go at the bottom again.
+    var follow by remember { mutableStateOf(true) }
+    LaunchedEffect(scroll) {
+        scroll.interactionSource.interactions.collect {
+            if (it is DragInteraction.Start) follow = false
+        }
+    }
+    LaunchedEffect(scroll) {
+        snapshotFlow { !scroll.isScrollInProgress && scroll.value >= scroll.maxValue }
+            .collect { atRestAtBottom -> if (atRestAtBottom) follow = true }
+    }
+    LaunchedEffect(isComplete, follow, scroll.maxValue) {
+        if (!isComplete && follow) scroll.animateScrollTo(scroll.maxValue)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = (LocalConfiguration.current.screenHeightDp * SheetScreenFraction).dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(start = 24.dp, top = 10.dp, end = 24.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -482,21 +504,13 @@ private fun HxReasoningTimeline(
     val rows = remember(items) { buildTimelineRows(items) }
     val toolCount = remember(items) { items.count { it is HxTraceItem.Tool } }
 
-    // Newest first: while the model thinks, the sheet grows from the top, so
-    // the latest step is under the reader's thumb instead of below the fold.
-    // The rail still runs unbroken from the top row down to the oldest one,
-    // which is now the only row with nothing below it.
+    // Oldest to newest, like the chat itself: the rail grows downward, so the
+    // newest step is always the last row — the one carrying the live dot with
+    // nothing below it. When the turn is done the Done row below closes the
+    // rail instead. (The sheet auto-scrolls to this newest row while thinking.)
     Column {
-        if (isComplete) {
-            HxTimelineRow(
-                title = doneLabel(elapsedSeconds, toolCount),
-                detail = stringResource(R.string.done_2),
-                isLast = rows.isEmpty(),
-                icon = HxIcons.CircleCheck,
-            )
-        }
-        rows.asReversed().forEachIndexed { index, row ->
-            val isLast = index == rows.lastIndex
+        rows.forEachIndexed { index, row ->
+            val isLast = !isComplete && index == rows.lastIndex
             when (row) {
                 is TimelineRow.Text -> HxTimelineRow(
                     title = row.title,
@@ -507,6 +521,14 @@ private fun HxReasoningTimeline(
 
                 is TimelineRow.Tool -> HxTimelineToolRow(tool = row.call, isLast = isLast)
             }
+        }
+        if (isComplete) {
+            HxTimelineRow(
+                title = doneLabel(elapsedSeconds, toolCount),
+                detail = stringResource(R.string.done_2),
+                isLast = true,
+                icon = HxIcons.CircleCheck,
+            )
         }
     }
 }
@@ -553,8 +575,8 @@ private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = bui
 
     // A turn's reasoning streams into one message while its tools run, so the
     // block is held open and cut at each tool that marked where it stood —
-    // otherwise all of it sits before the first tool, and the newest thought
-    // ends up at the bottom of the sheet instead of the top.
+    // otherwise all of it sits before the first tool instead of interleaving
+    // with the tools in the order they actually happened.
     var openBlock: HxTraceItem.Reasoning? = null
     var cut = 0
     fun closeOpen() {
