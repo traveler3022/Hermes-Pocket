@@ -15,9 +15,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -67,6 +70,61 @@ class DashboardApi @Inject constructor(
             viaHttp(method, scoped, body, slow)
         }
     }
+
+    /** True on the built-in Linux: there is no HTTP server, files are on this phone's disk. */
+    val inProcess: Boolean get() = StdioGatewayHub.handles(runtime.getWebSocketUrl())
+
+    /** The file the built-in Linux keeps at [guestPath], or null when it isn't ready. */
+    fun phoneFile(guestPath: String): File? = runtime.hostFileForGuestPath(guestPath)
+
+    /** GETs [path] over HTTP into [target] (remote and Termux only), streamed, not held in memory. */
+    suspend fun download(path: String, target: File) = withContext(Dispatchers.IO) {
+        val (base, token) = endpoint()
+        val request = Request.Builder()
+            .url(base + withProfile(path))
+            .apply { if (token.isNotEmpty()) header("Authorization", "Bearer $token") }
+            .get()
+            .build()
+        slowHttp.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val text = response.body?.string().orEmpty()
+                val parsed = runCatching { json.parseToJsonElement(text) }.getOrDefault(JsonNull)
+                throw IOException(detailOf(parsed) ?: "Hermes answered HTTP ${response.code}")
+            }
+            val body = response.body ?: throw IOException("Hermes sent nothing")
+            target.outputStream().use { out -> body.byteStream().use { it.copyTo(out) } }
+        }
+    }
+
+    /**
+     * POSTs [file] as the form's `file` part, with [fields] beside it, to [path] over HTTP
+     * (remote and Termux only). Returns the answer's JSON.
+     */
+    suspend fun upload(path: String, file: File, fileName: String, fields: Map<String, String> = emptyMap()): JsonElement =
+        withContext(Dispatchers.IO) {
+            val (base, token) = endpoint()
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("file", fileName, file.asRequestBody(OCTET_TYPE))
+                .apply { fields.forEach { (key, value) -> addFormDataPart(key, value) } }
+                .build()
+            val request = Request.Builder()
+                .url(base + withProfile(path))
+                .header("Accept", "application/json")
+                .apply { if (token.isNotEmpty()) header("Authorization", "Bearer $token") }
+                .post(form)
+                .build()
+            slowHttp.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                val parsed = runCatching { json.parseToJsonElement(text) }.getOrDefault(JsonNull)
+                if (!response.isSuccessful) {
+                    val detail = detailOf(parsed)?.takeIf { it != "Not Found" }
+                    throw IOException(
+                        detail ?: if (response.code == 404) OLD_HERMES else "Hermes answered HTTP ${response.code}",
+                    )
+                }
+                parsed
+            }
+        }
 
     private fun withProfile(path: String): String {
         val profile = profiles.active.value ?: return path
@@ -143,5 +201,6 @@ class DashboardApi @Inject constructor(
         const val METHOD = "android.dashboard"
         const val OLD_HERMES = "This Hermes doesn't have it yet. Update Hermes on the server."
         val JSON_TYPE = "application/json".toMediaType()
+        val OCTET_TYPE = "application/octet-stream".toMediaType()
     }
 }

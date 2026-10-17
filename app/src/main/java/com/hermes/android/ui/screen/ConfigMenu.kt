@@ -19,6 +19,7 @@ import com.hermes.android.ui.icons.filled.DataUsage
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Palette
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
 import com.hermes.android.ui.icons.filled.Schedule
@@ -56,6 +57,7 @@ internal fun SettingsMenu(
     onNavigateToStorage: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
     onNavigateToAchievements: () -> Unit = {},
+    onNavigateToOps: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -199,6 +201,12 @@ internal fun SettingsMenu(
                 subtitle = stringResource(R.string.achievements_nav_subtitle),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToAchievements,
+            ),
+            DomainSpec(
+                title = stringResource(R.string.ops_title),
+                subtitle = stringResource(R.string.ops_nav_subtitle),
+                icon = Icons.Default.Build,
+                onClick = onNavigateToOps,
             ),
             DomainSpec(
                 title = stringResource(R.string.storage),

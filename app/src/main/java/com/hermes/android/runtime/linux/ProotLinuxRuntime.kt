@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics", "/api/plugins/hermes-achievements/")
+                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics", "/api/plugins/hermes-achievements/", "/api/ops/", "/api/actions/", "/api/model/moa", "/api/model/auxiliary", "/api/model/set")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -774,12 +774,13 @@ class ProotLinuxRuntime @Inject constructor(
                             from fastapi import FastAPI
                             from fastapi.testclient import TestClient
                             app = FastAPI()
-                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "analytics", "status", "mcp", "skills"):
+                            for name in ("cron", "memory_providers", "ops", "tools", "config_env", "analytics", "status", "mcp", "skills", "actions", "models"):
                                 try:
                                     module = importlib.import_module("hermes_cli.web_routers." + name)
                                     # skills has hub_router too, and it must come first (route order);
-                                    # config_env keeps GET /api/config and the schema on config_router.
-                                    for attr in ("hub_router", "config_router", "router"):
+                                    # config_env keeps GET /api/config and the schema on config_router;
+                                    # actions has /api/actions/<name>/status on status_router.
+                                    for attr in ("hub_router", "config_router", "status_router", "router"):
                                         if hasattr(module, attr):
                                             app.include_router(getattr(module, attr))
                                 except Exception:
