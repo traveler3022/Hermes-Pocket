@@ -6,6 +6,7 @@ import com.hermes.android.data.CronJobsRepository
 import com.hermes.android.data.ServerHermesUpdatesRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
+import com.hermes.android.data.AchievementsRepository
 import com.hermes.android.data.LearningRepository
 import com.hermes.android.data.MemoryProvidersRepository
 import com.hermes.android.data.MessagingGatewayRepository
@@ -30,6 +31,7 @@ import com.hermes.android.data.SetupState
 import com.hermes.android.data.StorageCleaner
 import com.hermes.android.data.StorageFiles
 import com.hermes.android.data.TaskRegistry
+import com.hermes.android.domain.achievements.Achievements
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
 import com.hermes.android.domain.updates.ServerHermesUpdates
@@ -171,6 +173,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindLearningJourney(impl: LearningRepository): LearningJourney
+
+    @Binds
+    abstract fun bindAchievements(impl: AchievementsRepository): Achievements
 
     // Files, storage, media and notifications, behind the interfaces the screens use.
     @Binds

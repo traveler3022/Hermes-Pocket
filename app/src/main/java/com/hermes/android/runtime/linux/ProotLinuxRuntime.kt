@@ -766,7 +766,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics")
+                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics", "/api/plugins/hermes-achievements/")
                 def client():
                     with lock:
                         if "client" not in state:
@@ -784,6 +784,16 @@ class ProotLinuxRuntime @Inject constructor(
                                             app.include_router(getattr(module, attr))
                                 except Exception:
                                     log.exception("dashboard router %s not loaded", name)
+                            # The achievements plugin's router, mounted where the dashboard mounts it.
+                            try:
+                                import importlib.util
+                                api = os.path.join(os.environ["HERMES_PYTHON_SRC_ROOT"], "plugins/hermes-achievements/dashboard/plugin_api.py")
+                                spec = importlib.util.spec_from_file_location("android_achievements_plugin_api", api)
+                                plugin = importlib.util.module_from_spec(spec)
+                                spec.loader.exec_module(plugin)
+                                app.include_router(plugin.router, prefix="/api/plugins/hermes-achievements")
+                            except Exception:
+                                log.exception("achievements router not loaded")
                             state["client"] = TestClient(app)
                         return state["client"]
                 def handle(rid, params):
