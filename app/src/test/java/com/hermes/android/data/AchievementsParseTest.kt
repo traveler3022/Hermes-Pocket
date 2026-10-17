@@ -73,8 +73,11 @@ class AchievementsParseTest {
     fun tierNamesMapToTheLadderInOrder() {
         assertEquals(Tier.Olympian, Tier.fromHermes("Olympian"))
         assertEquals(Tier.Gold, Tier.fromHermes("gold"))
-        assertNull(Tier.fromHermes("Mythic"))
+        assertEquals(Tier.Unknown("Mythic"), Tier.fromHermes("Mythic"))
         assertNull(Tier.fromHermes(null))
-        assertTrue(Tier.COPPER < Tier.Silver && Tier.DIAMOND < Tier.Olympian)
+        assertNull(Tier.fromHermes("  "))
+        assertTrue(Tier.rank(Tier.Copper) < Tier.rank(Tier.Silver) && Tier.rank(Tier.Diamond) < Tier.rank(Tier.Olympian))
+        assertTrue(Tier.rank(Tier.Unknown("Mythic")) < Tier.rank(Tier.Copper))
+        assertTrue(Tier.rank(null) < Tier.rank(Tier.Copper))
     }
 }
