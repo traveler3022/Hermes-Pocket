@@ -336,6 +336,24 @@ func NetworkChanged(ifname, gateway string) {
 	}
 }
 
+// Rebind is called when a connection through the tunnel stopped answering
+// while Android reported no network change. Mobile networks drop NAT state and
+// idle TCP silently, and the node kept its dead relay connection until TCP gave
+// up (about 10 minutes). Rebind pings the relay and redials it if dead, then
+// looks for a new direct path, as a real network change would.
+func Rebind() {
+	var err error
+	defer recovered(&err)
+	s, _ := current()
+	if s == nil {
+		return
+	}
+	if ms, ok := s.Sys().MagicSock.GetOK(); ok {
+		ms.Rebind()
+		ms.ReSTUN("app-link-stalled")
+	}
+}
+
 // Version is the Tailscale version linked in.
 func Version() string {
 	return version.Short()

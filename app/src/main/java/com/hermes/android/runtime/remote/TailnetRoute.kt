@@ -25,6 +25,12 @@ interface TailnetRoute {
      */
     suspend fun ensureUp(host: String)
 
+    /**
+     * A live connection to [host] stopped answering although the phone's network did not change.
+     * Asks the tunnel to check its relay and look for a new path, once per dropped connection.
+     */
+    fun stalled(host: String) = Unit
+
     /** No tailnet: every host is dialled directly (tests, and builds without the native library). */
     object None : TailnetRoute {
         override val proxySelector: ProxySelector = object : ProxySelector() {

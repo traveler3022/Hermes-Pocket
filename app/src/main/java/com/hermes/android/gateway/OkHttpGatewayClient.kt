@@ -26,6 +26,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import com.hermes.android.runtime.remote.TailnetRoute
 import okhttp3.OkHttpClient
 import java.io.IOException
 import okhttp3.Request
@@ -65,6 +66,7 @@ class OkHttpGatewayClient @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val profileScope: ProfileScope = ProfileScope(appContext),
     private val remoteFiles: RemoteFiles = RemoteFiles(appContext, httpClient),
+    private val tailnet: TailnetRoute = TailnetRoute.None,
 ) : GatewayClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -787,8 +789,12 @@ class OkHttpGatewayClient @Inject constructor(
         // currently-tracked field tells a stale callback from a live one.
         private fun isCurrent(socket: WebSocket) = socket === webSocket
 
+        /** The socket got through the handshake, so a failure now drops a live connection. */
+        @Volatile private var opened = false
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
             if (!isCurrent(webSocket)) return
+            opened = true
             Timber.d("[Gateway] WebSocket open")
             onState(WsState.Opened)
         }
@@ -830,6 +836,9 @@ class OkHttpGatewayClient @Inject constructor(
                 }
             }
             Timber.e(t, "[Gateway] WebSocket failure")
+            // A live tailnet connection went silent (missed pong) on an unchanged network: the
+            // in-app Tailscale kept a dead relay link for ~10 minutes. Once per dropped socket.
+            if (opened) tailnet.stalled(webSocket.request().url.host)
             onState(WsState.Failure(t))
         }
     }
