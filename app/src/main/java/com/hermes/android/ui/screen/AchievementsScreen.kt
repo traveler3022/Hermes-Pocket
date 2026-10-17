@@ -55,6 +55,7 @@ import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatTile
+import com.hermes.android.ui.i18n.AchievementTexts
 import com.hermes.android.ui.icons.filled.StarBorder
 import com.hermes.android.ui.viewmodel.AchievementsViewModel
 
@@ -193,6 +194,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
     val unlocked = item.state == Achievement.State.UNLOCKED
     val secret = item.state == Achievement.State.SECRET
     val medal = tierColor(item.tier)
+    val persian = stringResource(R.string.ui_language) == "fa"
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (unlocked) 0.7f else 0.35f),
@@ -225,7 +227,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                     Text(
-                        text = if (secret) stringResource(R.string.achievements_secret) else item.name,
+                        text = if (secret) stringResource(R.string.achievements_secret) else AchievementTexts.name(item.id, item.name, persian),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f, fill = false),
@@ -234,7 +236,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
                 }
                 if (!secret) {
                     Text(
-                        text = item.description,
+                        text = AchievementTexts.description(item.id, item.description, persian),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -255,7 +257,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
                 }
                 if (expanded && item.criteria.isNotBlank()) {
                     Text(
-                        text = item.criteria,
+                        text = AchievementTexts.criteria(item.criteria, persian),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = HxSpace.xs),
