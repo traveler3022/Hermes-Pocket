@@ -32,10 +32,10 @@ data class Achievement(
     /** "Agent Autonomy", "Vibe Coding"…, as Hermes names it. */
     val category: String,
     val state: State,
-    /** Tier reached (Copper, Silver, Gold, Diamond, Olympian); null below the first. */
-    val tier: String?,
-    /** Next tier to reach; null at the top or for a one-step achievement. */
-    val nextTier: String?,
+    /** Medal reached; null below the first. */
+    val tier: Tier?,
+    /** Next medal to reach; null at the top or for a one-step achievement. */
+    val nextTier: Tier?,
     val progress: Long,
     val nextThreshold: Long?,
     /** 0–100 toward the next step. */
@@ -46,4 +46,18 @@ data class Achievement(
     val unlockedAt: Long?,
 ) {
     enum class State { UNLOCKED, DISCOVERED, SECRET }
+}
+
+/** Hermes' medal ladder, lowest first, so the order of the entries is the order of rank. */
+enum class Tier(val hermesName: String) {
+    COPPER("Copper"),
+    SILVER("Silver"),
+    GOLD("Gold"),
+    DIAMOND("Diamond"),
+    OLYMPIAN("Olympian");
+
+    companion object {
+        /** Null for a name this app doesn't know, e.g. a rung a newer Hermes added. */
+        fun fromHermes(name: String?): Tier? = entries.firstOrNull { it.hermesName.equals(name, ignoreCase = true) }
+    }
 }

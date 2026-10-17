@@ -49,6 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
 import com.hermes.android.domain.achievements.Achievement
+import com.hermes.android.domain.achievements.Tier
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
@@ -266,7 +267,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
 }
 
 @Composable
-private fun TierBadge(tier: String, color: Color) {
+private fun TierBadge(tier: Tier, color: Color) {
     Text(
         text = tierName(tier),
         style = MaterialTheme.typography.labelSmall,
@@ -278,29 +279,28 @@ private fun TierBadge(tier: String, color: Color) {
     )
 }
 
-/** Hermes' tier ladder, lowest first; an unknown name ranks below all of them. */
-private val TIERS = listOf("Copper", "Silver", "Gold", "Diamond", "Olympian")
+/** Rank for sorting; no medal ranks below all of them. */
+private fun tierRank(tier: Tier?): Int = tier?.ordinal ?: -1
 
-private fun tierRank(tier: String?): Int = TIERS.indexOf(tier)
-
-private fun tierColor(tier: String?): Color = when (tier) {
-    "Copper" -> Color(0xFFB87333)
-    "Silver" -> Color(0xFF9EA7B0)
-    "Gold" -> Color(0xFFE0A800)
-    "Diamond" -> Color(0xFF4FC3F7)
-    "Olympian" -> Color(0xFFAB47BC)
-    else -> Color(0xFF8D8D8D)
+private fun tierColor(tier: Tier?): Color = when (tier) {
+    Tier.COPPER -> Color(0xFFB87333)
+    Tier.SILVER -> Color(0xFF9EA7B0)
+    Tier.GOLD -> Color(0xFFE0A800)
+    Tier.DIAMOND -> Color(0xFF4FC3F7)
+    Tier.OLYMPIAN -> Color(0xFFAB47BC)
+    null -> Color(0xFF8D8D8D)
 }
 
 @Composable
-private fun tierName(tier: String): String = when (tier) {
-    "Copper" -> stringResource(R.string.tier_copper)
-    "Silver" -> stringResource(R.string.tier_silver)
-    "Gold" -> stringResource(R.string.tier_gold)
-    "Diamond" -> stringResource(R.string.tier_diamond)
-    "Olympian" -> stringResource(R.string.tier_olympian)
-    else -> tier
-}
+private fun tierName(tier: Tier): String = stringResource(
+    when (tier) {
+        Tier.COPPER -> R.string.tier_copper
+        Tier.SILVER -> R.string.tier_silver
+        Tier.GOLD -> R.string.tier_gold
+        Tier.DIAMOND -> R.string.tier_diamond
+        Tier.OLYMPIAN -> R.string.tier_olympian
+    },
+)
 
 @Composable
 private fun achievementCategoryName(category: String): String = when (category) {
