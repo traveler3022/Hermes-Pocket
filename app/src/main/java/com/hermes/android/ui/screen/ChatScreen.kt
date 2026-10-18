@@ -716,13 +716,11 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        // The same pen-on-square as the drawer's New chat button:
-                        // one action, one glyph, wherever it is offered.
                         HxHeaderCircleButton(
-                            icon = HxIcons.SquarePen,
+                            icon = HxIcons.NewChat,
                             contentDescription = stringResource(R.string.new_chat),
                             onClick = { viewModel.newConversation() },
-                            iconSize = 21.dp,
+                            iconSize = 25.dp,
                         )
                         Spacer(Modifier.width(8.dp))
                         // Context and search moved behind ⋮ so the bar keeps
