@@ -79,7 +79,7 @@ internal fun GeneralSettingsSection(
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.APPROVAL) },
             )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+            com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
             SettingsNavRow(
                 title = stringResource(R.string.personality),
                 subtitle = stringResource(R.string.preset_soul_md_memory),
@@ -94,14 +94,14 @@ internal fun GeneralSettingsSection(
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
             )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+            com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
             SettingsNavRow(
                 title = stringResource(R.string.webhooks_title),
                 subtitle = stringResource(R.string.webhooks_nav_subtitle),
                 icon = Icons.Default.Code,
                 onClick = onNavigateToWebhooks,
             )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+            com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
             SettingsNavRow(
                 title = stringResource(R.string.advanced),
                 subtitle = stringResource(R.string.env_mcp_console_log),
@@ -137,9 +137,9 @@ internal fun SettingsFolder(content: @Composable ColumnScope.() -> Unit) {
 internal fun SettingsLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp),
     )
 }
 
@@ -156,9 +156,9 @@ internal fun SettingsCardGroup(content: @Composable ColumnScope.() -> Unit) {
 }
 
 /**
- * One tappable row that opens a sub-page: icon tile, title, subtitle, chevron.
- * The same [SettingRow] the Control Center root draws, with a soft tile instead of
- * the root's solid one, so a sub-page reads as one level below it.
+ * One tappable row that opens a sub-page: title, subtitle, chevron — the same
+ * [SettingRow] the Control Center root draws, minus the icon. [icon] is kept for
+ * the callers but not drawn.
  */
 @Composable
 internal fun SettingsNavRow(
@@ -167,10 +167,11 @@ internal fun SettingsNavRow(
     icon: ImageVector,
     onClick: () -> Unit,
 ) {
+    // Inner pages draw no icon tile (the mockup's detail pages): the page title already
+    // says where you are, and text-only rows keep a sub-page quieter than the root.
     com.hermes.android.ui.design.SettingRow(
         title = title,
         subtitle = subtitle,
-        icon = icon,
         onClick = onClick,
     )
 }
@@ -192,7 +193,7 @@ internal fun PersonalitySection(
                 icon = Icons.Default.Description,
                 onClick = { onOpen(SettingsSection.SOUL) },
             )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+            com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
             SettingsNavRow(
                 title = stringResource(R.string.memory),
                 subtitle = "USER.md \u00B7 MEMORY.md",

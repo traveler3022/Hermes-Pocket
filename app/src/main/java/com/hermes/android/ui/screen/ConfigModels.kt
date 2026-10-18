@@ -348,14 +348,14 @@ internal fun ModelsTab(
                     icon = Icons.Default.Lightbulb,
                     onClick = { onOpen(SettingsSection.REASONING) },
                 )
-                com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+                com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
                 SettingsNavRow(
                     title = stringResource(R.string.aux_title),
                     subtitle = stringResource(R.string.aux_nav_subtitle),
                     icon = Icons.Default.SmartToy,
                     onClick = { onOpen(SettingsSection.AUX_MODELS) },
                 )
-                com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+                com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
                 SettingsNavRow(
                     title = stringResource(R.string.moa_title),
                     subtitle = stringResource(R.string.moa_nav_subtitle),

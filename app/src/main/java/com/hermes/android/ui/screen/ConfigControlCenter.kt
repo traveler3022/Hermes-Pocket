@@ -146,7 +146,7 @@ internal fun ControlCenterMenu(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = com.hermes.android.ui.design.HxSpace.page, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             StatTile(
@@ -413,9 +413,9 @@ private fun CcGroup(first: Boolean = false, content: @Composable () -> Unit) {
 /** The gap between two groups: enough to read as separate cards, under a line of text. */
 private val CC_GROUP_GAP = 16.dp
 
-/** Divider aligned with the row text (row padding 16 + icon 34 + gap 12). */
+/** Divider aligned with the row text (row padding 16 + icon 30 + gap 12). */
 @Composable
-private fun CcDivider() = GroupDivider(startIndent = 62.dp)
+private fun CcDivider() = GroupDivider(startIndent = 58.dp)
 
 /**
  * One Control Center row: solid coloured icon tile, title, an optional one-line subtitle,
@@ -475,7 +475,7 @@ private fun UpdateBanner(onUpdate: () -> Unit) {
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
+            .padding(horizontal = com.hermes.android.ui.design.HxSpace.page, vertical = 4.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(t("A new Hermes core is out", "نسخهٔ جدید هستهٔ هرمس آمده"), style = MaterialTheme.typography.titleSmall)

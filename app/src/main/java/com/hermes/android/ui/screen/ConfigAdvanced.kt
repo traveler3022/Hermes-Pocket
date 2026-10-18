@@ -64,7 +64,7 @@ internal fun AdvancedSection(
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.ENV_KEYS) },
             )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
+            com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
             SettingsNavRow(
                 title = stringResource(R.string.config_editor_title),
                 subtitle = stringResource(R.string.config_editor_subtitle),
