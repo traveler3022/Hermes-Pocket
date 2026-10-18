@@ -831,7 +831,6 @@
     <string name="theme">تم</string>
     <string name="thinking">فکر: %1$s</string>
     <string name="thinking_2">میزان فکر</string>
-    <string name="thinking_3">در حال فکر کردن</string>
     <string name="thinking_depth">عمق تفکر</string>
     <string name="thinking_off">بدون فکر</string>
     <string name="this_chat">این گفتگو</string>
@@ -844,7 +843,7 @@
     <string name="this_session_may_be_empty_or">این گفتگو خالی یا در دسترس نیست</string>
     <string name="this_toolset_has_no_services_to_choose">این گروه ابزار سرویسی برای انتخاب ندارد.</string>
     <string name="this_will_remove_from_config_yaml_and">\"%1$s\" از config.yaml و credential pool حذف میشه.</string>
-    <string name="thought_for_s">%1$s ثانیه فکر کرد</string>
+    <string name="thought_for_s">%1$d ثانیه فکر کرد</string>
     <string name="thoughts">افکار</string>
     <string name="thu">پنج</string>
     <string name="title">عنوان</string>
@@ -853,7 +852,7 @@
     <string name="toggle_preview">نمایش/بستن</string>
     <string name="tokens">حدود %1$s توکن</string>
     <string name="tools">ابزارها</string>
-    <string name="tools_2">%1$s ابزار</string>
+    <string name="tools_2">%1$d ابزار</string>
     <string name="toolsets">گروه‌های ابزار</string>
     <string name="toolsets_plugins_skills">ابزارها، افزونه‌ها، مهارت‌ها</string>
     <string name="total">کل</string>
@@ -888,7 +887,6 @@
     <string name="use_the_terminal_instead">به‌جایش با ترمینال</string>
     <string name="uses_the_current_provider_and_model_from">از پرووایدر و مدل فعلی تنظیمات استفاده می‌کند</string>
     <string name="uses_the_separate_termux_app_pick_this">از اپ جداگانه‌ی Termux استفاده می‌کند. اگر Hermes را از قبل در Termux دارید این را انتخاب کنید.</string>
-    <string name="using">در حال استفاده از %1$s…</string>
     <string name="variable_name_optional">نام متغیر (اختیاری)</string>
     <string name="verify_and_continue">بررسی و ادامه</string>
     <string name="version_label">نسخه: %1$s</string>
@@ -1302,4 +1300,31 @@
     <string name="status_pending">در انتظار</string>
     <string name="status_cancelled">لغو شد</string>
     <string name="remove_attachment">حذف پیوست</string>
+    <!-- خط «در حال فکر»: نوع کاری که در جریان است -->
+    <string name="activity_thinking">در حال فکر</string>
+    <string name="activity_web">جستجو در وب</string>
+    <string name="activity_terminal">اجرای دستور</string>
+    <string name="activity_file_read">خواندن فایل</string>
+    <string name="activity_file_write">نوشتن فایل</string>
+    <string name="activity_other">استفاده از ابزار</string>
+    <string name="trace_summary_separator">"، "</string>
+    <string name="kaomoji_status">کاموجی هرمس</string>
+    <string name="kaomoji_status_hint">چهره و حال هرمس موقع فکر کردن، مثل ترمینال</string>
+    <string-array name="thinking_verb_labels">
+        <item>در حال تأمل</item>
+        <item>در حال اندیشیدن</item>
+        <item>غرق در فکر</item>
+        <item>در حال کلنجار رفتن</item>
+        <item>در حال مرور ذهنی</item>
+        <item>در حال سبک‌سنگین کردن</item>
+        <item>در حال بالا و پایین کردن</item>
+        <item>در حال بازاندیشی</item>
+        <item>در حال پردازش</item>
+        <item>در حال استدلال</item>
+        <item>در حال تحلیل</item>
+        <item>در حال محاسبه</item>
+        <item>در حال جمع‌بندی</item>
+        <item>در حال شکل دادن پاسخ</item>
+        <item>در حال ایده‌پردازی</item>
+    </string-array>
 </resources>

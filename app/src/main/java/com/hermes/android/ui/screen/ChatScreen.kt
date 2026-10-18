@@ -1022,6 +1022,7 @@ fun ChatScreen(
                                 onEditMessage = viewModel::startEditing,
                                 onDeleteMessage = { id -> deleteFromMessageId = id },
                                 reactionsEnabled = themeModeState?.messageReactions == true,
+                                kaomoji = themeModeState?.kaomojiStatus == true,
                                 onReact = viewModel::reactToMessage,
                                 onOpenSubagent = uiState.activeSessionId?.let { sid ->
                                     { subagentId: String, text: String -> subagents.open(sid, subagentId, text) }

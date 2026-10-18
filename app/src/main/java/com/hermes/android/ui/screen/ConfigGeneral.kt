@@ -162,6 +162,27 @@ internal fun GeneralTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
+                                text = stringResource(R.string.kaomoji_status),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = stringResource(R.string.kaomoji_status_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.kaomojiStatus,
+                            onCheckedChange = { themeModeState.updateKaomojiStatus(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
                                 text = stringResource(R.string.message_reactions),
                                 style = MaterialTheme.typography.bodyLarge,
                             )

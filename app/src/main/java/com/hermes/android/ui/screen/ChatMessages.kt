@@ -134,6 +134,7 @@ internal fun MessageBubble(
     onReact: ((messageId: String, emoji: String?) -> Unit)? = null,
     /** Opens the sub-agent sheet; null where there is no live chat to ask. */
     onOpenSubagent: ((subagentId: String, text: String) -> Unit)? = null,
+    kaomoji: Boolean = false,
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -185,6 +186,7 @@ internal fun MessageBubble(
                 onReact = onReact
                     ?.takeIf { !message.isStreaming }
                     ?.let { react -> { emoji: String? -> react(message.id, emoji) } },
+                kaomoji = kaomoji,
             )
         }
 

@@ -833,7 +833,6 @@
     <string name="theme">Theme</string>
     <string name="thinking">thinking: %1$s</string>
     <string name="thinking_2">Thinking</string>
-    <string name="thinking_3">Thinking</string>
     <string name="thinking_depth">Thinking depth</string>
     <string name="thinking_off">thinking off</string>
     <string name="this_chat">This chat</string>
@@ -846,7 +845,7 @@
     <string name="this_session_may_be_empty_or">This session may be empty or inaccessible</string>
     <string name="this_toolset_has_no_services_to_choose">This toolset has no services to choose from.</string>
     <string name="this_will_remove_from_config_yaml_and">This will remove \"%1$s\" from config.yaml and credential pool.</string>
-    <string name="thought_for_s">Thought for %1$ss</string>
+    <string name="thought_for_s">Thought for %1$ds</string>
     <string name="thoughts">Thoughts</string>
     <string name="thu">Thu</string>
     <string name="title">Title</string>
@@ -855,7 +854,7 @@
     <string name="toggle_preview">Toggle preview</string>
     <string name="tokens">~%1$s tokens</string>
     <string name="tools">Tools</string>
-    <string name="tools_2">%1$s tools</string>
+    <string name="tools_2">%1$d tools</string>
     <string name="toolsets">Toolsets</string>
     <string name="toolsets_plugins_skills">Toolsets, plugins, skills</string>
     <string name="total">total</string>
@@ -890,7 +889,6 @@
     <string name="use_the_terminal_instead">Use the terminal instead</string>
     <string name="uses_the_current_provider_and_model_from">Uses the current provider and model from settings</string>
     <string name="uses_the_separate_termux_app_pick_this">Uses the separate Termux app. Pick this if you already run Hermes in Termux.</string>
-    <string name="using">Using %1$s…</string>
     <string name="variable_name_optional">Variable name (optional)</string>
     <string name="verify_and_continue">Verify and continue</string>
     <string name="version_label">Version: %1$s</string>
@@ -1304,4 +1302,49 @@
     <string name="status_pending">Pending</string>
     <string name="status_cancelled">Cancelled</string>
     <string name="remove_attachment">Remove attachment</string>
+    <!-- Thinking line: what kind of work is under way -->
+    <string name="activity_thinking">Thinking</string>
+    <string name="activity_web">Searching the web</string>
+    <string name="activity_terminal">Running a command</string>
+    <string name="activity_file_read">Reading a file</string>
+    <string name="activity_file_write">Writing a file</string>
+    <string name="activity_other">Using a tool</string>
+    <string name="trace_summary_separator">" · "</string>
+    <string name="kaomoji_status">Hermes kaomoji</string>
+    <string name="kaomoji_status_hint">Show Hermes’ face and mood while it thinks, as in the terminal</string>
+    <!-- Hermes' thinking verbs (agent/display.py THINKING_VERBS). Keys are matched, labels are shown. -->
+    <string-array name="thinking_verb_keys" translatable="false">
+        <item>pondering</item>
+        <item>contemplating</item>
+        <item>musing</item>
+        <item>cogitating</item>
+        <item>ruminating</item>
+        <item>deliberating</item>
+        <item>mulling</item>
+        <item>reflecting</item>
+        <item>processing</item>
+        <item>reasoning</item>
+        <item>analyzing</item>
+        <item>computing</item>
+        <item>synthesizing</item>
+        <item>formulating</item>
+        <item>brainstorming</item>
+    </string-array>
+    <string-array name="thinking_verb_labels">
+        <item>Pondering</item>
+        <item>Contemplating</item>
+        <item>Musing</item>
+        <item>Cogitating</item>
+        <item>Ruminating</item>
+        <item>Deliberating</item>
+        <item>Mulling it over</item>
+        <item>Reflecting</item>
+        <item>Processing</item>
+        <item>Reasoning</item>
+        <item>Analyzing</item>
+        <item>Computing</item>
+        <item>Synthesizing</item>
+        <item>Formulating</item>
+        <item>Brainstorming</item>
+    </string-array>
 </resources>
