@@ -100,6 +100,24 @@ object HxRadius {
     val lg = 22.dp
 }
 
+/**
+ * Fills for the solid icon tiles on the Settings root (the Telegram / One UI
+ * look: white glyph on a coloured tile). Fixed rather than taken from the
+ * scheme, so each row keeps its colour in every theme and the eye can find it
+ * by colour; every fill holds at least 3:1 against the white glyph.
+ */
+object HxIconColors {
+    val blue = Color(0xFF2F80ED)
+    val cyan = Color(0xFF1C93B0)
+    val green = Color(0xFF2E9E52)
+    val orange = Color(0xFFE06C10)
+    val red = Color(0xFFE5484D)
+    val pink = Color(0xFFD9437A)
+    val purple = Color(0xFF8B5CF6)
+    val indigo = Color(0xFF5B63E6)
+    val gray = Color(0xFF6B7280)
+}
+
 // ── Status colours ──────────────────────────────────────────────────────
 
 /** Warning amber: anything that is blocked on the user. */
@@ -268,6 +286,7 @@ fun GroupDivider(startIndent: Dp = 56.dp) {
 /**
  * The standard interactive row: tinted icon bubble, title + optional
  * support line, and a trailing slot (chevron by default when clickable).
+ * [solidIcon] fills the bubble with [iconTint] and draws the glyph white.
  */
 @Composable
 fun SettingRow(
@@ -276,6 +295,7 @@ fun SettingRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     iconTint: Color = MaterialTheme.colorScheme.primary,
+    solidIcon: Boolean = false,
     onClick: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
@@ -292,14 +312,14 @@ fun SettingRow(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(HxRadius.sm))
-                    .background(iconTint.copy(alpha = 0.12f)),
+                    .background(if (solidIcon) iconTint else iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = iconTint,
+                    modifier = Modifier.size(if (solidIcon) 20.dp else 18.dp),
+                    tint = if (solidIcon) Color.White else iconTint,
                 )
             }
         }

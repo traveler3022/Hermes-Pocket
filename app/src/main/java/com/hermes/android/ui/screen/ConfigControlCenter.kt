@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.design.GroupDivider
+import com.hermes.android.ui.design.HxIconColors
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.design.StatTile
@@ -118,11 +119,6 @@ internal fun ControlCenterMenu(
     onNavigateToAchievements: () -> Unit,
     onNavigateToOps: () -> Unit,
 ) {
-    val agentTint = MaterialTheme.colorScheme.primary
-    val capabilityTint = MaterialTheme.colorScheme.tertiary
-    val workTint = MaterialTheme.colorScheme.secondary
-    val systemTint = MaterialTheme.colorScheme.onSurfaceVariant
-
     val toolsOn = state.availableTools.count { it.enabled }
     val toolsTotal = state.availableTools.size
 
@@ -178,7 +174,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.personality),
                     icon = Icons.Default.Face,
-                    tint = agentTint,
+                    tint = HxIconColors.pink,
                     value = state.personality.ifBlank { t("Default", "پیش‌فرض") },
                     monoValue = state.personality.isNotBlank(),
                     onClick = { onOpen(SettingsSection.PERSONALITY) },
@@ -187,7 +183,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.models),
                     icon = Icons.Default.Psychology,
-                    tint = agentTint,
+                    tint = HxIconColors.purple,
                     subtitle = state.activeModel?.let { "${state.activeProvider ?: "?"} / $it" },
                     onClick = { onOpen(SettingsSection.MODELS) },
                 )
@@ -198,7 +194,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.tools),
                     icon = Icons.Default.Key,
-                    tint = capabilityTint,
+                    tint = HxIconColors.orange,
                     value = if (toolsTotal > 0) t("$toolsOn of $toolsTotal", "$toolsOn از $toolsTotal") else null,
                     onClick = { onOpen(SettingsSection.TOOLSETS) },
                 )
@@ -206,7 +202,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.command_approval_2),
                     icon = Icons.Default.Security,
-                    tint = capabilityTint,
+                    tint = HxIconColors.green,
                     value = t(state.approvalMode, approvalModeFa(state.approvalMode)),
                     onClick = { onOpen(SettingsSection.APPROVAL) },
                 )
@@ -214,21 +210,21 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = t("Skills", "مهارت‌ها"),
                     icon = Icons.Default.AutoAwesome,
-                    tint = capabilityTint,
+                    tint = HxIconColors.blue,
                     onClick = onNavigateToSkills,
                 )
                 CcDivider()
                 CcRow(
                     title = t("Plugins", "افزونه‌ها"),
                     icon = Icons.Default.Extension,
-                    tint = capabilityTint,
+                    tint = HxIconColors.cyan,
                     onClick = onNavigateToPlugins,
                 )
                 CcDivider()
                 CcRow(
                     title = t("MCP servers", "سرورهای MCP"),
                     icon = Icons.Default.Link,
-                    tint = capabilityTint,
+                    tint = HxIconColors.indigo,
                     onClick = onNavigateToMcp,
                 )
             }
@@ -238,7 +234,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.projects),
                     icon = Icons.Default.Folder,
-                    tint = workTint,
+                    tint = HxIconColors.blue,
                     subtitle = stringResource(R.string.browse_sessions_by_project),
                     onClick = onNavigateToProjects,
                 )
@@ -246,7 +242,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.scheduler),
                     icon = Icons.Default.Schedule,
-                    tint = workTint,
+                    tint = HxIconColors.orange,
                     subtitle = stringResource(R.string.scheduled_agent_jobs),
                     onClick = onNavigateToCron,
                 )
@@ -254,7 +250,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.kanban_board),
                     icon = Icons.Default.WorkOutline,
-                    tint = workTint,
+                    tint = HxIconColors.green,
                     onClick = { onOpen(SettingsSection.KANBAN) },
                 )
             }
@@ -264,7 +260,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.platforms),
                     icon = Icons.Default.Forum,
-                    tint = agentTint,
+                    tint = HxIconColors.cyan,
                     subtitle = stringResource(R.string.telegram_discord_slack),
                     onClick = onNavigateToPlatforms,
                 )
@@ -272,14 +268,14 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.webhooks_title),
                     icon = Icons.Default.Code,
-                    tint = agentTint,
+                    tint = HxIconColors.gray,
                     onClick = onNavigateToWebhooks,
                 )
                 CcDivider()
                 CcRow(
                     title = stringResource(R.string.assistant_title),
                     icon = Icons.Default.Mic,
-                    tint = agentTint,
+                    tint = HxIconColors.red,
                     value = if (isPhoneAssistant) t("On", "فعال") else t("Not set", "تنظیم نشده"),
                     onClick = { onOpen(SettingsSection.PHONE_ASSISTANT) },
                 )
@@ -290,7 +286,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.appearance),
                     icon = Icons.Default.Palette,
-                    tint = systemTint,
+                    tint = HxIconColors.purple,
                     value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
                     onClick = { onOpen(SettingsSection.APPEARANCE) },
                 )
@@ -299,7 +295,7 @@ internal fun ControlCenterMenu(
                     CcRow(
                         title = stringResource(R.string.language),
                         icon = Icons.Default.Language,
-                        tint = systemTint,
+                        tint = HxIconColors.indigo,
                         value = languageLabel(appLanguageState.language),
                         onClick = { onOpen(SettingsSection.LANGUAGE) },
                     )
@@ -308,7 +304,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.analytics_title),
                     icon = Icons.Default.BarChart,
-                    tint = systemTint,
+                    tint = HxIconColors.blue,
                     value = state.insights?.let { t("${it.sessions} sessions", "${it.sessions} جلسه") },
                     onClick = onNavigateToAnalytics,
                 )
@@ -316,7 +312,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.achievements_title),
                     icon = Icons.Default.Star,
-                    tint = systemTint,
+                    tint = HxIconColors.orange,
                     onClick = onNavigateToAchievements,
                 )
             }
@@ -326,7 +322,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.updates),
                     icon = Icons.Default.CloudDownload,
-                    tint = systemTint,
+                    tint = HxIconColors.green,
                     subtitle = stringResource(R.string.app_and_hermes_core_versions),
                     onClick = { onOpen(SettingsSection.ABOUT) },
                 )
@@ -334,7 +330,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.linux),
                     icon = Icons.Default.Terminal,
-                    tint = systemTint,
+                    tint = HxIconColors.gray,
                     subtitle = stringResource(R.string.terminal_files_packages),
                     onClick = onNavigateToLinux,
                 )
@@ -342,14 +338,14 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.storage),
                     icon = Icons.Default.DataUsage,
-                    tint = systemTint,
+                    tint = HxIconColors.blue,
                     onClick = onNavigateToStorage,
                 )
                 CcDivider()
                 CcRow(
                     title = stringResource(R.string.ops_title),
                     icon = Icons.Default.Build,
-                    tint = systemTint,
+                    tint = HxIconColors.orange,
                     subtitle = stringResource(R.string.ops_nav_subtitle),
                     onClick = onNavigateToOps,
                 )
@@ -357,7 +353,7 @@ internal fun ControlCenterMenu(
                 CcRow(
                     title = stringResource(R.string.advanced),
                     icon = Icons.Default.Settings,
-                    tint = systemTint,
+                    tint = HxIconColors.gray,
                     subtitle = stringResource(R.string.env_mcp_console_log),
                     onClick = { onOpen(SettingsSection.ADVANCED) },
                 )
@@ -392,6 +388,8 @@ private fun ConnectionCard(
             title = serverUrl.ifBlank { stringResource(R.string.no_server_configured) },
             subtitle = stringResource(R.string.server_connection_settings),
             icon = Icons.Default.Dns,
+            iconTint = HxIconColors.blue,
+            solidIcon = true,
             onClick = onNavigateToRuntime,
             trailing = { StatusChip(label = connLabel, color = connColor) },
         )
@@ -399,7 +397,7 @@ private fun ConnectionCard(
         CcRow(
             title = stringResource(R.string.setup_wizard),
             icon = Icons.Default.RocketLaunch,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = HxIconColors.purple,
             subtitle = stringResource(R.string.runtime_ai_provider_api_key_and_model),
             onClick = onNavigateToSetup,
         )
@@ -418,7 +416,7 @@ private fun CcGroup(first: Boolean = false, content: @Composable () -> Unit) {
 private fun CcDivider() = GroupDivider(startIndent = 62.dp)
 
 /**
- * One Control Center row: tinted icon, title, an optional one-line subtitle,
+ * One Control Center row: solid coloured icon tile, title, an optional one-line subtitle,
  * the current value on the trailing side, then a chevron.
  */
 @Composable
@@ -436,6 +434,7 @@ internal fun CcRow(
         subtitle = subtitle,
         icon = icon,
         iconTint = tint,
+        solidIcon = true,
         onClick = onClick,
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
