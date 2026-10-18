@@ -41,8 +41,7 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
  * Advanced (approved design I): env editor + reload, MCP servers editor +
- * reload, a command console over shell.exec (with process.stop as the
- * emergency brake), the live gateway stderr log, and the raw config view.
+ * reload, the connection log, and the raw config view.
  */
 @Composable
 internal fun AdvancedSection(
@@ -222,131 +221,6 @@ internal fun AdvancedSection(
                         }
                     }
                 }
-                }
-            }
-        }
-
-        SettingsLabel(stringResource(R.string.command_console))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
-        ) {
-            Column(
-                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.run_one_off_shell_commands_on_the_server),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                state.consoleEntries.forEach { entry ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = "$ ${entry.command}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = entry.output,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
-                            ),
-                            color = if (entry.isError) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            maxLines = 12,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                var consoleInput by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = consoleInput,
-                    onValueChange = { consoleInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("df -h /") },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
-                    ),
-                    singleLine = true,
-                    enabled = !state.isConsoleRunning,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.runConsoleCommand(consoleInput)
-                            consoleInput = ""
-                        },
-                        enabled = consoleInput.isNotBlank() && !state.isConsoleRunning,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        if (state.isConsoleRunning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Text(stringResource(R.string.run))
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.stopProcesses() },
-                        modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.stop_processes)) }
-                }
-            }
-        }
-
-        SettingsLabel(stringResource(R.string.gateway_log))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
-        ) {
-            Column(
-                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.live_server_stderr_fills_in_as_events),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (state.gatewayLog.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.no_log_lines_yet),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Text(
-                        text = state.gatewayLog.takeLast(40).joinToString("\n"),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .verticalScroll(rememberScrollState()),
-                    )
                 }
             }
         }

@@ -298,7 +298,6 @@ class SettingsScreenshotsTest {
                     onNavigateToCron = {},
                     onNavigateToProjects = {},
                     onNavigateToPlatforms = {},
-                    onNavigateToWebhooks = {},
                     onNavigateToPlugins = {},
                     onNavigateToSkills = {},
                     onNavigateToMcp = {},

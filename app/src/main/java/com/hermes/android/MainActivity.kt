@@ -363,7 +363,6 @@ private fun HermesNavHost(
             com.hermes.android.ui.screen.ConfigScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onNavigateToPlatforms = { navController.navigate("platforms") },
-                onNavigateToWebhooks = { navController.navigate("webhooks") },
                 onNavigateToAnalytics = { navController.navigate("analytics") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
@@ -401,6 +400,7 @@ private fun HermesNavHost(
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onNavigateToWebhooks = { navController.navigate("webhooks") },
             )
         }
 

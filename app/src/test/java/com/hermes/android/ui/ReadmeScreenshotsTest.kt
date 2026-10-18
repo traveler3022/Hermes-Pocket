@@ -274,7 +274,6 @@ private fun ControlCenter() {
                 onNavigateToCron = {},
                 onNavigateToProjects = {},
                 onNavigateToPlatforms = {},
-                onNavigateToWebhooks = {},
                 onNavigateToPlugins = {},
                 onNavigateToSkills = {},
                 onNavigateToMcp = {},

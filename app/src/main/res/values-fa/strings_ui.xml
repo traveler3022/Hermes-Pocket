@@ -142,7 +142,6 @@
     <string name="command">فرمان</string>
     <string name="command_approval">درخواست اجرای فرمان</string>
     <string name="command_approval_2">تأیید فرمان‌ها</string>
-    <string name="command_console">کنسول فرمان</string>
     <string name="comments">%1$s نظر</string>
     <string name="comments_2">نظرها</string>
     <string name="compress_history">فشرده‌سازی تاریخچه</string>
@@ -269,7 +268,7 @@
     <string name="enter_preset_name">اسم پریست را وارد کنید</string>
     <string name="enter_sudo_password">رمز sudo بنویسید...</string>
     <string name="enter_value">مقدار را وارد کنید...</string>
-    <string name="env_mcp_console_log">env · MCP · کنسول · لاگ</string>
+    <string name="env_mcp_console_log">env · MCP · لاگ اتصال</string>
     <string name="environment_variables_env">متغیرهای محیطی (.env)</string>
     <string name="erase">پاک کردن…</string>
     <string name="erase_built_in_memory">پاک کردن حافظهٔ داخلی</string>
@@ -309,7 +308,6 @@
     <string name="from_the_main_profile_off_the_new">از پروفایل اصلی. خاموش: پروفایل جدید بدون کلید شروع می‌شود.</string>
     <string name="full_guide_and_the_script_on_github">راهنمای کامل و اسکریپت در GitHub</string>
     <string name="full_screen">تمام‌صفحه</string>
-    <string name="gateway_log">لاگ گیت‌وی</string>
     <string name="general_settings">تنظیمات عمومی</string>
     <string name="get_a_key">گرفتن کلید</string>
     <string name="get_a_key_from">دریافت کلید از %1$s</string>
@@ -410,7 +408,6 @@
     <string name="linux_runs_inside_this_app_no_termux">لینوکس داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس</string>
     <string name="list_separator">"، "</string>
     <string name="live">زنده</string>
-    <string name="live_server_stderr_fills_in_as_events">stderr زندهٔ سرور — تا وقتی برنامه باز است با رسیدن رویدادها پر می‌شود.</string>
     <string name="loaded_tools">لود شده · %1$s ابزار</string>
     <string name="loading_cron_jobs">در حال بارگذاری کارها…</string>
     <string name="loading_memory">در حال بارگذاری حافظه...</string>
@@ -498,7 +495,6 @@
     <string name="no_group_chats_yet">هنوز گفتگوی گروهی نداری</string>
     <string name="no_key_configured">کلیدی تنظیم نشده</string>
     <string name="no_live_tasks">تسک زنده‌ای نیست</string>
-    <string name="no_log_lines_yet">هنوز خطی نرسیده</string>
     <string name="no_longer_waiting_for_an_answer">دیگر منتظر پاسخ نیست</string>
     <string name="no_match">چیزی پیدا نشد</string>
     <string name="no_matching_messages">پیامی پیدا نشد</string>
@@ -584,6 +580,8 @@
     <string name="pick_one_fill_in_a_few_blanks_and_hermes">یکی را انتخاب کن، چند جای خالی را پر کن و هرمس سر وقت اجرایش می‌کند.</string>
     <string name="pin">سنجاق</string>
     <string name="pinned">سنجاق‌شده</string>
+    <string name="connections_and_platforms">اتصالات و پلتفرم‌ها</string>
+    <string name="connections_and_platforms_subtitle">پلتفرم‌های پیام‌رسان، وب‌هوک‌ها، دستیار گوشی</string>
     <string name="platforms">پلتفرم‌ها</string>
     <string name="play">پخش</string>
     <string name="please_keep_this_window_open_while">تا تمام شدن پاک‌سازی این صفحه را باز نگه دارید.</string>
@@ -644,7 +642,6 @@
     <string name="review">بازبینی</string>
     <string name="run">اجرا</string>
     <string name="run_a_quick_health_check_of_the_server">یک بررسی سریع سلامت سرور انجام بده (سرویس‌ها، دیسک، خطاهای لاگ) و هرچیزی که نیاز به توجه من داره رو خلاصه کن.</string>
-    <string name="run_one_off_shell_commands_on_the_server">اجرای فرمان‌های تکی روی سرور — برای عیب‌یابی بدون SSH.</string>
     <string name="run_prompts_automatically_on_a_schedule">پرامپت‌ها رو خودکار و زمان‌بندی‌شده اجرا کن — گزارش روزانه، بکاپ، بررسی‌ها</string>
     <string name="run_this_in_a_terminal_then_tap_ive">این را در ترمینال اجرا کن، بعد «وارد شدم» را بزن:</string>
     <string name="running">در حال اجرا</string>
@@ -775,7 +772,6 @@
     <string name="step_of_4">مرحله %1$s از ۴</string>
     <string name="stop">توقف</string>
     <string name="stop_and_retry">توقف و شروع دوباره</string>
-    <string name="stop_processes">توقف فرایندها</string>
     <string name="stop_the_worker">کارگزار متوقف شود؟</string>
     <string name="stopped">متوقف شد.</string>
     <string name="stopped_2">خاموش</string>

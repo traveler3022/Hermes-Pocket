@@ -39,13 +39,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.design.GroupDivider
@@ -58,7 +56,6 @@ import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.BarChart
-import com.hermes.android.ui.icons.filled.Code
 import com.hermes.android.ui.icons.filled.CloudDownload
 import com.hermes.android.ui.icons.filled.DataUsage
 import com.hermes.android.ui.icons.filled.Dns
@@ -68,7 +65,6 @@ import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Language
 import com.hermes.android.ui.icons.filled.Link
-import com.hermes.android.ui.icons.filled.Mic
 import com.hermes.android.ui.icons.filled.Palette
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.RocketLaunch
@@ -109,7 +105,6 @@ internal fun ControlCenterMenu(
     onNavigateToCron: () -> Unit,
     onNavigateToProjects: () -> Unit,
     onNavigateToPlatforms: () -> Unit,
-    onNavigateToWebhooks: () -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSkills: () -> Unit,
     onNavigateToMcp: () -> Unit,
@@ -121,13 +116,6 @@ internal fun ControlCenterMenu(
 ) {
     val toolsOn = state.availableTools.count { it.enabled }
     val toolsTotal = state.availableTools.size
-
-    val context = LocalContext.current
-    var isPhoneAssistant by remember { mutableStateOf(false) }
-    LifecycleResumeEffect(Unit) {
-        isPhoneAssistant = holdsAssistantRole(context)
-        onPauseOrDispose { }
-    }
 
     Column(
         modifier = Modifier
@@ -258,26 +246,11 @@ internal fun ControlCenterMenu(
         // ── Messengers & connections ──
         CcGroup {
             CcRow(
-                title = stringResource(R.string.platforms),
+                title = stringResource(R.string.connections_and_platforms),
                 icon = Icons.Default.Forum,
                 tint = HxIconColors.cyan,
-                subtitle = stringResource(R.string.telegram_discord_slack),
+                subtitle = stringResource(R.string.connections_and_platforms_subtitle),
                 onClick = onNavigateToPlatforms,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.webhooks_title),
-                icon = Icons.Default.Code,
-                tint = HxIconColors.gray,
-                onClick = onNavigateToWebhooks,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.assistant_title),
-                icon = Icons.Default.Mic,
-                tint = HxIconColors.red,
-                value = if (isPhoneAssistant) t("On", "فعال") else t("Not set", "تنظیم نشده"),
-                onClick = { onOpen(SettingsSection.PHONE_ASSISTANT) },
             )
         }
 

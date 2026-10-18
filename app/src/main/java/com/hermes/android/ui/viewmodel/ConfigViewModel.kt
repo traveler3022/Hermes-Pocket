@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayEvent
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +15,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
@@ -63,7 +61,6 @@ class ConfigViewModel @Inject constructor(
     init {
         loadAll()
         loadHubStats()
-        collectGatewayLog()
     }
 
     /**
@@ -1187,98 +1184,6 @@ class ConfigViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.w(e, "[Config] insights.get failed (tile stays empty)")
             }
-        }
-    }
-
-    // ── Command console (design I) ────────────────────────────────────────
-
-    /**
-     * Run one shell command on the server (`shell.exec`) and append the
-     * result to the console history. The same RPC already powers all the
-     * file editors here — this just exposes it directly for diagnostics
-     * without SSH.
-     */
-    fun runConsoleCommand(command: String) {
-        val trimmed = command.trim()
-        if (trimmed.isEmpty() || _uiState.value.isConsoleRunning) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isConsoleRunning = true)
-            try {
-                val result = gatewayClient.request(
-                    GatewayMethods.SHELL_EXEC,
-                    mapOf("command" to JsonPrimitive(trimmed)),
-                )
-                val obj = result as? JsonObject
-                val stdout = (obj?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
-                val stderr = (obj?.get("stderr") as? JsonPrimitive)?.contentOrNull.orEmpty()
-                val code = (obj?.get("code") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
-                val output = buildString {
-                    if (stdout.isNotBlank()) append(stdout.trimEnd())
-                    if (stderr.isNotBlank()) {
-                        if (isNotEmpty()) append('\n')
-                        append(stderr.trimEnd())
-                    }
-                    if (isEmpty()) append("(exit $code)")
-                }
-                _uiState.value = _uiState.value.copy(
-                    isConsoleRunning = false,
-                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
-                        command = trimmed,
-                        output = output,
-                        isError = code != 0,
-                    )).takeLast(30),
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] Console command failed")
-                _uiState.value = _uiState.value.copy(
-                    isConsoleRunning = false,
-                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
-                        command = trimmed,
-                        output = e.message ?: "request failed",
-                        isError = true,
-                    )).takeLast(30),
-                )
-            }
-        }
-    }
-
-    /** Emergency stop for runaway processes started from the console. */
-    fun stopProcesses() {
-        viewModelScope.launch {
-            try {
-                val result = gatewayClient.request(GatewayMethods.PROCESS_STOP)
-                val killed = ((result as? JsonObject)?.get("killed") as? JsonPrimitive)
-                    ?.content?.toIntOrNull() ?: 0
-                _uiState.value = _uiState.value.copy(
-                    consoleEntries = (_uiState.value.consoleEntries + ConsoleEntry(
-                        command = "process.stop",
-                        output = "killed: $killed",
-                        isError = false,
-                    )).takeLast(30),
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "[Config] process.stop failed")
-                _uiState.value = _uiState.value.copy(errorMessage = "Failed to stop: ${e.message}")
-            }
-        }
-    }
-
-    // ── Gateway log (design I) ────────────────────────────────────────────
-
-    /**
-     * Keep the last lines of the server's stderr stream (gateway.stderr
-     * events) so connection problems can be diagnosed from the phone,
-     * without SSH. Bounded to 200 lines.
-     */
-    private fun collectGatewayLog() {
-        viewModelScope.launch {
-            gatewayClient.events
-                .filterIsInstance<GatewayEvent.GatewayStderr>()
-                .collect { event ->
-                    _uiState.value = _uiState.value.copy(
-                        gatewayLog = (_uiState.value.gatewayLog + event.line).takeLast(200),
-                    )
-                }
         }
     }
 

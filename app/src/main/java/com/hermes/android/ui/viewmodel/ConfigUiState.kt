@@ -54,21 +54,10 @@ data class ConfigUiState(
     // ── Control Center stats (design E) ──
     // 30-day aggregate from insights.get (reuses SessionsViewModel's type).
     val insights: InsightsData? = null,
-    // ── Advanced: command console + gateway log (design I) ──
-    val consoleEntries: List<ConsoleEntry> = emptyList(),
-    val isConsoleRunning: Boolean = false,
-    val gatewayLog: List<String> = emptyList(),
     /** Tail of the on-device connection journal, loaded on demand (it reads from disk). */
     val connectionJournal: String = "",
     // A model pick the gateway flagged (cost / data policy / large context) awaiting the user.
     val modelSwitchConfirm: ModelSwitchConfirm? = null,
-)
-
-/** One command + its result in the Advanced screen's console. */
-data class ConsoleEntry(
-    val command: String,
-    val output: String,
-    val isError: Boolean,
 )
 
 data class ModelOption(
