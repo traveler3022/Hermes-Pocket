@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.HxStatus
 import com.hermes.android.ui.design.HxGradientActionPill
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.hxSoftShadow
@@ -102,7 +103,7 @@ internal fun AgentTodoCard(todos: List<TodoItemUi>) {
                 Text(
                     text = stringResource(R.string.tasks) + " $done/${todos.size}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = HxStatus.running,
                 )
                 if (!expanded && current != null) {
                     Text(
@@ -123,19 +124,21 @@ internal fun AgentTodoCard(todos: List<TodoItemUi>) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(vertical = 2.dp),
                     ) {
-                        Text(
-                            text = when (todo.status) {
-                                TodoStatus.COMPLETED -> "✓"
-                                TodoStatus.IN_PROGRESS -> "▸"
-                                TodoStatus.CANCELLED -> "✕"
-                                TodoStatus.PENDING -> "○"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (todo.status) {
-                                TodoStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primary
-                                TodoStatus.CANCELLED -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                        // Line icons, not ✓ ▸ ✕ ○: text glyphs sit on the
+                        // baseline at the font's whim and never matched the
+                        // icons around them. Cancelled is not a failure, so
+                        // it is muted rather than red.
+                        val (glyph, label) = when (todo.status) {
+                            TodoStatus.COMPLETED -> HxIcons.CircleCheck to R.string.status_done
+                            TodoStatus.IN_PROGRESS -> HxIcons.CircleDot to R.string.status_in_progress
+                            TodoStatus.CANCELLED -> HxIcons.CircleX to R.string.status_cancelled
+                            TodoStatus.PENDING -> HxIcons.Circle to R.string.status_pending
+                        }
+                        Icon(
+                            imageVector = glyph,
+                            contentDescription = stringResource(label),
+                            modifier = Modifier.size(14.dp),
+                            tint = if (todo.status == TodoStatus.IN_PROGRESS) HxStatus.running else HxStatus.done,
                         )
                         Text(
                             text = todo.content,

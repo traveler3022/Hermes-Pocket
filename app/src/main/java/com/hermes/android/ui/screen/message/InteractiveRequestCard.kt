@@ -35,6 +35,7 @@ import com.hermes.android.R
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ClarifyQuestionUi
 import com.hermes.android.ui.viewmodel.InteractiveKind
+import com.hermes.android.ui.design.HxStatus
 
 /**
  * A question the agent is blocked on: clarify (one question — free text, one
@@ -49,12 +50,17 @@ internal fun InteractiveRequestCard(
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
 ) {
+    // Amber while it waits on the user — the same amber as the approval sheet
+    // and the drawer's "waiting" dot. Once answered or expired it is history,
+    // so it drops to a neutral outline instead of still calling for attention.
+    val settled = message.answered || message.expired
+    val accent = if (settled) MaterialTheme.colorScheme.outline else HxStatus.waiting
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f))
-            .border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+            .background(accent.copy(alpha = if (settled) 0.05f else 0.1f))
+            .border(1.dp, accent.copy(alpha = if (settled) 0.2f else 0.35f), RoundedCornerShape(12.dp)),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

@@ -138,6 +138,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.hermes.android.ui.design.HxIcons
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
@@ -377,7 +378,12 @@ internal fun HtmlBlockCard(
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🌐", style = MaterialTheme.typography.titleMedium)
+                Icon(
+                    HxIcons.Globe,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = name,
@@ -450,7 +456,8 @@ internal fun HtmlBlockCard(
 
 @Composable
 internal fun ArtifactCard(
-    emoji: String,
+    /** A line icon from [HxIcons] — never an emoji, which each phone draws differently. */
+    icon: ImageVector = HxIcons.FileText,
     name: String,
     actionLabel: String,
     onAction: () -> Unit,
@@ -466,7 +473,12 @@ internal fun ArtifactCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(text = emoji, style = MaterialTheme.typography.titleMedium)
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 text = name,
                 style = MaterialTheme.typography.bodySmall,

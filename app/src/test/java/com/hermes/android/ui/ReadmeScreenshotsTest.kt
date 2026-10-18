@@ -189,7 +189,7 @@ private fun Chat(fa: Boolean) {
         ) {
             HxHeaderCircleButton(icon = HxIcons.MenuShort, contentDescription = "", onClick = {})
             Spacer(Modifier.weight(1f))
-            HxHeaderCircleButton(icon = HxIcons.NewChat, contentDescription = "", onClick = {}, iconSize = 25.dp)
+            HxHeaderCircleButton(icon = HxIcons.SquarePen, contentDescription = "", onClick = {}, iconSize = 21.dp)
             Spacer(Modifier.width(8.dp))
             HxHeaderCircleButton(icon = Icons.Default.MoreVert, contentDescription = "", onClick = {})
         }
@@ -242,7 +242,7 @@ private fun Drawer(fa: Boolean) {
             onSearch = {},
             onNewChat = {},
             onSessionClick = {},
-            onAccount = {},
+            onSettings = {},
         )
     }
 }

@@ -5,7 +5,6 @@
     <string name="a_step_waiting_on_others_becomes_ready">مرحله‌ای که منتظر بقیه است، وقتی آن‌ها تمام شوند آماده می‌شود.</string>
     <string name="a_task_board_your_profiles_work_through">تابلوی کارهایی که پروفایل‌ها انجام می‌دهند، در منو. با سرور، روی سرور اجرا می‌شود. در لینوکس داخلی روی خود گوشی اجرا می‌شود: هر دقیقه یک بررسی و برای هر کار یک پروسهٔ هرمس، پس سنگین است و روشن یا خاموش کردنش هرمس را دوباره راه می‌اندازد.</string>
     <string name="account">حساب</string>
-    <string name="account_2">حساب</string>
     <string name="accounts">حساب‌ها</string>
     <string name="active">فعال</string>
     <string name="active_2">فعال</string>
@@ -702,7 +701,6 @@
     <string name="send">ارسال</string>
     <string name="send_back">برگرداندن</string>
     <string name="send_news_to">ارسال خبرها به</string>
-    <string name="send_now_interrupts_current_reply">ارسال الان (پاسخ فعلی رو قطع می‌کنه)</string>
     <string name="server">سرور</string>
     <string name="server_address">آدرس سرور</string>
     <string name="server_connection_settings">تنظیمات سرور و اتصال</string>
@@ -771,7 +769,6 @@
     <string name="starting_tailscale">در حال روشن کردن Tailscale…</string>
     <string name="starts_without_waiting_for_another_task">بدون منتظر ماندن برای کار دیگری شروع می‌شود.</string>
     <string name="stats">آمار</string>
-    <string name="steer_the_agent">هدایت عامل</string>
     <string name="step">گام %1$s</string>
     <string name="step_1_bot_token">قدم ۱: توکن ربات</string>
     <string name="step_2_allowed_users">قدم ۲: کاربران مجاز</string>
@@ -785,7 +782,7 @@
     <string name="storage">فضای ذخیره‌سازی</string>
     <string name="storage_cleared">فضا آزاد شد</string>
     <string name="storage_usage">مصرف فضای ذخیره‌سازی</string>
-    <string name="sub_agent">🤖 زیر ایجنت</string>
+    <string name="sub_agent">زیرعامل</string>
     <string name="subagent_s_running">%1$s ساب‌ایجنت در حال اجرا</string>
     <string name="sudo_password_required">رمز sudo لازم است</string>
     <string name="suggest_title">پیشنهاد عنوان</string>
@@ -1292,4 +1289,17 @@
     <string name="subagent_queued">فرستاده شد؛ در قدم بعدی می‌خواند</string>
     <string name="subagent_rejected">دیگر راهنمایی قبول نمی‌کند</string>
     <string name="subagent_stopped">زیرعامل متوقف شد</string>
+    <!-- Chat polish: status glyphs, send-while-running menu, drawer settings -->
+    <string name="drawer_settings">تنظیمات</string>
+    <string name="send_options">گزینه‌های ارسال</string>
+    <string name="steer_add_title">اضافه به کار فعلی</string>
+    <string name="steer_add_hint">هرمس بعد از ابزار بعدی‌اش آن را می‌خواند</string>
+    <string name="interrupt_send_title">توقف و ارسال</string>
+    <string name="interrupt_send_hint">این پاسخ تمام می‌شود و به پیام تو جواب می‌دهد</string>
+    <string name="status_done">انجام شد</string>
+    <string name="status_failed">ناموفق</string>
+    <string name="status_in_progress">در حال انجام</string>
+    <string name="status_pending">در انتظار</string>
+    <string name="status_cancelled">لغو شد</string>
+    <string name="remove_attachment">حذف پیوست</string>
 </resources>

@@ -118,6 +118,89 @@ object HxIcons {
             "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z",
         )
     }
+
+    // ── Status glyphs (tool cards, task list, sub-agents) ────────────────
+    // These replace the emoji and text characters (✓ ✕ ▸ ○ ❌ 📄) the cards
+    // used to draw: an emoji renders in each phone's own emoji font, so the
+    // same card looked different on every device and never matched the line
+    // icons around it.
+
+    /** lucide `check` */
+    val Check: ImageVector by lazy {
+        lucideIcon(
+            name = "Check",
+            "M20 6 9 17l-5-5",
+        )
+    }
+
+    /** lucide `x` */
+    val X: ImageVector by lazy {
+        lucideIcon(
+            name = "X",
+            "M18 6 6 18",
+            "m6 6 12 12",
+        )
+    }
+
+    /** lucide `circle-x` */
+    val CircleX: ImageVector by lazy {
+        lucideIcon(
+            name = "CircleX",
+            "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z",
+            "m15 9-6 6",
+            "m9 9 6 6",
+        )
+    }
+
+    /** lucide `circle` */
+    val Circle: ImageVector by lazy {
+        lucideIcon(
+            name = "Circle",
+            "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z",
+        )
+    }
+
+    /** lucide `circle-dot` */
+    val CircleDot: ImageVector by lazy {
+        lucideIcon(
+            name = "CircleDot",
+            "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z",
+            "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+        )
+    }
+
+    /** lucide `file-text` */
+    val FileText: ImageVector by lazy {
+        lucideIcon(
+            name = "FileText",
+            "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
+            "M14 2v4a2 2 0 0 0 2 2h4",
+            "M10 9H8",
+            "M16 13H8",
+            "M16 17H8",
+        )
+    }
+
+    /** lucide `corner-down-right` — "add to what is already running".
+     *  Mirrored in RTL so it still points the way the text runs. */
+    val CornerDownRight: ImageVector by lazy {
+        lucideIcon(
+            name = "CornerDownRight",
+            "M15 10L20 15L15 20",
+            "M4 4v7a4 4 0 0 0 4 4h12",
+            autoMirror = true,
+        )
+    }
+
+    /** lucide `settings` — the drawer's way into Settings. */
+    val Settings: ImageVector by lazy {
+        lucideIcon(
+            name = "Settings",
+            "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+            "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+        )
+    }
+
     /** lucide `sparkles` */
     val Sparkles: ImageVector by lazy {
         lucideIcon(
@@ -232,13 +315,14 @@ object HxIcons {
  * with round caps and joins, so those are fixed here rather than repeated at
  * each call site.
  */
-private fun lucideIcon(name: String, vararg pathData: String): ImageVector =
+private fun lucideIcon(name: String, vararg pathData: String, autoMirror: Boolean = false): ImageVector =
     ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = autoMirror,
     ).apply {
         pathData.forEach { d ->
             addPath(

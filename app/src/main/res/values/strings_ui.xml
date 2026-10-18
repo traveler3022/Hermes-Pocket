@@ -6,7 +6,6 @@
     <string name="a_step_waiting_on_others_becomes_ready">A step waiting on others becomes ready when they finish.</string>
     <string name="a_task_board_your_profiles_work_through">A task board your profiles work through, in the menu. With a server it runs there. On the built-in Linux it runs on the phone: a check every minute and a Hermes process per task, so it is heavy, and switching it restarts Hermes.</string>
     <string name="account">account</string>
-    <string name="account_2">Account</string>
     <string name="accounts">Accounts</string>
     <string name="active">Active</string>
     <string name="active_2">active</string>
@@ -703,7 +702,6 @@
     <string name="send">Send</string>
     <string name="send_back">Send back</string>
     <string name="send_news_to">Send news to</string>
-    <string name="send_now_interrupts_current_reply">Send now (interrupts current reply)</string>
     <string name="server">Server</string>
     <string name="server_address">Server address</string>
     <string name="server_connection_settings">Server &amp; connection settings</string>
@@ -772,7 +770,6 @@
     <string name="starting_tailscale">Starting Tailscale…</string>
     <string name="starts_without_waiting_for_another_task">Starts without waiting for another task.</string>
     <string name="stats">Stats</string>
-    <string name="steer_the_agent">Steer the agent</string>
     <string name="step">Step %1$s</string>
     <string name="step_1_bot_token">Step 1: bot token</string>
     <string name="step_2_allowed_users">Step 2: allowed users</string>
@@ -786,7 +783,7 @@
     <string name="storage">Storage</string>
     <string name="storage_cleared">Storage Cleared</string>
     <string name="storage_usage">Storage Usage</string>
-    <string name="sub_agent">🤖 Sub-agent</string>
+    <string name="sub_agent">Sub-agent</string>
     <string name="subagent_s_running">%1$s subagent(s) running</string>
     <string name="sudo_password_required">Sudo password required</string>
     <string name="suggest_title">Suggest title</string>
@@ -1294,4 +1291,17 @@
     <string name="subagent_queued">Sent; it reads it on its next step</string>
     <string name="subagent_rejected">It no longer takes guidance</string>
     <string name="subagent_stopped">Sub-agent stopped</string>
+    <!-- Chat polish: status glyphs, send-while-running menu, drawer settings -->
+    <string name="drawer_settings">Settings</string>
+    <string name="send_options">Send options</string>
+    <string name="steer_add_title">Add to current task</string>
+    <string name="steer_add_hint">Hermes reads it after its next tool call</string>
+    <string name="interrupt_send_title">Stop and send</string>
+    <string name="interrupt_send_hint">Ends this reply and answers your message</string>
+    <string name="status_done">Done</string>
+    <string name="status_failed">Failed</string>
+    <string name="status_in_progress">In progress</string>
+    <string name="status_pending">Pending</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="remove_attachment">Remove attachment</string>
 </resources>

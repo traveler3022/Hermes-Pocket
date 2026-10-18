@@ -200,14 +200,14 @@ internal fun AssistantMessageBubble(
                                         )
                                         is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
                                             ArtifactCard(
-                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                icon = HxIcons.FileText,name = block.name,
                                                 actionLabel = stringResource(R.string.download),
                                                 onAction = { onDownloadFile(block.url, block.name) },
                                                 onDownload = null,
                                             )
                                         } else {
                                             ArtifactCard(
-                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                icon = HxIcons.FileText,name = block.name,
                                                 actionLabel = stringResource(R.string.open),
                                                 onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                                 onDownload = { onDownloadFile(block.url, block.name) },

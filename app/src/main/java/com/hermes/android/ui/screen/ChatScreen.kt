@@ -518,7 +518,7 @@ fun ChatScreen(
                     onNewChat = { closeDrawerThen { viewModel.newConversation() } },
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
-                    onAccount = { closeDrawerThen(onNavigateToSettings) },
+                    onSettings = { closeDrawerThen(onNavigateToSettings) },
                     profileTitle = activeProfileTitle,
                     onProfileClick = {
                         profilesViewModel.load()
@@ -716,11 +716,13 @@ fun ChatScreen(
                                 }
                             }
                         }
+                        // The same pen-on-square as the drawer's New chat button:
+                        // one action, one glyph, wherever it is offered.
                         HxHeaderCircleButton(
-                            icon = HxIcons.NewChat,
+                            icon = HxIcons.SquarePen,
                             contentDescription = stringResource(R.string.new_chat),
                             onClick = { viewModel.newConversation() },
-                            iconSize = 25.dp,
+                            iconSize = 21.dp,
                         )
                         Spacer(Modifier.width(8.dp))
                         // Context and search moved behind ⋮ so the bar keeps

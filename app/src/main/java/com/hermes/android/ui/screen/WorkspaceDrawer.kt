@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.HxStatus
 import com.hermes.android.ui.viewmodel.SessionItem
 
 /** A Workspace destination in the drawer's upper block. */
@@ -89,7 +89,7 @@ internal fun WorkspaceDrawerSheet(
     onSearch: () -> Unit,
     onNewChat: () -> Unit,
     onSessionClick: (SessionItem) -> Unit,
-    onAccount: () -> Unit,
+    onSettings: () -> Unit,
     profileTitle: String? = null,
     onProfileClick: () -> Unit = {},
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
@@ -182,7 +182,7 @@ internal fun WorkspaceDrawerSheet(
                 }
             }
 
-            // ── Footer: new chat + account ───────────────────────────────
+            // ── Footer: new chat + settings ──────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -213,22 +213,13 @@ internal fun WorkspaceDrawerSheet(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onAccount) {
-                    Box(
-                        Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            HxIcons.User,
-                            contentDescription = stringResource(R.string.account_2),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
-                }
+                // A gear, not a person: this button has always opened Settings,
+                // and a generic avatar gave no hint of that.
+                HxHeaderCircleButton(
+                    icon = HxIcons.Settings,
+                    contentDescription = stringResource(R.string.drawer_settings),
+                    onClick = onSettings,
+                )
             }
         }
     }
@@ -306,10 +297,13 @@ private fun DrawerSessionRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        // One colour per meaning (HxStatus). Running used to be the theme's
+        // primary, which in the default Hermes palette IS this amber — so a
+        // chat that was working and one waiting on you showed the same dot.
         val dot = when (pulse) {
-            SessionPulse.Running -> MaterialTheme.colorScheme.primary
-            SessionPulse.Waiting -> HermesAmber
-            SessionPulse.Failed -> MaterialTheme.colorScheme.error
+            SessionPulse.Running -> HxStatus.running
+            SessionPulse.Waiting -> HxStatus.waiting
+            SessionPulse.Failed -> HxStatus.error
             SessionPulse.None -> null
         }
         if (unread > 0) {
@@ -339,7 +333,7 @@ private fun DrawerSessionRow(
 }
 
 /** Warning amber — the approval card's colour, for anything waiting on the user. */
-internal val HermesAmber = Color(0xFFF0B429)
+internal val HermesAmber = HxStatus.waiting
 
 /** Near-black, so a count on [HermesAmber] stays readable in either theme. */
 private val BadgeTextOnAmber = Color(0xFF1A1205)

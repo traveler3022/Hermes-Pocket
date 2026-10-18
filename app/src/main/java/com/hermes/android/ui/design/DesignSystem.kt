@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,6 +98,54 @@ object HxRadius {
     val md = 16.dp
     /** Sheets, hero surfaces. */
     val lg = 22.dp
+}
+
+// ── Status colours ──────────────────────────────────────────────────────
+
+/** Warning amber: anything that is blocked on the user. */
+val HxAmber = Color(0xFFF0B429)
+
+/**
+ * What a state means, one colour each, everywhere a state is shown — the tool
+ * card, the task list, the question card, the drawer's dots. Before this each
+ * place picked its own: a running tool was tertiary while a running chat in the
+ * drawer was primary, and a question waiting on the user was the same tertiary
+ * as a running tool.
+ *
+ * Running is the theme's primary, except where primary is itself an amber (the
+ * Hermes and Mocha palettes): there "running" and "waiting on you" would be the
+ * same colour, so running moves to tertiary instead.
+ */
+object HxStatus {
+    /** The agent is working on it. */
+    val running: Color
+        @Composable get() {
+            val scheme = MaterialTheme.colorScheme
+            return remember(scheme.primary, scheme.tertiary) {
+                if (hueDistance(scheme.primary, HxAmber) < AMBER_HUE_MARGIN) scheme.tertiary else scheme.primary
+            }
+        }
+
+    /** Blocked on the user: an approval, a question, a password. */
+    val waiting: Color get() = HxAmber
+
+    val error: Color
+        @Composable get() = MaterialTheme.colorScheme.error
+
+    /** Finished. Quiet on purpose: finished is the normal case. */
+    val done: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+
+    private const val AMBER_HUE_MARGIN = 30f
+
+    private fun hueDistance(a: Color, b: Color): Float {
+        val ha = FloatArray(3).also { android.graphics.Color.colorToHSV(a.toArgb(), it) }
+        val hb = FloatArray(3).also { android.graphics.Color.colorToHSV(b.toArgb(), it) }
+        // A grey has no hue to clash with; treat it as far away.
+        if (ha[1] < 0.15f) return 180f
+        val d = kotlin.math.abs(ha[0] - hb[0])
+        return minOf(d, 360f - d)
+    }
 }
 
 // ── Screen scaffold ───────────────────────────────────────────────────────
