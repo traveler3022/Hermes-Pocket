@@ -1114,7 +1114,13 @@ fun ChatScreen(
                     pendingAttachments = uiState.pendingAttachments,
                     slashCommands = slashCommands,
                     onTextChange = viewModel::updateInputText,
-                    onSend = viewModel::sendMessage,
+                    // Sending puts the keyboard away, so the reply has the screen
+                    // to stream into instead of the bottom third of it.
+                    onSend = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        viewModel.sendMessage()
+                    },
                     onStop = viewModel::stopGeneration,
                     onSteer = viewModel::steerAgent,
                     onAttachFiles = viewModel::attachFromUris,

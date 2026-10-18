@@ -192,6 +192,16 @@ object HxIcons {
         )
     }
 
+    /** lucide `arrow-up` — send. Points the same way in either reading
+     *  direction, so it needs no mirroring (the paper plane did). */
+    val ArrowUp: ImageVector by lazy {
+        lucideIcon(
+            name = "ArrowUp",
+            "m5 12 7-7 7 7",
+            "M12 19V5",
+        )
+    }
+
     /** lucide `settings` — the drawer's way into Settings. */
     val Settings: ImageVector by lazy {
         lucideIcon(
