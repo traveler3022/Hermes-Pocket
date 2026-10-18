@@ -75,6 +75,7 @@ import com.hermes.android.ui.icons.filled.CloudDownload
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.History
+import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Inventory2
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.SwapVert
@@ -88,6 +89,8 @@ import com.hermes.android.ui.viewmodel.OpsViewModel
 @Composable
 fun OpsScreen(
     onNavigateBack: () -> Unit = {},
+    /** Opens a Settings page (a [SettingsSection] name) on its own: .env keys, config editor, connection log. */
+    onOpenSettingsPage: (String) -> Unit = {},
     viewModel: OpsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -185,6 +188,30 @@ fun OpsScreen(
                     } else {
                         null
                     },
+                )
+            }
+
+            SectionHeader(stringResource(R.string.ops_config_logs))
+            SettingsGroup {
+                SettingRow(
+                    title = stringResource(R.string.env_keys_title),
+                    subtitle = stringResource(R.string.env_keys_subtitle),
+                    icon = Icons.Default.Key,
+                    onClick = { onOpenSettingsPage(SettingsSection.ENV_KEYS.name) },
+                )
+                GroupDivider()
+                SettingRow(
+                    title = stringResource(R.string.config_editor_title),
+                    subtitle = stringResource(R.string.config_editor_subtitle),
+                    icon = Icons.Default.Description,
+                    onClick = { onOpenSettingsPage(SettingsSection.CONFIG_EDITOR.name) },
+                )
+                GroupDivider()
+                SettingRow(
+                    title = stringResource(R.string.connection_log),
+                    subtitle = stringResource(R.string.every_connect_drop_and_retry_with_what),
+                    icon = Icons.Default.History,
+                    onClick = { onOpenSettingsPage(SettingsSection.CONNECTION_LOG.name) },
                 )
             }
 

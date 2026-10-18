@@ -405,7 +405,7 @@ private fun MemberContent(
                     val url = resolveUrl(block.file)
                     val name = block.file.substringAfterLast('/')
                     ArtifactCard(
-                        emoji = "\uD83D\uDCC4", name = name,
+                        icon = com.hermes.android.ui.design.HxIcons.FileText,name = name,
                         actionLabel = stringResource(R.string.open),
                         onAction = { FileViewerActivity.open(context, url, name) },
                         onDownload = { onDownloadFile(url, name) },
@@ -421,14 +421,14 @@ private fun MemberContent(
                 )
                 is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
                     ArtifactCard(
-                        emoji = "\uD83D\uDCC4", name = block.name,
+                        icon = com.hermes.android.ui.design.HxIcons.FileText,name = block.name,
                         actionLabel = stringResource(R.string.download),
                         onAction = { onDownloadFile(block.url, block.name) },
                         onDownload = null,
                     )
                 } else {
                     ArtifactCard(
-                        emoji = "\uD83D\uDCC4", name = block.name,
+                        icon = com.hermes.android.ui.design.HxIcons.FileText,name = block.name,
                         actionLabel = stringResource(R.string.open),
                         onAction = { FileViewerActivity.open(context, block.url, block.name) },
                         onDownload = { onDownloadFile(block.url, block.name) },

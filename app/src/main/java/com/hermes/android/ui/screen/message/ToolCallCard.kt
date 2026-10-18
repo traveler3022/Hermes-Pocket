@@ -35,15 +35,20 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.component.HermesMarkdown
+import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.HxStatus
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.viewmodel.ChatMessage
 
 @Composable
 internal fun ToolCallCard(message: ChatMessage.ToolCall) {
-    val toolAccent = if (message.isRunning) {
-        MaterialTheme.colorScheme.tertiary
-    } else {
-        MaterialTheme.colorScheme.outline
+    // Colours come from HxStatus so a running tool here and a running chat in
+    // the drawer read as the same state.
+    val failed = message.error != null
+    val toolAccent = when {
+        message.isRunning -> HxStatus.running
+        failed -> HxStatus.error
+        else -> MaterialTheme.colorScheme.outline
     }
     Box(
         modifier = Modifier
@@ -62,19 +67,16 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
             ) {
                 if (message.isRunning) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(14.dp),
                         strokeWidth = 1.5.dp,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        color = HxStatus.running,
                     )
                 } else {
-                    Text(
-                        text = if (message.error != null) "\u2715" else "\u2713",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (message.error != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
+                    Icon(
+                        imageVector = if (failed) HxIcons.CircleX else HxIcons.CircleCheck,
+                        contentDescription = stringResource(if (failed) R.string.status_failed else R.string.status_done),
+                        modifier = Modifier.size(14.dp),
+                        tint = if (failed) HxStatus.error else HxStatus.done,
                     )
                 }
                 Text(
@@ -87,7 +89,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     Text(
                         text = stringResource(R.string.running_5),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        color = HxStatus.running,
                     )
                 }
                 message.durationS?.let {
@@ -163,10 +165,12 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                 }
             }
             message.error?.takeIf { it.isNotBlank() }?.let { err ->
+                // The header's circle-x already says it failed; the text only
+                // has to say why, without a second (emoji) cross in front.
                 Text(
-                    text = "\u274C ${err.take(220)}",
+                    text = err.take(220),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = HxStatus.error,
                 )
             }
         }

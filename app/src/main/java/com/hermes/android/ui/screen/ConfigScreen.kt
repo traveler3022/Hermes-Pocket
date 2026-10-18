@@ -122,7 +122,6 @@ import com.hermes.android.ui.theme.ThemeModeState
 fun ConfigScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToPlatforms: () -> Unit = {},
-    onNavigateToWebhooks: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
     onNavigateToPlugins: () -> Unit = {},
     onNavigateToSkills: () -> Unit = {},
@@ -138,6 +137,8 @@ fun ConfigScreen(
     onNavigateToOps: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
+    /** A [SettingsSection] name to open straight into (from Maintenance); back then leaves Settings. */
+    initialPage: String? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -162,9 +163,11 @@ fun ConfigScreen(
     // Nested navigation: null = the top-level category menu; a value = drilled
     // into that category. The back arrow pops one level (category -> menu ->
     // out of Settings), so Settings can grow deep without one giant scroll.
-    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    val initialSection = remember(initialPage) { SettingsSection.entries.firstOrNull { it.name == initialPage } }
+    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initialSection) }
+    val goBack: () -> Unit = { if (section == null || section == initialSection) onNavigateBack() else section = section?.parent }
 
-    androidx.activity.compose.BackHandler(enabled = section != null) { section = section?.parent }
+    androidx.activity.compose.BackHandler(enabled = section != null && section != initialSection) { section = section?.parent }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -176,7 +179,7 @@ fun ConfigScreen(
     com.hermes.android.ui.design.HermesScaffold(
         title = section?.let { t(it.titleEn, it.titleFa) } ?: stringResource(R.string.control_center),
         subtitle = if (section == null) stringResource(R.string.agent_server_and_app_configuration) else null,
-        onBack = { if (section != null) section = section?.parent else onNavigateBack() },
+        onBack = goBack,
         snackbarHostState = snackbarHostState,
     ) { padding ->
         Box(
@@ -185,18 +188,24 @@ fun ConfigScreen(
                 .fillMaxSize()
         ) {
             when (section) {
-                null -> SettingsMenu(
+                null -> ControlCenterMenu(
                     state = uiState,
                     connection = connection,
                     serverUrl = connectionTitle,
+                    themeModeState = themeModeState,
+                    appLanguageState = appLanguageState,
                     onOpen = { section = it },
                     onNavigateToRuntime = onNavigateToRuntime,
-                    onNavigateToLinux = onNavigateToLinux,
-                    onNavigateToStorage = onNavigateToStorage,
-                    onNavigateToAnalytics = onNavigateToAnalytics,
                     onNavigateToSetup = onNavigateToSetup,
                     onNavigateToCron = onNavigateToCron,
                     onNavigateToProjects = onNavigateToProjects,
+                    onNavigateToPlatforms = onNavigateToPlatforms,
+                    onNavigateToPlugins = onNavigateToPlugins,
+                    onNavigateToSkills = onNavigateToSkills,
+                    onNavigateToMcp = onNavigateToMcp,
+                    onNavigateToLinux = onNavigateToLinux,
+                    onNavigateToStorage = onNavigateToStorage,
+                    onNavigateToAnalytics = onNavigateToAnalytics,
                     onNavigateToAchievements = onNavigateToAchievements,
                     onNavigateToOps = onNavigateToOps,
                 )
@@ -204,15 +213,15 @@ fun ConfigScreen(
                     state = uiState,
                     onOpen = { section = it },
                     onNavigateToPlatforms = onNavigateToPlatforms,
-                    onNavigateToWebhooks = onNavigateToWebhooks,
                 )
                 SettingsSection.APPEARANCE -> GeneralTab(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
+                    onOpenLanguage = { section = SettingsSection.LANGUAGE },
                 )
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
-                SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
+                SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel, showTitle = false) }
                 SettingsSection.AUX_MODELS -> AuxModelsSection(snackbarHostState)
                 SettingsSection.MOA -> MoaSection(snackbarHostState)
                 SettingsSection.PROVIDERS -> ProvidersSection(
@@ -230,7 +239,7 @@ fun ConfigScreen(
                     snackbarHostState = snackbarHostState,
                     onOpen = { section = it },
                 )
-                SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel) }
+                SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel, showTitle = false) }
                 SettingsSection.PERSONALITY -> PersonalitySection(
                     state = uiState,
                     viewModel = viewModel,
@@ -245,10 +254,14 @@ fun ConfigScreen(
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToMcp = onNavigateToMcp,
                 )
-                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel, onOpen = { section = it })
-                SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState)
+                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
+                SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState) { EnvFileCard(uiState, viewModel) }
+                SettingsSection.CONNECTION_LOG -> ConnectionLogSection(uiState, viewModel)
                 SettingsSection.CONFIG_EDITOR -> ConfigEditorSection(snackbarHostState)
                 SettingsSection.ABOUT -> AboutSection()
+                SettingsSection.LANGUAGE -> LanguageSection(appLanguageState)
+                SettingsSection.PHONE_ASSISTANT -> PhoneAssistantSection()
+                SettingsSection.KANBAN -> KanbanSection()
             }
         }
     }
@@ -265,14 +278,15 @@ internal enum class SettingsSection(
 ) {
     GENERAL_SETTINGS("General Settings", "تنظیمات عمومی"),
     APPEARANCE("Appearance", "ظاهر"),
-    APPROVAL("Command Approval", "تأیید فرمان‌ها", GENERAL_SETTINGS),
-    PERSONALITY("Personality", "شخصیت", GENERAL_SETTINGS),
+    APPROVAL("Command Approval", "تأیید فرمان‌ها"),
+    PERSONALITY("Personality", "شخصیت"),
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),
     MEMORY("Memory", "حافظه", PERSONALITY),
-    ADVANCED("Advanced", "پیشرفته", GENERAL_SETTINGS),
-    ENV_KEYS(".env keys", "کلیدهای .env", ADVANCED),
-    CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ", ADVANCED),
-    MODELS("Models & Providers", "مدل‌ها و پرووایدرها"),
+    ADVANCED("Advanced", "پیشرفته"),
+    ENV_KEYS(".env keys", "کلیدهای .env"),
+    CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ"),
+    CONNECTION_LOG("Connection log", "لاگ اتصال"),
+    MODELS("Models & Providers", "مدل و پرووایدر"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     AUX_MODELS("Task models", "مدل کارهای جانبی", MODELS),
     MOA("Mixture of Agents", "ترکیب چند مدل (MoA)", MODELS),
@@ -280,6 +294,9 @@ internal enum class SettingsSection(
     PROVIDER_KEYS("API key", "کلید API", PROVIDERS),
     PROVIDER_ACCOUNTS("Sign in with account", "ورود با حساب", PROVIDERS),
     TOOLS("Tools", "ابزارها"),
-    TOOLSETS("Toolsets", "گروه\u200Cهای ابزار", TOOLS),
+    TOOLSETS("Toolsets", "گروه\u200Cهای ابزار"),
     ABOUT("Updates", "به\u200Cروزرسانی"),
+    LANGUAGE("Language", "زبان", APPEARANCE),
+    PHONE_ASSISTANT("Phone assistant", "دستیار گوشی"),
+    KANBAN("Kanban board", "تابلوی کانبان"),
 }

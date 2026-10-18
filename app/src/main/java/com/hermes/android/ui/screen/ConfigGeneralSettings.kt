@@ -25,7 +25,6 @@ import com.hermes.android.ui.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.Link
-import com.hermes.android.ui.icons.filled.Code
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Terminal
 import androidx.compose.material3.Card
@@ -53,6 +52,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
@@ -68,7 +68,6 @@ internal fun GeneralSettingsSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     onOpen: (SettingsSection) -> Unit,
     onNavigateToPlatforms: () -> Unit,
-    onNavigateToWebhooks: () -> Unit,
 ) {
     SettingsFolder {
         SettingsCardGroup {
@@ -78,7 +77,7 @@ internal fun GeneralSettingsSection(
                 icon = Icons.Default.Security,
                 onClick = { onOpen(SettingsSection.APPROVAL) },
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.personality),
                 subtitle = stringResource(R.string.preset_soul_md_memory),
@@ -88,28 +87,18 @@ internal fun GeneralSettingsSection(
         }
         SettingsCardGroup {
             SettingsNavRow(
-                title = stringResource(R.string.platforms),
-                subtitle = stringResource(R.string.telegram_discord_slack),
+                title = stringResource(R.string.connections_and_platforms),
+                subtitle = stringResource(R.string.connections_and_platforms_subtitle),
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
             )
-            com.hermes.android.ui.design.GroupDivider()
-            SettingsNavRow(
-                title = stringResource(R.string.webhooks_title),
-                subtitle = stringResource(R.string.webhooks_nav_subtitle),
-                icon = Icons.Default.Code,
-                onClick = onNavigateToWebhooks,
-            )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.advanced),
                 subtitle = stringResource(R.string.env_mcp_console_log),
                 icon = Icons.Default.Terminal,
                 onClick = { onOpen(SettingsSection.ADVANCED) },
             )
-        }
-        SettingsCardGroup {
-            AssistantSettingCard()
         }
     }
 }
@@ -121,9 +110,24 @@ internal fun SettingsFolder(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
         content = content,
+    )
+}
+
+/**
+ * The label over a group of cards inside a settings page: the same small
+ * primary-coloured label the Providers and Updates pages use ([SectionHeader]),
+ * without its screen-edge padding, which [SettingsFolder] already gives.
+ */
+@Composable
+internal fun SettingsLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
     )
 }
 
@@ -133,17 +137,17 @@ internal fun SettingsCardGroup(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                // Aether's cards are its surface on the grey settings page.
-                if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
-                else MaterialTheme.colorScheme.surfaceVariant,
-            ),
+            .clip(RoundedCornerShape(com.hermes.android.ui.design.HxRadius.md))
+            .background(com.hermes.android.ui.design.settingsCardColor()),
         content = content,
     )
 }
 
-/** One tappable row that opens a sub-page: icon, title, one-line subtitle, chevron. */
+/**
+ * One tappable row that opens a sub-page: icon tile, title, subtitle, chevron.
+ * The same [SettingRow] the Control Center root draws, with a soft tile instead of
+ * the root's solid one, so a sub-page reads as one level below it.
+ */
 @Composable
 internal fun SettingsNavRow(
     title: String,
@@ -151,38 +155,12 @@ internal fun SettingsNavRow(
     icon: ImageVector,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 15.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(14.dp),
-        )
-    }
+    com.hermes.android.ui.design.SettingRow(
+        title = title,
+        subtitle = subtitle,
+        icon = icon,
+        onClick = onClick,
+    )
 }
 
 /** Personality folder: the preset, plus SOUL.md and the memory files. */
@@ -202,7 +180,7 @@ internal fun PersonalitySection(
                 icon = Icons.Default.Description,
                 onClick = { onOpen(SettingsSection.SOUL) },
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.memory),
                 subtitle = "USER.md \u00B7 MEMORY.md",
@@ -219,19 +197,23 @@ internal fun PersonalitySection(
 internal fun ApprovalCard(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
+    /** Off on the Command Approval page, whose top bar already says it. */
+    showTitle: Boolean = true,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.command_approval_2),
-                style = MaterialTheme.typography.titleSmall,
-            )
+            if (showTitle) {
+                Text(
+                    text = stringResource(R.string.command_approval_2),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 val modes = listOf(
                     "manual" to stringResource(R.string.manual),
@@ -254,11 +236,11 @@ internal fun ApprovalCard(
             }
             Text(
                 text = approvalDescription,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = if (state.approvalMode == "off") {
                     MaterialTheme.colorScheme.error
                 } else {
-                    MaterialTheme.colorScheme.outline
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
         }
@@ -274,20 +256,16 @@ internal fun PersonalityCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = stringResource(R.string.personality),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
                 text = stringResource(R.string.preset_name_e_g_helpful_kawaii_pirate),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             var personalityText by remember(state.personality) { mutableStateOf(state.personality) }
             OutlinedTextField(
@@ -299,6 +277,16 @@ internal fun PersonalityCard(
                 placeholder = { Text(stringResource(R.string.enter_preset_name)) },
                 singleLine = true,
             )
+            // The three presets the hint names, one tap to fill the field (still saved with Save).
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("helpful", "kawaii", "pirate").forEach { preset ->
+                    androidx.compose.material3.FilterChip(
+                        selected = personalityText == preset,
+                        onClick = { personalityText = preset },
+                        label = { Text(preset) },
+                    )
+                }
+            }
             if (personalityText != state.personality) {
                 TextButton(
                     onClick = { viewModel.setPersonality(personalityText) },
@@ -318,11 +306,11 @@ internal fun SoulCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             var editingSoul by remember { mutableStateOf(false) }
             Row(
@@ -332,7 +320,7 @@ internal fun SoulCard(
             ) {
                 Text(
                     text = stringResource(R.string.soul_md_persistent_identity),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
                 TextButton(onClick = { editingSoul = !editingSoul }) {
                     Text(if (editingSoul) stringResource(R.string.close) else stringResource(R.string.edit))
@@ -340,8 +328,8 @@ internal fun SoulCard(
             }
             Text(
                 text = stringResource(R.string.the_agents_persistent_voice_identity),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             when {
                 state.isLoadingSoul -> CircularProgressIndicator(
@@ -387,19 +375,23 @@ internal fun SoulCard(
 internal fun ReasoningCard(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
+    /** Off on the Reasoning depth page, whose top bar already says it. */
+    showTitle: Boolean = true,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.reasoning_depth),
-                style = MaterialTheme.typography.titleSmall,
-            )
+            if (showTitle) {
+                Text(
+                    text = stringResource(R.string.reasoning_depth),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
             val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
             val currentIdx = levels.indexOf(state.reasoning).let { if (it < 0) 3 else it }
             Row(
@@ -450,8 +442,8 @@ internal fun ReasoningCard(
             }
             Text(
                 text = stringResource(R.string.also_switchable_mid_session_from_the),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

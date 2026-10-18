@@ -119,6 +119,7 @@ class JournalTree(private val journal: ConnectionJournal) : Timber.Tree() {
             "[GatewayService]",
             "[Runtime]",
             "[Linux]",
+            "[Tailscale]",
             "[App]",
             "[Chat] Failed",
             "[Turn]",

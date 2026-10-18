@@ -78,6 +78,8 @@ internal fun AssistantMessageBubble(
     reactionsEnabled: Boolean = false,
     /** Null: the reply cannot take a reaction yet (still streaming). */
     onReact: ((String?) -> Unit)? = null,
+    /** Settings > Hermes kaomoji: the agent's face and verb on the thinking line. */
+    kaomoji: Boolean = false,
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -110,6 +112,7 @@ internal fun AssistantMessageBubble(
                             isStreaming = message.isStreaming,
                             messageId = message.id,
                             status = thinkingStatus,
+                            kaomoji = kaomoji,
                         )
                     }
                     // A turn can end on a tool rather than a sentence, leaving
@@ -200,14 +203,14 @@ internal fun AssistantMessageBubble(
                                         )
                                         is ContentBlock.FileRef -> if (block.kind == FileKind.OTHER) {
                                             ArtifactCard(
-                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                icon = HxIcons.FileText,name = block.name,
                                                 actionLabel = stringResource(R.string.download),
                                                 onAction = { onDownloadFile(block.url, block.name) },
                                                 onDownload = null,
                                             )
                                         } else {
                                             ArtifactCard(
-                                                emoji = "\uD83D\uDCC4", name = block.name,
+                                                icon = HxIcons.FileText,name = block.name,
                                                 actionLabel = stringResource(R.string.open),
                                                 onAction = { FileViewerActivity.open(assistantContext, block.url, block.name) },
                                                 onDownload = { onDownloadFile(block.url, block.name) },

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -52,7 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -119,6 +121,10 @@ internal fun InputBar(
         if (saved && uri != null) onAttachFiles(listOf(uri))
     }
     var attachMenuOpen by remember { mutableStateOf(false) }
+    // The "add to current task / stop and send" choice while a turn is running.
+    var sendChoiceOpen by remember { mutableStateOf(false) }
+    // A turn that ends while the menu is open leaves nothing to choose between.
+    LaunchedEffect(isSending) { if (!isSending) sendChoiceOpen = false }
     // Voice input: Android's own recognizer (the system's speech dialog), so no
     // microphone permission here. No language is asked for: the recognizer uses the
     // one the user set on the phone. What was said lands in the box to check before sending.
@@ -274,16 +280,25 @@ internal fun InputBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(pendingAttachments) { attachment ->
-                    SuggestionChip(
+                    // A real trailing icon for "remove", not a ✕ typed into the label.
+                    InputChip(
+                        selected = false,
                         onClick = { onRemoveAttachment(attachment) },
-                        icon = {
+                        leadingIcon = {
                             Icon(
                                 Icons.Default.AttachFile,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                             )
                         },
-                        label = { Text("${attachment.name}  ✕", maxLines = 1) },
+                        label = { Text(attachment.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingIcon = {
+                            Icon(
+                                HxIcons.X,
+                                contentDescription = stringResource(R.string.remove_attachment),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        },
                     )
                 }
             }
@@ -383,26 +398,48 @@ internal fun InputBar(
                     //    chat app. This used to be unreachable: the button was
                     //    swapped out entirely while isSending.
                     // Stop (full interrupt, no follow-up) stays available too.
+                    //
+                    // These used to be three bare icons side by side — steer, send,
+                    // stop — and the difference between the first two lived only
+                    // in their contentDescription. Now there is one Send; tapping it
+                    // asks which of the two the user means, each with a line saying
+                    // what it does. Stop keeps its place at the end so it never
+                    // moves under a thumb when Send appears beside it.
                     if (text.isNotBlank()) {
-                        IconButton(
-                            onClick = onSteer,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                HxIcons.GitBranch,
-                                contentDescription = stringResource(R.string.steer_the_agent),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        IconButton(
-                            onClick = onSend,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.send_now_interrupts_current_reply),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
+                        Box {
+                            IconButton(
+                                onClick = { sendChoiceOpen = true },
+                                modifier = Modifier.size(48.dp),
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.send_options),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = sendChoiceOpen,
+                                onDismissRequest = { sendChoiceOpen = false },
+                            ) {
+                                SendChoiceItem(
+                                    icon = HxIcons.CornerDownRight,
+                                    title = stringResource(R.string.steer_add_title),
+                                    hint = stringResource(R.string.steer_add_hint),
+                                    onClick = {
+                                        sendChoiceOpen = false
+                                        onSteer()
+                                    },
+                                )
+                                SendChoiceItem(
+                                    icon = Icons.AutoMirrored.Filled.Send,
+                                    title = stringResource(R.string.interrupt_send_title),
+                                    hint = stringResource(R.string.interrupt_send_hint),
+                                    onClick = {
+                                        sendChoiceOpen = false
+                                        onSend()
+                                    },
+                                )
+                            }
                         }
                     }
                     IconButton(
@@ -444,6 +481,30 @@ internal fun InputBar(
             }
         }
     }
+}
+
+/** One row of the send-while-running menu: what it does, and a line on what that means. */
+@Composable
+private fun SendChoiceItem(
+    icon: ImageVector,
+    title: String,
+    hint: String,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Column(modifier = Modifier.widthIn(max = 260.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    hint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        leadingIcon = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        onClick = onClick,
+    )
 }
 
 /**

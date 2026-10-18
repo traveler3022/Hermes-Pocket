@@ -5,7 +5,6 @@
     <string name="a_step_waiting_on_others_becomes_ready">مرحله‌ای که منتظر بقیه است، وقتی آن‌ها تمام شوند آماده می‌شود.</string>
     <string name="a_task_board_your_profiles_work_through">تابلوی کارهایی که پروفایل‌ها انجام می‌دهند، در منو. با سرور، روی سرور اجرا می‌شود. در لینوکس داخلی روی خود گوشی اجرا می‌شود: هر دقیقه یک بررسی و برای هر کار یک پروسهٔ هرمس، پس سنگین است و روشن یا خاموش کردنش هرمس را دوباره راه می‌اندازد.</string>
     <string name="account">حساب</string>
-    <string name="account_2">حساب</string>
     <string name="accounts">حساب‌ها</string>
     <string name="active">فعال</string>
     <string name="active_2">فعال</string>
@@ -143,7 +142,6 @@
     <string name="command">فرمان</string>
     <string name="command_approval">درخواست اجرای فرمان</string>
     <string name="command_approval_2">تأیید فرمان‌ها</string>
-    <string name="command_console">کنسول فرمان</string>
     <string name="comments">%1$s نظر</string>
     <string name="comments_2">نظرها</string>
     <string name="compress_history">فشرده‌سازی تاریخچه</string>
@@ -270,7 +268,7 @@
     <string name="enter_preset_name">اسم پریست را وارد کنید</string>
     <string name="enter_sudo_password">رمز sudo بنویسید...</string>
     <string name="enter_value">مقدار را وارد کنید...</string>
-    <string name="env_mcp_console_log">env · MCP · کنسول · لاگ</string>
+    <string name="env_mcp_console_log">MCP · کانفیگ فعلی</string>
     <string name="environment_variables_env">متغیرهای محیطی (.env)</string>
     <string name="erase">پاک کردن…</string>
     <string name="erase_built_in_memory">پاک کردن حافظهٔ داخلی</string>
@@ -310,7 +308,6 @@
     <string name="from_the_main_profile_off_the_new">از پروفایل اصلی. خاموش: پروفایل جدید بدون کلید شروع می‌شود.</string>
     <string name="full_guide_and_the_script_on_github">راهنمای کامل و اسکریپت در GitHub</string>
     <string name="full_screen">تمام‌صفحه</string>
-    <string name="gateway_log">لاگ گیت‌وی</string>
     <string name="general_settings">تنظیمات عمومی</string>
     <string name="get_a_key">گرفتن کلید</string>
     <string name="get_a_key_from">دریافت کلید از %1$s</string>
@@ -411,7 +408,6 @@
     <string name="linux_runs_inside_this_app_no_termux">لینوکس داخل خود اپ اجرا می‌شود — بدون نیاز به ترموکس</string>
     <string name="list_separator">"، "</string>
     <string name="live">زنده</string>
-    <string name="live_server_stderr_fills_in_as_events">stderr زندهٔ سرور — تا وقتی برنامه باز است با رسیدن رویدادها پر می‌شود.</string>
     <string name="loaded_tools">لود شده · %1$s ابزار</string>
     <string name="loading_cron_jobs">در حال بارگذاری کارها…</string>
     <string name="loading_memory">در حال بارگذاری حافظه...</string>
@@ -499,7 +495,6 @@
     <string name="no_group_chats_yet">هنوز گفتگوی گروهی نداری</string>
     <string name="no_key_configured">کلیدی تنظیم نشده</string>
     <string name="no_live_tasks">تسک زنده‌ای نیست</string>
-    <string name="no_log_lines_yet">هنوز خطی نرسیده</string>
     <string name="no_longer_waiting_for_an_answer">دیگر منتظر پاسخ نیست</string>
     <string name="no_match">چیزی پیدا نشد</string>
     <string name="no_matching_messages">پیامی پیدا نشد</string>
@@ -585,6 +580,8 @@
     <string name="pick_one_fill_in_a_few_blanks_and_hermes">یکی را انتخاب کن، چند جای خالی را پر کن و هرمس سر وقت اجرایش می‌کند.</string>
     <string name="pin">سنجاق</string>
     <string name="pinned">سنجاق‌شده</string>
+    <string name="connections_and_platforms">اتصالات و پلتفرم‌ها</string>
+    <string name="connections_and_platforms_subtitle">پلتفرم‌های پیام‌رسان، وب‌هوک‌ها، دستیار گوشی</string>
     <string name="platforms">پلتفرم‌ها</string>
     <string name="play">پخش</string>
     <string name="please_keep_this_window_open_while">تا تمام شدن پاک‌سازی این صفحه را باز نگه دارید.</string>
@@ -645,7 +642,6 @@
     <string name="review">بازبینی</string>
     <string name="run">اجرا</string>
     <string name="run_a_quick_health_check_of_the_server">یک بررسی سریع سلامت سرور انجام بده (سرویس‌ها، دیسک، خطاهای لاگ) و هرچیزی که نیاز به توجه من داره رو خلاصه کن.</string>
-    <string name="run_one_off_shell_commands_on_the_server">اجرای فرمان‌های تکی روی سرور — برای عیب‌یابی بدون SSH.</string>
     <string name="run_prompts_automatically_on_a_schedule">پرامپت‌ها رو خودکار و زمان‌بندی‌شده اجرا کن — گزارش روزانه، بکاپ، بررسی‌ها</string>
     <string name="run_this_in_a_terminal_then_tap_ive">این را در ترمینال اجرا کن، بعد «وارد شدم» را بزن:</string>
     <string name="running">در حال اجرا</string>
@@ -702,7 +698,6 @@
     <string name="send">ارسال</string>
     <string name="send_back">برگرداندن</string>
     <string name="send_news_to">ارسال خبرها به</string>
-    <string name="send_now_interrupts_current_reply">ارسال الان (پاسخ فعلی رو قطع می‌کنه)</string>
     <string name="server">سرور</string>
     <string name="server_address">آدرس سرور</string>
     <string name="server_connection_settings">تنظیمات سرور و اتصال</string>
@@ -771,21 +766,19 @@
     <string name="starting_tailscale">در حال روشن کردن Tailscale…</string>
     <string name="starts_without_waiting_for_another_task">بدون منتظر ماندن برای کار دیگری شروع می‌شود.</string>
     <string name="stats">آمار</string>
-    <string name="steer_the_agent">هدایت عامل</string>
     <string name="step">گام %1$s</string>
     <string name="step_1_bot_token">قدم ۱: توکن ربات</string>
     <string name="step_2_allowed_users">قدم ۲: کاربران مجاز</string>
     <string name="step_of_4">مرحله %1$s از ۴</string>
     <string name="stop">توقف</string>
     <string name="stop_and_retry">توقف و شروع دوباره</string>
-    <string name="stop_processes">توقف فرایندها</string>
     <string name="stop_the_worker">کارگزار متوقف شود؟</string>
     <string name="stopped">متوقف شد.</string>
     <string name="stopped_2">خاموش</string>
     <string name="storage">فضای ذخیره‌سازی</string>
     <string name="storage_cleared">فضا آزاد شد</string>
     <string name="storage_usage">مصرف فضای ذخیره‌سازی</string>
-    <string name="sub_agent">🤖 زیر ایجنت</string>
+    <string name="sub_agent">زیرعامل</string>
     <string name="subagent_s_running">%1$s ساب‌ایجنت در حال اجرا</string>
     <string name="sudo_password_required">رمز sudo لازم است</string>
     <string name="suggest_title">پیشنهاد عنوان</string>
@@ -834,7 +827,6 @@
     <string name="theme">تم</string>
     <string name="thinking">فکر: %1$s</string>
     <string name="thinking_2">میزان فکر</string>
-    <string name="thinking_3">در حال فکر کردن</string>
     <string name="thinking_depth">عمق تفکر</string>
     <string name="thinking_off">بدون فکر</string>
     <string name="this_chat">این گفتگو</string>
@@ -847,7 +839,7 @@
     <string name="this_session_may_be_empty_or">این گفتگو خالی یا در دسترس نیست</string>
     <string name="this_toolset_has_no_services_to_choose">این گروه ابزار سرویسی برای انتخاب ندارد.</string>
     <string name="this_will_remove_from_config_yaml_and">\"%1$s\" از config.yaml و credential pool حذف میشه.</string>
-    <string name="thought_for_s">%1$s ثانیه فکر کرد</string>
+    <string name="thought_for_s">%1$d ثانیه فکر کرد</string>
     <string name="thoughts">افکار</string>
     <string name="thu">پنج</string>
     <string name="title">عنوان</string>
@@ -856,7 +848,7 @@
     <string name="toggle_preview">نمایش/بستن</string>
     <string name="tokens">حدود %1$s توکن</string>
     <string name="tools">ابزارها</string>
-    <string name="tools_2">%1$s ابزار</string>
+    <string name="tools_2">%1$d ابزار</string>
     <string name="toolsets">گروه‌های ابزار</string>
     <string name="toolsets_plugins_skills">ابزارها، افزونه‌ها، مهارت‌ها</string>
     <string name="total">کل</string>
@@ -891,7 +883,6 @@
     <string name="use_the_terminal_instead">به‌جایش با ترمینال</string>
     <string name="uses_the_current_provider_and_model_from">از پرووایدر و مدل فعلی تنظیمات استفاده می‌کند</string>
     <string name="uses_the_separate_termux_app_pick_this">از اپ جداگانه‌ی Termux استفاده می‌کند. اگر Hermes را از قبل در Termux دارید این را انتخاب کنید.</string>
-    <string name="using">در حال استفاده از %1$s…</string>
     <string name="variable_name_optional">نام متغیر (اختیاری)</string>
     <string name="verify_and_continue">بررسی و ادامه</string>
     <string name="version_label">نسخه: %1$s</string>
@@ -1176,6 +1167,7 @@
     <string name="ach_cat_research_web">جستجو و وب</string>
     <string name="ach_cat_tool_mastery">استادی ابزار</string>
     <string name="ach_cat_vibe_coding">وایب‌کدینگ</string>
+    <string name="ops_config_logs">کانفیگ و لاگ</string>
     <string name="ops_title">نگهداری</string>
     <string name="ops_subtitle">عیب‌یابی، بکاپ و تعمیر روی دستگاه Hermes</string>
     <string name="ops_nav_subtitle">عیب‌یابی، بکاپ و بازگردانی، گزارش دیباگ، hookها</string>
@@ -1292,4 +1284,44 @@
     <string name="subagent_queued">فرستاده شد؛ در قدم بعدی می‌خواند</string>
     <string name="subagent_rejected">دیگر راهنمایی قبول نمی‌کند</string>
     <string name="subagent_stopped">زیرعامل متوقف شد</string>
+    <!-- Chat polish: status glyphs, send-while-running menu, drawer settings -->
+    <string name="drawer_settings">تنظیمات</string>
+    <string name="send_options">گزینه‌های ارسال</string>
+    <string name="steer_add_title">اضافه به کار فعلی</string>
+    <string name="steer_add_hint">هرمس بعد از ابزار بعدی‌اش آن را می‌خواند</string>
+    <string name="interrupt_send_title">توقف و ارسال</string>
+    <string name="interrupt_send_hint">این پاسخ تمام می‌شود و به پیام تو جواب می‌دهد</string>
+    <string name="status_done">انجام شد</string>
+    <string name="status_failed">ناموفق</string>
+    <string name="status_in_progress">در حال انجام</string>
+    <string name="status_pending">در انتظار</string>
+    <string name="status_cancelled">لغو شد</string>
+    <string name="remove_attachment">حذف پیوست</string>
+    <!-- خط «در حال فکر»: نوع کاری که در جریان است -->
+    <string name="activity_thinking">در حال فکر</string>
+    <string name="activity_web">جستجو در وب</string>
+    <string name="activity_terminal">اجرای دستور</string>
+    <string name="activity_file_read">خواندن فایل</string>
+    <string name="activity_file_write">نوشتن فایل</string>
+    <string name="activity_other">استفاده از ابزار</string>
+    <string name="trace_summary_separator">"، "</string>
+    <string name="kaomoji_status">کاموجی هرمس</string>
+    <string name="kaomoji_status_hint">چهره و حال هرمس موقع فکر کردن، مثل ترمینال</string>
+    <string-array name="thinking_verb_labels">
+        <item>در حال تأمل</item>
+        <item>در حال اندیشیدن</item>
+        <item>غرق در فکر</item>
+        <item>در حال کلنجار رفتن</item>
+        <item>در حال مرور ذهنی</item>
+        <item>در حال سبک‌سنگین کردن</item>
+        <item>در حال بالا و پایین کردن</item>
+        <item>در حال بازاندیشی</item>
+        <item>در حال پردازش</item>
+        <item>در حال استدلال</item>
+        <item>در حال تحلیل</item>
+        <item>در حال محاسبه</item>
+        <item>در حال جمع‌بندی</item>
+        <item>در حال شکل دادن پاسخ</item>
+        <item>در حال ایده‌پردازی</item>
+    </string-array>
 </resources>

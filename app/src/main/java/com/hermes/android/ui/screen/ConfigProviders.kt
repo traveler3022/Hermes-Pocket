@@ -112,7 +112,7 @@ internal fun ProviderDropdown(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = com.hermes.android.ui.design.settingsCardColor(),
             ),
         ) {
             Box {
@@ -217,7 +217,7 @@ internal fun ModelDropdown(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = com.hermes.android.ui.design.settingsCardColor(),
             ),
         ) {
             Row(
@@ -404,10 +404,8 @@ internal fun ProviderCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (provider.isPrimary)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant,
+            // One card fill for every provider; the Primary chip marks the main one.
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
         ),
     ) {
         Column {
@@ -428,7 +426,7 @@ internal fun ProviderCard(
                         imageVector = Icons.Default.Dns,
                         contentDescription = null,
                         tint = if (provider.isPrimary)
-                            MaterialTheme.colorScheme.onPrimaryContainer
+                            MaterialTheme.colorScheme.primary
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -439,8 +437,8 @@ internal fun ProviderCard(
                         ) {
                             Text(
                                 text = provider.slug,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Normal,
                             )
                             if (provider.isPrimary) {
                                 AssistChip(

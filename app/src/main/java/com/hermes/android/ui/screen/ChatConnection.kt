@@ -273,6 +273,7 @@ private fun StartupProgressIndicator(
  */
 @Composable
 internal fun AgentWorkingIndicator(label: String) {
+    val running = com.hermes.android.ui.design.HxStatus.running
     val transition = rememberInfiniteTransition(label = "agent_working")
     val dotAlpha by transition.animateFloat(
         initialValue = 0.35f,
@@ -296,11 +297,11 @@ internal fun AgentWorkingIndicator(label: String) {
                 modifier = Modifier
                     .size(7.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha)),
+                    .background(running.copy(alpha = dotAlpha)),
             )
             Text(
                 text = label,
-                color = MaterialTheme.colorScheme.primary,
+                color = running,
                 style = MaterialTheme.typography.labelMedium,
             )
         }

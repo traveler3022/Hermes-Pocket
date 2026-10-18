@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,7 +89,20 @@ object HxSpace {
     val md = 12.dp
     val lg = 16.dp
     val xl = 24.dp
+    /** Vertical padding of a settings row: with the 34 dp icon tile, a 60 dp row. */
+    val row = 13.dp
 }
+
+/**
+ * The frame of every settings page, the Control Center root included: screen-edge
+ * margin, a short gap under the top bar, room at the bottom past the last card.
+ */
+val SettingsPagePadding = androidx.compose.foundation.layout.PaddingValues(
+    start = HxSpace.screen,
+    end = HxSpace.screen,
+    top = HxSpace.md,
+    bottom = 32.dp,
+)
 
 object HxRadius {
     /** Chips, small controls. */
@@ -96,6 +111,72 @@ object HxRadius {
     val md = 16.dp
     /** Sheets, hero surfaces. */
     val lg = 22.dp
+}
+
+/**
+ * Fills for the solid icon tiles on the Settings root (the Telegram / One UI
+ * look: white glyph on a coloured tile). Fixed rather than taken from the
+ * scheme, so each row keeps its colour in every theme and the eye can find it
+ * by colour; every fill holds at least 3:1 against the white glyph.
+ */
+object HxIconColors {
+    val blue = Color(0xFF2F80ED)
+    val cyan = Color(0xFF1C93B0)
+    val green = Color(0xFF2E9E52)
+    val orange = Color(0xFFE06C10)
+    val red = Color(0xFFE5484D)
+    val pink = Color(0xFFD9437A)
+    val purple = Color(0xFF8B5CF6)
+    val indigo = Color(0xFF5B63E6)
+    val gray = Color(0xFF6B7280)
+}
+
+// ── Status colours ──────────────────────────────────────────────────────
+
+/** Warning amber: anything that is blocked on the user. */
+val HxAmber = Color(0xFFF0B429)
+
+/**
+ * What a state means, one colour each, everywhere a state is shown — the tool
+ * card, the task list, the question card, the drawer's dots. Before this each
+ * place picked its own: a running tool was tertiary while a running chat in the
+ * drawer was primary, and a question waiting on the user was the same tertiary
+ * as a running tool.
+ *
+ * Running is the theme's primary, except where primary is itself an amber (the
+ * Hermes and Mocha palettes): there "running" and "waiting on you" would be the
+ * same colour, so running moves to tertiary instead.
+ */
+object HxStatus {
+    /** The agent is working on it. */
+    val running: Color
+        @Composable get() {
+            val scheme = MaterialTheme.colorScheme
+            return remember(scheme.primary, scheme.tertiary) {
+                if (hueDistance(scheme.primary, HxAmber) < AMBER_HUE_MARGIN) scheme.tertiary else scheme.primary
+            }
+        }
+
+    /** Blocked on the user: an approval, a question, a password. */
+    val waiting: Color get() = HxAmber
+
+    val error: Color
+        @Composable get() = MaterialTheme.colorScheme.error
+
+    /** Finished. Quiet on purpose: finished is the normal case. */
+    val done: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+
+    private const val AMBER_HUE_MARGIN = 30f
+
+    private fun hueDistance(a: Color, b: Color): Float {
+        val ha = FloatArray(3).also { android.graphics.Color.colorToHSV(a.toArgb(), it) }
+        val hb = FloatArray(3).also { android.graphics.Color.colorToHSV(b.toArgb(), it) }
+        // A grey has no hue to clash with; treat it as far away.
+        if (ha[1] < 0.15f) return 180f
+        val d = kotlin.math.abs(ha[0] - hb[0])
+        return minOf(d, 360f - d)
+    }
 }
 
 // ── Screen scaffold ───────────────────────────────────────────────────────
@@ -196,13 +277,38 @@ fun SettingsGroup(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = settingsCardColor(),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = HxSpace.screen),
     ) {
         Column(content = content)
     }
+}
+
+/**
+ * The fill of every settings card — the root's groups and each sub-page's cards —
+ * so a page never mixes two greys. Aether draws its cards in its surface colour
+ * on a grey page instead.
+ */
+@Composable
+fun settingsCardColor(): Color =
+    if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+
+/**
+ * The shape of one row of a grouped list drawn item by item (a LazyColumn): only
+ * the first row rounds its top corners and only the last its bottom ones, so the
+ * rows read as one card like [SettingsGroup].
+ */
+fun groupedRowShape(index: Int, lastIndex: Int): RoundedCornerShape {
+    val r = HxRadius.md
+    return RoundedCornerShape(
+        topStart = if (index == 0) r else 0.dp,
+        topEnd = if (index == 0) r else 0.dp,
+        bottomStart = if (index == lastIndex) r else 0.dp,
+        bottomEnd = if (index == lastIndex) r else 0.dp,
+    )
 }
 
 /** Hairline divider between rows of a [SettingsGroup], inset past the icon. */
@@ -218,6 +324,7 @@ fun GroupDivider(startIndent: Dp = 56.dp) {
 /**
  * The standard interactive row: tinted icon bubble, title + optional
  * support line, and a trailing slot (chevron by default when clickable).
+ * [solidIcon] fills the bubble with [iconTint] and draws the glyph white.
  */
 @Composable
 fun SettingRow(
@@ -226,6 +333,7 @@ fun SettingRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     iconTint: Color = MaterialTheme.colorScheme.primary,
+    solidIcon: Boolean = false,
     onClick: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
@@ -233,7 +341,7 @@ fun SettingRow(
         modifier = modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = HxSpace.inner, vertical = 13.dp),
+            .padding(horizontal = HxSpace.inner, vertical = HxSpace.row),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HxSpace.md),
     ) {
@@ -242,14 +350,14 @@ fun SettingRow(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(HxRadius.sm))
-                    .background(iconTint.copy(alpha = 0.12f)),
+                    .background(if (solidIcon) iconTint else iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = iconTint,
+                    modifier = Modifier.size(if (solidIcon) 20.dp else 18.dp),
+                    tint = if (solidIcon) Color.White else iconTint,
                 )
             }
         }

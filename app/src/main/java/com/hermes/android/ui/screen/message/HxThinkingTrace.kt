@@ -1,6 +1,24 @@
 package com.hermes.android.ui.screen
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringArrayResource
+import com.hermes.android.ui.design.HxStatus
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -84,19 +102,24 @@ private const val ShimmerTravelMillis = 1800
 private const val ShimmerPauseMillis = 1000
 private const val ShimmerHalfWidth = 180f
 
-// ── Status line ──────────────────────────────────────────────────────────────
-// The preview line is recomputed on every buffered streaming flush — many
-// times a second. Repainting the line that often is what makes small text
-// strobe, so the line is *sampled* on a slow fixed cadence instead of
-// following the stream, and each new value crossfades in.
-private const val StatusSampleMillis = 450L
-private const val StatusFadeMillis = 260
+// ── Activity line ────────────────────────────────────────────────────────────
+// The line says what KIND of work is happening (thinking, web, a command, a
+// file), never the reasoning itself — that lives in the sheet. An agent can
+// fire a dozen tools in a few seconds, so the shown activity only follows the
+// real one under three rules, or the glyph would flicker:
 
-/** Only scan the tail of the reasoning: it grows by hundreds of tokens per
- *  turn and this re-runs on every buffered flush, so scanning the whole
- *  string would be O(n²) across a turn — enough to visibly stutter on a
- *  phone during a long thinking phase. */
-private const val PreviewScanTail = 400
+/** A shown activity stays at least this long before the next may replace it. */
+private const val ActivityDwellMillis = 800L
+
+/** A tool that finishes sooner than this is never shown at all. */
+private const val ActivityMinToolMillis = 250L
+
+/** Thinking between two tools has to last this long before the star returns,
+ *  so a quick think between commands does not ping-pong the glyph. */
+private const val ActivityThinkReturnMillis = 1000L
+
+/** How often the shown activity is reconciled with the real one. */
+private const val ActivitySampleMillis = 100L
 
 /** Raw reasoning past this length is truncated — a `Text` holding a whole
  *  turn's unstructured reasoning janks the sheet's scroll. */
@@ -326,10 +349,13 @@ internal fun visibleChatMessages(
 /**
  * The agent's reasoning, as a single quiet line in the message flow.
  *
- * Collapsed it is only text — no card, no border, no chevron: while the model
- * is thinking the line shimmers or types itself out, and once it is done the
- * line states how long it took. Tapping anywhere on it opens the full trace in
- * a bottom sheet, so a long reasoning dump never pushes the reply off screen.
+ * Collapsed it is one line with no card or border: a breathing glyph and a
+ * shimmering label saying what KIND of work is under way — thinking, the web,
+ * a command, a file — never the reasoning itself, which is half-sentences,
+ * often in another language, and lives in the sheet. Once the turn is done
+ * the glyph stills, the line states how long it took, and a chevron marks it
+ * as the way in. Tapping anywhere on it opens the full trace in a bottom
+ * sheet, so a long reasoning dump never pushes the reply off screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -340,12 +366,11 @@ internal fun HxThinkingTrace(
     modifier: Modifier = Modifier,
     /** What the agent says it is doing (thinking.delta); blank when it says nothing. */
     status: String = "",
+    /** Settings > "Hermes kaomoji": the agent's own face and verb in place of the star. */
+    kaomoji: Boolean = false,
 ) {
     if (items.isEmpty()) return
     val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
-    val reasoning = remember(items) {
-        items.filterIsInstance<HxTraceItem.Reasoning>().joinToString("\n\n") { it.text }
-    }
     var sheetVisible by remember(messageId) { mutableStateOf(false) }
 
     // Thinking duration is measured, never guessed: a message restored from
@@ -362,47 +387,66 @@ internal fun HxThinkingTrace(
         }
     }
 
-    val preview = remember(reasoning) {
-        reasoning.takeLast(PreviewScanTail)
-            .lineSequence()
-            .lastOrNull { it.isNotBlank() }
-            ?.trim()
-            .orEmpty()
-    }
-
     val elapsedSeconds = remember(startedAt, finishedAt) {
         if (startedAt == 0L || finishedAt == 0L) null
         else ((finishedAt - startedAt) / 1000L).coerceAtLeast(1L)
     }
 
-    Column(
+    // The agent's kaomoji status ("(◕‿◕) pondering...") picks one face and one
+    // verb per turn — Hermes sends a fresh random pair on every API call, and
+    // following each one would make the line flicker.
+    var turnFace by rememberSaveable(messageId) { mutableStateOf<String?>(null) }
+    var turnVerb by rememberSaveable(messageId) { mutableStateOf<String?>(null) }
+    val kawaii = remember(status) { parseKawaiiStatus(status) }
+    LaunchedEffect(kawaii) {
+        if (kawaii != null && turnFace == null) {
+            turnFace = kawaii.face
+            turnVerb = kawaii.verb
+        }
+    }
+    // Anything else in the status line is a real notice (a slow provider, a
+    // retry) and is worth reading, so it takes the label while it lasts.
+    val notice = status.takeIf { it.isNotBlank() && kawaii == null }
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 6.dp, bottom = 4.dp)
             .noRippleClickable { sheetVisible = true },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        val runningTool = tools.lastOrNull { it.isRunning }
-        when {
-            // The tool cards live in the sheet now, so the line has to say
-            // what is running — otherwise a long tool looks like a hang.
-            runningTool != null -> HxShimmerText(
-                text = stringResource(R.string.using, runningTool.toolName),
-            )
-
-            !isStreaming -> Text(
+        if (!isStreaming) {
+            HxActivityGlyph(activity = HxTraceActivity.Think, face = null, done = true)
+            Text(
                 text = doneLabel(elapsedSeconds, tools.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
-
-            // The server clears its status once tokens flow, so one that is set is
-            // about right now (a slow provider, a retry) and outranks older reasoning.
-            status.isNotBlank() -> HxShimmerText(text = status)
-
-            preview.isNotEmpty() -> HxStatusLine(text = preview)
-
-            else -> HxShimmerText(text = stringResource(R.string.thinking_3))
+            // The one hint that this quiet line opens the full trace.
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        } else {
+            val runningTool = tools.lastOrNull { it.isRunning }
+            val target = runningTool?.let { HxTraceActivity.of(it.toolName) } ?: HxTraceActivity.Think
+            val shown = rememberSettledActivity(target)
+            val face = turnFace?.takeIf { kaomoji && shown == HxTraceActivity.Think }
+            HxActivityGlyph(activity = shown, face = face, done = false)
+            val verb = turnVerb
+            val label = when {
+                shown != HxTraceActivity.Think -> stringResource(shown.label)
+                notice != null -> notice
+                kaomoji && verb != null -> translateThinkingVerb(verb)
+                else -> stringResource(HxTraceActivity.Think.label)
+            }
+            HxSwapLabel(label)
         }
     }
 
@@ -436,7 +480,9 @@ private fun doneLabel(elapsedSeconds: Long?, toolCount: Int): String {
     } else {
         stringResource(R.string.tools_2, toolCount)
     }
-    return "$thought · $tools"
+    // "·" beside a Persian digit reads as a zero ("· ۱" looks like "۱۰"), so the
+    // separator is a string: "·" in English, "،" in Persian.
+    return thought + stringResource(R.string.trace_summary_separator) + tools
 }
 
 @Composable
@@ -639,11 +685,9 @@ private fun HxTimelineToolRow(
     }
 }
 
-private fun toolGlyph(toolName: String): ImageVector = when (toolName.lowercase()) {
-    "bash", "shell", "terminal", "run_command" -> HxIcons.Terminal
-    "fetch", "fetch_web_url", "web_search", "browse" -> HxIcons.Globe
-    else -> HxIcons.Wrench
-}
+// The same glyph the collapsed line shows for this tool, so the line reads as
+// a preview of the sheet.
+private fun toolGlyph(toolName: String): ImageVector = HxTraceActivity.of(toolName).glyph
 
 @Composable
 private fun HxTimelineRow(
@@ -732,49 +776,6 @@ private fun HxTimelineGlyph(
 }
 
 /**
- * The one-line "what the agent is chewing on" preview.
- *
- * The underlying text changes many times a second while the model streams, so
- * it is sampled on a fixed cadence rather than followed: the line updates a
- * couple of times a second at most, and each new value crossfades in. Held to
- * a single line so a long reasoning sentence can never reflow the message and
- * shove the rest of the conversation around.
- */
-@Composable
-private fun HxStatusLine(text: String) {
-    val reduceMotion = rememberReduceMotion()
-    val latest by rememberUpdatedState(text)
-    var shown by remember { mutableStateOf(text) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            if (latest != shown) shown = latest
-            delay(StatusSampleMillis)
-        }
-    }
-
-    if (reduceMotion) {
-        HxStatusText(shown)
-        return
-    }
-    Crossfade(
-        targetState = shown,
-        animationSpec = tween(StatusFadeMillis),
-        label = "thinking_status",
-    ) { line -> HxStatusText(line) }
-}
-
-@Composable
-private fun HxStatusText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
  * Text with a highlight sweeping across it, then a beat of stillness before
  * the next pass — the "the agent is working" signal when there is no status
  * text to show yet.
@@ -789,6 +790,8 @@ private fun HxShimmerText(text: String) {
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         return
     }
@@ -815,6 +818,8 @@ private fun HxShimmerText(text: String) {
 
     Text(
         text = text,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.bodyMedium.copy(
             brush = Brush.linearGradient(
                 colors = listOf(
@@ -837,4 +842,194 @@ private fun Modifier.noRippleClickable(onClick: () -> Unit): Modifier = composed
         indication = null,
         onClick = onClick,
     )
+}
+
+// ── Activity line pieces ─────────────────────────────────────────────────────
+
+/** The kinds of work the collapsed line can name. Each has one glyph and one label. */
+internal enum class HxTraceActivity(val label: Int) {
+    Think(R.string.activity_thinking),
+    Web(R.string.activity_web),
+    Terminal(R.string.activity_terminal),
+    FileRead(R.string.activity_file_read),
+    FileWrite(R.string.activity_file_write),
+    Other(R.string.activity_other);
+
+    val glyph: ImageVector
+        get() = when (this) {
+            Think -> HxIcons.Sparkles
+            Web -> HxIcons.Globe
+            Terminal -> HxIcons.Terminal
+            FileRead, FileWrite -> HxIcons.FileText
+            Other -> HxIcons.Wrench
+        }
+
+    companion object {
+        /** Hermes' own tool names (the .py files under tools/), plus the generic ones other gateways use. */
+        fun of(toolName: String): HxTraceActivity {
+            val n = toolName.lowercase()
+            return when {
+                n in setOf("terminal", "read_terminal", "close_terminal", "process_manage", "execute_code",
+                    "bash", "shell", "run_command") -> Terminal
+                n.startsWith("web_") || n.startsWith("browser") || n.startsWith("fetch") ||
+                    n == "x_search" || n == "browse" -> Web
+                n in setOf("read_file", "search_files", "skill_view") -> FileRead
+                n in setOf("write_file", "patch") -> FileWrite
+                else -> Other
+            }
+        }
+    }
+}
+
+/**
+ * The activity to show, following [target] under the dwell rules above: a
+ * change has to have held for a moment (longer for a return to thinking) and
+ * the current one has to have been on screen long enough. Ten quick commands
+ * in a row read as one "running a command", not ten flickers.
+ */
+@Composable
+private fun rememberSettledActivity(target: HxTraceActivity): HxTraceActivity {
+    var shown by remember { mutableStateOf(target) }
+    val latest by rememberUpdatedState(target)
+    LaunchedEffect(Unit) {
+        var shownAt = android.os.SystemClock.uptimeMillis()
+        var candidate = latest
+        var candidateSince = shownAt
+        while (true) {
+            delay(ActivitySampleMillis)
+            val now = android.os.SystemClock.uptimeMillis()
+            if (latest != candidate) {
+                candidate = latest
+                candidateSince = now
+            }
+            val settle = if (candidate == HxTraceActivity.Think) ActivityThinkReturnMillis else ActivityMinToolMillis
+            if (candidate != shown && now - candidateSince >= settle && now - shownAt >= ActivityDwellMillis) {
+                shown = candidate
+                shownAt = now
+            }
+        }
+    }
+    return shown
+}
+
+/**
+ * The glyph beside the line. While the turn runs it breathes — a slow scale,
+ * a small turn and a lift in opacity — which is the "still alive" signal;
+ * its SHAPE says what kind of work it is, and a new shape hops in. Once the
+ * turn is over it is the same star, still and muted.
+ *
+ * With kaomoji on, the agent's face for this turn stands in for the star
+ * while it thinks (tools keep their own glyphs).
+ */
+@Composable
+private fun HxActivityGlyph(activity: HxTraceActivity, face: String?, done: Boolean) {
+    val reduceMotion = rememberReduceMotion()
+    val running = HxStatus.running
+    val breathing = !done && !reduceMotion
+    val transition = rememberInfiniteTransition(label = "activity_breath")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (breathing) 1f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "activity_breath_phase",
+    )
+    val key: Any = face ?: activity
+    Box(
+        modifier = Modifier
+            .heightIn(min = 20.dp)
+            .graphicsLayer {
+                if (breathing) {
+                    val scale = 0.88f + 0.17f * phase
+                    scaleX = scale
+                    scaleY = scale
+                    rotationZ = 18f * phase
+                    alpha = 0.75f + 0.25f * phase
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedContent(
+            targetState = key,
+            transitionSpec = {
+                if (reduceMotion) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    (fadeIn(tween(220)) + scaleIn(
+                        initialScale = 0.6f,
+                        animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow),
+                    )) togetherWith fadeOut(tween(160))
+                }
+            },
+            label = "activity_glyph",
+        ) { k ->
+            if (k is String) {
+                // Isolated left-to-right: a kaomoji is all brackets and symbols,
+                // which an RTL line would otherwise mirror and reorder.
+                Text(
+                    text = "\u2066$k\u2069",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = running,
+                    maxLines = 1,
+                )
+            } else {
+                Icon(
+                    imageVector = (k as HxTraceActivity).glyph,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (done) MaterialTheme.colorScheme.onSurfaceVariant else running,
+                )
+            }
+        }
+    }
+}
+
+/** The label: the new one rises in as the old one lifts away, with the
+ *  existing shimmer on whichever is current. */
+@Composable
+private fun RowScope.HxSwapLabel(text: String) {
+    val reduceMotion = rememberReduceMotion()
+    AnimatedContent(
+        targetState = text,
+        transitionSpec = {
+            if (reduceMotion) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                (slideInVertically(tween(260)) { it / 3 } + fadeIn(tween(260))) togetherWith
+                    (slideOutVertically(tween(260)) { -it / 3 } + fadeOut(tween(200)))
+            }
+        },
+        modifier = Modifier.weight(1f, fill = false),
+        label = "activity_label",
+    ) { line -> HxShimmerText(text = line) }
+}
+
+/** The agent's kaomoji status line, split into its face and verb. */
+internal data class KawaiiStatus(val face: String, val verb: String)
+
+private val KawaiiStatusRegex = Regex("""^(.+?)\s+(\p{L}[\p{L} ]*?)\.{3}$""")
+
+/**
+ * Hermes' wait line is either a kaomoji status — "{face} {verb}...", with the
+ * face from KawaiiSpinner.KAWAII_THINKING — or a real notice (a slow provider,
+ * a retry). A face never contains ASCII letters or digits; a notice always
+ * does, which is what tells them apart.
+ */
+internal fun parseKawaiiStatus(status: String): KawaiiStatus? {
+    val match = KawaiiStatusRegex.matchEntire(status.trim()) ?: return null
+    val face = match.groupValues[1]
+    if (face.any { it.code < 128 && it.isLetterOrDigit() }) return null
+    return KawaiiStatus(face = face, verb = match.groupValues[2].trim())
+}
+
+/** Hermes' thinking verbs in the app's language; an unknown verb (a custom
+ *  skin, another locale) falls back to the plain "Thinking" label. */
+@Composable
+private fun translateThinkingVerb(verb: String): String {
+    val keys = stringArrayResource(R.array.thinking_verb_keys)
+    val labels = stringArrayResource(R.array.thinking_verb_labels)
+    val i = keys.indexOf(verb.lowercase())
+    return if (i in labels.indices) labels[i] else stringResource(R.string.activity_thinking)
 }

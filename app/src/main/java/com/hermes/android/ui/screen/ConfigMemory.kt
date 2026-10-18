@@ -108,36 +108,33 @@ internal fun MemorySection(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.memory_files),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            SettingsLabel(stringResource(R.string.memory_files))
             TextButton(onClick = { viewModel.loadMemory() }) {
                 Text(stringResource(R.string.refresh_2))
             }
         }
         LearningEntryCard(onOpenLearning)
         MemoryFileCard(
-            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = "USER.md",
             content = state.memoryUserMd,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
         )
         MemoryFileCard(
-            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
+            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = "MEMORY.md",
             content = state.memoryMd,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
         )
         MemoryProvidersPanel(onBuiltInReset = { viewModel.loadMemory() })
     }
@@ -158,13 +155,13 @@ internal fun MemoryFileCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 icon()
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = contentColor)
             }
             Text(
                 text = displayText,
@@ -183,16 +180,16 @@ internal fun MemoryFileCard(
 private fun LearningEntryCard(onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.learning_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.learning_title), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     stringResource(R.string.learning_open_hint),
                     style = MaterialTheme.typography.bodySmall,

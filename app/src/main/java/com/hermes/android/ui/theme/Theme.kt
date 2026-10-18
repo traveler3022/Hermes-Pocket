@@ -109,6 +109,13 @@ class ThemeModeState(context: Context) {
     )
         private set
 
+    // Hermes' terminal personality on the thinking line: its kaomoji face and
+    // verb ("(◕‿◕) pondering...") in place of the breathing star. Off by
+    // default — the plain line says what kind of work is happening; this is
+    // for people who like the CLI's character.
+    var kaomojiStatus: Boolean by mutableStateOf(prefs.getBoolean("kaomoji_status", false))
+        private set
+
     fun updateMode(newMode: ThemeMode) {
         mode = newMode
         prefs.edit().putString("theme_mode", newMode.key).apply()
@@ -127,6 +134,11 @@ class ThemeModeState(context: Context) {
     fun updateShowInlineNarration(enabled: Boolean) {
         showInlineNarration = enabled
         prefs.edit().putBoolean("show_inline_narration", enabled).apply()
+    }
+
+    fun updateKaomojiStatus(enabled: Boolean) {
+        kaomojiStatus = enabled
+        prefs.edit().putBoolean("kaomoji_status", enabled).apply()
     }
 
     fun updateMessageReactions(enabled: Boolean) {

@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.hermes.android.R
+import com.hermes.android.ui.icons.filled.Language
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
@@ -54,64 +55,38 @@ import kotlin.math.roundToInt
 internal fun GeneralTab(
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
+    onOpenLanguage: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         if (appLanguageState != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.language),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AppLanguage.entries.forEach { lang ->
-                            val label = when (lang) {
-                                AppLanguage.AUTO -> stringResource(R.string.auto)
-                                AppLanguage.ENGLISH -> "English"
-                                AppLanguage.FARSI -> "فارسی"
-                            }
-                            androidx.compose.material3.FilterChip(
-                                selected = appLanguageState.language == lang,
-                                onClick = { appLanguageState.updateLanguage(lang) },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-                }
+            SettingsCardGroup {
+                SettingsNavRow(
+                    title = stringResource(R.string.language),
+                    subtitle = languageLabel(appLanguageState.language),
+                    icon = androidx.compose.material.icons.Icons.Default.Language,
+                    onClick = onOpenLanguage,
+                )
             }
         }
 
         if (themeModeState != null) {
-            Text(
-                text = stringResource(R.string.appearance),
-                style = MaterialTheme.typography.titleMedium,
-            )
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.theme),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -132,7 +107,7 @@ internal fun GeneralTab(
                     }
                     Text(
                         text = stringResource(R.string.color_theme),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                     FlowRow(
@@ -157,7 +132,7 @@ internal fun GeneralTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.warm_night_mode),
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.shifts_screens_toward_a_warm_amber_tint),
@@ -178,7 +153,7 @@ internal fun GeneralTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.show_the_agents_running_commentary),
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.what_the_agent_says_between_tool_calls),
@@ -198,8 +173,29 @@ internal fun GeneralTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = stringResource(R.string.message_reactions),
+                                text = stringResource(R.string.kaomoji_status),
                                 style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = stringResource(R.string.kaomoji_status_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = themeModeState.kaomojiStatus,
+                            onCheckedChange = { themeModeState.updateKaomojiStatus(it) },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.message_reactions),
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.touch_and_hold_a_message_to_react_with),
@@ -213,11 +209,9 @@ internal fun GeneralTab(
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    KanbanSettingRow()
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = stringResource(R.string.font),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -234,7 +228,7 @@ internal fun GeneralTab(
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = stringResource(R.string.font_size),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -275,7 +269,7 @@ internal fun GeneralTab(
 
 /** Kanban, off unless turned on: shows the board, and on the built-in Linux runs it too. */
 @Composable
-private fun KanbanSettingRow(
+internal fun KanbanSettingRow(
     viewModel: com.hermes.android.ui.viewmodel.KanbanSettingViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val on by viewModel.on.collectAsStateWithLifecycle()
@@ -287,7 +281,7 @@ private fun KanbanSettingRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.kanban_board),
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 text = stringResource(R.string.a_task_board_your_profiles_work_through),

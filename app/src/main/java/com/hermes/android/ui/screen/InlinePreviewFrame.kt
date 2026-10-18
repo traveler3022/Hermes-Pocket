@@ -262,7 +262,7 @@ internal fun InlinePreviewFrame(
 
     if (failed) {
         ArtifactCard(
-            emoji = "🌐", name = file.substringAfterLast('/'),
+            icon = HxIcons.Globe, name = file.substringAfterLast('/'),
             actionLabel = stringResource(R.string.open),
             onAction = onOpen,
             onDownload = null,

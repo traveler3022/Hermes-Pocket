@@ -359,11 +359,23 @@ private fun HermesNavHost(
             )
         }
 
+        // One Settings page on its own (Maintenance opens .env keys, config editor, connection log).
+        composable(
+            "config-page/{section}",
+            arguments = listOf(navArgument("section") { type = NavType.StringType }),
+        ) { entry ->
+            com.hermes.android.ui.screen.ConfigScreen(
+                initialPage = entry.arguments?.getString("section"),
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                themeModeState = themeModeState,
+                appLanguageState = appLanguageState,
+            )
+        }
+
         composable("config") {
             com.hermes.android.ui.screen.ConfigScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
                 onNavigateToPlatforms = { navController.navigate("platforms") },
-                onNavigateToWebhooks = { navController.navigate("webhooks") },
                 onNavigateToAnalytics = { navController.navigate("analytics") },
                 onNavigateToPlugins = { navController.navigate("plugins") },
                 onNavigateToSkills = { navController.navigate("skills") },
@@ -401,6 +413,7 @@ private fun HermesNavHost(
         composable("platforms") {
             com.hermes.android.ui.screen.PlatformsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onNavigateToWebhooks = { navController.navigate("webhooks") },
             )
         }
 
@@ -431,6 +444,7 @@ private fun HermesNavHost(
         composable("ops") {
             com.hermes.android.ui.screen.OpsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onOpenSettingsPage = { navController.navigate("config-page/$it") },
             )
         }
 

@@ -45,11 +45,14 @@ import com.hermes.android.ui.viewmodel.PairingViewModel
 import com.hermes.android.ui.viewmodel.PlatformsViewModel
 import com.hermes.android.ui.viewmodel.TelegramSetupViewModel
 import com.hermes.android.R
+import androidx.compose.material.icons.Icons
+import com.hermes.android.ui.icons.filled.Code
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalResources
 
 /**
- * Messaging Platforms — configure Telegram/Discord/Slack bot tokens.
+ * Connections & Platforms — webhooks, the phone-assistant role, and
+ * Messaging Platforms: configure Telegram/Discord/Slack bot tokens.
  * Rebuilt on the design system: neutral tonal cards with a clear
  * connected/not-connected status chip instead of a full-card color flip,
  * and bilingual labels (was hardcoded English).
@@ -59,6 +62,7 @@ import androidx.compose.ui.platform.LocalResources
 @Composable
 fun PlatformsScreen(
     onNavigateBack: () -> Unit = {},
+    onNavigateToWebhooks: () -> Unit = {},
     viewModel: PlatformsViewModel = hiltViewModel(),
     telegramSetup: TelegramSetupViewModel = hiltViewModel(),
     pairing: PairingViewModel = hiltViewModel(),
@@ -110,7 +114,7 @@ fun PlatformsScreen(
     }
 
     HermesScaffold(
-        title = stringResource(R.string.messaging_platforms),
+        title = stringResource(R.string.connections_and_platforms),
         subtitle = stringResource(R.string.talk_to_your_agent_from_telegram_discord),
         onBack = onNavigateBack,
         snackbarHostState = snackbarHostState,
@@ -142,6 +146,18 @@ fun PlatformsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(HxSpace.group),
             ) {
+                item(key = "connections") {
+                    SettingsCardGroup {
+                        SettingsNavRow(
+                            title = stringResource(R.string.webhooks_title),
+                            subtitle = stringResource(R.string.webhooks_nav_subtitle),
+                            icon = Icons.Default.Code,
+                            onClick = onNavigateToWebhooks,
+                        )
+                        com.hermes.android.ui.design.GroupDivider()
+                        AssistantSettingCard()
+                    }
+                }
                 item(key = "gateway") {
                     if (viewModel.gatewayAvailable) {
                         GatewaySection(

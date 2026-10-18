@@ -163,8 +163,8 @@ internal fun ModelsTab(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = com.hermes.android.ui.design.SettingsPagePadding,
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         // ══════════════════════════════════════════════════════════════
         // ── Active model hero (design F) ──
@@ -210,10 +210,7 @@ internal fun ModelsTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = stringResource(R.string.select_model),
-                    style = MaterialTheme.typography.titleSmall,
-                )
+                SettingsLabel(stringResource(R.string.select_model))
                 TextButton(onClick = { viewModel.loadModels() }) {
                     Text(stringResource(R.string.refresh_2))
                 }
@@ -225,7 +222,7 @@ internal fun ModelsTab(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        containerColor = com.hermes.android.ui.design.settingsCardColor(),
                     ),
                 ) {
                     Text(
@@ -285,7 +282,7 @@ internal fun ModelsTab(
                                 containerColor = if (isActive) {
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
+                                    com.hermes.android.ui.design.settingsCardColor()
                                 },
                             ),
                         ) {
@@ -351,14 +348,14 @@ internal fun ModelsTab(
                     icon = Icons.Default.Lightbulb,
                     onClick = { onOpen(SettingsSection.REASONING) },
                 )
-                HorizontalDivider(modifier = Modifier.padding(start = 54.dp), thickness = 0.5.dp)
+                com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
                 SettingsNavRow(
                     title = stringResource(R.string.aux_title),
                     subtitle = stringResource(R.string.aux_nav_subtitle),
                     icon = Icons.Default.SmartToy,
                     onClick = { onOpen(SettingsSection.AUX_MODELS) },
                 )
-                HorizontalDivider(modifier = Modifier.padding(start = 54.dp), thickness = 0.5.dp)
+                com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
                 SettingsNavRow(
                     title = stringResource(R.string.moa_title),
                     subtitle = stringResource(R.string.moa_nav_subtitle),

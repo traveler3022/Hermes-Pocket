@@ -45,6 +45,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.viewmodel.ChatMessage
+import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.HxStatus
 
 
 /** One quiet icon in the post-reply action row: 40dp touch target, 20dp
@@ -72,7 +74,7 @@ internal fun MessageActionIcon(
 internal fun TypingDots(
     modifier: Modifier = Modifier,
     dotSize: androidx.compose.ui.unit.Dp = 6.dp,
-    color: Color = MaterialTheme.colorScheme.primary,
+    color: Color = HxStatus.running,
 ) {
     val reduceMotion = rememberReduceMotion()
     val transition = rememberInfiniteTransition(label = "typingDots")
@@ -132,6 +134,7 @@ internal fun MessageBubble(
     onReact: ((messageId: String, emoji: String?) -> Unit)? = null,
     /** Opens the sub-agent sheet; null where there is no live chat to ask. */
     onOpenSubagent: ((subagentId: String, text: String) -> Unit)? = null,
+    kaomoji: Boolean = false,
 ) {
     when (message) {
         is ChatMessage.User -> {
@@ -183,6 +186,7 @@ internal fun MessageBubble(
                 onReact = onReact
                     ?.takeIf { !message.isStreaming }
                     ?.let { react -> { emoji: String? -> react(message.id, emoji) } },
+                kaomoji = kaomoji,
             )
         }
 
@@ -244,9 +248,18 @@ internal fun MessageBubble(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (!message.isComplete) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = HxStatus.running,
+                        )
                     } else {
-                        Text("✓", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                        Icon(
+                            imageVector = HxIcons.CircleCheck,
+                            contentDescription = stringResource(R.string.status_done),
+                            modifier = Modifier.size(14.dp),
+                            tint = HxStatus.done,
+                        )
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

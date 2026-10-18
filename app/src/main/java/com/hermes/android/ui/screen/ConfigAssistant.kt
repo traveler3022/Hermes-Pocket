@@ -48,7 +48,7 @@ internal fun AssistantSettingCard() {
     }
     val noSettings = stringResource(R.string.assistant_settings_unavailable)
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = com.hermes.android.ui.design.HxSpace.row),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -88,7 +88,7 @@ internal fun AssistantSettingCard() {
     }
 }
 
-private fun holdsAssistantRole(context: Context): Boolean {
+internal fun holdsAssistantRole(context: Context): Boolean {
     val roles = context.getSystemService(RoleManager::class.java) ?: return false
     return runCatching {
         roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)

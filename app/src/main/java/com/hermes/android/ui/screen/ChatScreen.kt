@@ -518,7 +518,7 @@ fun ChatScreen(
                     onNewChat = { closeDrawerThen { viewModel.newConversation() } },
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
-                    onAccount = { closeDrawerThen(onNavigateToSettings) },
+                    onSettings = { closeDrawerThen(onNavigateToSettings) },
                     profileTitle = activeProfileTitle,
                     onProfileClick = {
                         profilesViewModel.load()
@@ -1020,6 +1020,7 @@ fun ChatScreen(
                                 onEditMessage = viewModel::startEditing,
                                 onDeleteMessage = { id -> deleteFromMessageId = id },
                                 reactionsEnabled = themeModeState?.messageReactions == true,
+                                kaomoji = themeModeState?.kaomojiStatus == true,
                                 onReact = viewModel::reactToMessage,
                                 onOpenSubagent = uiState.activeSessionId?.let { sid ->
                                     { subagentId: String, text: String -> subagents.open(sid, subagentId, text) }
