@@ -80,7 +80,9 @@ internal fun UserMessageBubble(
     // with a gentle shadow to lift it off the background — readable in every
     // theme because the tint is translucent and the text stays onSurface.
     val bubbleColor = if (aether) MaterialTheme.colorScheme.tertiaryContainer
-        else MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        // 0.24, not 0.14: on near-black the lighter tint read as no bubble at all
+        // (1.19:1 against the chat background); this keeps it a quiet region.
+        else MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
     val bubbleTextColor = if (aether) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurface
 

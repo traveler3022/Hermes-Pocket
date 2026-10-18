@@ -278,10 +278,19 @@ private fun DrawerSessionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // The open chat sits on a soft pill rather than being told apart by
+            // colour alone — blue text read as a link, and colour is no cue at
+            // all for someone who cannot tell it apart.
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isActive) Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                else Modifier,
+            )
             // Long-press is where rename / pin / delete live now that the row
             // itself carries no buttons.
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 18.dp, vertical = 11.dp),
+            .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
@@ -289,11 +298,7 @@ private fun DrawerSessionRow(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isActive) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),

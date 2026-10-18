@@ -33,6 +33,17 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -121,6 +132,7 @@ internal fun InputBar(
         if (saved && uri != null) onAttachFiles(listOf(uri))
     }
     var attachMenuOpen by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
     // The "add to current task / stop and send" choice while a turn is running.
     var sendChoiceOpen by remember { mutableStateOf(false) }
     // A turn that ends while the menu is open leaves nothing to choose between.
@@ -412,7 +424,7 @@ internal fun InputBar(
                                 modifier = Modifier.size(48.dp),
                             ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.Send,
+                                    HxIcons.ArrowUp,
                                     contentDescription = stringResource(R.string.send_options),
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
@@ -442,44 +454,112 @@ internal fun InputBar(
                             }
                         }
                     }
-                    IconButton(
-                        onClick = onStop,
-                        modifier = Modifier.size(48.dp),
+                    // Stop sits in the same blue disc as Send, a white square in
+                    // place of the arrow: one button that changes its sign, not
+                    // a red control that reads as an error.
+                    ComposerDiscButton(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onStop()
+                        },
+                        contentDescription = stringResource(R.string.stop),
+                        filled = true,
                     ) {
                         Icon(
                             Icons.Default.Stop,
-                            contentDescription = stringResource(R.string.stop),
-                            tint = MaterialTheme.colorScheme.error,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White,
                         )
                     }
                 } else {
-                    IconButton(
-                        onClick = startVoiceInput,
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
+                    // One slot, one button: the microphone while the box is empty,
+                    // the arrow once there is something to send. An attachment on
+                    // its own is sendable (sendMessage() handles it), so a picked
+                    // file switches to the arrow too. While a file is still
+                    // uploading the arrow shows but waits, so nothing goes without it.
+                    val canSend = text.isNotBlank() || pendingAttachments.isNotEmpty()
+                    if (!canSend && !isAttaching) {
+                        ComposerDiscButton(
+                            onClick = startVoiceInput,
                             contentDescription = stringResource(R.string.voice_input),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(
-                        onClick = onSend,
-                        // An attachment-only message (no typed text) is valid —
-                        // sendMessage() already handles it — so the button must
-                        // not be gated on text alone, or a picked file/image can
-                        // never actually be sent.
-                        enabled = text.isNotBlank() || pendingAttachments.isNotEmpty(),
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
+                            filled = false,
+                        ) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        ComposerDiscButton(
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSend()
+                            },
                             contentDescription = stringResource(R.string.send),
-                        )
+                            filled = true,
+                            enabled = canSend && !isAttaching,
+                        ) {
+                            Icon(
+                                HxIcons.ArrowUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * The composer's trailing button: a 48dp touch target around a 38dp disc.
+ * Filled, the disc is the theme's primary (send, stop); unfilled, it is just
+ * the icon (voice). Pressed, the disc shrinks a touch instead of a ripple
+ * washing over the whole composer.
+ */
+@Composable
+private fun ComposerDiscButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    filled: Boolean,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed && enabled) 0.9f else 1f, label = "disc_press")
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .semantics(mergeDescendants = true) {
+                this.contentDescription = contentDescription
+                role = Role.Button
+            }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = if (enabled) 1f else 0.4f
+                }
+                .clip(CircleShape)
+                .then(if (filled) Modifier.background(primary) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) { content() }
     }
 }
 

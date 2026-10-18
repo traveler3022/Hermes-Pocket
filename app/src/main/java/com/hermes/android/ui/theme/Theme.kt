@@ -482,6 +482,11 @@ private val CarbonLightColors = lightColorScheme(
     onSurfaceVariant = carbon_light_onSurfaceVariant,
     outline = carbon_light_outline,
     outlineVariant = carbon_light_outlineVariant,
+    surfaceContainerLowest = carbon_light_surfaceContainerLowest,
+    surfaceContainerLow = carbon_light_surfaceContainerLow,
+    surfaceContainer = carbon_light_surfaceContainer,
+    surfaceContainerHigh = carbon_light_surfaceContainerHigh,
+    surfaceContainerHighest = carbon_light_surfaceContainerHighest,
 )
 
 private val CarbonDarkColors = darkColorScheme(
@@ -509,6 +514,11 @@ private val CarbonDarkColors = darkColorScheme(
     onSurfaceVariant = carbon_dark_onSurfaceVariant,
     outline = carbon_dark_outline,
     outlineVariant = carbon_dark_outlineVariant,
+    surfaceContainerLowest = carbon_dark_surfaceContainerLowest,
+    surfaceContainerLow = carbon_dark_surfaceContainerLow,
+    surfaceContainer = carbon_dark_surfaceContainer,
+    surfaceContainerHigh = carbon_dark_surfaceContainerHigh,
+    surfaceContainerHighest = carbon_dark_surfaceContainerHighest,
 )
 
 // ── Mocha palette ──
