@@ -670,6 +670,15 @@ class OkHttpGatewayClient @Inject constructor(
             Timber.i("[Gateway] reconnect attempt $attempt in ${delayMs}ms (last: $lastReason, elapsed: ${elapsed / 1000}s)")
             delay(delayMs)
 
+            // A request's dial-on-demand may have connected while we slept. Dialing
+            // again would close that live socket and strand its in-flight requests
+            // until their 120s timeout (the stale socket's callbacks are ignored).
+            if (_connectionState.value is ConnectionState.Connected && webSocket != null) {
+                firstFailureAt = null
+                lastErrorPermanent = false
+                return
+            }
+
             val url = currentUrl ?: return
             try {
                 when (val result = startDial(url).await()) {
