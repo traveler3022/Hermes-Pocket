@@ -176,7 +176,7 @@ internal fun ControlCenterMenu(
             )
         }
 
-        // ── Appearance (theme, colours, language) ──
+        // ── Appearance, then capabilities & permissions, in one card ──
         CcGroup {
             CcRow(
                 title = stringResource(R.string.appearance),
@@ -185,10 +185,7 @@ internal fun ControlCenterMenu(
                 value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
                 onClick = { onOpen(SettingsSection.APPEARANCE) },
             )
-        }
-
-        // ── Capabilities & permissions ──
-        CcGroup {
+            CcDivider()
             CcRow(
                 title = stringResource(R.string.tools),
                 icon = Icons.Default.Key,
