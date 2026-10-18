@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,12 +89,8 @@ object HxSpace {
     val md = 12.dp
     val lg = 16.dp
     val xl = 24.dp
-    /** Vertical padding of a settings row; the row is at least [rowMin] tall. */
-    val row = 8.dp
-    /** A settings row's minimum height (the Control Center mockup: 52). */
-    val rowMin = 52.dp
-    /** Side margin of the settings pages (the Control Center mockup: 16). */
-    val page = 16.dp
+    /** Vertical padding of a settings row: with the 34 dp icon tile, a 60 dp row. */
+    val row = 13.dp
 }
 
 /**
@@ -103,8 +98,8 @@ object HxSpace {
  * margin, a short gap under the top bar, room at the bottom past the last card.
  */
 val SettingsPagePadding = androidx.compose.foundation.layout.PaddingValues(
-    start = HxSpace.page,
-    end = HxSpace.page,
+    start = HxSpace.screen,
+    end = HxSpace.screen,
     top = HxSpace.md,
     bottom = 32.dp,
 )
@@ -260,11 +255,11 @@ fun HermesScaffold(
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.8.sp),
+        color = MaterialTheme.colorScheme.primary,
         modifier = modifier.padding(
-            start = HxSpace.page + 14.dp,
-            end = HxSpace.page + 14.dp,
+            start = HxSpace.screen + 2.dp,
+            end = HxSpace.screen,
             top = HxSpace.xl,
             bottom = HxSpace.sm,
         ),
@@ -285,7 +280,7 @@ fun SettingsGroup(
         color = settingsCardColor(),
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = HxSpace.page),
+            .padding(horizontal = HxSpace.screen),
     ) {
         Column(content = content)
     }
@@ -318,7 +313,7 @@ fun groupedRowShape(index: Int, lastIndex: Int): RoundedCornerShape {
 
 /** Hairline divider between rows of a [SettingsGroup], inset past the icon. */
 @Composable
-fun GroupDivider(startIndent: Dp = 58.dp) {
+fun GroupDivider(startIndent: Dp = 56.dp) {
     HorizontalDivider(
         modifier = Modifier.padding(start = startIndent),
         thickness = 0.5.dp,
@@ -346,7 +341,6 @@ fun SettingRow(
         modifier = modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .heightIn(min = HxSpace.rowMin)
             .padding(horizontal = HxSpace.inner, vertical = HxSpace.row),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HxSpace.md),
@@ -354,15 +348,15 @@ fun SettingRow(
         if (icon != null) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(HxRadius.sm))
                     .background(if (solidIcon) iconTint else iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(17.dp),
+                    modifier = Modifier.size(if (solidIcon) 20.dp else 18.dp),
                     tint = if (solidIcon) Color.White else iconTint,
                 )
             }
@@ -486,8 +480,8 @@ fun DomainTile(
         ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(HxRadius.sm))
                     .background(iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
