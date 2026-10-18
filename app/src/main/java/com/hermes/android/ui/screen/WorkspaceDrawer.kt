@@ -199,11 +199,12 @@ internal fun WorkspaceDrawerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // The same chat bubble as the chat header's new-chat button.
                     Icon(
-                        HxIcons.SquarePen,
+                        HxIcons.NewChat,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                     )
                     Text(
                         text = stringResource(R.string.chat),
