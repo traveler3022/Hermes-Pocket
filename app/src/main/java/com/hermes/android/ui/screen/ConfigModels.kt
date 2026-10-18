@@ -163,8 +163,8 @@ internal fun ModelsTab(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = com.hermes.android.ui.design.SettingsPagePadding,
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         // ══════════════════════════════════════════════════════════════
         // ── Active model hero (design F) ──

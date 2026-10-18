@@ -161,19 +161,13 @@ internal fun ToolsetsSection(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        contentPadding = com.hermes.android.ui.design.SettingsPagePadding,
     ) {
         // One grouped card, like the other settings lists: each row rounds only the
         // corners on the card's outer edge, with a hairline between rows.
         val last = state.availableTools.lastIndex
         itemsIndexed(state.availableTools, key = { _, tool -> tool.name }) { index, tool ->
-            val r = com.hermes.android.ui.design.HxRadius.md
-            val shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                topStart = if (index == 0) r else 0.dp,
-                topEnd = if (index == 0) r else 0.dp,
-                bottomStart = if (index == last) r else 0.dp,
-                bottomEnd = if (index == last) r else 0.dp,
-            )
+            val shape = com.hermes.android.ui.design.groupedRowShape(index, last)
             Column {
                 ToolRow(tool, viewModel, onClick = { setupFor = tool.name }, shape = shape)
                 if (index != last) {
@@ -211,7 +205,7 @@ internal fun ToolRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = tool.name,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (tool.description.isNotBlank()) {

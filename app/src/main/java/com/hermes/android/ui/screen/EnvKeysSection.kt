@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -91,11 +94,13 @@ internal fun EnvKeysSection(snackbarHostState: SnackbarHostState) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = com.hermes.android.ui.design.SettingsPagePadding,
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.padding(bottom = com.hermes.android.ui.design.HxSpace.group),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
                     text = stringResource(R.string.env_keys_intro),
                     style = MaterialTheme.typography.bodySmall,
@@ -137,15 +142,25 @@ internal fun EnvKeysSection(snackbarHostState: SnackbarHostState) {
                 )
             }
         }
-        items(state.visible, key = { it.key }) { key ->
-            EnvKeyRow(
-                key = key,
-                revealed = state.revealed[key.key],
-                busy = state.busy == key.key,
-                onReveal = { viewModel.reveal(key.key) },
-                onEdit = { editing = key },
-                onRemove = { removing = key.key },
-            )
+        // One grouped card, like the other settings lists.
+        val last = state.visible.lastIndex
+        itemsIndexed(state.visible, key = { _, key -> key.key }) { index, key ->
+            Column {
+                EnvKeyRow(
+                    key = key,
+                    revealed = state.revealed[key.key],
+                    busy = state.busy == key.key,
+                    onReveal = { viewModel.reveal(key.key) },
+                    onEdit = { editing = key },
+                    onRemove = { removing = key.key },
+                    shape = com.hermes.android.ui.design.groupedRowShape(index, last),
+                )
+                if (index != last) {
+                    Box(Modifier.background(com.hermes.android.ui.design.settingsCardColor())) {
+                        com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
+                    }
+                }
+            }
         }
     }
 }
@@ -158,18 +173,20 @@ private fun EnvKeyRow(
     onReveal: () -> Unit,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape,
 ) {
     Card(
         onClick = onEdit,
+        shape = shape,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(key.key, style = MaterialTheme.typography.titleSmall, fontFamily = FontFamily.Monospace)
+                Text(key.key, style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace)
                 if (key.description.isNotBlank()) {
                     Text(
                         key.description,
@@ -196,15 +213,16 @@ private fun EnvKeyRow(
                     Icon(
                         if (revealed != null) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = stringResource(if (revealed != null) R.string.env_key_hide else R.string.env_key_show),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
+                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (key.isSet) {
                 IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = stringResource(R.string.delete))
+                    Icon(Icons.Default.DeleteOutline, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

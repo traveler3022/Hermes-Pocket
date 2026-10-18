@@ -122,8 +122,8 @@ internal fun SettingsFolder(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
         content = content,
     )
 }
@@ -223,7 +223,7 @@ internal fun ApprovalCard(
             if (showTitle) {
                 Text(
                     text = stringResource(R.string.command_approval_2),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -332,7 +332,7 @@ internal fun SoulCard(
             ) {
                 Text(
                     text = stringResource(R.string.soul_md_persistent_identity),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
                 TextButton(onClick = { editingSoul = !editingSoul }) {
                     Text(if (editingSoul) stringResource(R.string.close) else stringResource(R.string.edit))
@@ -401,7 +401,7 @@ internal fun ReasoningCard(
             if (showTitle) {
                 Text(
                     text = stringResource(R.string.reasoning_depth),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
             val levels = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")

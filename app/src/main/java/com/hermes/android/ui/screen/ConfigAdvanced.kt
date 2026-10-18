@@ -54,8 +54,8 @@ internal fun AdvancedSection(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         SettingsCardGroup {
             SettingsNavRow(
@@ -78,7 +78,7 @@ internal fun AdvancedSection(
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(
@@ -88,7 +88,7 @@ internal fun AdvancedSection(
                 ) {
                     Text(
                         text = stringResource(R.string.environment_variables_env),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     TextButton(onClick = { editingEnv = !editingEnv }) {
                         Text(if (editingEnv) stringResource(R.string.close) else stringResource(R.string.edit))
@@ -155,7 +155,7 @@ internal fun AdvancedSection(
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(
@@ -165,7 +165,7 @@ internal fun AdvancedSection(
                 ) {
                     Text(
                         text = stringResource(R.string.mcp_servers),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     TextButton(onClick = { editingMcp = !editingMcp }) {
                         Text(if (editingMcp) stringResource(R.string.close) else stringResource(R.string.edit))
@@ -232,7 +232,7 @@ internal fun AdvancedSection(
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -321,7 +321,7 @@ internal fun AdvancedSection(
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -357,7 +357,7 @@ internal fun AdvancedSection(
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -413,7 +413,7 @@ internal fun AdvancedSection(
                 text = state.configYaml.ifEmpty { "(empty)" },
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
             )
         }
     }

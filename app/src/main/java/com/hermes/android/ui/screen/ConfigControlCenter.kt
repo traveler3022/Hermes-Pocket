@@ -509,11 +509,11 @@ internal fun LanguageSection(appLanguageState: AppLanguageState?) {
                                 onClick = { appLanguageState.updateLanguage(lang) },
                                 role = Role.RadioButton,
                             )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 16.dp, vertical = com.hermes.android.ui.design.HxSpace.row),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = selected, onClick = null)
-                        Spacer(Modifier.size(8.dp))
+                        Spacer(Modifier.size(12.dp))
                         Text(languageLabel(lang), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
@@ -535,7 +535,7 @@ internal fun PhoneAssistantSection() {
 internal fun KanbanSection() {
     SettingsFolder {
         SettingsCardGroup {
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = com.hermes.android.ui.design.HxSpace.row)) {
                 KanbanSettingRow()
             }
         }

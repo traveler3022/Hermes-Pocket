@@ -238,7 +238,7 @@ internal fun MoaSection(snackbarHostState: SnackbarHostState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (draft.presets.size > 1) {
-                Text(stringResource(R.string.moa_default_preset), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.moa_default_preset), style = MaterialTheme.typography.bodyLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     draft.presets.keys.forEach { name ->
                         FilterChip(
@@ -317,7 +317,7 @@ private fun PresetCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.titleMedium)
+                Text(name, style = MaterialTheme.typography.bodyLarge)
                 if (isDefault) {
                     Text(
                         stringResource(R.string.moa_is_default),

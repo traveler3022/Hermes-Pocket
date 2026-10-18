@@ -437,8 +437,8 @@ internal fun ProviderCard(
                         ) {
                             Text(
                                 text = provider.slug,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Normal,
                             )
                             if (provider.isPrimary) {
                                 AssistChip(

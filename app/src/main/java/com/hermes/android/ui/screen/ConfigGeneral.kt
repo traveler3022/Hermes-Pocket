@@ -59,8 +59,8 @@ internal fun GeneralTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         // Language now has its own row on the Control Center root (LanguageSection).
 
@@ -70,12 +70,12 @@ internal fun GeneralTab(
                 colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.theme),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -96,7 +96,7 @@ internal fun GeneralTab(
                     }
                     Text(
                         text = stringResource(R.string.color_theme),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                     FlowRow(
@@ -121,7 +121,7 @@ internal fun GeneralTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.warm_night_mode),
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.shifts_screens_toward_a_warm_amber_tint),
@@ -142,7 +142,7 @@ internal fun GeneralTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.show_the_agents_running_commentary),
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.what_the_agent_says_between_tool_calls),
@@ -163,7 +163,7 @@ internal fun GeneralTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.message_reactions),
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = stringResource(R.string.touch_and_hold_a_message_to_react_with),
@@ -179,7 +179,7 @@ internal fun GeneralTab(
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = stringResource(R.string.font),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -196,7 +196,7 @@ internal fun GeneralTab(
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                     Text(
                         text = stringResource(R.string.font_size),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -249,7 +249,7 @@ internal fun KanbanSettingRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.kanban_board),
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 text = stringResource(R.string.a_task_board_your_profiles_work_through),

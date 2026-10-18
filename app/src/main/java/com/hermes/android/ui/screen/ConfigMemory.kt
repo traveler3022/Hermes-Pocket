@@ -108,8 +108,8 @@ internal fun MemorySection(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(com.hermes.android.ui.design.SettingsPagePadding),
+        verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -161,7 +161,7 @@ internal fun MemoryFileCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 icon()
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = contentColor)
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = contentColor)
             }
             Text(
                 text = displayText,
@@ -183,13 +183,13 @@ private fun LearningEntryCard(onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.learning_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.learning_title), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     stringResource(R.string.learning_open_hint),
                     style = MaterialTheme.typography.bodySmall,

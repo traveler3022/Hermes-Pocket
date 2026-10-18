@@ -89,7 +89,20 @@ object HxSpace {
     val md = 12.dp
     val lg = 16.dp
     val xl = 24.dp
+    /** Vertical padding of a settings row: with the 34 dp icon tile, a 60 dp row. */
+    val row = 13.dp
 }
+
+/**
+ * The frame of every settings page, the Control Center root included: screen-edge
+ * margin, a short gap under the top bar, room at the bottom past the last card.
+ */
+val SettingsPagePadding = androidx.compose.foundation.layout.PaddingValues(
+    start = HxSpace.screen,
+    end = HxSpace.screen,
+    top = HxSpace.md,
+    bottom = 32.dp,
+)
 
 object HxRadius {
     /** Chips, small controls. */
@@ -283,6 +296,21 @@ fun settingsCardColor(): Color =
     if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
 
+/**
+ * The shape of one row of a grouped list drawn item by item (a LazyColumn): only
+ * the first row rounds its top corners and only the last its bottom ones, so the
+ * rows read as one card like [SettingsGroup].
+ */
+fun groupedRowShape(index: Int, lastIndex: Int): RoundedCornerShape {
+    val r = HxRadius.md
+    return RoundedCornerShape(
+        topStart = if (index == 0) r else 0.dp,
+        topEnd = if (index == 0) r else 0.dp,
+        bottomStart = if (index == lastIndex) r else 0.dp,
+        bottomEnd = if (index == lastIndex) r else 0.dp,
+    )
+}
+
 /** Hairline divider between rows of a [SettingsGroup], inset past the icon. */
 @Composable
 fun GroupDivider(startIndent: Dp = 56.dp) {
@@ -313,7 +341,7 @@ fun SettingRow(
         modifier = modifier
             .fillMaxWidth()
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-            .padding(horizontal = HxSpace.inner, vertical = 13.dp),
+            .padding(horizontal = HxSpace.inner, vertical = HxSpace.row),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HxSpace.md),
     ) {
