@@ -865,7 +865,7 @@ internal enum class HxTraceActivity(val label: Int) {
         }
 
     companion object {
-        /** Hermes' own tool names (tools/*.py), plus the generic ones other gateways use. */
+        /** Hermes' own tool names (the .py files under tools/), plus the generic ones other gateways use. */
         fun of(toolName: String): HxTraceActivity {
             val n = toolName.lowercase()
             return when {
