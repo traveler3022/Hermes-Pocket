@@ -116,28 +116,25 @@ internal fun MemorySection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.memory_files),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            SettingsLabel(stringResource(R.string.memory_files))
             TextButton(onClick = { viewModel.loadMemory() }) {
                 Text(stringResource(R.string.refresh_2))
             }
         }
         LearningEntryCard(onOpenLearning)
         MemoryFileCard(
-            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+            icon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = "USER.md",
             content = state.memoryUserMd,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
         )
         MemoryFileCard(
-            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer) },
+            icon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = "MEMORY.md",
             content = state.memoryMd,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
         )
         MemoryProvidersPanel(onBuiltInReset = { viewModel.loadMemory() })
     }
@@ -158,7 +155,7 @@ internal fun MemoryFileCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

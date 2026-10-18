@@ -210,10 +210,7 @@ internal fun ModelsTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = stringResource(R.string.select_model),
-                    style = MaterialTheme.typography.titleSmall,
-                )
+                SettingsLabel(stringResource(R.string.select_model))
                 TextButton(onClick = { viewModel.loadModels() }) {
                     Text(stringResource(R.string.refresh_2))
                 }

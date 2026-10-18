@@ -96,8 +96,8 @@ internal fun AdvancedSection(
                 }
                 Text(
                     text = stringResource(R.string.hermes_env_api_keys_and_other_env_vars),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (editingEnv) {
                 Row(
@@ -173,8 +173,8 @@ internal fun AdvancedSection(
                 }
                 Text(
                     text = stringResource(R.string.raw_json_config_yamls_mcp_servers),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (editingMcp) {
                 Row(
@@ -237,8 +237,8 @@ internal fun AdvancedSection(
             ) {
                 Text(
                     text = stringResource(R.string.run_one_off_shell_commands_on_the_server),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 state.consoleEntries.forEach { entry ->
                     Column(
@@ -326,8 +326,8 @@ internal fun AdvancedSection(
             ) {
                 Text(
                     text = stringResource(R.string.live_server_stderr_fills_in_as_events),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (state.gatewayLog.isEmpty()) {
                     Text(
@@ -362,8 +362,8 @@ internal fun AdvancedSection(
             ) {
                 Text(
                     text = stringResource(R.string.every_connect_drop_and_retry_with_what),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // Loaded here rather than in the ViewModel's init: it is a disk read whose
                 // only reader is this card, and it has to be re-read to be current.

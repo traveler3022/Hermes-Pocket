@@ -56,6 +56,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -160,18 +162,40 @@ internal fun ToolsetsSection(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(state.availableTools, key = { it.name }) { tool ->
-            ToolRow(tool, viewModel, onClick = { setupFor = tool.name })
+        // One grouped card, like the other settings lists: each row rounds only the
+        // corners on the card's outer edge, with a hairline between rows.
+        val last = state.availableTools.lastIndex
+        itemsIndexed(state.availableTools, key = { _, tool -> tool.name }) { index, tool ->
+            val r = com.hermes.android.ui.design.HxRadius.md
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                topStart = if (index == 0) r else 0.dp,
+                topEnd = if (index == 0) r else 0.dp,
+                bottomStart = if (index == last) r else 0.dp,
+                bottomEnd = if (index == last) r else 0.dp,
+            )
+            Column {
+                ToolRow(tool, viewModel, onClick = { setupFor = tool.name }, shape = shape)
+                if (index != last) {
+                    Box(Modifier.background(com.hermes.android.ui.design.settingsCardColor())) {
+                        com.hermes.android.ui.design.GroupDivider(startIndent = 16.dp)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -> Unit) {
+internal fun ToolRow(
+    tool: ToolOption,
+    viewModel: ConfigViewModel,
+    onClick: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.foundation.shape.RoundedCornerShape(com.hermes.android.ui.design.HxRadius.md),
+) {
     Card(
         onClick = onClick,
+        shape = shape,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = com.hermes.android.ui.design.settingsCardColor(),
@@ -180,7 +204,7 @@ internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -198,11 +222,13 @@ internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -
                     )
                 }
                 Text(
-                    text = "${tool.toolCount} tools" + if (tool.tools.isNotEmpty()) ": ${tool.tools.take(6).joinToString(", ")}${if (tool.tools.size > 6) "…" else ""}" else "",
+                    text = com.hermes.android.ui.i18n.t("${tool.toolCount} tools", "${tool.toolCount} ابزار") +
+                        if (tool.tools.isNotEmpty()) ": ${tool.tools.take(6).joinToString(", ")}${if (tool.tools.size > 6) "…" else ""}" else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
-                tool.toolset?.let {
+                // The toolset name only when it says something the title doesn't.
+                tool.toolset?.takeIf { it != tool.name }?.let {
                     Text(
                         text = "toolset: $it",
                         style = MaterialTheme.typography.labelSmall,

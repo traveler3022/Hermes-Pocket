@@ -66,7 +66,7 @@ internal fun MemoryProvidersPanel(
     var confirmReset by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
-        Text(stringResource(R.string.external_memory), style = MaterialTheme.typography.titleMedium)
+        SettingsLabel(stringResource(R.string.external_memory))
         Text(
             stringResource(R.string.built_in_memory_is_always_on_one_extra),
             style = MaterialTheme.typography.bodySmall,
