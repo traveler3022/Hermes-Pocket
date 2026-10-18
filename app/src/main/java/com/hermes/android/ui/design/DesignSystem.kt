@@ -264,7 +264,7 @@ fun SettingsGroup(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = settingsCardColor(),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = HxSpace.screen),
@@ -272,6 +272,16 @@ fun SettingsGroup(
         Column(content = content)
     }
 }
+
+/**
+ * The fill of every settings card — the root's groups and each sub-page's cards —
+ * so a page never mixes two greys. Aether draws its cards in its surface colour
+ * on a grey page instead.
+ */
+@Composable
+fun settingsCardColor(): Color =
+    if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
 
 /** Hairline divider between rows of a [SettingsGroup], inset past the icon. */
 @Composable

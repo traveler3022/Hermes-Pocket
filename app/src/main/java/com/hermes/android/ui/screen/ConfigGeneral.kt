@@ -65,13 +65,9 @@ internal fun GeneralTab(
         // Language now has its own row on the Control Center root (LanguageSection).
 
         if (themeModeState != null) {
-            Text(
-                text = stringResource(R.string.appearance),
-                style = MaterialTheme.typography.titleMedium,
-            )
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),

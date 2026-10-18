@@ -75,6 +75,7 @@ import com.hermes.android.ui.viewmodel.GatewayConnectionUi
 import com.hermes.android.ui.viewmodel.HermesProviderConfig
 import com.hermes.android.ui.viewmodel.InsightsData
 import com.hermes.android.ui.viewmodel.KanbanSettingViewModel
+import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel
 import com.hermes.android.ui.viewmodel.ModelOption
 import com.hermes.android.ui.viewmodel.ModelPickerUiState
 import com.hermes.android.ui.viewmodel.ModelPickerViewModel
@@ -105,7 +106,7 @@ import java.io.File
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], application = Application::class, qualifiers = "w400dp-h1500dp-xxhdpi")
+@Config(sdk = [34], application = Application::class, qualifiers = "fa-w400dp-h1500dp-xxhdpi")
 class SettingsScreenshotsTest {
 
     @get:Rule
@@ -121,7 +122,8 @@ class SettingsScreenshotsTest {
 
     @Test fun rootDark() = shot("00-root-dark") { Root() }
     @Test fun rootLight() = shot("00-root-light", dark = false) { Root() }
-    @Test fun rootEnglish() = shot("00-root-en", language = AppLanguage.ENGLISH) { Root() }
+    @Test @Config(qualifiers = "en-w400dp-h1500dp-xxhdpi")
+    fun rootEnglish() = shot("00-root-en", language = AppLanguage.ENGLISH) { Root() }
     @Test fun appearance() = shot("01-appearance") { Page(SettingsSection.APPEARANCE) { GeneralTab(ThemeModeState(LocalContext.current), AppLanguageState(LocalContext.current)) } }
     @Test fun appearanceLight() = shot("01-appearance-light", dark = false) { Page(SettingsSection.APPEARANCE) { GeneralTab(ThemeModeState(LocalContext.current), AppLanguageState(LocalContext.current)) } }
     @Test fun language() = shot("02-language") { Page(SettingsSection.LANGUAGE) { LanguageSection(AppLanguageState(LocalContext.current)) } }
@@ -129,13 +131,13 @@ class SettingsScreenshotsTest {
     @Test fun soul() = shot("04-soul") { Page(SettingsSection.SOUL) { SettingsFolder { SoulCard(sample, config) } } }
     @Test fun memory() = shot("05-memory") { Page(SettingsSection.MEMORY) { MemorySection(sample, config) } }
     @Test fun models() = shot("06-models") { Page(SettingsSection.MODELS) { ModelsTab(sample, config, onOpen = {}) } }
-    @Test fun reasoning() = shot("07-reasoning") { Page(SettingsSection.REASONING) { SettingsFolder { ReasoningCard(sample, config) } } }
+    @Test fun reasoning() = shot("07-reasoning") { Page(SettingsSection.REASONING) { SettingsFolder { ReasoningCard(sample, config, showTitle = false) } } }
     @Test fun auxModels() = shot("08-task-models") { Page(SettingsSection.AUX_MODELS) { AuxModelsSection(remember { SnackbarHostState() }) } }
     @Test fun moa() = shot("09-moa") { Page(SettingsSection.MOA) { MoaSection(remember { SnackbarHostState() }) } }
     @Test fun providers() = shot("10-providers") { Page(SettingsSection.PROVIDERS) { ProvidersSection(sample, config, remember { SnackbarHostState() }, onOpen = {}) } }
     @Test fun providerKeys() = shot("11-provider-keys") { Page(SettingsSection.PROVIDER_KEYS) { ProviderKeysSection(config, remember { SnackbarHostState() }, onOpen = {}) } }
     @Test fun providerAccounts() = shot("12-provider-accounts") { Page(SettingsSection.PROVIDER_ACCOUNTS) { ProviderAccountsSection(remember { SnackbarHostState() }, onOpen = {}) } }
-    @Test fun approval() = shot("13-approval") { Page(SettingsSection.APPROVAL) { SettingsFolder { ApprovalCard(sample, config) } } }
+    @Test fun approval() = shot("13-approval") { Page(SettingsSection.APPROVAL) { SettingsFolder { ApprovalCard(sample, config, showTitle = false) } } }
     @Test fun toolsets() = shot("14-toolsets") { Page(SettingsSection.TOOLSETS) { ToolsetsSection(sample, config) } }
     @Test fun advanced() = shot("15-advanced") { Page(SettingsSection.ADVANCED) { AdvancedSection(sample, config, onOpen = {}) } }
     @Test fun envKeys() = shot("16-env-keys") { Page(SettingsSection.ENV_KEYS) { EnvKeysSection(remember { SnackbarHostState() }) } }
@@ -257,6 +259,9 @@ class SettingsScreenshotsTest {
                     ),
                 ),
             )
+        },
+        MemoryProvidersViewModel::class.java to mockk<MemoryProvidersViewModel>(relaxed = true) {
+            every { uiState } returns MutableStateFlow(MemoryProvidersViewModel.UiState(isLoading = false))
         },
         ConfigEditorViewModel::class.java to mockk<ConfigEditorViewModel>(relaxed = true) {
             every { uiState } returns MutableStateFlow(ConfigEditorUiState())

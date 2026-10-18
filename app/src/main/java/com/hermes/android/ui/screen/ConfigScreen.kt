@@ -219,7 +219,7 @@ fun ConfigScreen(
                 )
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
-                SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel) }
+                SettingsSection.REASONING -> SettingsFolder { ReasoningCard(uiState, viewModel, showTitle = false) }
                 SettingsSection.AUX_MODELS -> AuxModelsSection(snackbarHostState)
                 SettingsSection.MOA -> MoaSection(snackbarHostState)
                 SettingsSection.PROVIDERS -> ProvidersSection(
@@ -237,7 +237,7 @@ fun ConfigScreen(
                     snackbarHostState = snackbarHostState,
                     onOpen = { section = it },
                 )
-                SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel) }
+                SettingsSection.APPROVAL -> SettingsFolder { ApprovalCard(uiState, viewModel, showTitle = false) }
                 SettingsSection.PERSONALITY -> PersonalitySection(
                     state = uiState,
                     viewModel = viewModel,

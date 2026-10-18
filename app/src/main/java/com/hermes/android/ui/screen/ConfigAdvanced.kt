@@ -64,7 +64,7 @@ internal fun AdvancedSection(
                 icon = Icons.Default.Key,
                 onClick = { onOpen(SettingsSection.ENV_KEYS) },
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.config_editor_title),
                 subtitle = stringResource(R.string.config_editor_subtitle),
@@ -75,7 +75,7 @@ internal fun AdvancedSection(
         var editingEnv by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -152,7 +152,7 @@ internal fun AdvancedSection(
         var editingMcp by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -226,14 +226,10 @@ internal fun AdvancedSection(
             }
         }
 
-        Text(
-            text = stringResource(R.string.command_console),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        SettingsLabel(stringResource(R.string.command_console))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -319,14 +315,10 @@ internal fun AdvancedSection(
             }
         }
 
-        Text(
-            text = stringResource(R.string.gateway_log),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        SettingsLabel(stringResource(R.string.gateway_log))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -359,14 +351,10 @@ internal fun AdvancedSection(
             }
         }
 
-        Text(
-            text = stringResource(R.string.connection_log),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        SettingsLabel(stringResource(R.string.connection_log))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -414,15 +402,11 @@ internal fun AdvancedSection(
             }
         }
 
-        Text(
-            text = stringResource(R.string.current_configuration),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        SettingsLabel(stringResource(R.string.current_configuration))
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = com.hermes.android.ui.design.settingsCardColor(),
             ),
         ) {
             Text(

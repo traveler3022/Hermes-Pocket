@@ -117,21 +117,21 @@ internal fun ToolsTab(
                 icon = Icons.Default.Build,
                 onClick = { onOpen(SettingsSection.TOOLSETS) },
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.plugins),
                 subtitle = stringResource(R.string.install_and_manage_plugins),
                 icon = Icons.Default.Extension,
                 onClick = onNavigateToPlugins,
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.skills),
                 subtitle = stringResource(R.string.browse_and_manage_skills),
                 icon = Icons.Default.Star,
                 onClick = onNavigateToSkills,
             )
-            com.hermes.android.ui.design.GroupDivider()
+            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
             SettingsNavRow(
                 title = stringResource(R.string.mcp_servers),
                 subtitle = stringResource(R.string.catalog_sign_in_and_connection_tests),
@@ -174,7 +174,7 @@ internal fun ToolRow(tool: ToolOption, viewModel: ConfigViewModel, onClick: () -
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = com.hermes.android.ui.design.settingsCardColor(),
         ),
     ) {
         Row(
