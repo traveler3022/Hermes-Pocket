@@ -1,7 +1,8 @@
 name: README Screenshots
 
 # Renders the real chat and drawer composables (ReadmeScreenshotsTest) to PNGs
-# for the README. Run by hand; the images come out as the run's artifact.
+# for the README, and every Settings page (SettingsScreenshotsTest) for design
+# review. Run by hand; the images come out as the run's artifact.
 
 on:
   workflow_dispatch:
@@ -58,9 +59,10 @@ jobs:
       - name: Render screenshots
         env:
           README_SHOTS: '1'
+          SETTINGS_SHOTS: '1'
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testDebugUnitTest --tests '*ReadmeScreenshotsTest*' --no-daemon --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests '*ReadmeScreenshotsTest*' --tests '*SettingsScreenshotsTest*' --no-daemon --stacktrace
 
       - name: Upload screenshots
         if: always()
