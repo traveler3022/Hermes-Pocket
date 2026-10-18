@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -118,14 +119,17 @@ internal fun EnvKeysSection(snackbarHostState: SnackbarHostState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    // The chip gives way first, so "Add key" never breaks onto two lines.
                     FilterChip(
                         selected = state.showUnset,
                         onClick = { viewModel.setShowUnset(!state.showUnset) },
-                        label = { Text(stringResource(R.string.env_keys_show_unset)) },
+                        label = { Text(stringResource(R.string.env_keys_show_unset), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Spacer(Modifier.size(8.dp))
                     FilledTonalButton(onClick = { adding = true }) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text(stringResource(R.string.env_key_add), modifier = Modifier.padding(start = 6.dp))
+                        Text(stringResource(R.string.env_key_add), modifier = Modifier.padding(start = 6.dp), maxLines = 1, softWrap = false)
                     }
                 }
             }
