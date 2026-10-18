@@ -139,7 +139,7 @@ class SettingsScreenshotsTest {
     @Test fun providerAccounts() = shot("12-provider-accounts") { Page(SettingsSection.PROVIDER_ACCOUNTS) { ProviderAccountsSection(remember { SnackbarHostState() }, onOpen = {}) } }
     @Test fun approval() = shot("13-approval") { Page(SettingsSection.APPROVAL) { SettingsFolder { ApprovalCard(sample, config, showTitle = false) } } }
     @Test fun toolsets() = shot("14-toolsets") { Page(SettingsSection.TOOLSETS) { ToolsetsSection(sample, config) } }
-    @Test fun advanced() = shot("15-advanced") { Page(SettingsSection.ADVANCED) { AdvancedSection(sample, config, onOpen = {}) } }
+    @Test fun advanced() = shot("15-advanced") { Page(SettingsSection.ADVANCED) { AdvancedSection(sample, config) } }
     @Test fun envKeys() = shot("16-env-keys") { Page(SettingsSection.ENV_KEYS) { EnvKeysSection(remember { SnackbarHostState() }) } }
     @Test fun configEditor() = shot("17-config-editor") { Page(SettingsSection.CONFIG_EDITOR) { ConfigEditorSection(remember { SnackbarHostState() }) } }
     @Test fun about() = shot("18-updates") { Page(SettingsSection.ABOUT) { AboutSection() } }

@@ -359,6 +359,19 @@ private fun HermesNavHost(
             )
         }
 
+        // One Settings page on its own (Maintenance opens .env keys, config editor, connection log).
+        composable(
+            "config-page/{section}",
+            arguments = listOf(navArgument("section") { type = NavType.StringType }),
+        ) { entry ->
+            com.hermes.android.ui.screen.ConfigScreen(
+                initialPage = entry.arguments?.getString("section"),
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                themeModeState = themeModeState,
+                appLanguageState = appLanguageState,
+            )
+        }
+
         composable("config") {
             com.hermes.android.ui.screen.ConfigScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
@@ -431,6 +444,7 @@ private fun HermesNavHost(
         composable("ops") {
             com.hermes.android.ui.screen.OpsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onOpenSettingsPage = { navController.navigate("config-page/$it") },
             )
         }
 

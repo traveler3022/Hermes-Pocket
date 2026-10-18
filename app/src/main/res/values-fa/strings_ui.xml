@@ -268,7 +268,7 @@
     <string name="enter_preset_name">اسم پریست را وارد کنید</string>
     <string name="enter_sudo_password">رمز sudo بنویسید...</string>
     <string name="enter_value">مقدار را وارد کنید...</string>
-    <string name="env_mcp_console_log">env · MCP · لاگ اتصال</string>
+    <string name="env_mcp_console_log">MCP · کانفیگ فعلی</string>
     <string name="environment_variables_env">متغیرهای محیطی (.env)</string>
     <string name="erase">پاک کردن…</string>
     <string name="erase_built_in_memory">پاک کردن حافظهٔ داخلی</string>
@@ -1167,6 +1167,7 @@
     <string name="ach_cat_research_web">جستجو و وب</string>
     <string name="ach_cat_tool_mastery">استادی ابزار</string>
     <string name="ach_cat_vibe_coding">وایب‌کدینگ</string>
+    <string name="ops_config_logs">کانفیگ و لاگ</string>
     <string name="ops_title">نگهداری</string>
     <string name="ops_subtitle">عیب‌یابی، بکاپ و تعمیر روی دستگاه Hermes</string>
     <string name="ops_nav_subtitle">عیب‌یابی، بکاپ و بازگردانی، گزارش دیباگ، hookها</string>

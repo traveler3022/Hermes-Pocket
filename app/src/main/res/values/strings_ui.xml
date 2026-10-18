@@ -269,7 +269,7 @@
     <string name="enter_preset_name">Enter preset name</string>
     <string name="enter_sudo_password">Enter sudo password...</string>
     <string name="enter_value">Enter value...</string>
-    <string name="env_mcp_console_log">env · MCP · connection log</string>
+    <string name="env_mcp_console_log">MCP · current config</string>
     <string name="environment_variables_env">Environment Variables (.env)</string>
     <string name="erase">Erase…</string>
     <string name="erase_built_in_memory">Erase built-in memory</string>
@@ -1169,6 +1169,7 @@
     <string name="ach_cat_research_web">Research &amp; web</string>
     <string name="ach_cat_tool_mastery">Tool mastery</string>
     <string name="ach_cat_vibe_coding">Vibe coding</string>
+    <string name="ops_config_logs">Config &amp; logs</string>
     <string name="ops_title">Maintenance</string>
     <string name="ops_subtitle">Diagnostics, backup and repair on the Hermes machine</string>
     <string name="ops_nav_subtitle">Doctor, backup and restore, debug report, hooks</string>

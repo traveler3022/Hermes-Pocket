@@ -34,20 +34,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.hermes.android.R
-import androidx.compose.material.icons.Icons
-import com.hermes.android.ui.icons.filled.Description
-import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
- * Advanced (approved design I): env editor + reload, MCP servers editor +
- * reload, the connection log, and the raw config view.
+ * Advanced (approved design I): MCP servers editor + reload and the raw config view.
+ * The .env and config editors and the connection log live under Maintenance.
  */
 @Composable
 internal fun AdvancedSection(
     state: com.hermes.android.ui.viewmodel.ConfigUiState,
     viewModel: ConfigViewModel,
-    onOpen: (SettingsSection) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -56,98 +52,6 @@ internal fun AdvancedSection(
             .padding(com.hermes.android.ui.design.SettingsPagePadding),
         verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
-        SettingsCardGroup {
-            SettingsNavRow(
-                title = stringResource(R.string.env_keys_title),
-                subtitle = stringResource(R.string.env_keys_subtitle),
-                icon = Icons.Default.Key,
-                onClick = { onOpen(SettingsSection.ENV_KEYS) },
-            )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
-            SettingsNavRow(
-                title = stringResource(R.string.config_editor_title),
-                subtitle = stringResource(R.string.config_editor_subtitle),
-                icon = Icons.Default.Description,
-                onClick = { onOpen(SettingsSection.CONFIG_EDITOR) },
-            )
-        }
-        var editingEnv by remember { mutableStateOf(false) }
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
-        ) {
-            Column(
-                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.environment_variables_env),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    TextButton(onClick = { editingEnv = !editingEnv }) {
-                        Text(if (editingEnv) stringResource(R.string.close) else stringResource(R.string.edit))
-                    }
-                }
-                Text(
-                    text = stringResource(R.string.hermes_env_api_keys_and_other_env_vars),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (editingEnv) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("\u26A0\uFE0F", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = stringResource(R.string.advanced_setting_if_you_dont_know_what),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                LaunchedEffect(Unit) { viewModel.loadEnvFile() }
-                if (state.isLoadingEnv) {
-                    CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    var envText by remember(state.envText) { mutableStateOf(state.envText) }
-                    OutlinedTextField(
-                        value = envText,
-                        onValueChange = { envText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        minLines = 4,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.reloadEnv() },
-                            modifier = Modifier.weight(1f),
-                        ) { Text(stringResource(R.string.reload)) }
-                        if (envText != state.envText) {
-                            Button(
-                                onClick = { viewModel.saveEnvFile(envText) },
-                                modifier = Modifier.weight(1f),
-                            ) { Text(stringResource(R.string.save)) }
-                        }
-                    }
-                }
-                }
-            }
-        }
-
         var editingMcp by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -225,7 +129,115 @@ internal fun AdvancedSection(
             }
         }
 
-        SettingsLabel(stringResource(R.string.connection_log))
+        SettingsLabel(stringResource(R.string.current_configuration))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = com.hermes.android.ui.design.settingsCardColor(),
+            ),
+        ) {
+            Text(
+                text = state.configYaml.ifEmpty { "(empty)" },
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
+            )
+        }
+    }
+}
+
+
+/** ~/.hermes/.env as raw text, with reload; shown at the top of the .env keys page. */
+@Composable
+internal fun EnvFileCard(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    var editingEnv by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
+    ) {
+        Column(
+            modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.environment_variables_env),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                TextButton(onClick = { editingEnv = !editingEnv }) {
+                    Text(if (editingEnv) stringResource(R.string.close) else stringResource(R.string.edit))
+                }
+            }
+            Text(
+                text = stringResource(R.string.hermes_env_api_keys_and_other_env_vars),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (editingEnv) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
+                    .padding(10.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("\u26A0\uFE0F", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = stringResource(R.string.advanced_setting_if_you_dont_know_what),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            LaunchedEffect(Unit) { viewModel.loadEnvFile() }
+            if (state.isLoadingEnv) {
+                CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp)
+            } else {
+                var envText by remember(state.envText) { mutableStateOf(state.envText) }
+                OutlinedTextField(
+                    value = envText,
+                    onValueChange = { envText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 4,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { viewModel.reloadEnv() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.reload)) }
+                    if (envText != state.envText) {
+                        Button(
+                            onClick = { viewModel.saveEnvFile(envText) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(stringResource(R.string.save)) }
+                    }
+                }
+            }
+            }
+        }
+    }
+}
+
+/** Every connect, drop and retry, from the on-device connection journal (Maintenance). */
+@Composable
+internal fun ConnectionLogSection(
+    state: com.hermes.android.ui.viewmodel.ConfigUiState,
+    viewModel: ConfigViewModel,
+) {
+    SettingsFolder {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = com.hermes.android.ui.design.settingsCardColor()),
@@ -276,19 +288,5 @@ internal fun AdvancedSection(
             }
         }
 
-        SettingsLabel(stringResource(R.string.current_configuration))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = com.hermes.android.ui.design.settingsCardColor(),
-            ),
-        ) {
-            Text(
-                text = state.configYaml.ifEmpty { "(empty)" },
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(com.hermes.android.ui.design.HxSpace.inner),
-            )
-        }
     }
 }

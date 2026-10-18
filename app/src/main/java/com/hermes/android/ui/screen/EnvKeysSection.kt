@@ -50,9 +50,13 @@ import com.hermes.android.ui.icons.filled.Visibility
 import com.hermes.android.ui.icons.filled.VisibilityOff
 import com.hermes.android.ui.viewmodel.EnvKeysViewModel
 
-/** Settings › Advanced › `.env` keys: each key with its masked value; show, edit, add, remove. */
+/** Maintenance › `.env` keys: each key with its masked value; show, edit, add, remove. */
 @Composable
-internal fun EnvKeysSection(snackbarHostState: SnackbarHostState) {
+internal fun EnvKeysSection(
+    snackbarHostState: SnackbarHostState,
+    /** Shown above the key list (the raw .env editor). */
+    header: (@Composable () -> Unit)? = null,
+) {
     val viewModel: EnvKeysViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -97,6 +101,11 @@ internal fun EnvKeysSection(snackbarHostState: SnackbarHostState) {
         modifier = Modifier.fillMaxSize(),
         contentPadding = com.hermes.android.ui.design.SettingsPagePadding,
     ) {
+        if (header != null) {
+            item(key = "env-file") {
+                Box(Modifier.padding(bottom = com.hermes.android.ui.design.HxSpace.group)) { header() }
+            }
+        }
         item {
             Column(
                 modifier = Modifier.padding(bottom = com.hermes.android.ui.design.HxSpace.group),

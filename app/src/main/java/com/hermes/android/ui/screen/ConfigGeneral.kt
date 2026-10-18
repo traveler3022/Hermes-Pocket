@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.hermes.android.R
+import com.hermes.android.ui.icons.filled.Language
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.i18n.AppLanguageState
 import com.hermes.android.ui.i18n.t
@@ -54,6 +55,7 @@ import kotlin.math.roundToInt
 internal fun GeneralTab(
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
+    onOpenLanguage: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -62,7 +64,16 @@ internal fun GeneralTab(
             .padding(com.hermes.android.ui.design.SettingsPagePadding),
         verticalArrangement = Arrangement.spacedBy(com.hermes.android.ui.design.HxSpace.group),
     ) {
-        // Language now has its own row on the Control Center root (LanguageSection).
+        if (appLanguageState != null) {
+            SettingsCardGroup {
+                SettingsNavRow(
+                    title = stringResource(R.string.language),
+                    subtitle = languageLabel(appLanguageState.language),
+                    icon = androidx.compose.material.icons.Icons.Default.Language,
+                    onClick = onOpenLanguage,
+                )
+            }
+        }
 
         if (themeModeState != null) {
             Card(

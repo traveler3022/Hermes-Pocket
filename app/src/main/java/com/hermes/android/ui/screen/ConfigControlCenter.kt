@@ -63,7 +63,6 @@ import com.hermes.android.ui.icons.filled.Extension
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.icons.filled.Key
-import com.hermes.android.ui.icons.filled.Language
 import com.hermes.android.ui.icons.filled.Link
 import com.hermes.android.ui.icons.filled.Palette
 import com.hermes.android.ui.icons.filled.Psychology
@@ -177,6 +176,17 @@ internal fun ControlCenterMenu(
             )
         }
 
+        // ── Appearance (theme, colours, language) ──
+        CcGroup {
+            CcRow(
+                title = stringResource(R.string.appearance),
+                icon = Icons.Default.Palette,
+                tint = HxIconColors.purple,
+                value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
+                onClick = { onOpen(SettingsSection.APPEARANCE) },
+            )
+        }
+
         // ── Capabilities & permissions ──
         CcGroup {
             CcRow(
@@ -256,24 +266,6 @@ internal fun ControlCenterMenu(
 
         // ── App ──
         CcGroup {
-            CcRow(
-                title = stringResource(R.string.appearance),
-                icon = Icons.Default.Palette,
-                tint = HxIconColors.purple,
-                value = themeModeState?.let { "${themeModeLabel(it.mode)} · ${t(it.colorTheme.displayEn, it.colorTheme.displayFa)}" },
-                onClick = { onOpen(SettingsSection.APPEARANCE) },
-            )
-            if (appLanguageState != null) {
-                CcDivider()
-                CcRow(
-                    title = stringResource(R.string.language),
-                    icon = Icons.Default.Language,
-                    tint = HxIconColors.indigo,
-                    value = languageLabel(appLanguageState.language),
-                    onClick = { onOpen(SettingsSection.LANGUAGE) },
-                )
-            }
-            CcDivider()
             CcRow(
                 title = stringResource(R.string.analytics_title),
                 icon = Icons.Default.BarChart,
@@ -527,7 +519,7 @@ private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
 }
 
 @Composable
-private fun languageLabel(lang: AppLanguage): String = when (lang) {
+internal fun languageLabel(lang: AppLanguage): String = when (lang) {
     AppLanguage.AUTO -> stringResource(R.string.auto)
     AppLanguage.ENGLISH -> "English"
     AppLanguage.FARSI -> "فارسی"

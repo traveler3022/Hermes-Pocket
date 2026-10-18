@@ -137,6 +137,8 @@ fun ConfigScreen(
     onNavigateToOps: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
+    /** A [SettingsSection] name to open straight into (from Maintenance); back then leaves Settings. */
+    initialPage: String? = null,
     viewModel: ConfigViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -161,9 +163,11 @@ fun ConfigScreen(
     // Nested navigation: null = the top-level category menu; a value = drilled
     // into that category. The back arrow pops one level (category -> menu ->
     // out of Settings), so Settings can grow deep without one giant scroll.
-    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    val initialSection = remember(initialPage) { SettingsSection.entries.firstOrNull { it.name == initialPage } }
+    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initialSection) }
+    val goBack: () -> Unit = { if (section == null || section == initialSection) onNavigateBack() else section = section?.parent }
 
-    androidx.activity.compose.BackHandler(enabled = section != null) { section = section?.parent }
+    androidx.activity.compose.BackHandler(enabled = section != null && section != initialSection) { section = section?.parent }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -175,7 +179,7 @@ fun ConfigScreen(
     com.hermes.android.ui.design.HermesScaffold(
         title = section?.let { t(it.titleEn, it.titleFa) } ?: stringResource(R.string.control_center),
         subtitle = if (section == null) stringResource(R.string.agent_server_and_app_configuration) else null,
-        onBack = { if (section != null) section = section?.parent else onNavigateBack() },
+        onBack = goBack,
         snackbarHostState = snackbarHostState,
     ) { padding ->
         Box(
@@ -213,6 +217,7 @@ fun ConfigScreen(
                 SettingsSection.APPEARANCE -> GeneralTab(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
+                    onOpenLanguage = { section = SettingsSection.LANGUAGE },
                 )
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
@@ -249,8 +254,9 @@ fun ConfigScreen(
                     onNavigateToSkills = onNavigateToSkills,
                     onNavigateToMcp = onNavigateToMcp,
                 )
-                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel, onOpen = { section = it })
-                SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState)
+                SettingsSection.ADVANCED -> AdvancedSection(uiState, viewModel)
+                SettingsSection.ENV_KEYS -> EnvKeysSection(snackbarHostState) { EnvFileCard(uiState, viewModel) }
+                SettingsSection.CONNECTION_LOG -> ConnectionLogSection(uiState, viewModel)
                 SettingsSection.CONFIG_EDITOR -> ConfigEditorSection(snackbarHostState)
                 SettingsSection.ABOUT -> AboutSection()
                 SettingsSection.LANGUAGE -> LanguageSection(appLanguageState)
@@ -277,8 +283,9 @@ internal enum class SettingsSection(
     SOUL("SOUL.md", "SOUL.md", PERSONALITY),
     MEMORY("Memory", "حافظه", PERSONALITY),
     ADVANCED("Advanced", "پیشرفته"),
-    ENV_KEYS(".env keys", "کلیدهای .env", ADVANCED),
-    CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ", ADVANCED),
+    ENV_KEYS(".env keys", "کلیدهای .env"),
+    CONFIG_EDITOR("Config editor", "ویرایشگر کانفیگ"),
+    CONNECTION_LOG("Connection log", "لاگ اتصال"),
     MODELS("Models & Providers", "مدل و پرووایدر"),
     REASONING("Reasoning depth", "عمق تفکر", MODELS),
     AUX_MODELS("Task models", "مدل کارهای جانبی", MODELS),
@@ -289,7 +296,7 @@ internal enum class SettingsSection(
     TOOLS("Tools", "ابزارها"),
     TOOLSETS("Toolsets", "گروه\u200Cهای ابزار"),
     ABOUT("Updates", "به\u200Cروزرسانی"),
-    LANGUAGE("Language", "زبان"),
+    LANGUAGE("Language", "زبان", APPEARANCE),
     PHONE_ASSISTANT("Phone assistant", "دستیار گوشی"),
     KANBAN("Kanban board", "تابلوی کانبان"),
 }
