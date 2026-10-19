@@ -330,7 +330,7 @@ val aether_dark_surfaceHigher = Color(0xFF2C3036)
 
 // ── Carbon — Perplexity-inspired: خاکستری تیره + teal ──
 
-val carbon_light_primary = Color(0xFF0369A1)
+val carbon_light_primary = Color(0xFF0099CC)
 val carbon_light_onPrimary = Color(0xFFFFFFFF)
 val carbon_light_primaryContainer = Color(0xFFE0F4FA)
 val carbon_light_onPrimaryContainer = Color(0xFF003344)
