@@ -46,7 +46,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.hermes.android.ui.design.hxMessageMaxWidth
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -69,22 +68,17 @@ internal fun UserMessageBubble(
     var isExpanded by remember { mutableStateOf(!isLongMessage) }
     var showMenu by remember { mutableStateOf(false) }
 
-    val aether = com.hermes.android.ui.theme.LocalAetherStyle.current
-    val bubbleShape = when {
-        // Aether's UserTextBubble: 24 dp on every corner, its lavender bubble colour.
-        aether -> RoundedCornerShape(24.dp)
-        isLastInGroup -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-        else -> RoundedCornerShape(16.dp)
+    val bubbleShape = if (isLastInGroup) {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(16.dp)
     }
-    // Aether-style user bubble: a soft primary tint (no hard fill or border)
-    // with a gentle shadow to lift it off the background — readable in every
-    // theme because the tint is translucent and the text stays onSurface.
-    val bubbleColor = if (aether) MaterialTheme.colorScheme.tertiaryContainer
-        // 0.24, not 0.14: on near-black the lighter tint read as no bubble at all
-        // (1.19:1 against the chat background); this keeps it a quiet region.
-        else MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-    val bubbleTextColor = if (aether) MaterialTheme.colorScheme.onPrimaryContainer
-        else MaterialTheme.colorScheme.onSurface
+    // A soft primary tint (no hard fill or border) with a gentle shadow — readable
+    // in every theme because the tint is translucent and the text stays onSurface.
+    // 0.24, not 0.14: on near-black the lighter tint read as no bubble at all
+    // (1.19:1 against the chat background); this keeps it a quiet region.
+    val bubbleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+    val bubbleTextColor = MaterialTheme.colorScheme.onSurface
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -96,8 +90,8 @@ internal fun UserMessageBubble(
         ) {
             Box(
                 modifier = Modifier
-                    .widthIn(max = if (aether) hxMessageMaxWidth(fraction = 0.72f, ceiling = 520.dp) else hxUserBubbleMaxWidth())
-                    .hxSoftShadow(radius = if (aether) 10.dp else 12.dp, shape = bubbleShape)
+                    .widthIn(max = hxUserBubbleMaxWidth())
+                    .hxSoftShadow(radius = 12.dp, shape = bubbleShape)
                     .clip(bubbleShape)
                     .background(bubbleColor)
                     .combinedClickable(
@@ -108,10 +102,7 @@ internal fun UserMessageBubble(
                 CompositionLocalProvider(LocalContentColor provides bubbleTextColor) {
                     Column(
                         modifier = Modifier
-                            .then(
-                                if (aether) Modifier.padding(horizontal = 18.dp, vertical = 14.dp)
-                                else Modifier.padding(12.dp),
-                            )
+                            .padding(12.dp)
                             .animateContentSize(),
                     ) {
                         if (message.attachments.isNotEmpty()) {

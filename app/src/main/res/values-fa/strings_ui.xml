@@ -1325,4 +1325,5 @@
         <item>در حال شکل دادن پاسخ</item>
         <item>در حال ایده‌پردازی</item>
     </string-array>
+    <string name="status_waiting">منتظر تو</string>
 </resources>

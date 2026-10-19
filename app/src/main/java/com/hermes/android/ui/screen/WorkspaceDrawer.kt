@@ -44,6 +44,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxStatus
@@ -303,15 +311,6 @@ private fun DrawerSessionRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // One colour per meaning (HxStatus). Running used to be the theme's
-        // primary, which in the default Hermes palette IS this amber — so a
-        // chat that was working and one waiting on you showed the same dot.
-        val dot = when (pulse) {
-            SessionPulse.Running -> HxStatus.running
-            SessionPulse.Waiting -> HxStatus.waiting
-            SessionPulse.Failed -> HxStatus.error
-            SessionPulse.None -> null
-        }
         if (unread > 0) {
             Box(
                 Modifier
@@ -327,19 +326,60 @@ private fun DrawerSessionRow(
                 )
             }
         }
-        if (dot != null) {
+        SessionPulseMark(pulse)
+    }
+}
+
+/**
+ * A chat's state at a glance, told by shape as well as colour: with colour
+ * alone, amber "waiting" and red "failed" are the same dot to someone who
+ * cannot tell red from green. Running beats, waiting is a still dot, failed
+ * is a small cross. Colours come from HxStatus, one per meaning.
+ */
+@Composable
+private fun SessionPulseMark(pulse: SessionPulse) {
+    val label = when (pulse) {
+        SessionPulse.Running -> stringResource(R.string.status_in_progress)
+        SessionPulse.Waiting -> stringResource(R.string.status_waiting)
+        SessionPulse.Failed -> stringResource(R.string.status_failed)
+        SessionPulse.None -> ""
+    }
+    val described = Modifier.semantics { contentDescription = label }
+    when (pulse) {
+        SessionPulse.None -> Unit
+        SessionPulse.Running -> {
+            val reduceMotion = rememberReduceMotion()
+            val alpha by rememberInfiniteTransition(label = "pulse_running").animateFloat(
+                initialValue = 1f,
+                targetValue = if (reduceMotion) 1f else 0.35f,
+                animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+                label = "pulse_running_alpha",
+            )
             Spacer(
-                Modifier
+                described
                     .size(7.dp)
+                    .graphicsLayer { this.alpha = alpha }
                     .clip(CircleShape)
-                    .background(dot),
+                    .background(HxStatus.running),
             )
         }
+        SessionPulse.Waiting -> Spacer(
+            described
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(HxStatus.waiting),
+        )
+        SessionPulse.Failed -> Icon(
+            imageVector = HxIcons.X,
+            contentDescription = label,
+            modifier = Modifier.size(12.dp),
+            tint = HxStatus.error,
+        )
     }
 }
 
 /** Warning amber — the approval card's colour, for anything waiting on the user. */
-internal val HermesAmber = HxStatus.waiting
+internal val HermesAmber = com.hermes.android.ui.design.HxAmber
 
 /** Near-black, so a count on [HermesAmber] stays readable in either theme. */
 private val BadgeTextOnAmber = Color(0xFF1A1205)

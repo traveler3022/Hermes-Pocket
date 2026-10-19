@@ -1345,4 +1345,5 @@
         <item>Formulating</item>
         <item>Brainstorming</item>
     </string-array>
+    <string name="status_waiting">Waiting for you</string>
 </resources>

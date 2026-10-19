@@ -12,9 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.hermes.android.ui.viewmodel.MESSAGE_REACTIONS_PREF
 
@@ -40,19 +37,21 @@ enum class AppFont(val key: String, val displayEn: String, val displayFa: String
 }
 
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
-    HERMES("hermes", "Hermes", "هرمس"),
-    BLUE_EYE("blue_eye", "Blue Eye", "آبی چشم"),
-    // The key stays "claude" so a saved choice survives.
-    MOCHA("claude", "Mocha", "موکا"),
-    MIDNIGHT("midnight", "Midnight", "میدنایت"),
-    // The key stays "indigo_pro" so a saved choice survives.
-    MANUS("indigo_pro", "Manus", "مانوس"),
-    AETHER("aether", "Aether", "اتر"),
-    CARBON("carbon", "Carbon", "کربن");
+    // Two families, each with a day and a night palette; the app's light/dark
+    // setting (or the phone's, on System) picks which one shows.
+    CARBON("carbon", "Carbon", "کربن"),
+    LAJVARD("lajvard", "Lajvard", "لاجورد");
 
     companion object {
-        // Carbon (near-black + neutral grey) is the default.
-        fun fromKey(key: String): ColorTheme = entries.firstOrNull { it.key == key } ?: CARBON
+        /**
+         * Carbon is the default. The seven palettes before these two were folded in:
+         * a saved choice moves to the family closest in feel — the tinted, warm or
+         * coloured ones to Lajvard, the neutral ones to Carbon.
+         */
+        fun fromKey(key: String): ColorTheme = when (key) {
+            "lajvard", "hermes", "blue_eye", "claude", "aether" -> LAJVARD
+            else -> CARBON
+        }
     }
 }
 
@@ -159,303 +158,11 @@ class ThemeModeState(context: Context) {
 
 }
 
-// ── Default Hermes palette ──
-
-private val LightColors = lightColorScheme(
-    primary = md_light_primary,
-    onPrimary = md_light_onPrimary,
-    primaryContainer = md_light_primaryContainer,
-    onPrimaryContainer = md_light_onPrimaryContainer,
-    secondary = md_light_secondary,
-    onSecondary = md_light_onSecondary,
-    secondaryContainer = md_light_secondaryContainer,
-    onSecondaryContainer = md_light_onSecondaryContainer,
-    tertiary = md_light_tertiary,
-    onTertiary = md_light_onTertiary,
-    tertiaryContainer = md_light_tertiaryContainer,
-    onTertiaryContainer = md_light_onTertiaryContainer,
-    error = md_light_error,
-    onError = md_light_onError,
-    errorContainer = md_light_errorContainer,
-    onErrorContainer = md_light_onErrorContainer,
-    background = md_light_background,
-    onBackground = md_light_onBackground,
-    surface = md_light_surface,
-    onSurface = md_light_onSurface,
-    surfaceVariant = md_light_surfaceVariant,
-    onSurfaceVariant = md_light_onSurfaceVariant,
-    outline = md_light_outline,
-    outlineVariant = md_light_outlineVariant,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = md_dark_primary,
-    onPrimary = md_dark_onPrimary,
-    primaryContainer = md_dark_primaryContainer,
-    onPrimaryContainer = md_dark_onPrimaryContainer,
-    secondary = md_dark_secondary,
-    onSecondary = md_dark_onSecondary,
-    secondaryContainer = md_dark_secondaryContainer,
-    onSecondaryContainer = md_dark_onSecondaryContainer,
-    tertiary = md_dark_tertiary,
-    onTertiary = md_dark_onTertiary,
-    tertiaryContainer = md_dark_tertiaryContainer,
-    onTertiaryContainer = md_dark_onTertiaryContainer,
-    error = md_dark_error,
-    onError = md_dark_onError,
-    errorContainer = md_dark_errorContainer,
-    onErrorContainer = md_dark_onErrorContainer,
-    background = md_dark_background,
-    onBackground = md_dark_onBackground,
-    surface = md_dark_surface,
-    onSurface = md_dark_onSurface,
-    surfaceVariant = md_dark_surfaceVariant,
-    onSurfaceVariant = md_dark_onSurfaceVariant,
-    outline = md_dark_outline,
-    outlineVariant = md_dark_outlineVariant,
-)
-
-// ── Blue Eye palette ──
-
-private val BlueLightColors = lightColorScheme(
-    primary = blue_light_primary,
-    onPrimary = blue_light_onPrimary,
-    primaryContainer = blue_light_primaryContainer,
-    onPrimaryContainer = blue_light_onPrimaryContainer,
-    secondary = blue_light_secondary,
-    onSecondary = blue_light_onSecondary,
-    secondaryContainer = blue_light_secondaryContainer,
-    onSecondaryContainer = blue_light_onSecondaryContainer,
-    tertiary = blue_light_tertiary,
-    onTertiary = blue_light_onTertiary,
-    tertiaryContainer = blue_light_tertiaryContainer,
-    onTertiaryContainer = blue_light_onTertiaryContainer,
-    error = blue_light_error,
-    onError = blue_light_onError,
-    errorContainer = blue_light_errorContainer,
-    onErrorContainer = blue_light_onErrorContainer,
-    background = blue_light_background,
-    onBackground = blue_light_onBackground,
-    surface = blue_light_surface,
-    onSurface = blue_light_onSurface,
-    surfaceVariant = blue_light_surfaceVariant,
-    onSurfaceVariant = blue_light_onSurfaceVariant,
-    outline = blue_light_outline,
-    outlineVariant = blue_light_outlineVariant,
-)
-
-private val BlueDarkColors = darkColorScheme(
-    primary = blue_dark_primary,
-    onPrimary = blue_dark_onPrimary,
-    primaryContainer = blue_dark_primaryContainer,
-    onPrimaryContainer = blue_dark_onPrimaryContainer,
-    secondary = blue_dark_secondary,
-    onSecondary = blue_dark_onSecondary,
-    secondaryContainer = blue_dark_secondaryContainer,
-    onSecondaryContainer = blue_dark_onSecondaryContainer,
-    tertiary = blue_dark_tertiary,
-    onTertiary = blue_dark_onTertiary,
-    tertiaryContainer = blue_dark_tertiaryContainer,
-    onTertiaryContainer = blue_dark_onTertiaryContainer,
-    error = blue_dark_error,
-    onError = blue_dark_onError,
-    errorContainer = blue_dark_errorContainer,
-    onErrorContainer = blue_dark_onErrorContainer,
-    background = blue_dark_background,
-    onBackground = blue_dark_onBackground,
-    surface = blue_dark_surface,
-    onSurface = blue_dark_onSurface,
-    surfaceVariant = blue_dark_surfaceVariant,
-    onSurfaceVariant = blue_dark_onSurfaceVariant,
-    outline = blue_dark_outline,
-    outlineVariant = blue_dark_outlineVariant,
-)
-
-// ── Midnight palette ──
-
-private val MidnightLightColors = lightColorScheme(
-    primary = midnight_light_primary,
-    onPrimary = midnight_light_onPrimary,
-    primaryContainer = midnight_light_primaryContainer,
-    onPrimaryContainer = midnight_light_onPrimaryContainer,
-    secondary = midnight_light_secondary,
-    onSecondary = midnight_light_onSecondary,
-    secondaryContainer = midnight_light_secondaryContainer,
-    onSecondaryContainer = midnight_light_onSecondaryContainer,
-    tertiary = midnight_light_tertiary,
-    onTertiary = midnight_light_onTertiary,
-    tertiaryContainer = midnight_light_tertiaryContainer,
-    onTertiaryContainer = midnight_light_onTertiaryContainer,
-    error = midnight_light_error,
-    onError = midnight_light_onError,
-    errorContainer = midnight_light_errorContainer,
-    onErrorContainer = midnight_light_onErrorContainer,
-    background = midnight_light_background,
-    onBackground = midnight_light_onBackground,
-    surface = midnight_light_surface,
-    onSurface = midnight_light_onSurface,
-    surfaceVariant = midnight_light_surfaceVariant,
-    onSurfaceVariant = midnight_light_onSurfaceVariant,
-    outline = midnight_light_outline,
-    outlineVariant = midnight_light_outlineVariant,
-)
-
-private val MidnightDarkColors = darkColorScheme(
-    primary = midnight_dark_primary,
-    onPrimary = midnight_dark_onPrimary,
-    primaryContainer = midnight_dark_primaryContainer,
-    onPrimaryContainer = midnight_dark_onPrimaryContainer,
-    secondary = midnight_dark_secondary,
-    onSecondary = midnight_dark_onSecondary,
-    secondaryContainer = midnight_dark_secondaryContainer,
-    onSecondaryContainer = midnight_dark_onSecondaryContainer,
-    tertiary = midnight_dark_tertiary,
-    onTertiary = midnight_dark_onTertiary,
-    tertiaryContainer = midnight_dark_tertiaryContainer,
-    onTertiaryContainer = midnight_dark_onTertiaryContainer,
-    error = midnight_dark_error,
-    onError = midnight_dark_onError,
-    errorContainer = midnight_dark_errorContainer,
-    onErrorContainer = midnight_dark_onErrorContainer,
-    background = midnight_dark_background,
-    onBackground = midnight_dark_onBackground,
-    surface = midnight_dark_surface,
-    onSurface = midnight_dark_onSurface,
-    surfaceVariant = midnight_dark_surfaceVariant,
-    onSurfaceVariant = midnight_dark_onSurfaceVariant,
-    outline = midnight_dark_outline,
-    outlineVariant = midnight_dark_outlineVariant,
-)
-
-// ── Manus palette ──
-
-private val ManusLightColors = lightColorScheme(
-    primary = manus_light_primary,
-    onPrimary = manus_light_onPrimary,
-    primaryContainer = manus_light_primaryContainer,
-    onPrimaryContainer = manus_light_onPrimaryContainer,
-    secondary = manus_light_secondary,
-    onSecondary = manus_light_onSecondary,
-    secondaryContainer = manus_light_secondaryContainer,
-    onSecondaryContainer = manus_light_onSecondaryContainer,
-    tertiary = manus_light_tertiary,
-    onTertiary = manus_light_onTertiary,
-    tertiaryContainer = manus_light_tertiaryContainer,
-    onTertiaryContainer = manus_light_onTertiaryContainer,
-    error = manus_light_error,
-    onError = manus_light_onError,
-    errorContainer = manus_light_errorContainer,
-    onErrorContainer = manus_light_onErrorContainer,
-    background = manus_light_background,
-    onBackground = manus_light_onBackground,
-    surface = manus_light_surface,
-    onSurface = manus_light_onSurface,
-    surfaceVariant = manus_light_surfaceVariant,
-    onSurfaceVariant = manus_light_onSurfaceVariant,
-    outline = manus_light_outline,
-    outlineVariant = manus_light_outlineVariant,
-)
-
-private val ManusDarkColors = darkColorScheme(
-    primary = manus_dark_primary,
-    onPrimary = manus_dark_onPrimary,
-    primaryContainer = manus_dark_primaryContainer,
-    onPrimaryContainer = manus_dark_onPrimaryContainer,
-    secondary = manus_dark_secondary,
-    onSecondary = manus_dark_onSecondary,
-    secondaryContainer = manus_dark_secondaryContainer,
-    onSecondaryContainer = manus_dark_onSecondaryContainer,
-    tertiary = manus_dark_tertiary,
-    onTertiary = manus_dark_onTertiary,
-    tertiaryContainer = manus_dark_tertiaryContainer,
-    onTertiaryContainer = manus_dark_onTertiaryContainer,
-    error = manus_dark_error,
-    onError = manus_dark_onError,
-    errorContainer = manus_dark_errorContainer,
-    onErrorContainer = manus_dark_onErrorContainer,
-    background = manus_dark_background,
-    onBackground = manus_dark_onBackground,
-    surface = manus_dark_surface,
-    onSurface = manus_dark_onSurface,
-    surfaceVariant = manus_dark_surfaceVariant,
-    onSurfaceVariant = manus_dark_onSurfaceVariant,
-    outline = manus_dark_outline,
-    outlineVariant = manus_dark_outlineVariant,
-)
-
-// ── Aether palette ──
-// Sets its own surface container roles from Aether's surface ladder, so it skips
-// withSurfaceContainers below.
-
-private val AetherLightColors = lightColorScheme(
-    primary = aether_light_primary,
-    onPrimary = aether_light_onPrimary,
-    primaryContainer = aether_light_primaryContainer,
-    onPrimaryContainer = aether_light_onPrimaryContainer,
-    secondary = aether_light_secondary,
-    onSecondary = aether_light_onSecondary,
-    secondaryContainer = aether_light_secondaryContainer,
-    onSecondaryContainer = aether_light_onSecondaryContainer,
-    tertiary = aether_light_tertiary,
-    onTertiary = aether_light_onTertiary,
-    tertiaryContainer = aether_light_tertiaryContainer,
-    onTertiaryContainer = aether_light_onTertiaryContainer,
-    error = aether_light_error,
-    onError = aether_light_onError,
-    errorContainer = aether_light_errorContainer,
-    onErrorContainer = aether_light_onErrorContainer,
-    background = aether_light_background,
-    onBackground = aether_light_onBackground,
-    surface = aether_light_surface,
-    onSurface = aether_light_onSurface,
-    surfaceVariant = aether_light_surfaceVariant,
-    onSurfaceVariant = aether_light_onSurfaceVariant,
-    outline = aether_light_outline,
-    outlineVariant = aether_light_outlineVariant,
-    surfaceContainerLowest = aether_light_surface,
-    surfaceContainerLow = aether_light_surfaceLow,
-    surfaceContainer = aether_light_surfaceHigh,
-    surfaceContainerHigh = aether_light_surfaceHigher,
-    surfaceContainerHighest = aether_light_surfaceVariant,
-    surfaceBright = aether_light_surface,
-    surfaceDim = aether_light_surfaceHigher,
-)
-
-private val AetherDarkColors = darkColorScheme(
-    primary = aether_dark_primary,
-    onPrimary = aether_dark_onPrimary,
-    primaryContainer = aether_dark_primaryContainer,
-    onPrimaryContainer = aether_dark_onPrimaryContainer,
-    secondary = aether_dark_secondary,
-    onSecondary = aether_dark_onSecondary,
-    secondaryContainer = aether_dark_secondaryContainer,
-    onSecondaryContainer = aether_dark_onSecondaryContainer,
-    tertiary = aether_dark_tertiary,
-    onTertiary = aether_dark_onTertiary,
-    tertiaryContainer = aether_dark_tertiaryContainer,
-    onTertiaryContainer = aether_dark_onTertiaryContainer,
-    error = aether_dark_error,
-    onError = aether_dark_onError,
-    errorContainer = aether_dark_errorContainer,
-    onErrorContainer = aether_dark_onErrorContainer,
-    background = aether_dark_background,
-    onBackground = aether_dark_onBackground,
-    surface = aether_dark_surface,
-    onSurface = aether_dark_onSurface,
-    surfaceVariant = aether_dark_surfaceVariant,
-    onSurfaceVariant = aether_dark_onSurfaceVariant,
-    outline = aether_dark_outline,
-    outlineVariant = aether_dark_outlineVariant,
-    surfaceContainerLowest = aether_dark_background,
-    surfaceContainerLow = aether_dark_surface,
-    surfaceContainer = aether_dark_surfaceHigh,
-    surfaceContainerHigh = aether_dark_surfaceHigher,
-    surfaceContainerHighest = aether_dark_surfaceVariant,
-    surfaceBright = aether_dark_surfaceVariant,
-    surfaceDim = aether_dark_background,
-)
-
-// ── Carbon — Perplexity-inspired: near-black + teal ──
+// ── Palettes ──
+// Every role is set explicitly, surface containers included: sheets, dialogs and
+// menus are painted with those, and left unset they fall back to Material's
+// lavender-tinted baseline. A theme is only these values — no screen checks which
+// theme is on.
 
 private val CarbonLightColors = lightColorScheme(
     primary = carbon_light_primary,
@@ -487,6 +194,8 @@ private val CarbonLightColors = lightColorScheme(
     surfaceContainer = carbon_light_surfaceContainer,
     surfaceContainerHigh = carbon_light_surfaceContainerHigh,
     surfaceContainerHighest = carbon_light_surfaceContainerHighest,
+    surfaceBright = carbon_light_surfaceContainerLowest,
+    surfaceDim = carbon_light_surfaceContainerHighest,
 )
 
 private val CarbonDarkColors = darkColorScheme(
@@ -519,77 +228,77 @@ private val CarbonDarkColors = darkColorScheme(
     surfaceContainer = carbon_dark_surfaceContainer,
     surfaceContainerHigh = carbon_dark_surfaceContainerHigh,
     surfaceContainerHighest = carbon_dark_surfaceContainerHighest,
+    surfaceBright = carbon_dark_surfaceContainerHighest,
+    surfaceDim = carbon_dark_surfaceContainerLowest,
 )
 
-// ── Mocha palette ──
-
-private val MochaLightColors = lightColorScheme(
-    primary = mocha_light_primary,
-    onPrimary = mocha_light_onPrimary,
-    primaryContainer = mocha_light_primaryContainer,
-    onPrimaryContainer = mocha_light_onPrimaryContainer,
-    secondary = mocha_light_secondary,
-    onSecondary = mocha_light_onSecondary,
-    secondaryContainer = mocha_light_secondaryContainer,
-    onSecondaryContainer = mocha_light_onSecondaryContainer,
-    tertiary = mocha_light_tertiary,
-    onTertiary = mocha_light_onTertiary,
-    tertiaryContainer = mocha_light_tertiaryContainer,
-    onTertiaryContainer = mocha_light_onTertiaryContainer,
-    error = mocha_light_error,
-    onError = mocha_light_onError,
-    errorContainer = mocha_light_errorContainer,
-    onErrorContainer = mocha_light_onErrorContainer,
-    background = mocha_light_background,
-    onBackground = mocha_light_onBackground,
-    surface = mocha_light_surface,
-    onSurface = mocha_light_onSurface,
-    surfaceVariant = mocha_light_surfaceVariant,
-    onSurfaceVariant = mocha_light_onSurfaceVariant,
-    outline = mocha_light_outline,
-    outlineVariant = mocha_light_outlineVariant,
+private val LajvardLightColors = lightColorScheme(
+    primary = lajvard_light_primary,
+    onPrimary = lajvard_light_onPrimary,
+    primaryContainer = lajvard_light_primaryContainer,
+    onPrimaryContainer = lajvard_light_onPrimaryContainer,
+    secondary = lajvard_light_secondary,
+    onSecondary = lajvard_light_onSecondary,
+    secondaryContainer = lajvard_light_secondaryContainer,
+    onSecondaryContainer = lajvard_light_onSecondaryContainer,
+    tertiary = lajvard_light_tertiary,
+    onTertiary = lajvard_light_onTertiary,
+    tertiaryContainer = lajvard_light_tertiaryContainer,
+    onTertiaryContainer = lajvard_light_onTertiaryContainer,
+    error = lajvard_light_error,
+    onError = lajvard_light_onError,
+    errorContainer = lajvard_light_errorContainer,
+    onErrorContainer = lajvard_light_onErrorContainer,
+    background = lajvard_light_background,
+    onBackground = lajvard_light_onBackground,
+    surface = lajvard_light_surface,
+    onSurface = lajvard_light_onSurface,
+    surfaceVariant = lajvard_light_surfaceVariant,
+    onSurfaceVariant = lajvard_light_onSurfaceVariant,
+    outline = lajvard_light_outline,
+    outlineVariant = lajvard_light_outlineVariant,
+    surfaceContainerLowest = lajvard_light_surfaceContainerLowest,
+    surfaceContainerLow = lajvard_light_surfaceContainerLow,
+    surfaceContainer = lajvard_light_surfaceContainer,
+    surfaceContainerHigh = lajvard_light_surfaceContainerHigh,
+    surfaceContainerHighest = lajvard_light_surfaceContainerHighest,
+    surfaceBright = lajvard_light_surfaceContainerLowest,
+    surfaceDim = lajvard_light_surfaceContainerHighest,
 )
 
-private val MochaDarkColors = darkColorScheme(
-    primary = mocha_dark_primary,
-    onPrimary = mocha_dark_onPrimary,
-    primaryContainer = mocha_dark_primaryContainer,
-    onPrimaryContainer = mocha_dark_onPrimaryContainer,
-    secondary = mocha_dark_secondary,
-    onSecondary = mocha_dark_onSecondary,
-    secondaryContainer = mocha_dark_secondaryContainer,
-    onSecondaryContainer = mocha_dark_onSecondaryContainer,
-    tertiary = mocha_dark_tertiary,
-    onTertiary = mocha_dark_onTertiary,
-    tertiaryContainer = mocha_dark_tertiaryContainer,
-    onTertiaryContainer = mocha_dark_onTertiaryContainer,
-    error = mocha_dark_error,
-    onError = mocha_dark_onError,
-    errorContainer = mocha_dark_errorContainer,
-    onErrorContainer = mocha_dark_onErrorContainer,
-    background = mocha_dark_background,
-    onBackground = mocha_dark_onBackground,
-    surface = mocha_dark_surface,
-    onSurface = mocha_dark_onSurface,
-    surfaceVariant = mocha_dark_surfaceVariant,
-    onSurfaceVariant = mocha_dark_onSurfaceVariant,
-    outline = mocha_dark_outline,
-    outlineVariant = mocha_dark_outlineVariant,
+private val LajvardDarkColors = darkColorScheme(
+    primary = lajvard_dark_primary,
+    onPrimary = lajvard_dark_onPrimary,
+    primaryContainer = lajvard_dark_primaryContainer,
+    onPrimaryContainer = lajvard_dark_onPrimaryContainer,
+    secondary = lajvard_dark_secondary,
+    onSecondary = lajvard_dark_onSecondary,
+    secondaryContainer = lajvard_dark_secondaryContainer,
+    onSecondaryContainer = lajvard_dark_onSecondaryContainer,
+    tertiary = lajvard_dark_tertiary,
+    onTertiary = lajvard_dark_onTertiary,
+    tertiaryContainer = lajvard_dark_tertiaryContainer,
+    onTertiaryContainer = lajvard_dark_onTertiaryContainer,
+    error = lajvard_dark_error,
+    onError = lajvard_dark_onError,
+    errorContainer = lajvard_dark_errorContainer,
+    onErrorContainer = lajvard_dark_onErrorContainer,
+    background = lajvard_dark_background,
+    onBackground = lajvard_dark_onBackground,
+    surface = lajvard_dark_surface,
+    onSurface = lajvard_dark_onSurface,
+    surfaceVariant = lajvard_dark_surfaceVariant,
+    onSurfaceVariant = lajvard_dark_onSurfaceVariant,
+    outline = lajvard_dark_outline,
+    outlineVariant = lajvard_dark_outlineVariant,
+    surfaceContainerLowest = lajvard_dark_surfaceContainerLowest,
+    surfaceContainerLow = lajvard_dark_surfaceContainerLow,
+    surfaceContainer = lajvard_dark_surfaceContainer,
+    surfaceContainerHigh = lajvard_dark_surfaceContainerHigh,
+    surfaceContainerHighest = lajvard_dark_surfaceContainerHighest,
+    surfaceBright = lajvard_dark_surfaceContainerHighest,
+    surfaceDim = lajvard_dark_surfaceContainerLowest,
 )
-
-/**
- * True while the Aether theme is on. The Aether theme is more than a palette: screens
- * that Aether draws differently (user bubble, composer, settings cards and page) read this
- * and switch to Aether's own shapes and colours.
- */
-val LocalAetherStyle = staticCompositionLocalOf { false }
-
-/** Aether's page colour under settings and other secondary pages: iOS grey in light, the plain background in dark. */
-@Composable
-fun aetherPageBackground(): androidx.compose.ui.graphics.Color {
-    val background = MaterialTheme.colorScheme.background
-    return if (background.luminance() > 0.5f) aether_light_settingsBackground else background
-}
 
 @Composable
 fun Hermes2Theme(
@@ -608,21 +317,14 @@ fun Hermes2Theme(
         ThemeMode.SYSTEM -> darkTheme
     }
 
-    // Wallpaper colours come with all their surface roles; only the hand-made palettes need them derived.
-    val isDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         else -> when (colorTheme) {
-            ColorTheme.HERMES -> if (useDark) DarkColors else LightColors
-            ColorTheme.BLUE_EYE -> if (useDark) BlueDarkColors else BlueLightColors
-            ColorTheme.MOCHA -> if (useDark) MochaDarkColors else MochaLightColors
-            ColorTheme.MIDNIGHT -> if (useDark) MidnightDarkColors else MidnightLightColors
-            ColorTheme.MANUS -> if (useDark) ManusDarkColors else ManusLightColors
-            ColorTheme.AETHER -> if (useDark) AetherDarkColors else AetherLightColors
             ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
+            ColorTheme.LAJVARD -> if (useDark) LajvardDarkColors else LajvardLightColors
         }
     }
 
@@ -631,16 +333,11 @@ fun Hermes2Theme(
         AppFont.SYSTEM -> androidx.compose.ui.text.font.FontFamily.Default
     }
 
-    val aether = colorTheme == ColorTheme.AETHER && !isDynamic
-    CompositionLocalProvider(LocalAetherStyle provides aether) {
-        MaterialTheme(
-            colorScheme = (if (warmMode) colorScheme.warmed() else colorScheme)
-                .let { if (isDynamic || aether) it else it.withSurfaceContainers(useDark) },
-            typography = hermesTypography(fontFamily, fontScalePct)
-                .let { if (aether) it.aetherSized(fontScalePct) else it },
-            content = content
-        )
-    }
+    MaterialTheme(
+        colorScheme = if (warmMode) colorScheme.warmed() else colorScheme,
+        typography = hermesTypography(fontFamily, fontScalePct),
+        content = content
+    )
 }
 
 /** Night/warm reading mode: nudges the large background/surface areas
@@ -658,29 +355,5 @@ private fun androidx.compose.material3.ColorScheme.warmed(): androidx.compose.ma
         primaryContainer = primaryContainer.warm(0.06f),
         secondaryContainer = secondaryContainer.warm(0.06f),
         tertiaryContainer = tertiaryContainer.warm(0.06f),
-    )
-}
-
-/**
- * The palettes above set surface and surfaceVariant but none of Material 3's surface
- * container roles, and those are what dialogs, bottom sheets, menus and cards are painted
- * with. Left unset they fell back to Material's baseline, a lavender-tinted grey: every
- * dialog in the neutral Carbon theme came up faintly purple. Derived here from each
- * palette's own surface, stepping toward its text colour as Material's tones do.
- */
-private fun androidx.compose.material3.ColorScheme.withSurfaceContainers(
-    dark: Boolean,
-): androidx.compose.material3.ColorScheme {
-    fun step(fraction: Float) = androidx.compose.ui.graphics.lerp(surface, onSurface, fraction)
-    val black = androidx.compose.ui.graphics.Color.Black
-    val white = androidx.compose.ui.graphics.Color.White
-    return copy(
-        surfaceContainerLowest = if (dark) androidx.compose.ui.graphics.lerp(surface, black, 0.35f) else white,
-        surfaceContainerLow = step(if (dark) 0.03f else 0.02f),
-        surfaceContainer = step(if (dark) 0.05f else 0.04f),
-        surfaceContainerHigh = step(if (dark) 0.08f else 0.06f),
-        surfaceContainerHighest = step(if (dark) 0.11f else 0.09f),
-        surfaceBright = step(if (dark) 0.12f else 0.0f),
-        surfaceDim = if (dark) androidx.compose.ui.graphics.lerp(surface, black, 0.2f) else step(0.10f),
     )
 }
