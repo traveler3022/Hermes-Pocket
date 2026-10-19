@@ -505,7 +505,9 @@ internal fun InputBar(
                                 HxIcons.ArrowUp,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                // White on the blue disc in every theme, like Stop:
+                                // some themes' onPrimary is dark and the arrow sank.
+                                tint = Color.White,
                             )
                         }
                     }
