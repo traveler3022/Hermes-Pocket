@@ -11,6 +11,8 @@ import android.util.Size
 import android.webkit.MimeTypeMap
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.SavedFile
+import com.hermes.android.runtime.FileGatePrompt
+import com.hermes.android.runtime.LinuxFileGate
 import com.hermes.android.runtime.linux.ProotEnvironment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -33,9 +35,16 @@ import javax.inject.Singleton
  *
  * Names are kept; a different file under a taken name becomes "name (1).ext", and the same
  * file downloaded again is not written twice.
+ *
+ * A program passes the same check as on every other way out ([LinuxFileGate]): saved only
+ * after the user confirms it, and never when it is named like a photo or a document.
  */
 @Singleton
-class DownloadStorage @Inject constructor(@ApplicationContext private val context: Context) : Downloads {
+class DownloadStorage @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val fileGate: LinuxFileGate,
+    private val prompt: FileGatePrompt,
+) : Downloads {
 
     private val rootfs = ProotEnvironment.rootfsDir(context)
     private val resolver get() = context.contentResolver
@@ -50,6 +59,9 @@ class DownloadStorage @Inject constructor(@ApplicationContext private val contex
         withContext(Dispatchers.IO) {
             val source = localSource(url) ?: fetch(url)
             val wanted = downloadFileName(url, name)
+            fileGate.heldBack(source, wanted)?.let { risk ->
+                if (!prompt.allowed(source, wanted, risk)) throw IOException("$wanted is a program and was not saved")
+            }
             val target = freeName(wanted) { candidate ->
                 val existing = ownEntry(candidate) ?: return@freeName NameState.Free
                 if (sameContent(existing, source)) NameState.Same else NameState.Other

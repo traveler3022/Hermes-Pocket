@@ -32,6 +32,7 @@
     <string name="alive">زنده</string>
     <string name="all">همه</string>
     <string name="all_providers">همه پرووایدرها</string>
+    <string name="download_anyway">دانلود شود</string>
     <string name="allow_for_10_minutes">اجازه برای ۱۰ دقیقه</string>
     <string name="allow_for_this_chat">در این گفتگو مجاز باش</string>
     <string name="allow_once">یک‌بار مجاز</string>
