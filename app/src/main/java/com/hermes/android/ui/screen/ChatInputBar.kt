@@ -521,7 +521,7 @@ internal fun InputBar(
 }
 
 /** The Send disc's colour; the arrow on it is white. */
-private val SendBlue = Color(0xFF0285FF)
+private val SendBlue = Color(0xFF3566EF)
 
 /**
  * The composer's trailing button: a 48dp touch target around a 38dp disc.
