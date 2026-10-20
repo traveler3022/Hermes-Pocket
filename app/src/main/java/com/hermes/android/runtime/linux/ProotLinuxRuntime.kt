@@ -695,7 +695,14 @@ class ProotLinuxRuntime @Inject constructor(
             [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
             # Kanban, when the user turned it on (Settings › General; LinuxKanban writes the flag).
             [ -f "${'$'}HERMES_HOME/android/kanban.enabled" ] && export HERMES_ANDROID_KANBAN=1
-            exec "${'$'}REPO/venv/bin/python" -u -c '
+            # What this start runs on, ahead of Hermes' own output in gateway_stderr.log.
+            {
+                echo "[diag] gateway start ${'$'}(date -u +%FT%TZ)"
+                echo "[diag] python: ${'$'}(readlink -f "${'$'}REPO/venv/bin/python" 2>&1) — ${'$'}("${'$'}REPO/venv/bin/python" -V 2>&1)"
+                echo "[diag] checkout: ${'$'}(git -C "${'$'}REPO" rev-parse --short HEAD 2>&1)"
+                echo "[diag] lazy-installs off: ${'$'}{HERMES_DISABLE_LAZY_INSTALLS:-unset}"
+            } >&2
+            exec "${'$'}REPO/venv/bin/python" -X faulthandler -u -c '
             import logging, os, sys, threading, time
             from tui_gateway import entry, hosted_room_service, methods_groups, server
             hosted_room_service._HOSTED_ROOM_IDLE_FALLBACK_SECONDS = 60.0
