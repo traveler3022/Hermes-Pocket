@@ -792,7 +792,8 @@ class ProotLinuxRuntime @Inject constructor(
                                             app.include_router(getattr(module, attr))
                                 except Exception:
                                     log.exception("dashboard router %s not loaded", name)
-                            # The achievements plugin's router, mounted where the dashboard mounts it.
+                            # The achievements plugin router, mounted where the dashboard mounts it.
+                            # (No apostrophes in this block: it sits inside a single-quoted `sh` argument.)
                             try:
                                 import importlib.util
                                 api = os.path.join(os.environ["HERMES_PYTHON_SRC_ROOT"], "plugins/hermes-achievements/dashboard/plugin_api.py")
