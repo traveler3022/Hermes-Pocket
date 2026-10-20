@@ -326,11 +326,7 @@ internal fun InputBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
                 .clip(RoundedCornerShape(26.dp))
-                .background(
-                    // Aether's composer card is its plain surface.
-                    if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                )
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(4.dp),
         ) {
             TextField(
@@ -499,13 +495,18 @@ internal fun InputBar(
                             },
                             contentDescription = stringResource(R.string.send),
                             filled = true,
+                            // A deep blue in every theme, like ChatGPT's: the themes'
+                            // sky/cyan primaries read as a pale button.
+                            discColor = SendBlue,
                             enabled = canSend && !isAttaching,
                         ) {
                             Icon(
                                 HxIcons.ArrowUp,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                // White on the blue disc in every theme, like Stop:
+                                // some themes' onPrimary is dark and the arrow sank.
+                                tint = Color.White,
                             )
                         }
                     }
@@ -515,9 +516,12 @@ internal fun InputBar(
     }
 }
 
+/** The Send disc's colour; the arrow on it is white. */
+private val SendBlue = Color(0xFF3566EF)
+
 /**
  * The composer's trailing button: a 48dp touch target around a 38dp disc.
- * Filled, the disc is the theme's primary (send, stop); unfilled, it is just
+ * Filled, the disc is [discColor] (the theme's primary unless given); unfilled, it is just
  * the icon (voice). Pressed, the disc shrinks a touch instead of a ripple
  * washing over the whole composer.
  */
@@ -526,13 +530,13 @@ private fun ComposerDiscButton(
     onClick: () -> Unit,
     contentDescription: String,
     filled: Boolean,
+    discColor: Color = MaterialTheme.colorScheme.primary,
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && enabled) 0.9f else 1f, label = "disc_press")
-    val primary = MaterialTheme.colorScheme.primary
     Box(
         modifier = Modifier
             .size(48.dp)
@@ -557,7 +561,7 @@ private fun ComposerDiscButton(
                     alpha = if (enabled) 1f else 0.4f
                 }
                 .clip(CircleShape)
-                .then(if (filled) Modifier.background(primary) else Modifier),
+                .then(if (filled) Modifier.background(discColor) else Modifier),
             contentAlignment = Alignment.Center,
         ) { content() }
     }

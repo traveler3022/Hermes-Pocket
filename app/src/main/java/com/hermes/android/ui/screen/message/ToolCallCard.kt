@@ -145,6 +145,9 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
+                    // Tool output is shell and code text: `$HOME/$USER` is not a formula,
+                    // and measuring one blocks the main thread (it ANR'd here).
+                    math = false,
                 )
                 if (isLongResult) {
                     TextButton(

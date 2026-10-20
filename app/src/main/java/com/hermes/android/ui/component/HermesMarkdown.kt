@@ -112,6 +112,7 @@ fun HermesMarkdown(
     ),
     linkColor: Color = MaterialTheme.colorScheme.primary,
     persianDigits: Boolean = stringResource(R.string.ui_language) == "fa",
+    math: Boolean = true,
 ) {
     val parser = remember { IncrementalMdParser() }
     val blocks = remember(markdown) { footnotesLast(parser.parse(markdown)) }
@@ -140,6 +141,7 @@ fun HermesMarkdown(
             codeBg = codeBg,
             onCodeBg = MaterialTheme.colorScheme.onSurfaceVariant,
             markBg = MaterialTheme.colorScheme.tertiaryContainer,
+            math = math,
         ),
         persianDigits = persianDigits,
     )
@@ -216,7 +218,11 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
 
         is MdBlock.Code -> CodeBlock(block, body, base, theme.codeBg, theme.onCode, muted)
 
-        is MdBlock.Math -> MathBlock(block.latex, base * 1.15f, body.color)
+        is MdBlock.Math -> if (inlineStyle.math) {
+            MathBlock(block.latex, base * 1.15f, body.color)
+        } else {
+            MdText(raw = "$$${block.latex}$$", style = body, inlineStyle = inlineStyle)
+        }
 
         is MdBlock.Rule -> Spacer(
             Modifier

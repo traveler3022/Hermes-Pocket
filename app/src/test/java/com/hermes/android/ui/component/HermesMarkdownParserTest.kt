@@ -437,6 +437,14 @@ class HermesMarkdownParserTest {
             .map { it.removePrefix(INLINE_MATH_PREFIX) }
 
     @Test
+    fun `with math off dollar signs stay as typed`() {
+        val text = "cp \$SRC/a \$DST and \$x\$ and \\(y\\)"
+        val out = inline(text, style.copy(math = false))
+        assertEquals("cp \$SRC/a \$DST and \$x\$ and (y)", out.text)
+        assertTrue(out.getStringAnnotations(0, out.length).none { it.item.startsWith(INLINE_MATH_PREFIX) })
+    }
+
+    @Test
     fun `display math on one line or across lines`() {
         assertEquals(listOf(MdBlock.Math("x^2")), parseMdBlocks("\$\$x^2\$\$"))
         assertEquals(

@@ -136,6 +136,9 @@ object HxIconColors {
 /** Warning amber: anything that is blocked on the user. */
 val HxAmber = Color(0xFFF0B429)
 
+/** The same amber, darkened for light themes: the bright one is 1.9:1 on a white page. */
+val HxAmberOnLight = Color(0xFFB45309)
+
 /**
  * What a state means, one colour each, everywhere a state is shown — the tool
  * card, the task list, the question card, the drawer's dots. Before this each
@@ -143,9 +146,10 @@ val HxAmber = Color(0xFFF0B429)
  * drawer was primary, and a question waiting on the user was the same tertiary
  * as a running tool.
  *
- * Running is the theme's primary, except where primary is itself an amber (the
- * Hermes and Mocha palettes): there "running" and "waiting on you" would be the
- * same colour, so running moves to tertiary instead.
+ * Running is the theme's primary, unless a palette's primary is itself an amber:
+ * then "running" and "waiting on you" would be the same colour, so running moves
+ * to tertiary. Neither current palette (sky blue, lapis) trips this; it guards
+ * any palette added later.
  */
 object HxStatus {
     /** The agent is working on it. */
@@ -157,8 +161,10 @@ object HxStatus {
             }
         }
 
-    /** Blocked on the user: an approval, a question, a password. */
-    val waiting: Color get() = HxAmber
+    /** Blocked on the user: an approval, a question, a password. One hue in every
+     *  theme; only its lightness follows the page so it stays readable. */
+    val waiting: Color
+        @Composable get() = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) HxAmberOnLight else HxAmber
 
     val error: Color
         @Composable get() = MaterialTheme.colorScheme.error
@@ -198,11 +204,7 @@ fun HermesScaffold(
     floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit,
 ) {
-    val pageBackground = if (com.hermes.android.ui.theme.LocalAetherStyle.current) {
-        com.hermes.android.ui.theme.aetherPageBackground()
-    } else {
-        MaterialTheme.colorScheme.background
-    }
+    val pageBackground = MaterialTheme.colorScheme.background
     Scaffold(
         floatingActionButton = floatingActionButton,
         topBar = {
@@ -288,13 +290,10 @@ fun SettingsGroup(
 
 /**
  * The fill of every settings card — the root's groups and each sub-page's cards —
- * so a page never mixes two greys. Aether draws its cards in its surface colour
- * on a grey page instead.
+ * so a page never mixes two greys.
  */
 @Composable
-fun settingsCardColor(): Color =
-    if (com.hermes.android.ui.theme.LocalAetherStyle.current) MaterialTheme.colorScheme.surface
-    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+fun settingsCardColor(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
 
 /**
  * The shape of one row of a grouped list drawn item by item (a LazyColumn): only

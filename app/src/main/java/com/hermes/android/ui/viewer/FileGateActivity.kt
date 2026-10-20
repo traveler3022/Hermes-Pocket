@@ -38,19 +38,35 @@ import javax.inject.Inject
 /**
  * Asks before a program of the built-in Linux leaves for the phone ([LinuxFileGate]); a program
  * named like a photo or document is only reported. Opened by "Open with another app" (then
- * opens the file) and by the notification the Files provider posts when it held a file back.
+ * opens the file), by the notification the Files provider posts when it held a file back, and
+ * by Download ([DialogFileGatePrompt], which waits for the answer).
  */
 @AndroidEntryPoint
 class FileGateActivity : ComponentActivity() {
 
     @Inject lateinit var fileGate: LinuxFileGate
     @Inject lateinit var linuxFiles: LinuxFileAccess
+    @Inject lateinit var downloadPrompt: DialogFileGatePrompt
+
+    /** The Download waiting on this dialog, or null. */
+    private var request: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val path = intent.getStringExtra(EXTRA_PATH)
         if (path == null) {
             finish()
+            return
+        }
+        request = intent.getStringExtra(EXTRA_REQUEST)
+        if (request != null) {
+            // Download already checked the file; the name is the one it is saved under.
+            val risk = intent.getStringExtra(EXTRA_RISK)?.let { runCatching { LinuxFileGate.Risk.valueOf(it) }.getOrNull() }
+            if (risk == null) {
+                finish()
+                return
+            }
+            ask(File(path), intent.getStringExtra(EXTRA_NAME) ?: File(path).name, risk, open = false)
             return
         }
         val open = intent.getBooleanExtra(EXTRA_OPEN, false)
@@ -66,7 +82,7 @@ class FileGateActivity : ComponentActivity() {
                 file == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(File(path)).toString(), linuxFiles)
                 risk == null -> if (open) startExternalView(this@FileGateActivity, Uri.fromFile(file).toString(), linuxFiles)
                 else -> {
-                    ask(file, risk, open)
+                    ask(file, file.name, risk, open)
                     return@launch
                 }
             }
@@ -74,7 +90,7 @@ class FileGateActivity : ComponentActivity() {
         }
     }
 
-    private fun ask(file: File, risk: LinuxFileGate.Risk, open: Boolean) {
+    private fun ask(file: File, name: String, risk: LinuxFileGate.Risk, open: Boolean) {
         val themeModeState = ThemeModeState(this)
         val appLanguageState = AppLanguageState(this)
         setContent {
@@ -92,7 +108,7 @@ class FileGateActivity : ComponentActivity() {
                             title = { Text(stringResource(R.string.blocked_a_disguised_program)) },
                             text = {
                                 Text(
-                                    stringResource(R.string.is_named_like_a_photo_or_document_but_it, file.name),
+                                    stringResource(R.string.is_named_like_a_photo_or_document_but_it, name),
                                 )
                             },
                             confirmButton = { TextButton(onClick = ::finish) { Text(stringResource(R.string.ok)) } },
@@ -103,13 +119,17 @@ class FileGateActivity : ComponentActivity() {
                             title = { Text(stringResource(R.string.this_file_is_a_program)) },
                             text = {
                                 Text(
-                                    stringResource(R.string.may_have_come_from_the_internet_if_it_is, file.name),
+                                    stringResource(R.string.may_have_come_from_the_internet_if_it_is, name),
                                 )
                             },
                             confirmButton = {
                                 TextButton(onClick = { allow(file, open) }) {
                                     Text(
-                                        if (open) stringResource(R.string.open_anyway) else stringResource(R.string.allow_for_10_minutes),
+                                        when {
+                                            request != null -> stringResource(R.string.download_anyway)
+                                            open -> stringResource(R.string.open_anyway)
+                                            else -> stringResource(R.string.allow_for_10_minutes)
+                                        },
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 }
@@ -123,6 +143,11 @@ class FileGateActivity : ComponentActivity() {
     }
 
     private fun allow(file: File, open: Boolean) {
+        request?.let { id ->
+            downloadPrompt.answer(id, allowed = true)
+            finish()
+            return
+        }
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { fileGate.approve(file) }
             if (open) {
@@ -138,12 +163,21 @@ class FileGateActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        // Closed without "Download anyway": the Download is not saved. A recreated window keeps waiting.
+        if (isFinishing) request?.let { downloadPrompt.answer(it, allowed = false) }
+        super.onDestroy()
+    }
+
     /** The regular file at [path] in the rootfs, its symlinks followed as the Linux sees them; else null. */
     private fun linuxFile(path: String): File? = linuxFiles.guestPathOf(path)?.let(linuxFiles::regularFile)
 
     companion object {
         private const val EXTRA_PATH = "com.hermes.android.gate.PATH"
         private const val EXTRA_OPEN = "com.hermes.android.gate.OPEN"
+        private const val EXTRA_REQUEST = "com.hermes.android.gate.REQUEST"
+        private const val EXTRA_NAME = "com.hermes.android.gate.NAME"
+        private const val EXTRA_RISK = "com.hermes.android.gate.RISK"
         private const val CHANNEL_ID = "file_gate"
 
         /** The dialog for [file] (a host path in the rootfs); with [open], opens it once allowed. */
@@ -152,6 +186,15 @@ class FileGateActivity : ComponentActivity() {
                 .putExtra(EXTRA_PATH, file.absolutePath)
                 .putExtra(EXTRA_OPEN, open)
                 .apply { if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+
+        /** The dialog for Download [request]: [file] (anywhere on this disk) saved as [name], found [risk]. */
+        fun downloadIntent(context: Context, file: File, name: String, risk: LinuxFileGate.Risk, request: String): Intent =
+            Intent(context, FileGateActivity::class.java)
+                .putExtra(EXTRA_PATH, file.absolutePath)
+                .putExtra(EXTRA_NAME, name)
+                .putExtra(EXTRA_RISK, risk.name)
+                .putExtra(EXTRA_REQUEST, request)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
         /** Another app (a copy in the Files app) tried to read [file]; the tap opens the dialog. */
         fun notifyHeldBack(context: Context, file: File, risk: LinuxFileGate.Risk) {

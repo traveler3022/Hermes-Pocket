@@ -76,6 +76,8 @@ internal data class InlineStyle(
     val onCodeBg: Color,
     /** Background of `==highlighted==` text. */
     val markBg: Color = codeBg,
+    /** Whether `$…$`, `$$…$$` and `\(…\)` are formulas; off, they stay as typed. */
+    val math: Boolean = true,
 )
 
 /**
@@ -521,19 +523,19 @@ internal fun inline(text: String, s: InlineStyle): AnnotatedString = buildAnnota
         val c = text[i]
         when {
             // `\(x\)` and `$$x$$` inside a sentence: checked before escapes eat the `\(`.
-            text.startsWith("\\(", i) && text.indexOf("\\)", i + 2) > i + 2 -> {
+            s.math && text.startsWith("\\(", i) && text.indexOf("\\)", i + 2) > i + 2 -> {
                 val end = text.indexOf("\\)", i + 2)
                 math(text.substring(i + 2, end).trim())
                 i = end + 2
             }
 
-            text.startsWith("$$", i) && text.indexOf("$$", i + 2) > i + 2 -> {
+            s.math && text.startsWith("$$", i) && text.indexOf("$$", i + 2) > i + 2 -> {
                 val end = text.indexOf("$$", i + 2)
                 math(text.substring(i + 2, end).trim())
                 i = end + 2
             }
 
-            c == '$' && inlineMathEnd(text, i) > i -> {
+            s.math && c == '$' && inlineMathEnd(text, i) > i -> {
                 val end = inlineMathEnd(text, i)
                 math(text.substring(i + 1, end))
                 i = end + 1

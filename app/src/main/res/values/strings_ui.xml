@@ -33,6 +33,7 @@
     <string name="alive">Alive</string>
     <string name="all">All</string>
     <string name="all_providers">All providers</string>
+    <string name="download_anyway">Download anyway</string>
     <string name="allow_for_10_minutes">Allow for 10 minutes</string>
     <string name="allow_for_this_chat">Allow for this chat</string>
     <string name="allow_once">Allow once</string>
@@ -1344,4 +1345,5 @@
         <item>Formulating</item>
         <item>Brainstorming</item>
     </string-array>
+    <string name="status_waiting">Waiting for you</string>
 </resources>

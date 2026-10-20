@@ -21,9 +21,9 @@ class FileGate @Inject constructor() : LinuxFileGate {
 
     private val approvals = ConcurrentHashMap<String, Long>()
 
-    fun riskOf(file: File): Risk {
+    fun riskOf(file: File, name: String = file.name): Risk {
         if (!isProgram(file)) return Risk.SAFE
-        val ext = file.name.substringAfterLast('.', "").lowercase()
+        val ext = name.substringAfterLast('.', "").lowercase()
         return if (ext in PassiveExtensions) Risk.DISGUISED else Risk.PROGRAM
     }
 
@@ -40,10 +40,11 @@ class FileGate @Inject constructor() : LinuxFileGate {
     /**
      * Why another app may not have [file] now, or null when it may: data always leaves, a
      * program only while the user's confirmation lasts, a disguised program never. The one
-     * rule every way out of the Linux (the Files app, "Open with another app") applies.
+     * rule every way out of the Linux (the Files app, "Open with another app", Download) applies.
+     * [name] is the name the file leaves under, which decides a disguise.
      */
-    override fun heldBack(file: File, now: Long): Risk? {
-        val risk = riskOf(file)
+    override fun heldBack(file: File, name: String, now: Long): Risk? {
+        val risk = riskOf(file, name)
         return risk.takeUnless { it == Risk.SAFE || (it == Risk.PROGRAM && isApproved(file, now)) }
     }
 
