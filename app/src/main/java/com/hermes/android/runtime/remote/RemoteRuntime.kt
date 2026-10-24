@@ -14,6 +14,7 @@ import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.StopResult
 import com.hermes.android.runtime.VerifyResult
 import com.hermes.android.runtime.remote.tailscale.TailscaleLoginNeeded
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,6 +61,11 @@ class RemoteRuntime @Inject constructor(
         _state.value = RuntimeState.Detecting
         val status = try {
             auth.probe(base)
+        } catch (e: CancellationException) {
+            // The caller went away mid-check (the screen closed): left at Detecting, the runtime
+            // read as busy for good and the service refused to start the gateway.
+            _state.value = RuntimeState.NotDetected
+            throw e
         } catch (e: TailscaleLoginNeeded) {
             _state.value = RuntimeState.NotDetected
             return DetectionResult.Missing(
