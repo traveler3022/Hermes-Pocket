@@ -14,6 +14,7 @@ internal class ChatDrawerDelegate(
     private val loadSessionList: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val renameSession: suspend (sessionId: String, title: String) -> Unit,
+    private val archiveSession: suspend (sessionId: String) -> Unit,
     private val forgetSessionActivity: (String) -> Unit,
 ) {
     fun togglePin(state: MutableStateFlow<ChatUiState>, sessionId: String) {
@@ -52,6 +53,20 @@ internal class ChatDrawerDelegate(
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Rename failed")
                 state.update { it.copy(errorEvent = ErrorEvent.Error("Rename failed: ${e.message}")) }
+            }
+        }
+    }
+
+    /** Out of the list, kept on the server; Sessions › Archived brings it back. An open chat stays open. */
+    fun archive(state: MutableStateFlow<ChatUiState>, sessionId: String) {
+        scope.launch {
+            try {
+                archiveSession(sessionId)
+                Timber.i("[Chat] Archived $sessionId")
+                loadSessionList(state)
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Archive failed")
+                state.update { it.copy(errorEvent = ErrorEvent.Error("Archive failed: ${e.message}")) }
             }
         }
     }

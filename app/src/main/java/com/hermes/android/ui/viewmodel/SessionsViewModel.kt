@@ -4,14 +4,15 @@ import com.hermes.android.data.deleteStoredSession
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.domain.session.ArchivedChats
 import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.gateway.GatewayClient
-import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.i18n.tForContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -47,6 +48,7 @@ sealed interface SessionsEffect {
 class SessionsViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val sessionRepository: ChatSessions,
+    private val archive: ArchivedChats,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -68,17 +70,26 @@ class SessionsViewModel @Inject constructor(
 
     // ── Sessions ──────────────────────────────────────────────────────────
 
+    private var loadJob: Job? = null
+
     fun loadSessions() {
-        viewModelScope.launch {
+        // Switching between the lists fast must not let the older answer land last.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val archivedView = _uiState.value.showingArchived
             _uiState.value = _uiState.value.copy(isLoadingSessions = true)
             try {
-                val sessions = parseSessionList(sessionRepository.storedChats())
+                val sessions = parseSessionList(
+                    if (archivedView) archive.archived() else sessionRepository.storedChats(),
+                )
                 _uiState.value = _uiState.value.copy(
                     sessions = sessions,
                     isLoadingSessions = false,
                 )
-                Timber.i("[Sessions] Loaded ${sessions.size} sessions")
-            } catch (e: GatewayException) {
+                Timber.i("[Sessions] Loaded ${sessions.size} sessions (archived=$archivedView)")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 Timber.e(e, "[Sessions] Failed to load")
                 _uiState.value = _uiState.value.copy(
                     isLoadingSessions = false,
@@ -256,6 +267,33 @@ class SessionsViewModel @Inject constructor(
             selectedSessionHistory = emptyList(),
             isLoadingHistory = false,
         )
+    }
+
+    // ── Archive ───────────────────────────────────────────────────────────
+
+    /** Lists the archived chats instead of the usual ones, or goes back. */
+    fun showArchived(show: Boolean) {
+        if (_uiState.value.showingArchived == show) return
+        _uiState.update {
+            it.copy(showingArchived = show, sessions = emptyList(), searchQuery = "", isSelecting = false, selectedIds = emptySet())
+        }
+        loadSessions()
+    }
+
+    /** Archives a chat, or takes it out of the archive; the list it was in drops it. */
+    fun setArchived(sessionId: String, archived: Boolean) {
+        viewModelScope.launch {
+            try {
+                archive.setArchived(sessionId, archived)
+                Timber.i("[Sessions] archived=$archived: $sessionId")
+                loadSessions()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Sessions] Archive failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Archive failed: ${e.message}")
+            }
+        }
     }
 
     // ── Delete with confirmation (#9) ─────────────────────────────────────
@@ -662,6 +700,8 @@ data class SessionRenameDialog(
 
 data class SessionsUiState(
     val sessions: List<SessionSummary> = emptyList(),
+    // The list shows the archived chats (GET /api/sessions?archived=only) instead of session.list's.
+    val showingArchived: Boolean = false,
     val selectedSessionId: String? = null,
     val selectedSessionHistory: List<HistoryMessage> = emptyList(),
     val isLoadingSessions: Boolean = false,

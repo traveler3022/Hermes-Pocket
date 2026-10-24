@@ -33,6 +33,7 @@ object GatewayMethods {
     const val SESSION_MOST_RECENT = "session.most_recent"
     const val SESSION_RESUME = "session.resume"
     const val SESSION_DELETE = "session.delete"
+    const val SESSION_ARCHIVE = "session.archive"
     const val SESSION_INTERRUPT = "session.interrupt"
     const val SESSION_HISTORY = "session.history"
     const val SESSION_TITLE = "session.title"

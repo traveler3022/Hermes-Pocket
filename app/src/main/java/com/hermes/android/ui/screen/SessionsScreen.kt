@@ -243,6 +243,9 @@ fun SessionsScreen(
     // Back from a session's history returns to the list, like the top bar's arrow;
     // it used to leave the Sessions screen altogether.
     BackHandler(enabled = inHistoryDetail) { viewModel.closeHistory() }
+    BackHandler(enabled = !inHistoryDetail && !uiState.isSelecting && uiState.showingArchived) {
+        viewModel.showArchived(false)
+    }
 
     HermesScaffold(
         title = if (inHistoryDetail) {
@@ -250,6 +253,8 @@ fun SessionsScreen(
                 ?: stringResource(R.string.session_history)
         } else if (uiState.isSelecting) {
             stringResource(R.string.count_selected, uiState.selectedIds.size)
+        } else if (uiState.showingArchived) {
+            stringResource(R.string.archived_chats)
         } else {
             stringResource(R.string.sessions)
         },
@@ -260,6 +265,7 @@ fun SessionsScreen(
             when {
                 inHistoryDetail -> viewModel.closeHistory()
                 uiState.isSelecting -> viewModel.toggleSelecting()
+                uiState.showingArchived -> viewModel.showArchived(false)
                 else -> onNavigateBack()
             }
         },
@@ -317,6 +323,12 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDel
                 text = { Text(stringResource(R.string.refresh_sessions)) },
                 onClick = { viewModel.loadSessions(); expanded = false },
             )
+            if (!state.showingArchived) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.archived_chats)) },
+                    onClick = { viewModel.showArchived(true); expanded = false },
+                )
+            }
             listOf(
                 SessionSortOrder.NEWEST_FIRST to stringResource(R.string.newest_first),
                 SessionSortOrder.OLDEST_FIRST to stringResource(R.string.oldest_first),
@@ -336,7 +348,7 @@ private fun SortMenu(state: SessionsUiState, viewModel: SessionsViewModel, onDel
                     onClick = { viewModel.setSortOrder(order); expanded = false },
                 )
             }
-            if (state.sessions.isNotEmpty()) {
+            if (state.sessions.isNotEmpty() && !state.showingArchived) {
                 HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.select_chats)) },
@@ -366,11 +378,19 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
         return
     }
     if (state.sessions.isEmpty()) {
-        HermesEmptyState(
-            icon = Icons.Default.Forum,
-            title = stringResource(R.string.no_sessions_yet),
-            caption = stringResource(R.string.conversations_you_start_with_the_agent),
-        )
+        if (state.showingArchived) {
+            HermesEmptyState(
+                icon = Icons.Default.Forum,
+                title = stringResource(R.string.no_archived_chats),
+                caption = stringResource(R.string.archived_chats_caption),
+            )
+        } else {
+            HermesEmptyState(
+                icon = Icons.Default.Forum,
+                title = stringResource(R.string.no_sessions_yet),
+                caption = stringResource(R.string.conversations_you_start_with_the_agent),
+            )
+        }
         return
     }
 
@@ -412,7 +432,7 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
             ),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            state.insights?.let { ins ->
+            state.insights?.takeUnless { state.showingArchived }?.let { ins ->
                 item(key = "insights") {
                     Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
                         StatTile(value = "${ins.sessions}", label = stringResource(R.string.sessions_3))
@@ -422,7 +442,7 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
                     Spacer(Modifier.height(HxSpace.xs))
                 }
             }
-            if (state.activeAgents.isNotEmpty()) {
+            if (state.activeAgents.isNotEmpty() && !state.showingArchived) {
                 item(key = "agents") { ActiveAgentsCard(state) }
             }
             items(displaySessions, key = { it.id }) { session ->
@@ -430,6 +450,7 @@ private fun SessionsList(state: SessionsUiState, viewModel: SessionsViewModel) {
                     session = session,
                     viewModel = viewModel,
                     isPinned = session.id in state.pinnedSessionIds,
+                    archivedView = state.showingArchived,
                     selecting = state.isSelecting,
                     selected = session.id in state.selectedIds,
                 )
@@ -466,6 +487,7 @@ private fun SessionRow(
     session: SessionSummary,
     viewModel: SessionsViewModel,
     isPinned: Boolean,
+    archivedView: Boolean,
     selecting: Boolean,
     selected: Boolean,
 ) {
@@ -483,7 +505,7 @@ private fun SessionRow(
                 onClick = {
                     if (selecting) viewModel.toggleSelected(session.id) else viewModel.loadSessionHistory(session.id)
                 },
-                onLongClick = { viewModel.toggleSelected(session.id) },
+                onLongClick = { if (!archivedView) viewModel.toggleSelected(session.id) },
             ),
     ) {
         Row(
@@ -549,18 +571,29 @@ private fun SessionRow(
                         text = { Text(stringResource(R.string.view_history)) },
                         onClick = { viewModel.loadSessionHistory(session.id); menuExpanded = false },
                     )
-                    DropdownMenuItem(
-                        text = { Text(if (isPinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) },
-                        onClick = { viewModel.togglePin(session.id); menuExpanded = false },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.rename)) },
-                        onClick = { viewModel.showRenameDialog(session.id, session.title); menuExpanded = false },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.share_export)) },
-                        onClick = { viewModel.shareSession(session.id); menuExpanded = false },
-                    )
+                    if (archivedView) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.unarchive)) },
+                            onClick = { viewModel.setArchived(session.id, false); menuExpanded = false },
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text(if (isPinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) },
+                            onClick = { viewModel.togglePin(session.id); menuExpanded = false },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.rename)) },
+                            onClick = { viewModel.showRenameDialog(session.id, session.title); menuExpanded = false },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share_export)) },
+                            onClick = { viewModel.shareSession(session.id); menuExpanded = false },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.archive)) },
+                            onClick = { viewModel.setArchived(session.id, true); menuExpanded = false },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = { viewModel.confirmDelete(session.id); menuExpanded = false },
