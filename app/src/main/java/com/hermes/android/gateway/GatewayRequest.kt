@@ -80,6 +80,7 @@ object GatewayMethods {
     const val MCP_OAUTH_START = "mcp.servers.oauth.start"
     const val MCP_OAUTH_POLL = "mcp.servers.oauth.poll"
     const val MCP_OAUTH_CANCEL = "mcp.servers.oauth.cancel"
+    const val MCP_OAUTH_CALLBACK = "mcp.servers.oauth.callback"
 
     const val APPROVAL_RESPOND = "approval.respond"
 
