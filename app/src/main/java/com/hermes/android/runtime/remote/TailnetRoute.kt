@@ -31,6 +31,13 @@ interface TailnetRoute {
      */
     fun stalled(host: String) = Unit
 
+    /**
+     * Bytes received so far from the tailnet device [host]; null when [host] is not in the
+     * tailnet or the tunnel can't tell. It climbs with anything the device sends: replies,
+     * file data, and the TCP acknowledgements of an upload.
+     */
+    suspend fun receivedFrom(host: String): Long? = null
+
     /** No tailnet: every host is dialled directly (tests, and builds without the native library). */
     object None : TailnetRoute {
         override val proxySelector: ProxySelector = object : ProxySelector() {

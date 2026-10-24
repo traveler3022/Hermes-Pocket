@@ -189,6 +189,8 @@ type peerJSON struct {
 	Online  bool   `json:"online"`
 	CurAddr string `json:"curAddr"`
 	Relay   string `json:"relay"`
+	// Bytes received from the device so far: anything it sends, TCP acknowledgements included.
+	RxBytes int64  `json:"rx"`
 }
 
 type statusJSON struct {
@@ -246,6 +248,7 @@ func Status() (ret string) {
 			Online:  p.Online,
 			CurAddr: p.CurAddr,
 			Relay:   p.Relay,
+			RxBytes: p.RxBytes,
 		}
 		if len(p.TailscaleIPs) > 0 {
 			pj.IP = p.TailscaleIPs[0].String()
