@@ -1419,4 +1419,10 @@
     <string name="foreign_sessions_open">Already imported: open</string>
     <string name="profile_avatar_choose">Choose image</string>
     <string name="profile_avatar_remove">Remove image</string>
+    <string name="new_project">New project</string>
+    <string name="rename_project">Rename project</string>
+    <string name="add_folder">Add folder</string>
+    <string name="project_folder_on_server">Folder on the server</string>
+    <string name="project_folder_hint">e.g. ~/code/my-app</string>
+    <string name="project_primary_folder">New chats start here</string>
 </resources>
