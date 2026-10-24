@@ -1399,4 +1399,10 @@
     <string name="foreign_sessions_open">قبلاً وارد شده؛ باز کن</string>
     <string name="profile_avatar_choose">انتخاب عکس</string>
     <string name="profile_avatar_remove">حذف عکس</string>
+    <string name="new_project">پروژه‌ی جدید</string>
+    <string name="rename_project">تغییر نام پروژه</string>
+    <string name="add_folder">افزودن پوشه</string>
+    <string name="project_folder_on_server">پوشه روی سرور</string>
+    <string name="project_folder_hint">مثلاً ~/code/my-app</string>
+    <string name="project_primary_folder">چت‌های جدید اینجا شروع می‌شن</string>
 </resources>

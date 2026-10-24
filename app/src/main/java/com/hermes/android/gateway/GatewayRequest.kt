@@ -137,6 +137,13 @@ object GatewayMethods {
     const val PROJECTS_TREE = "projects.tree"
     const val PROJECT_FACTS = "project.facts"
     const val PROJECTS_PROJECT_SESSIONS = "projects.project_sessions"
+    const val PROJECTS_LIST = "projects.list"
+    const val PROJECTS_GET = "projects.get"
+    const val PROJECTS_CREATE = "projects.create"
+    const val PROJECTS_UPDATE = "projects.update"
+    const val PROJECTS_ARCHIVE = "projects.archive"
+    const val PROJECTS_ADD_FOLDER = "projects.add_folder"
+    const val PROJECTS_REMOVE_FOLDER = "projects.remove_folder"
     const val SESSION_WORKSPACE_MOVE = "session.workspace.move"
 
     // Profiles: separate agents (own config, skills, memory, sessions) on one gateway.

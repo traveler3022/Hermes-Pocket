@@ -30,6 +30,10 @@ class ProjectsViewModel @Inject constructor(
         val facts: String? = null,
         val error: String? = null,
         val createdSessionId: String? = null,
+        /** The user's archived projects; `projects.tree` leaves them out. */
+        val archived: List<Projects.StoredProject> = emptyList(),
+        /** The open project's folders, when it is one the user made (auto projects have none to edit). */
+        val selectedStored: Projects.StoredProject? = null,
     )
 
     private val _uiState = MutableStateFlow(ProjectsUiState())
@@ -48,8 +52,14 @@ class ProjectsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
+                val projects = repository.projectTree()
+                // An older server without projects.list still shows the tree.
+                val archived = runCatching { repository.storedProjects().filter { it.archived } }
+                    .onFailure { Timber.w(it, "[Projects] projects.list failed") }
+                    .getOrDefault(emptyList())
                 _uiState.value = _uiState.value.copy(
-                    projects = repository.projectTree(),
+                    projects = projects,
+                    archived = archived,
                     isLoading = false,
                 )
             } catch (e: Exception) {
@@ -65,8 +75,12 @@ class ProjectsViewModel @Inject constructor(
             try {
                 val detail = repository.projectSessions(project.id)
                 val facts = project.path.takeIf { it.isNotBlank() }?.let { repository.projectFacts(it) }
+                val stored = if (!project.isStored) null else runCatching { repository.storedProject(project.id) }
+                    .onFailure { Timber.w(it, "[Projects] projects.get failed") }
+                    .getOrNull()
                 _uiState.value = _uiState.value.copy(
                     selectedProject = detail,
+                    selectedStored = stored,
                     selectedProjectPath = project.path.takeIf { it.isNotBlank() },
                     facts = facts,
                     isLoadingDetail = false,
@@ -79,7 +93,53 @@ class ProjectsViewModel @Inject constructor(
     }
 
     fun closeProject() {
-        _uiState.value = _uiState.value.copy(selectedProject = null, selectedProjectPath = null, facts = null)
+        _uiState.value = _uiState.value.copy(
+            selectedProject = null, selectedProjectPath = null, facts = null, selectedStored = null,
+        )
+    }
+
+    /** A new project named [name] that works in [folder] on the server. */
+    fun createProject(name: String, folder: String) = mutate("createProject") {
+        repository.createProject(name.trim(), folder.trim())
+        load()
+    }
+
+    fun renameProject(id: String, name: String) = mutate("renameProject") {
+        repository.renameProject(id, name.trim())
+        load()
+    }
+
+    /** Archives a project (it leaves the list and its chats fall back to automatic grouping), or restores it. */
+    fun archiveProject(id: String, restore: Boolean) = mutate("archiveProject") {
+        repository.archiveProject(id, restore)
+        load()
+    }
+
+    fun addFolder(path: String) {
+        val id = _uiState.value.selectedStored?.id ?: return
+        mutate("addFolder") { applyStored(repository.addFolder(id, path.trim())) }
+    }
+
+    fun removeFolder(path: String) {
+        val id = _uiState.value.selectedStored?.id ?: return
+        mutate("removeFolder") { applyStored(repository.removeFolder(id, path)) }
+    }
+
+    /** Shows the server's answer for the open project; its primary folder is where new chats start. */
+    private fun applyStored(stored: Projects.StoredProject?) {
+        if (stored == null || stored.id != _uiState.value.selectedStored?.id) return
+        _uiState.value = _uiState.value.copy(selectedStored = stored, selectedProjectPath = stored.primaryPath)
+    }
+
+    private fun mutate(what: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                Timber.w(e, "[Projects] $what failed")
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
     }
 
     fun clearError() {

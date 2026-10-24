@@ -4,12 +4,15 @@ import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.projects.Projects.ProjectSummary
 import com.hermes.android.domain.projects.Projects.ProjectSession
 import com.hermes.android.domain.projects.Projects.ProjectDetail
+import com.hermes.android.domain.projects.Projects.StoredProject
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.inject.Inject
@@ -17,8 +20,9 @@ import javax.inject.Singleton
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * Read-side of the gateway's project browser (`projects.tree` /
- * `projects.project_sessions` / `project.facts`). Repos are discovered
+ * The gateway's project browser (`projects.tree` / `projects.project_sessions` /
+ * `project.facts`) plus the user's own stored projects (`projects.list/get/create/update/
+ * archive/add_folder/remove_folder`, as the desktop manages them). Repos are discovered
  * server-side from existing session cwds — no client filesystem crawl (that's
  * the desktop's local-fs `projects.discover_repos` / `record_repos` path,
  * which has no mobile equivalent and is deliberately not wired here).
@@ -52,6 +56,7 @@ class ProjectsRepository @Inject constructor(
                 },
                 sessionCount = p.str("sessionCount").toIntOrNull() ?: 0,
                 lastActive = p.str("lastActive").toDoubleOrNull() ?: 0.0,
+                isStored = p.str("isAuto") != "true" && p.str("isNoProject") != "true",
             )
         }.sortedByDescending { it.lastActive }
     }
@@ -106,6 +111,79 @@ class ProjectsRepository @Inject constructor(
                 put("session_key", sessionId)
                 put("cwd", cwd)
             }.toElementMap(),
+        )
+    }
+
+    override suspend fun storedProjects(): List<StoredProject> {
+        val result = gatewayClient.request(GatewayMethods.PROJECTS_LIST) as? JsonObject ?: return emptyList()
+        return (result["projects"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.toStoredProject() }
+    }
+
+    override suspend fun storedProject(id: String): StoredProject? =
+        projectResult(GatewayMethods.PROJECTS_GET, buildJsonObject { put("id", id) })
+
+    override suspend fun createProject(name: String, folder: String): StoredProject? =
+        projectResult(
+            GatewayMethods.PROJECTS_CREATE,
+            buildJsonObject {
+                put("name", name)
+                put("folders", buildJsonArray { add(folder) })
+            },
+        )
+
+    override suspend fun renameProject(id: String, name: String): StoredProject? =
+        projectResult(
+            GatewayMethods.PROJECTS_UPDATE,
+            buildJsonObject {
+                put("id", id)
+                put("name", name)
+            },
+        )
+
+    override suspend fun archiveProject(id: String, restore: Boolean) {
+        gatewayClient.request(
+            GatewayMethods.PROJECTS_ARCHIVE,
+            buildJsonObject {
+                put("id", id)
+                put("restore", restore)
+            }.toElementMap(),
+        )
+    }
+
+    override suspend fun addFolder(id: String, path: String): StoredProject? =
+        projectResult(
+            GatewayMethods.PROJECTS_ADD_FOLDER,
+            buildJsonObject {
+                put("id", id)
+                put("path", path)
+            },
+        )
+
+    override suspend fun removeFolder(id: String, path: String): StoredProject? =
+        projectResult(
+            GatewayMethods.PROJECTS_REMOVE_FOLDER,
+            buildJsonObject {
+                put("id", id)
+                put("path", path)
+            },
+        )
+
+    /** Calls a method that answers `{project: ProjectInfo}` (snake_case, `projects_db.Project.to_dict`). */
+    private suspend fun projectResult(method: String, params: JsonObject): StoredProject? {
+        val result = gatewayClient.request(method, params.toElementMap()) as? JsonObject ?: return null
+        return (result["project"] as? JsonObject)?.toStoredProject()
+    }
+
+    private fun JsonObject.toStoredProject(): StoredProject? {
+        val id = str("id").ifBlank { return null }
+        val folders = (this["folders"] as? JsonArray).orEmpty()
+            .mapNotNull { (it as? JsonObject)?.str("path")?.takeIf(String::isNotBlank) }
+        return StoredProject(
+            id = id,
+            name = str("name").ifBlank { str("slug").ifBlank { id } },
+            primaryPath = str("primary_path").ifBlank { folders.firstOrNull().orEmpty() }.ifBlank { null },
+            archived = str("archived") == "true",
+            folders = folders,
         )
     }
 
