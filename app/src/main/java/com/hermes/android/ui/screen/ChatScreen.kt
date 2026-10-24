@@ -32,6 +32,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -74,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -88,6 +92,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
 import android.content.Context
@@ -336,11 +342,15 @@ fun ChatScreen(
     // The ViewModel only mirrors it, to refresh the chat list while it is open.
     // Hiding the keyboard lives here so it also covers the drawer being swiped
     // open: otherwise the keyboard stays up and covers the foot of the sheet.
-    LaunchedEffect(drawerState.isOpen) {
-        if (drawerState.isOpen) {
-            keyboardController?.hide()
-            focusManager.clearFocus()
-            // However it opened (hamburger or swipe), fetch a current chat list.
+    // 840dp is where Material puts "expanded" width: tablets, unfolded phones, landscape on big phones.
+    val wideLayout = LocalConfiguration.current.screenWidthDp >= 840
+    LaunchedEffect(drawerState.isOpen, wideLayout) {
+        if (drawerState.isOpen || wideLayout) {
+            if (drawerState.isOpen) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            }
+            // However it opened (hamburger or swipe), or always there on a wide screen: a current chat list.
             viewModel.onSessionDrawerOpened()
             profilesViewModel.load()
         } else {
@@ -454,15 +464,8 @@ fun ChatScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                modifier = Modifier.fillMaxHeight().width(322.dp),
-                drawerContainerColor = MaterialTheme.colorScheme.surface,
-                drawerContentColor = MaterialTheme.colorScheme.onSurface,
-                drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
-            ) {
+    // The chat list's sheet content, in the modal drawer or, on a wide screen, the permanent one.
+    val drawerBody: @Composable ColumnScope.() -> Unit = {
                 // Pinned chats first, each group by last update in the chosen order.
                 val drawerSessions = remember(uiState.sessions, uiState.drawerPinnedIds, uiState.drawerSortNewest) {
                     val byTime = if (uiState.drawerSortNewest) {
@@ -473,7 +476,7 @@ fun ChatScreen(
                     byTime.sortedByDescending { it.id in uiState.drawerPinnedIds }
                 }
                 val closeDrawerThen: (() -> Unit) -> Unit = { action ->
-                    scope.launch { drawerState.close() }
+                    if (!wideLayout) scope.launch { drawerState.close() }
                     action()
                 }
                 // Read here as values, not inside the row lambdas: rows reading uiState
@@ -658,9 +661,9 @@ fun ChatScreen(
                         },
                     )
                 }
-            }
-        },
-    ) {
+    }
+
+    val chatBody: @Composable () -> Unit = {
         Scaffold(
             topBar = {
                 // The activity is edge-to-edge, and a plain Column does not
@@ -696,7 +699,7 @@ fun ChatScreen(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        HxHeaderCircleButton(
+                        if (!wideLayout) HxHeaderCircleButton(
                             icon = HxIcons.MenuShort,
                             contentDescription = stringResource(R.string.sessions),
                             onClick = { scope.launch { drawerState.open() } },
@@ -844,6 +847,11 @@ fun ChatScreen(
                     // composer's imePadding() added it again on top of the keyboard.
                     .consumeWindowInsets(padding)
                     .fillMaxSize()
+                    // On a wide screen the messages and the composer keep a readable
+                    // width, centred, instead of lines running across the whole display.
+                    .wrapContentWidth(Alignment.CenterHorizontally)
+                    .widthIn(max = 760.dp)
+                    .fillMaxWidth()
             ) {
                 if (showsBanner) Spacer(Modifier.height(topBarHeight))
                 // Feature #7: Connection error retry banner
@@ -1140,6 +1148,35 @@ fun ChatScreen(
         }
     }
 
+    if (wideLayout) {
+        // A tablet or an unfolded phone: the chat list stays beside the chat.
+        PermanentNavigationDrawer(
+            drawerContent = {
+                PermanentDrawerSheet(
+                    modifier = Modifier.fillMaxHeight().width(322.dp),
+                    drawerContainerColor = MaterialTheme.colorScheme.surface,
+                    drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                    content = drawerBody,
+                )
+            },
+            content = chatBody,
+        )
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    modifier = Modifier.fillMaxHeight().width(322.dp),
+                    drawerContainerColor = MaterialTheme.colorScheme.surface,
+                    drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                    drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
+                    content = drawerBody,
+                )
+            },
+            content = chatBody,
+        )
+    }
+
     deleteFromMessageId?.let { messageId ->
         AlertDialog(
             onDismissRequest = { deleteFromMessageId = null },
@@ -1243,12 +1280,12 @@ fun ChatScreen(
             onSelect = { profile ->
                 showProfiles = false
                 profilesViewModel.select(profile)
-                scope.launch { drawerState.close() }
+                if (!wideLayout) scope.launch { drawerState.close() }
             },
             onCreate = { name, description, copyCurrent, copyKeys ->
                 profilesViewModel.create(name, description, copyCurrent, copyKeys) {
                     showProfiles = false
-                    scope.launch { drawerState.close() }
+                    if (!wideLayout) scope.launch { drawerState.close() }
                 }
             },
             onEdit = profilesViewModel::openEditor,
