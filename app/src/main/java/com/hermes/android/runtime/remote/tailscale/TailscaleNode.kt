@@ -202,17 +202,24 @@ class TailscaleNode @Inject constructor(
 
     override suspend fun ensureUp(host: String) {
         if (!isTailnetHost(host)) return
+        if (proxy != null && _status.value.let { it.state == TailscaleStatus.State.Running && it.knows(host) }) return
         start()
         val s = withTimeoutOrNull(CONNECT_WAIT_MS) {
             var s = refresh()
-            while (s.state == TailscaleStatus.State.Starting || s.state == TailscaleStatus.State.Stopped) {
+            // "Running" comes a moment before the list of devices: until the server is in it, the
+            // tunnel refuses a dial to its name (CONNECT 403), so every cold start failed once first.
+            while (s.state == TailscaleStatus.State.Starting || s.state == TailscaleStatus.State.Stopped ||
+                (s.state == TailscaleStatus.State.Running && !s.knows(host))
+            ) {
                 delay(300)
                 s = refresh()
             }
             s
         } ?: _status.value
         when (s.state) {
-            TailscaleStatus.State.Running -> Unit
+            TailscaleStatus.State.Running -> if (!s.knows(host)) {
+                throw IOException("Can't find $host in your tailnet. Check that the server is online in Tailscale.")
+            }
             TailscaleStatus.State.NeedsLogin -> throw TailscaleLoginNeeded()
             TailscaleStatus.State.NeedsMachineAuth ->
                 throw IOException("Approve this device in the Tailscale admin console (Machines).")
@@ -224,6 +231,13 @@ class TailscaleNode @Inject constructor(
         if (proxy == null || !isTailnetHost(host)) return
         Timber.i("[Tailscale] connection to $host stalled; checking the relay and the direct path")
         goThread.execute { runCatching { Tsbridge.rebind() } }
+    }
+
+    /** True when [host] is a Tailscale address, or a name this node's device list already has. */
+    private fun TailscaleStatus.knows(host: String): Boolean {
+        val h = host.trim().trimEnd('.').lowercase()
+        if (!h.endsWith(".ts.net")) return true
+        return peers.any { it.dnsName.trimEnd('.').equals(h, ignoreCase = true) }
     }
 
     private suspend fun <T> onGo(block: () -> T): T = withContext(Dispatchers.IO) {

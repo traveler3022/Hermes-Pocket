@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -185,6 +186,11 @@ class RemoteAuth @Inject constructor(
         val base = remoteHttpBase(serverUrl) ?: return
         if (_session.value?.serverUrl == base) signOut()
         store.forgetLogin(base)
+    }
+
+    /** Brings the in-app Tailscale tunnel up for a tailnet [host] and waits until it can reach it. */
+    fun ensureRouteBlocking(host: String) {
+        if (isTailnetHost(host)) runBlocking { tailnet.ensureUp(host) }
     }
 
     /** An access token for [tokens]' server, refreshed first when it is about to lapse. */
