@@ -51,6 +51,7 @@ class ChatViewModel @Inject constructor(
     downloads: com.hermes.android.domain.files.Downloads,
     private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
     private val kanban: com.hermes.android.domain.kanban.KanbanRepository? = null,
+    private val archive: com.hermes.android.domain.session.ArchivedChats? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ class ChatViewModel @Inject constructor(
         loadSessionList = { sessionDelegate.loadList(it) },
         createNewSession = { sessionDelegate.create(it) },
         renameSession = { id, title -> sessionRepository.rename(id, title) },
+        archiveSession = { id -> checkNotNull(archive) { "archive unavailable" }.setArchived(id, true) },
         forgetSessionActivity = { sessionId ->
             liveIdsFor(sessionId).forEach {
                 backgroundSessions.forget(it)
@@ -820,6 +822,7 @@ class ChatViewModel @Inject constructor(
     fun drawerShowDelete(sessionId: String) = drawerDelegate.showDelete(_uiState, sessionId)
     fun drawerHideDelete() = drawerDelegate.hideDelete(_uiState)
     fun drawerConfirmDelete() = drawerDelegate.confirmDelete(_uiState)
+    fun drawerArchive(sessionId: String) = drawerDelegate.archive(_uiState, sessionId)
 
     // ── Reactions (delegated) ────────────────────────────────────────────
 

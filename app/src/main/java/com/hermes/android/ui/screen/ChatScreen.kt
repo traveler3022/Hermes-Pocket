@@ -551,6 +551,10 @@ fun ChatScreen(
                                 }) { Text(stringResource(R.string.move_to_project)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    viewModel.drawerArchive(target.id)
+                                }) { Text(stringResource(R.string.archive)) }
+                                TextButton(onClick = {
+                                    drawerMenuTarget = null
                                     viewModel.drawerShowDelete(target.id)
                                 }) {
                                     Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)

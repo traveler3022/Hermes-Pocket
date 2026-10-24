@@ -1088,6 +1088,10 @@
     <string name="media_empty_caption">فایل‌هایی که در چت با دکمهٔ دانلود ذخیره می‌کنی اینجا می‌آیند؛ در پوشهٔ Download/Hermes گوشی.</string>
     <string name="no_app_opens_file">برنامه‌ای برای باز کردن این فایل نیست</string>
     <string name="move_to_project">انتقال به پروژه</string>
+    <string name="unarchive">خروج از بایگانی</string>
+    <string name="archived_chats">گفتگوهای بایگانی‌شده</string>
+    <string name="no_archived_chats">گفتگوی بایگانی‌شده‌ای نیست</string>
+    <string name="archived_chats_caption">گفتگوهایی که بایگانی می‌کنی از لیست‌ها بیرون می‌روند ولی پیام‌هایشان می‌ماند.</string>
     <string name="move_no_projects">پروژه‌ای با پوشه برای انتقال نیست</string>
     <string name="moved_to_project">به %1$s منتقل شد</string>
     <string name="move_to_project_failed">انتقال گفتگو انجام نشد</string>
