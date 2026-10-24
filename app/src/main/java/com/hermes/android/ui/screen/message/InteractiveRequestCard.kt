@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +67,9 @@ internal fun InteractiveRequestCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (message.questions.isEmpty() && message.kind != InteractiveKind.SECRET) {
+            if (message.kind in VAULT_KINDS) {
+                VaultHeader(message)
+            } else if (message.questions.isEmpty() && message.kind != InteractiveKind.SECRET) {
                 Text(
                     text = message.question.ifBlank { stringResource(R.string.sudo_password_required) },
                     style = MaterialTheme.typography.bodyLarge,
@@ -85,6 +88,28 @@ internal fun InteractiveRequestCard(
                         onRespondToClarify(message.requestId, picked)
                     }
                 }
+                // Vault answers go back like a secret's: {value}, '' = declined.
+                message.kind == InteractiveKind.VAULT_UNLOCK ->
+                    MaskedInput(
+                        label = stringResource(R.string.vault_master_password),
+                        placeholder = stringResource(R.string.vault_master_password),
+                        onSkip = { onRespondToSecret(message.requestId, "") },
+                        skipLabel = stringResource(R.string.vault_keep_locked),
+                    ) { onRespondToSecret(message.requestId, it) }
+                message.kind == InteractiveKind.VAULT_CODE ->
+                    VaultCodeInput(
+                        onSkip = { onRespondToSecret(message.requestId, "") },
+                    ) { onRespondToSecret(message.requestId, it) }
+                message.kind == InteractiveKind.VAULT_SAVE_LOGIN ->
+                    VaultLoginInput(
+                        onSkip = { onRespondToSecret(message.requestId, "") },
+                    ) { identifier, password ->
+                        val answer = kotlinx.serialization.json.buildJsonObject {
+                            put("identifier", kotlinx.serialization.json.JsonPrimitive(identifier))
+                            put("password", kotlinx.serialization.json.JsonPrimitive(password))
+                        }
+                        onRespondToSecret(message.requestId, answer.toString())
+                    }
                 message.kind == InteractiveKind.SUDO ->
                     MaskedInput(label = null, placeholder = stringResource(R.string.enter_sudo_password)) {
                         onRespondToSudo(message.requestId, it)
@@ -154,8 +179,94 @@ private fun ClarifyAnswerInput(
     }
 }
 
+private val VAULT_KINDS = setOf(InteractiveKind.VAULT_UNLOCK, InteractiveKind.VAULT_SAVE_LOGIN, InteractiveKind.VAULT_CODE)
+
+/** What the vault asks, in words: whose master password, which site's login or code. */
 @Composable
-private fun ColumnScope.MaskedInput(label: String?, placeholder: String, onSubmit: (String) -> Unit) {
+private fun VaultHeader(message: ChatMessage.InteractiveRequest) {
+    val name = message.question
+    val (title, body) = when (message.kind) {
+        InteractiveKind.VAULT_UNLOCK ->
+            stringResource(R.string.vault_unlock_title, name) to stringResource(R.string.vault_unlock_desc, name)
+        InteractiveKind.VAULT_SAVE_LOGIN ->
+            stringResource(R.string.vault_save_title, name) to
+                stringResource(R.string.vault_save_desc, message.detail.ifBlank { name })
+        else ->
+            (if (name.isBlank()) stringResource(R.string.vault_code_title_plain) else stringResource(R.string.vault_code_title, name)) to
+                message.detail
+    }
+    Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    if (body.isNotBlank()) {
+        Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ColumnScope.VaultCodeInput(onSkip: () -> Unit, onSubmit: (String) -> Unit) {
+    var value by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = value,
+        onValueChange = { value = it.trim() },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(stringResource(R.string.vault_code)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+    )
+    SendRow(enabled = value.isNotBlank(), onSkip = onSkip, skipLabel = stringResource(R.string.vault_skip)) { onSubmit(value) }
+}
+
+/** Identifier plain, password masked; both needed, as on the desktop. */
+@Composable
+private fun ColumnScope.VaultLoginInput(onSkip: () -> Unit, onSubmit: (identifier: String, password: String) -> Unit) {
+    var identifier by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = identifier,
+        onValueChange = { identifier = it },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(stringResource(R.string.vault_identifier)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+    )
+    OutlinedTextField(
+        value = password,
+        onValueChange = { password = it },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(stringResource(R.string.vault_password)) },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+    )
+    SendRow(
+        enabled = identifier.isNotBlank() && password.isNotEmpty(),
+        onSkip = onSkip,
+        skipLabel = stringResource(R.string.vault_skip),
+        sendLabel = stringResource(R.string.save),
+    ) { onSubmit(identifier.trim(), password) }
+}
+
+@Composable
+private fun ColumnScope.SendRow(
+    enabled: Boolean,
+    onSkip: () -> Unit,
+    skipLabel: String,
+    sendLabel: String? = null,
+    onSend: () -> Unit,
+) {
+    Row(modifier = Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = onSkip) { Text(skipLabel) }
+        Button(onClick = onSend, enabled = enabled) { Text(sendLabel ?: stringResource(R.string.send)) }
+    }
+}
+
+@Composable
+private fun ColumnScope.MaskedInput(
+    label: String?,
+    placeholder: String,
+    onSkip: (() -> Unit)? = null,
+    skipLabel: String = "",
+    onSubmit: (String) -> Unit,
+) {
     var value by remember { mutableStateOf("") }
     OutlinedTextField(
         value = value,
@@ -172,7 +283,11 @@ private fun ColumnScope.MaskedInput(label: String?, placeholder: String, onSubmi
         // password or an API key as ordinary text and may learn and suggest it later.
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
     )
-    SendButton(enabled = value.isNotBlank()) { onSubmit(value) }
+    if (onSkip != null) {
+        SendRow(enabled = value.isNotBlank(), onSkip = onSkip, skipLabel = skipLabel) { onSubmit(value) }
+    } else {
+        SendButton(enabled = value.isNotBlank()) { onSubmit(value) }
+    }
 }
 
 @Composable

@@ -63,6 +63,21 @@ internal object ServerRequestParser {
                 params.text("env_var").orEmpty(),
                 params.text("prompt").orEmpty(),
             )
+            "vault.unlock_prompt" -> GatewayEvent.VaultRequest(
+                sid, id, GatewayEvent.VaultRequest.Kind.UNLOCK,
+                name = params.text("display_name") ?: params.text("backend").orEmpty(),
+                detail = "",
+            )
+            "vault.save_login" -> GatewayEvent.VaultRequest(
+                sid, id, GatewayEvent.VaultRequest.Kind.SAVE_LOGIN,
+                name = params.text("site").orEmpty(),
+                detail = params.text("origin").orEmpty(),
+            )
+            "vault.code" -> GatewayEvent.VaultRequest(
+                sid, id, GatewayEvent.VaultRequest.Kind.CODE,
+                name = params.text("site").orEmpty(),
+                detail = params.text("hint").orEmpty(),
+            )
             else -> null
         }
     }

@@ -246,7 +246,7 @@ class GatewayFrameTest {
     @Test
     fun `a server request the app cannot show produces no card`() = runTest {
         val got = collect(this)
-        receive(serverRequest("srq-2", "vault.code", buildJsonObject { put("session_id", "s1") }))
+        receive(serverRequest("srq-2", "terminal.read", buildJsonObject { put("session_id", "s1") }))
 
         assertTrue(got.isEmpty())
     }

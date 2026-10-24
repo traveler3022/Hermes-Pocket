@@ -87,6 +87,8 @@ sealed class ChatMessage {
         val questions: List<ClarifyQuestionUi> = emptyList(),
         /** The server withdrew the request (timeout, interrupt) before it was answered. */
         val expired: Boolean = false,
+        /** Vault: the site's origin (save login) or the code's hint; [question] holds the site or manager. */
+        val detail: String = "",
     ) : ChatMessage()
 
     /** Sub-agent execution card. */
@@ -99,7 +101,7 @@ sealed class ChatMessage {
     ) : ChatMessage()
 }
 
-enum class InteractiveKind { CLARIFY, SUDO, SECRET }
+enum class InteractiveKind { CLARIFY, SUDO, SECRET, VAULT_UNLOCK, VAULT_SAVE_LOGIN, VAULT_CODE }
 
 /** One question of a batch clarify card. */
 data class ClarifyQuestionUi(

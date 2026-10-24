@@ -163,6 +163,24 @@ internal class ChatRequestsDelegate(
         ),
     )
 
+    /** Vault cards answer like secret ({value}); '' declines. */
+    fun onVaultRequest(event: GatewayEvent.VaultRequest) = addInteractiveRequest(
+        event.sessionId,
+        ChatMessage.InteractiveRequest(
+            id = event.requestId,
+            timestamp = System.currentTimeMillis(),
+            requestId = event.requestId,
+            question = event.name,
+            choices = null,
+            kind = when (event.kind) {
+                GatewayEvent.VaultRequest.Kind.UNLOCK -> InteractiveKind.VAULT_UNLOCK
+                GatewayEvent.VaultRequest.Kind.SAVE_LOGIN -> InteractiveKind.VAULT_SAVE_LOGIN
+                GatewayEvent.VaultRequest.Kind.CODE -> InteractiveKind.VAULT_CODE
+            },
+            detail = event.detail,
+        ),
+    )
+
     private fun findInteractiveRequest(requestId: String): ChatMessage.InteractiveRequest? =
         state.value.messages.lastOrNull {
             it is ChatMessage.InteractiveRequest && it.requestId == requestId
