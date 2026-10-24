@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.files.Downloads
+import com.hermes.android.domain.files.ServerUploads
 import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
@@ -39,10 +40,11 @@ class KanbanViewModel @Inject constructor(
     linuxFiles: LinuxFileAccess,
     @ApplicationContext private val context: Context,
     private val downloads: Downloads,
+    private val uploads: ServerUploads,
 ) : ViewModel() {
 
     /** Turns a server path into what the file viewer reads, per runtime, as for chat files. */
-    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope)
+    private val media = ChatAttachmentDelegate(gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope, uploads)
 
     data class UiState(
         val available: Boolean = true,

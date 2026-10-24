@@ -6,6 +6,7 @@ import com.hermes.android.gateway.ProfileScope
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -18,14 +19,17 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import okio.BufferedSink
 
 /**
  * A few routes of the `hermes dashboard` REST API, on every runtime.
@@ -93,6 +97,78 @@ class DashboardApi @Inject constructor(
             }
             val body = response.body ?: throw IOException("Hermes sent nothing")
             target.outputStream().use { out -> body.byteStream().use { it.copyTo(out) } }
+        }
+    }
+
+    /**
+     * For a chat attachment's upload: no call limit, as a big file on a slow uplink takes as
+     * long as it takes. A stalled one still ends on the write timeout.
+     */
+    private val uploadHttp = http.newBuilder()
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(2, TimeUnit.MINUTES)
+        .callTimeout(0, TimeUnit.SECONDS)
+        .build()
+
+    /**
+     * Streams [open]'s bytes ([size], or -1 when unknown) to `/api/files/upload-stream` as the
+     * server file [serverPath] (remote and Termux only), calling [onProgress] as they go out.
+     * Returns the answer's JSON. Cancelling the caller cancels the call.
+     */
+    suspend fun uploadStream(
+        serverPath: String,
+        fileName: String,
+        size: Long,
+        open: () -> InputStream,
+        onProgress: (Long, Long) -> Unit,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val (base, token) = endpoint()
+        val filePart = object : RequestBody() {
+            override fun contentType() = OCTET_TYPE
+            override fun contentLength() = if (size > 0) size else -1L
+            override fun isOneShot() = true
+            override fun writeTo(sink: BufferedSink) {
+                var sent = 0L
+                open().use { input ->
+                    val buffer = ByteArray(UPLOAD_BUFFER_BYTES)
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        sink.write(buffer, 0, n)
+                        sent += n
+                        onProgress(sent, size)
+                    }
+                }
+            }
+        }
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", fileName, filePart)
+            .addFormDataPart("path", serverPath)
+            .addFormDataPart("overwrite", "false")
+            .build()
+        val request = Request.Builder()
+            .url(base + withProfile("/api/files/upload-stream"))
+            .header("Accept", "application/json")
+            .apply { if (token.isNotEmpty()) header("Authorization", "Bearer $token") }
+            .post(form)
+            .build()
+        val call = uploadHttp.newCall(request)
+        // A blocking write does not see cancellation; cancelling the call ends it.
+        val cancelHook = coroutineContext.job.invokeOnCompletion { call.cancel() }
+        try {
+            call.execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                val parsed = runCatching { json.parseToJsonElement(text) }.getOrDefault(JsonNull)
+                if (!response.isSuccessful) {
+                    val detail = detailOf(parsed)?.takeIf { it != "Not Found" }
+                    throw IOException(
+                        detail ?: if (response.code == 404) OLD_HERMES else "Hermes answered HTTP ${response.code}",
+                    )
+                }
+                parsed
+            }
+        } finally {
+            cancelHook.dispose()
         }
     }
 
@@ -202,5 +278,6 @@ class DashboardApi @Inject constructor(
         const val OLD_HERMES = "This Hermes doesn't have it yet. Update Hermes on the server."
         val JSON_TYPE = "application/json".toMediaType()
         val OCTET_TYPE = "application/octet-stream".toMediaType()
+        const val UPLOAD_BUFFER_BYTES = 64 * 1024
     }
 }

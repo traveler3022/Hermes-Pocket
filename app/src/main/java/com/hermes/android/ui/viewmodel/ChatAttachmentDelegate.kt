@@ -9,6 +9,7 @@ import androidx.core.content.FileProvider
 import android.util.Base64
 import android.webkit.MimeTypeMap
 import com.hermes.android.domain.files.Downloads
+import com.hermes.android.domain.files.ServerUploads
 import com.hermes.android.gateway.redactCredentials
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.HermesRuntime
@@ -16,6 +17,12 @@ import com.hermes.android.runtime.LinuxFileAccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,14 +44,22 @@ internal class ChatAttachmentDelegate(
     private val context: Context,
     private val downloads: Downloads,
     private val scope: CoroutineScope,
+    private val uploads: ServerUploads?,
 ) {
-    private val maxAttachBytes = 25 * 1024 * 1024
+    /** The most `/api/files/upload-stream` takes (web_server.py `_MANAGED_FILE_MAX_BYTES`). */
+    private val maxUploadBytes = 100L * MB
+    /** Inline base64 rides one WebSocket frame, which OkHttp refuses past 16 MiB: 12 MB of file. */
+    private val maxInlineBytes = 12L * MB
+    /** A pasted image is copied into the cache first, at most this big. */
+    private val maxAttachBytes = 100 * 1024 * 1024
     private val attachChunkSize = 1024 * 1024
 
     /** Batches still to attach; [ChatUiState.isAttaching] is true while any is. */
     private val attachBatches = AtomicInteger(0)
     /** One file at a time, in the order picked: Hermes queues images in that order. */
     private val attachLock = Mutex()
+    /** The file being uploaded now, by its chip's id, so removing the chip cancels it. */
+    private val uploadJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     /** Attaches [uris] one after another, each the way a single picked file is. */
     fun attachFromUris(state: MutableStateFlow<ChatUiState>, uris: List<Uri>) =
@@ -93,8 +108,24 @@ internal class ChatAttachmentDelegate(
         scope.launch(Dispatchers.IO) {
             try {
                 val list = uris()
+                // Every picked file shows at once, waiting its turn; removing one cancels it.
+                val staged = list.map { uri ->
+                    uri to PendingAttachment(
+                        name = displayName(uri),
+                        isImage = false,
+                        localUri = uri.toString(),
+                        progress = 0f,
+                    )
+                }
+                state.update { it.copy(pendingAttachments = it.pendingAttachments + staged.map { s -> s.second }) }
                 attachLock.withLock {
-                    for (uri in list) attachOne(state, uri)
+                    for ((uri, placeholder) in staged) {
+                        if (state.value.pendingAttachments.none { it.id == placeholder.id }) continue
+                        val job = launch { attachOne(state, uri, placeholder) }
+                        uploadJobs[placeholder.id] = job
+                        job.join()
+                        uploadJobs.remove(placeholder.id)
+                    }
                 }
             } finally {
                 attachBatches.decrementAndGet()
@@ -125,7 +156,7 @@ internal class ChatAttachmentDelegate(
                         val read = stream.read(buffer)
                         if (read <= 0) break
                         total += read
-                        if (total > maxAttachBytes) throw IllegalStateException("File too large (max 25 MB)")
+                        if (total > maxAttachBytes) throw IllegalStateException("File too large (max 100 MB)")
                         out.write(buffer, 0, read)
                     }
                 }
@@ -148,12 +179,12 @@ internal class ChatAttachmentDelegate(
             null
         } ?: uri.lastPathSegment ?: "attachment"
 
-    private suspend fun attachOne(state: MutableStateFlow<ChatUiState>, uri: Uri) {
-        val sessionId = state.value.activeSessionId ?: return
+    private suspend fun attachOne(state: MutableStateFlow<ChatUiState>, uri: Uri, placeholder: PendingAttachment) {
+        val sessionId = state.value.activeSessionId ?: return dropPlaceholder(state, placeholder)
         var jpeg: java.io.File? = null
         try {
             val resolver = context.contentResolver
-            val pickedName = displayName(uri)
+            val pickedName = placeholder.name
             val pickedMime = resolver.getType(uri) ?: "application/octet-stream"
 
             // Hermes takes only the image types a model reads (cli._IMAGE_EXTENSIONS), and
@@ -168,50 +199,145 @@ internal class ChatAttachmentDelegate(
             // built-in Linux doesn't have.
             val isImage = name.substringAfterLast('.', "").lowercase() in hermesImageExtensions
 
-            // Built-in Linux: hand Hermes a path on its own disk, as its desktop app does.
-            // Termux and remote gateways can't see the file, so they get the bytes.
-            val guestPath = if (GatewayClient.isStdio(hermesRuntime.getWebSocketUrl())) {
+            // A path on Hermes' own disk where there is one: the built-in Linux gets the file
+            // copied in, as its desktop app does; remote and Termux get it streamed over HTTP,
+            // with its progress on the chip. Only when that route fails do the bytes go inline.
+            val serverPath = if (GatewayClient.isStdio(hermesRuntime.getWebSocketUrl())) {
                 linuxFiles.upload(source, name)
+            } else if (uploads != null && uploads.available) {
+                uploadOverHttp(state, placeholder, uploads, source, name)
             } else null
-            val b64 = if (guestPath == null) readBase64(source) else ""
+            val b64 = if (serverPath == null) readBase64(source) else ""
 
-            val attachment = if (isImage) {
-                // image.attach takes only session_id and path, and rejects anything else
-                // (tui_gateway/contracts/prompt_voice.py: ImageAttachParams); the filename
-                // hint belongs to image.attach_bytes alone.
-                val params = buildJsonObject {
-                    put("session_id", sessionId)
-                    if (guestPath != null) {
-                        put("path", guestPath)
-                    } else {
-                        put("content_base64", b64)
-                        put("filename", name)
+            // The upload is done; the attach itself is short and always runs to its answer. Left
+            // half-way, Hermes would still queue an image the chat no longer shows, and send it
+            // with the next message.
+            val cancelled = currentCoroutineContext().job
+            val attachment = withContext(NonCancellable) {
+                if (isImage) {
+                    // image.attach takes only session_id and path, and rejects anything else
+                    // (tui_gateway/contracts/prompt_voice.py: ImageAttachParams); the filename
+                    // hint belongs to image.attach_bytes alone.
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        if (serverPath != null) {
+                            put("path", serverPath)
+                        } else {
+                            put("content_base64", b64)
+                            put("filename", name)
+                        }
                     }
+                    val method = if (serverPath != null) "image.attach" else "image.attach_bytes"
+                    val result = gatewayClient.request(method, jsonToElementMap(params))
+                    val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.contentOrNull
+                    placeholder.copy(name = name, isImage = true, gatewayPath = path, progress = null)
+                } else {
+                    val params = buildJsonObject {
+                        put("session_id", sessionId)
+                        if (serverPath != null) put("path", serverPath) else put("data_url", "data:$mime;base64,$b64")
+                        put("name", name)
+                    }
+                    val result = gatewayClient.request("file.attach", jsonToElementMap(params))
+                    val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.contentOrNull
+                        ?: throw IllegalStateException("Gateway returned no file reference")
+                    placeholder.copy(name = name, isImage = false, refText = ref, progress = null)
                 }
-                val method = if (guestPath != null) "image.attach" else "image.attach_bytes"
-                val result = gatewayClient.request(method, jsonToElementMap(params))
-                val path = ((result as? JsonObject)?.get("path") as? JsonPrimitive)?.contentOrNull
-                PendingAttachment(name = name, isImage = true, gatewayPath = path, localUri = uri.toString())
-            } else {
-                val params = buildJsonObject {
-                    put("session_id", sessionId)
-                    if (guestPath != null) put("path", guestPath) else put("data_url", "data:$mime;base64,$b64")
-                    put("name", name)
-                }
-                val result = gatewayClient.request("file.attach", jsonToElementMap(params))
-                val ref = ((result as? JsonObject)?.get("ref_text") as? JsonPrimitive)?.contentOrNull
-                    ?: throw IllegalStateException("Gateway returned no file reference")
-                PendingAttachment(name = name, isImage = false, refText = ref, localUri = uri.toString())
             }
-            state.update { it.copy(pendingAttachments = it.pendingAttachments + attachment) }
-            Timber.i("[Chat] Attached $name (${guestPath ?: "uploaded"})")
+            if (cancelled.isCancelled || state.value.pendingAttachments.none { it.id == placeholder.id }) {
+                // Removed while it was being attached: take it back off Hermes' queue too.
+                withContext(NonCancellable) { detachImage(sessionId, attachment) }
+                dropPlaceholder(state, placeholder)
+                return
+            }
+            state.update { s ->
+                s.copy(pendingAttachments = s.pendingAttachments.map { if (it.id == placeholder.id) attachment else it })
+            }
+            Timber.i("[Chat] Attached $name (${serverPath ?: "inline"})")
         } catch (e: CancellationException) {
+            dropPlaceholder(state, placeholder)
             throw e
         } catch (e: Exception) {
+            dropPlaceholder(state, placeholder)
+            // Removed by the user mid-upload: no error to show.
+            if (!currentCoroutineContext().isActive) return
             Timber.e(e, "[Chat] Attach failed")
             state.update { it.copy(errorEvent = ErrorEvent.Error("Attach failed: ${e.message}")) }
         } finally {
             jpeg?.delete()
+        }
+    }
+
+    /**
+     * Streams [source] to the server and returns its path there, showing the share sent on
+     * [placeholder]'s chip. Null when this server can't take it that way (an older Hermes, a
+     * refused path) and the file is small enough to go inline instead.
+     */
+    private suspend fun uploadOverHttp(
+        state: MutableStateFlow<ChatUiState>,
+        placeholder: PendingAttachment,
+        uploads: ServerUploads,
+        source: Uri,
+        name: String,
+    ): String? {
+        val size = fileSize(source)
+        if (size > maxUploadBytes) throw IllegalStateException("File too large (max ${maxUploadBytes / MB} MB)")
+        var shownPercent = -1
+        return try {
+            uploads.upload(
+                name = name,
+                size = size,
+                open = { context.contentResolver.openInputStream(source) ?: throw java.io.IOException("Cannot read file") },
+                onProgress = { sent, total ->
+                    if (total <= 0) return@upload
+                    val percent = (sent * 100 / total).toInt().coerceIn(0, 100)
+                    // One state update per percent, not per buffer.
+                    if (percent != shownPercent) {
+                        shownPercent = percent
+                        setProgress(state, placeholder.id, percent / 100f)
+                    }
+                },
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            // A cancelled call surfaces as an IOException; that is a cancel, not a failure.
+            currentCoroutineContext().ensureActive()
+            if (size in 1..maxInlineBytes) {
+                Timber.w(e, "[Chat] Upload failed; sending $name inline")
+                null
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun setProgress(state: MutableStateFlow<ChatUiState>, id: String, progress: Float) {
+        state.update { s ->
+            s.copy(pendingAttachments = s.pendingAttachments.map { if (it.id == id) it.copy(progress = progress) else it })
+        }
+    }
+
+    private fun dropPlaceholder(state: MutableStateFlow<ChatUiState>, placeholder: PendingAttachment) {
+        state.update { s -> s.copy(pendingAttachments = s.pendingAttachments.filterNot { it.id == placeholder.id }) }
+    }
+
+    /** The bytes behind [uri], or -1 when the provider doesn't say. */
+    private fun fileSize(uri: Uri): Long =
+        runCatching { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } }
+            .getOrNull()?.takeIf { it >= 0 } ?: -1L
+
+    /** Takes [attachment]'s image back off Hermes' queue for the next turn. */
+    private suspend fun detachImage(sessionId: String, attachment: PendingAttachment) {
+        val path = attachment.gatewayPath ?: return
+        if (!attachment.isImage) return
+        try {
+            val params = buildJsonObject {
+                put("session_id", sessionId)
+                put("path", path)
+            }
+            gatewayClient.request("image.detach", jsonToElementMap(params))
+        } catch (e: Exception) {
+            Timber.w(e, "[Chat] image.detach failed (ignored)")
         }
     }
 
@@ -273,8 +399,8 @@ internal class ChatAttachmentDelegate(
                     val read = stream.read(buffer)
                     if (read <= 0) break
                     totalSize += read
-                    if (totalSize > maxAttachBytes) {
-                        throw IllegalStateException("File too large (max 25 MB)")
+                    if (totalSize > maxInlineBytes) {
+                        throw IllegalStateException("File too large (max ${maxInlineBytes / MB} MB)")
                     }
                     encoder.write(buffer, 0, read)
                 }
@@ -287,24 +413,16 @@ internal class ChatAttachmentDelegate(
     }
 
     fun removeAttachment(state: MutableStateFlow<ChatUiState>, attachment: PendingAttachment) {
-        state.update { it.copy(
-            pendingAttachments = state.value.pendingAttachments - attachment,
-        ) }
-        val sessionId = state.value.activeSessionId ?: return
-        if (attachment.isImage && attachment.gatewayPath != null) {
-            scope.launch {
-                try {
-                    val params = buildJsonObject {
-                        put("session_id", sessionId)
-                        put("path", attachment.gatewayPath)
-                    }
-                    gatewayClient.request("image.detach", jsonToElementMap(params))
-                } catch (e: Exception) {
-                    Timber.w(e, "[Chat] image.detach failed (ignored)")
-                }
-            }
+        state.update { s -> s.copy(pendingAttachments = s.pendingAttachments.filterNot { it.id == attachment.id }) }
+        // Still uploading or waiting: stop it; its own attach, if under way, takes it back off.
+        if (attachment.progress != null) {
+            uploadJobs[attachment.id]?.cancel()
+            return
         }
+        val sessionId = state.value.activeSessionId ?: return
+        scope.launch { detachImage(sessionId, attachment) }
     }
+
 
     fun resolveMediaUrl(raw: String): String {
         if (raw.startsWith("http://") || raw.startsWith("https://") ||
@@ -426,3 +544,5 @@ internal class ChatAttachmentDelegate(
 
     private fun jsonToElementMap(obj: JsonObject): Map<String, kotlinx.serialization.json.JsonElement> = obj.toMap()
 }
+
+private const val MB = 1024L * 1024L

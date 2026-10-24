@@ -1,6 +1,7 @@
 package com.hermes.android.di
 
 import com.hermes.android.data.AppReleaseRepository
+import com.hermes.android.data.ChatUploadRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.CronJobsRepository
 import com.hermes.android.data.ServerHermesUpdatesRepository
@@ -47,6 +48,7 @@ import com.hermes.android.domain.cron.CronJobs
 import com.hermes.android.domain.updates.ServerHermesUpdates
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
+import com.hermes.android.domain.files.ServerUploads
 import com.hermes.android.domain.groups.GroupRooms
 import com.hermes.android.domain.messaging.MessagingGateway
 import com.hermes.android.domain.messaging.MessagingPairing
@@ -214,6 +216,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindServerFiles(impl: RemoteFiles): ServerFiles
+
+    @Binds
+    abstract fun bindServerUploads(impl: ChatUploadRepository): ServerUploads
 
     @Binds
     abstract fun bindMediaPlayers(impl: MediaStreams): MediaPlayers

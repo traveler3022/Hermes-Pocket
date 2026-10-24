@@ -52,6 +52,7 @@ class ChatViewModel @Inject constructor(
     private val profiles: com.hermes.android.domain.profiles.HermesProfiles? = null,
     private val kanban: com.hermes.android.domain.kanban.KanbanRepository? = null,
     private val archive: com.hermes.android.domain.session.ArchivedChats? = null,
+    uploads: com.hermes.android.domain.files.ServerUploads? = null,
 ) : ViewModel() {
 
     // ── State ───────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ class ChatViewModel @Inject constructor(
     private var newChatOnConnect = false
 
     private val attachmentDelegate = ChatAttachmentDelegate(
-        gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope,
+        gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope, uploads,
     )
 
     private val drawerDelegate = ChatDrawerDelegate(
@@ -501,6 +502,8 @@ class ChatViewModel @Inject constructor(
         val text = _uiState.value.inputText.trim()
         val attachments = _uiState.value.pendingAttachments
         if (text.isEmpty() && attachments.isEmpty()) return
+        // A file still uploading isn't on Hermes yet: the send button waits for it.
+        if (attachments.any { it.progress != null }) return
         val sessionId = _uiState.value.activeSessionId
         _uiState.value.editingMessageId?.let { editing ->
             if (text.isNotEmpty()) rewindDelegate.submitEdit(editing, text)

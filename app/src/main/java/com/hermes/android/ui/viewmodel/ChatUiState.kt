@@ -282,6 +282,10 @@ data class PendingAttachment(
     val refText: String? = null,
     /** content:// URI of the picked file, for thumbnail preview in the bubble. */
     val localUri: String? = null,
+    /** Set while it is still on its way to Hermes: the share uploaded so far, 0 to 1. */
+    val progress: Float? = null,
+    /** Tells this chip from another file of the same name. */
+    val id: String = java.util.UUID.randomUUID().toString(),
 )
 
 enum class ChatConnectionState {

@@ -282,8 +282,8 @@ internal fun InputBar(
                 }
             }
         }
-        // Staged attachments — already uploaded to the gateway, sent with the
-        // next prompt. Tap a chip to remove it.
+        // Staged attachments, sent with the next prompt; one still uploading shows how far it
+        // got. Tap a chip to remove it, or to stop its upload.
         if (pendingAttachments.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -297,13 +297,30 @@ internal fun InputBar(
                         selected = false,
                         onClick = { onRemoveAttachment(attachment) },
                         leadingIcon = {
-                            Icon(
-                                Icons.Default.AttachFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                            // Still on its way: how much of it has reached Hermes.
+                            val progress = attachment.progress
+                            if (progress != null) {
+                                CircularProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.AttachFile,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        },
+                        label = {
+                            val progress = attachment.progress
+                            Text(
+                                if (progress != null) "${(progress * 100).toInt()}% · ${attachment.name}" else attachment.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         },
-                        label = { Text(attachment.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         trailingIcon = {
                             Icon(
                                 HxIcons.X,
