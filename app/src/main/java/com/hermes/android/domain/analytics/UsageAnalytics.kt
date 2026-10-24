@@ -35,7 +35,18 @@ interface UsageAnalytics {
         val costIsEstimate: Boolean get() = actualCost <= 0.0
     }
 
-    data class Day(val day: String, val tokens: Long, val cost: Double)
+    /** One local calendar day of the server (a session counts on the day it started). */
+    data class Day(
+        val day: String,
+        val inputTokens: Long,
+        val outputTokens: Long,
+        val cacheReadTokens: Long,
+        val sessions: Long,
+        val apiCalls: Long,
+        val cost: Double,
+    ) {
+        val tokens: Long get() = inputTokens + outputTokens
+    }
 
     data class ModelUse(
         val model: String,

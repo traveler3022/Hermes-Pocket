@@ -1196,7 +1196,8 @@
     <string name="analytics_cost_estimated">هزینه (تخمینی)</string>
     <string name="analytics_cache">خواندن از کش</string>
     <string name="analytics_reasoning">استدلال</string>
-    <string name="analytics_daily_cost">هزینهٔ هر روز</string>
+    <string name="analytics_daily_usage">مصرف روزانه</string>
+    <string name="analytics_day_line">ورودی %1$s · خروجی %2$s · کش %3$s · %4$d گفتگو · %5$d فراخوانی</string>
     <string name="analytics_model_line">ورودی %1$s · خروجی %2$s · %3$d گفتگو · %4$d فراخوانی</string>
     <string name="analytics_auxiliary">کارهای فرعی (فشرده‌سازی، بینایی…)</string>
     <string name="analytics_no_models">مصرفی برای مدل‌ها ثبت نشده.</string>

@@ -1198,7 +1198,8 @@
     <string name="analytics_cost_estimated">cost (est.)</string>
     <string name="analytics_cache">cache read</string>
     <string name="analytics_reasoning">reasoning</string>
-    <string name="analytics_daily_cost">Cost per day</string>
+    <string name="analytics_daily_usage">Usage per day</string>
+    <string name="analytics_day_line">in %1$s · out %2$s · cache %3$s · %4$d sessions · %5$d calls</string>
     <string name="analytics_model_line">in %1$s · out %2$s · %3$d sessions · %4$d calls</string>
     <string name="analytics_auxiliary">Side jobs (compression, vision…)</string>
     <string name="analytics_no_models">No model usage recorded.</string>
