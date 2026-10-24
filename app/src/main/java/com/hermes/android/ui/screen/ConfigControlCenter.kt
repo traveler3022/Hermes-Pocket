@@ -20,7 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -112,6 +112,7 @@ internal fun ControlCenterMenu(
     onNavigateToAnalytics: () -> Unit,
     onNavigateToAchievements: () -> Unit,
     onNavigateToOps: () -> Unit,
+    onNavigateToVault: () -> Unit,
 ) {
     val toolsOn = state.availableTools.count { it.enabled }
     val toolsTotal = state.availableTools.size
@@ -222,6 +223,13 @@ internal fun ControlCenterMenu(
                 tint = HxIconColors.indigo,
                 onClick = onNavigateToMcp,
             )
+            CcDivider()
+            CcRow(
+                title = stringResource(R.string.vault_title),
+                icon = Icons.Default.Lock,
+                tint = HxIconColors.green,
+                onClick = onNavigateToVault,
+            )
         }
 
         // ── Work ──
@@ -310,14 +318,6 @@ internal fun ControlCenterMenu(
                 tint = HxIconColors.orange,
                 subtitle = stringResource(R.string.ops_nav_subtitle),
                 onClick = onNavigateToOps,
-            )
-            CcDivider()
-            CcRow(
-                title = stringResource(R.string.advanced),
-                icon = Icons.Default.Settings,
-                tint = HxIconColors.gray,
-                subtitle = stringResource(R.string.env_mcp_console_log),
-                onClick = { onOpen(SettingsSection.ADVANCED) },
             )
         }
     }
