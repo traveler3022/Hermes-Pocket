@@ -282,6 +282,8 @@ private fun ControlCenter() {
                 onNavigateToAnalytics = {},
                 onNavigateToAchievements = {},
                 onNavigateToOps = {},
+                onNavigateToVault = {},
+                onNavigateToForeignSessions = {},
             )
         }
     }

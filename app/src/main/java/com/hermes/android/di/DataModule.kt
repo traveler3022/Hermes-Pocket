@@ -9,6 +9,7 @@ import com.hermes.android.data.GroupsRepository
 import com.hermes.android.data.AchievementsRepository
 import com.hermes.android.data.ArchivedChatsRepository
 import com.hermes.android.data.CredentialVaultRepository
+import com.hermes.android.data.ForeignSessionsRepository
 import com.hermes.android.data.ServerOpsRepository
 import com.hermes.android.data.ModelSlotsRepository
 import com.hermes.android.data.LearningRepository
@@ -38,6 +39,7 @@ import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.achievements.Achievements
 import com.hermes.android.domain.session.ArchivedChats
 import com.hermes.android.domain.vault.CredentialVault
+import com.hermes.android.domain.session.ForeignSessions
 import com.hermes.android.domain.ops.ServerOps
 import com.hermes.android.domain.config.ModelSlots
 import com.hermes.android.domain.cron.CronBlueprints
@@ -190,6 +192,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindCredentialVault(impl: CredentialVaultRepository): CredentialVault
+
+    @Binds
+    abstract fun bindForeignSessions(impl: ForeignSessionsRepository): ForeignSessions
 
     @Binds
     abstract fun bindServerOps(impl: ServerOpsRepository): ServerOps

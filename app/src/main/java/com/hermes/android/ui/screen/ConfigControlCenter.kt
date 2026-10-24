@@ -62,6 +62,7 @@ import com.hermes.android.ui.icons.filled.Dns
 import com.hermes.android.ui.icons.filled.Extension
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Forum
+import com.hermes.android.ui.icons.filled.History
 import com.hermes.android.ui.icons.filled.Key
 import com.hermes.android.ui.icons.filled.Link
 import com.hermes.android.ui.icons.filled.Palette
@@ -113,6 +114,7 @@ internal fun ControlCenterMenu(
     onNavigateToAchievements: () -> Unit,
     onNavigateToOps: () -> Unit,
     onNavigateToVault: () -> Unit,
+    onNavigateToForeignSessions: () -> Unit,
 ) {
     val toolsOn = state.availableTools.count { it.enabled }
     val toolsTotal = state.availableTools.size
@@ -284,6 +286,14 @@ internal fun ControlCenterMenu(
                 icon = Icons.Default.Star,
                 tint = HxIconColors.orange,
                 onClick = onNavigateToAchievements,
+            )
+            CcDivider()
+            CcRow(
+                title = stringResource(R.string.foreign_sessions_title),
+                icon = Icons.Default.History,
+                tint = HxIconColors.indigo,
+                subtitle = stringResource(R.string.foreign_sessions_nav_subtitle),
+                onClick = onNavigateToForeignSessions,
             )
         }
 

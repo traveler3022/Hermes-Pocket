@@ -1405,4 +1405,16 @@
         <item>Brainstorming</item>
     </string-array>
     <string name="status_waiting">Waiting for you</string>
+    <string name="foreign_sessions_title">Import chats</string>
+    <string name="foreign_sessions_nav_subtitle">Claude Code and Codex sessions on the server</string>
+    <string name="foreign_sessions_on_host">On %1$s</string>
+    <string name="foreign_sessions_all">All</string>
+    <string name="foreign_sessions_empty">No Claude Code or Codex sessions</string>
+    <string name="foreign_sessions_empty_caption">Hermes looks in ~/.claude/projects and ~/.codex/sessions on the machine it runs on.</string>
+    <string name="foreign_sessions_unreadable">%1$d logs could not be read</string>
+    <string name="foreign_sessions_more">Show more</string>
+    <string name="foreign_sessions_last_of">Last %1$d of %2$d messages</string>
+    <string name="foreign_sessions_you">You</string>
+    <string name="foreign_sessions_import">Import and open</string>
+    <string name="foreign_sessions_open">Already imported: open</string>
 </resources>
