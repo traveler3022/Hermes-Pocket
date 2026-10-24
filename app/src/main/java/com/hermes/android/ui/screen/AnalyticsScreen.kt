@@ -1,6 +1,7 @@
 package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -113,7 +114,7 @@ fun AnalyticsScreen(
             }
             item(key = "totals") { Totals(report) }
             if (report.daily.isNotEmpty()) {
-                item(key = "daily") { DailyCost(report.daily) }
+                item(key = "daily") { DailyUsage(report.daily) }
             }
             item(key = "tabs") { TabChips(tab) { tab = it } }
             when (tab) {
@@ -211,12 +212,18 @@ private fun Totals(report: Report) {
     }
 }
 
-/** One bar per day, as tall as that day's cost relative to the dearest day. */
+/**
+ * One bar per day, as tall as that day's tokens (in + out) against the busiest day: costs are
+ * often all 0 (free or unpriced models), which left every bar the same. Tap a bar for that day's
+ * numbers; the newest day is shown first.
+ */
 @Composable
-private fun DailyCost(daily: List<Day>) {
-    val top = daily.maxOf { it.cost }
+private fun DailyUsage(daily: List<Day>) {
+    val top = daily.maxOf { it.tokens }
+    var selected by rememberSaveable(daily.size, daily.last().day) { mutableStateOf(daily.lastIndex) }
+    val day = daily.getOrNull(selected) ?: daily.last()
     Card {
-        SectionTitle(stringResource(R.string.analytics_daily_cost))
+        SectionTitle(stringResource(R.string.analytics_daily_usage))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -224,14 +231,26 @@ private fun DailyCost(daily: List<Day>) {
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-            daily.forEach { d ->
-                val share = if (top > 0.0) (d.cost / top).toFloat() else 0f
+            daily.forEachIndexed { i, d ->
+                val share = if (top > 0L) d.tokens.toFloat() / top else 0f
+                val color = if (i == selected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight(share.coerceIn(0.04f, 1f))
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
-                )
+                        .fillMaxHeight()
+                        .clickable { selected = i },
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(if (d.tokens > 0L) share.coerceIn(0.04f, 1f) else 0.02f)
+                            .background(
+                                if (d.tokens > 0L) color else MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(2.dp),
+                            ),
+                    )
+                }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -239,6 +258,30 @@ private fun DailyCost(daily: List<Day>) {
             Text(daily.first().day, style = labelStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(daily.last().day, style = labelStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                day.day,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                hxCompactCount(day.tokens) + if (day.cost > 0.0) " · " + formatCost(day.cost) else "",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            stringResource(
+                R.string.analytics_day_line,
+                hxCompactCount(day.inputTokens),
+                hxCompactCount(day.outputTokens),
+                hxCompactCount(day.cacheReadTokens),
+                day.sessions.toInt(),
+                day.apiCalls.toInt(),
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

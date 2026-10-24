@@ -16,6 +16,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import timber.log.Timber
 import java.io.IOException
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,14 +54,20 @@ class UsageAnalyticsRepository @Inject constructor(
                 estimatedCost = totals.double("total_estimated_cost"),
                 actualCost = totals.double("total_actual_cost"),
             ),
-            daily = usage.list("daily").mapNotNull { d ->
-                val day = d.str("day") ?: return@mapNotNull null
-                Day(
-                    day = day,
-                    tokens = d.long("input_tokens") + d.long("output_tokens"),
-                    cost = d.costOf("actual_cost", "estimated_cost"),
-                )
-            },
+            daily = withEmptyDays(
+                usage.list("daily").mapNotNull { d ->
+                    val day = d.str("day") ?: return@mapNotNull null
+                    Day(
+                        day = day,
+                        inputTokens = d.long("input_tokens"),
+                        outputTokens = d.long("output_tokens"),
+                        cacheReadTokens = d.long("cache_read_tokens"),
+                        sessions = d.long("sessions"),
+                        apiCalls = d.long("api_calls"),
+                        cost = d.costOf("actual_cost", "estimated_cost"),
+                    )
+                },
+            ),
             models = (models?.objects() ?: usage.list("by_model")).mapNotNull { m ->
                 val model = m.str("model") ?: return@mapNotNull null
                 ModelUse(
@@ -90,6 +97,23 @@ class UsageAnalyticsRepository @Inject constructor(
                 Counted(t.str("tool") ?: return@mapNotNull null, t.long("count"))
             },
         )
+    }
+
+    /**
+     * The server lists only days that had a session: put the quiet days in between back as
+     * zeros, so the chart's bars are one per calendar day and a gap shows as a gap.
+     */
+    private fun withEmptyDays(days: List<Day>): List<Day> {
+        val byDate = days.mapNotNull { d ->
+            runCatching { LocalDate.parse(d.day) }.getOrNull()?.let { it to d }
+        }.toMap()
+        if (byDate.size != days.size || byDate.isEmpty()) return days
+        val first = byDate.keys.min()
+        val last = byDate.keys.max()
+        return generateSequence(first) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(last) }
+            .map { date -> byDate[date] ?: Day(date.toString(), 0, 0, 0, 0, 0, 0.0) }
+            .toList()
     }
 
     private fun JsonObject?.obj(key: String): JsonObject? = this?.get(key) as? JsonObject
