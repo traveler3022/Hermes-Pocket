@@ -202,7 +202,7 @@ internal class ChatSlashDelegate(
                 }
             }
             "exec", "plugin" -> {
-                postStatus(str("output")?.takeIf { it.isNotBlank() } ?: "(no output)")
+                postStatus(str("output")?.takeIf { it.isNotBlank() } ?: "(no output)", isCommandOutput = true)
                 return
             }
             "skill", "send" -> {
@@ -222,16 +222,18 @@ internal class ChatSlashDelegate(
         }
         val output = extractCommandOutput(result)?.trim().orEmpty().ifBlank { "/$name: no output" }
         val warning = str("warning")?.takeIf { it.isNotBlank() }
-        postStatus(if (warning != null) "warning: $warning\n$output" else output)
+        postStatus(if (warning != null) "warning: $warning\n$output" else output, isCommandOutput = true)
     }
 
-    private fun postStatus(text: String, isError: Boolean = false) {
+    private fun postStatus(text: String, isError: Boolean = false, isCommandOutput: Boolean = false) {
         state.update { it.copy(
             messages = it.messages + ChatMessage.Status(
                 id = UUID.randomUUID().toString(),
                 timestamp = System.currentTimeMillis(),
-                text = text.trim(),
+                // trimEnd: leading spaces are a table's indentation.
+                text = if (isCommandOutput) text.trimEnd().trimStart('\n') else text.trim(),
                 isError = isError,
+                isCommandOutput = isCommandOutput,
             ),
             isSending = false,
         ) }
@@ -297,7 +299,7 @@ internal class ChatSlashDelegate(
             "/plugins", "/cron", "/platforms", "/agents", "/insights", "/usage",
             "/rollback", "/skin",
             "/redraw", "/prompt", "/palette", "/statusbar", "/battery", "/indicator",
-            "/copy", "/paste", "/quit", "/wake", "/voice",
+            "/copy", "/paste", "/quit", "/wake", "/voice", "/mouse", "/density",
         )
     }
 }

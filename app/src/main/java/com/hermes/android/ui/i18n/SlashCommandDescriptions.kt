@@ -87,6 +87,7 @@ internal object SlashCommandDescriptions {
         "/platforms" to "نمایش وضعیت پیام‌رسان‌های متصل",
         "/update" to "به‌روزرسانی هرمس به آخرین نسخه",
         "/version" to "نمایش نسخهٔ هرمس",
+        "/logs" to "نمایش آخرین خطوط لاگ gateway",
         "/debug" to "فرستادن گزارش اشکال (اطلاعات سیستم و لاگ‌ها) و گرفتن لینک اشتراک",
     )
 }
