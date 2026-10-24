@@ -1417,4 +1417,6 @@
     <string name="foreign_sessions_you">You</string>
     <string name="foreign_sessions_import">Import and open</string>
     <string name="foreign_sessions_open">Already imported: open</string>
+    <string name="profile_avatar_choose">Choose image</string>
+    <string name="profile_avatar_remove">Remove image</string>
 </resources>

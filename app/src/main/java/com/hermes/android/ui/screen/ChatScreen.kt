@@ -1291,6 +1291,7 @@ fun ChatScreen(
             onEdit = profilesViewModel::openEditor,
             onSave = profilesViewModel::save,
             onDelete = profilesViewModel::delete,
+            onSetAvatar = profilesViewModel::setAvatar,
             onCloseEditor = profilesViewModel::closeEditor,
             onClearError = profilesViewModel::clearError,
             onDismiss = {
