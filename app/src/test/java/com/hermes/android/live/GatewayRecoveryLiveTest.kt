@@ -262,7 +262,6 @@ class GatewayRecoveryLiveTest {
         init {
             // Transport settings copied from GatewayModule.provideOkHttpClient.
             val http = OkHttpClient.Builder()
-                .pingInterval(15, TimeUnit.SECONDS)
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(0, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)

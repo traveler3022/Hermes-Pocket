@@ -51,9 +51,10 @@ object GatewayModule {
             // A server inside the user's tailnet is reached through the in-app Tailscale node.
             .proxySelector(tailnet.proxySelector)
             .proxyAuthenticator(tailnet.proxyAuthenticator)
-            .pingInterval(15, TimeUnit.SECONDS) // ping every 15s; if pong
-            // doesn't arrive, OkHttp fires onFailure → reconnect kicks in.
-            // 15s is low enough to detect stale connections through TLS proxies.
+            // No ping: a deadline on its answer takes a busy line for a dead one, and it cut
+            // uploads, downloads and every call sharing the line with them. Long-lived sockets are
+            // watched by LinkWatch (nothing at all from the server, not a slow answer); a call
+            // fails when no byte comes for its read timeout, which a slow transfer never reaches.
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.SECONDS) // WebSocket — no read timeout
             .writeTimeout(15, TimeUnit.SECONDS)
