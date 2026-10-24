@@ -70,6 +70,8 @@ sealed class ChatMessage {
         override val timestamp: Long,
         val text: String,
         val isError: Boolean,
+        /** A slash command's terminal output (tables, box art): shown monospace, left to right. */
+        val isCommandOutput: Boolean = false,
     ) : ChatMessage()
 
     /** Interactive request: clarify question, sudo prompt, or secret input. */

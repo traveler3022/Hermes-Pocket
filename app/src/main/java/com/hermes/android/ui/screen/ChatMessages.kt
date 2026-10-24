@@ -44,6 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.LayoutDirection
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxStatus
@@ -194,7 +201,29 @@ internal fun MessageBubble(
             ToolCallCard(message = message)
         }
 
-        is ChatMessage.Status -> {
+        is ChatMessage.Status -> if (message.isCommandOutput) {
+            // Hermes formats command output for an 80-column terminal: tables and box art
+            // only line up monospace, left to right, unwrapped (scroll sideways instead).
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                SelectionContainer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        text = message.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        softWrap = false,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        } else {
             Text(
                 text = message.text,
                 style = MaterialTheme.typography.labelSmall,
