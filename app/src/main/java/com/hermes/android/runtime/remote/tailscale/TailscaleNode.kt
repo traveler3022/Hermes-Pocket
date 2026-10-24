@@ -227,6 +227,22 @@ class TailscaleNode @Inject constructor(
         }
     }
 
+    override suspend fun receivedFrom(host: String): Long? {
+        if (proxy == null || !isTailnetHost(host)) return null
+        val h = host.trim().trimEnd('.').lowercase()
+        // Read here, not kept in [status]: a count that changes every poll would make the status
+        // a new value (and redraw whatever shows it) every time.
+        val peers = runCatching { JSONObject(onGo { Tsbridge.status() }).optJSONArray("peers") }.getOrNull()
+            ?: return null
+        for (i in 0 until peers.length()) {
+            val p = peers.optJSONObject(i) ?: continue
+            if (p.optString("dns").equals(h, ignoreCase = true) || p.optString("ip") == h) {
+                return p.optLong("rx", -1).takeIf { it >= 0 }
+            }
+        }
+        return null
+    }
+
     override fun stalled(host: String) {
         if (proxy == null || !isTailnetHost(host)) return
         Timber.i("[Tailscale] connection to $host stalled; checking the relay and the direct path")
