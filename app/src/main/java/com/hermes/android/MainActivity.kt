@@ -390,6 +390,7 @@ private fun HermesNavHost(
                 onNavigateToAchievements = { navController.navigate("achievements") },
                 onNavigateToVault = { navController.navigate("vault") },
                 onNavigateToOps = { navController.navigate("ops") },
+                onNavigateToForeignSessions = { navController.navigate("foreign-sessions") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
             )
@@ -445,6 +446,17 @@ private fun HermesNavHost(
         composable("achievements") {
             com.hermes.android.ui.screen.AchievementsScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("foreign-sessions") {
+            com.hermes.android.ui.screen.ForeignSessionsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onOpenSession = { sessionId ->
+                    navController.navigate("chat?resumeSessionId=$sessionId") {
+                        popUpTo("chat") { inclusive = true }
+                    }
+                },
             )
         }
 

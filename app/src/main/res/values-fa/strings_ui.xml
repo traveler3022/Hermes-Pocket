@@ -1385,4 +1385,16 @@
         <item>در حال ایده‌پردازی</item>
     </string-array>
     <string name="status_waiting">منتظر تو</string>
+    <string name="foreign_sessions_title">وارد کردن گفتگوها</string>
+    <string name="foreign_sessions_nav_subtitle">جلسه‌های Claude Code و Codex روی سرور</string>
+    <string name="foreign_sessions_on_host">روی %1$s</string>
+    <string name="foreign_sessions_all">همه</string>
+    <string name="foreign_sessions_empty">جلسه‌ای از Claude Code یا Codex نیست</string>
+    <string name="foreign_sessions_empty_caption">هرمس در ‎~/.claude/projects و ‎~/.codex/sessions روی همان دستگاهی که اجرا می‌شود می‌گردد.</string>
+    <string name="foreign_sessions_unreadable">%1$d فایل خوانده نشد</string>
+    <string name="foreign_sessions_more">بیشتر</string>
+    <string name="foreign_sessions_last_of">%1$d پیام آخر از %2$d</string>
+    <string name="foreign_sessions_you">تو</string>
+    <string name="foreign_sessions_import">وارد کن و باز کن</string>
+    <string name="foreign_sessions_open">قبلاً وارد شده؛ باز کن</string>
 </resources>

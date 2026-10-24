@@ -306,6 +306,8 @@ class SettingsScreenshotsTest {
                     onNavigateToAnalytics = {},
                     onNavigateToAchievements = {},
                     onNavigateToOps = {},
+                    onNavigateToVault = {},
+                    onNavigateToForeignSessions = {},
                 )
             }
         }
