@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Face
 import com.hermes.android.ui.icons.filled.Security
 import com.hermes.android.ui.icons.filled.Link
 import com.hermes.android.ui.icons.filled.Psychology
-import com.hermes.android.ui.icons.filled.Terminal
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -91,13 +90,6 @@ internal fun GeneralSettingsSection(
                 subtitle = stringResource(R.string.connections_and_platforms_subtitle),
                 icon = Icons.Default.Link,
                 onClick = onNavigateToPlatforms,
-            )
-            com.hermes.android.ui.design.GroupDivider(startIndent = 62.dp)
-            SettingsNavRow(
-                title = stringResource(R.string.advanced),
-                subtitle = stringResource(R.string.env_mcp_console_log),
-                icon = Icons.Default.Terminal,
-                onClick = { onOpen(SettingsSection.ADVANCED) },
             )
         }
     }
