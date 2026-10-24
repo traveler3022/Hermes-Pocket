@@ -36,6 +36,8 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -116,6 +118,27 @@ class OkHttpGatewayClient @Inject constructor(
 
     @Volatile
     private var webSocket: WebSocket? = null
+
+    /**
+     * The gateway socket's own client, without OkHttp's ping. OkHttp drops the socket the
+     * moment one pong is 15 s late, and the server answers nothing until it has read the
+     * frame before it whole: a photo that took longer to upload on mobile data cut the
+     * connection mid-attach. [startHeartbeat] keeps watch instead, as the Hermes desktop does.
+     */
+    private val socketClient: OkHttpClient by lazy {
+        httpClient.newBuilder().pingInterval(0, TimeUnit.MILLISECONDS).build()
+    }
+
+    /** When the current socket last received a frame ([nowMs]); any frame shows it is alive. */
+    @Volatile
+    private var lastInboundAt = 0L
+    @Volatile
+    private var heartbeatJob: Job? = null
+    private val heartbeatSeq = AtomicLong(0)
+
+    /** Requests big enough to hold the socket while they upload (attachments); see [send]. */
+    private val largeSendsInFlight = AtomicInteger(0)
+
     @Volatile
     private var currentUrl: String? = null
     @Volatile
@@ -273,6 +296,9 @@ class OkHttpGatewayClient @Inject constructor(
             oldSocket?.close(1000, "reconnecting")
             eventSequence.reset()
 
+            // The built-in Linux runtime's gateway is a child process on stdio; everything
+            // else (Termux, remote) is a real WebSocket.
+            val stdio = StdioGatewayHub.handles(url)
             val listener = GatewayWebSocketListener { state ->
                 when (state) {
                     is WsState.Opened -> {
@@ -282,6 +308,7 @@ class OkHttpGatewayClient @Inject constructor(
                         if (!deferred.isCompleted) {
                             _connectionState.value = ConnectionState.Connected(state.sessionId)
                             deferred.complete(_connectionState.value)
+                            if (!stdio) webSocket?.let { startHeartbeat(it) }
                             scope.launch { advertiseCapabilities() }
                             // Session resume on reconnect. Capture into a local so
                             // a concurrent write to lastSessionId can't null it out
@@ -306,13 +333,10 @@ class OkHttpGatewayClient @Inject constructor(
                 }
             }
 
-            // The built-in Linux runtime's gateway is a child process on stdio; everything
-            // else (Termux, remote) is a real WebSocket.
-            val stdio = StdioGatewayHub.handles(url)
             val newSocket = if (stdio) {
                 stdioHub.open(listener)
             } else {
-                httpClient.newWebSocket(Request.Builder().url(url).build(), listener)
+                socketClient.newWebSocket(Request.Builder().url(url).build(), listener)
             }
             synchronized(this) {
                 webSocket = newSocket
@@ -354,6 +378,7 @@ class OkHttpGatewayClient @Inject constructor(
     override suspend fun disconnect() {
         val ws = synchronized(this) {
             reconnectJob?.cancel()
+            heartbeatJob?.cancel()
             // Setting Disconnected FIRST makes any in-flight dial's success moot;
             // startDial's finally also resolves its deferred for joiners.
             val socket = webSocket
@@ -436,37 +461,50 @@ class OkHttpGatewayClient @Inject constructor(
             throw GatewayException("WebSocket is null")
         }
 
-        if (!ws.send(requestJson)) {
-            pendingRequests.remove(id)
-            nonTrackingRequestIds.remove(id)
-            // A refused send means the socket is dead even if no callback has
-            // fired yet — arm recovery now rather than waiting for the ping
-            // cycle to notice.
-            handleDisconnect("send failed (socket dead)")
-            throw GatewayException("Failed to send WebSocket message")
+        // An attachment's base64 holds the socket until all of it is uploaded: the heartbeat
+        // waits for it, and its time limit grows with its size (a slow uplink, not a dead link).
+        val large = requestJson.length >= LARGE_REQUEST_CHARS
+        val waitMs = if (large) {
+            maxOf(timeoutMs, LARGE_REQUEST_BASE_MS + requestJson.length * 1000L / MIN_UPLINK_BYTES_PER_S)
+        } else {
+            timeoutMs
         }
-
-        return try {
-            withTimeoutOrNull(timeoutMs) {
-                deferred.await()
-            } ?: run {
+        if (large) largeSendsInFlight.incrementAndGet()
+        try {
+            if (!ws.send(requestJson)) {
                 pendingRequests.remove(id)
                 nonTrackingRequestIds.remove(id)
-                throw GatewayException("Request $method timed out after ${timeoutMs}ms")
+                // A refused send means the socket is dead even if no callback has
+                // fired yet — arm recovery now rather than waiting for the heartbeat
+                // to notice.
+                handleDisconnect("send failed (socket dead)")
+                throw GatewayException("Failed to send WebSocket message")
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            // The caller gave up (a newer chat was picked, the screen went away).
-            // Wrapped as a GatewayException it read as a failed request: a
-            // superseded resume showed "Failed to resume", and the caller's own
-            // cancellation checks never saw it.
-            pendingRequests.remove(id)
-            nonTrackingRequestIds.remove(id)
-            throw e
-        } catch (e: Exception) {
-            pendingRequests.remove(id)
-            nonTrackingRequestIds.remove(id)
-            if (e is GatewayException) throw e
-            throw GatewayException("Request $method failed: ${e.message}", e)
+
+            return try {
+                withTimeoutOrNull(waitMs) {
+                    deferred.await()
+                } ?: run {
+                    pendingRequests.remove(id)
+                    nonTrackingRequestIds.remove(id)
+                    throw GatewayException("Request $method timed out after ${waitMs}ms")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // The caller gave up (a newer chat was picked, the screen went away).
+                // Wrapped as a GatewayException it read as a failed request: a
+                // superseded resume showed "Failed to resume", and the caller's own
+                // cancellation checks never saw it.
+                pendingRequests.remove(id)
+                nonTrackingRequestIds.remove(id)
+                throw e
+            } catch (e: Exception) {
+                pendingRequests.remove(id)
+                nonTrackingRequestIds.remove(id)
+                if (e is GatewayException) throw e
+                throw GatewayException("Request $method failed: ${e.message}", e)
+            }
+        } finally {
+            if (large) largeSendsInFlight.decrementAndGet()
         }
     }
 
@@ -539,6 +577,53 @@ class OkHttpGatewayClient @Inject constructor(
         } else {
             super.fetchFile(url)
         }
+
+    // ── Heartbeat ──────────────────────────────────────────────────────────
+
+    /**
+     * Watches [ws] as the Hermes desktop does (apps/shared json-rpc-channel.ts): a
+     * `gateway.ping` every 15 s, which the server answers on its read loop, and the socket is
+     * dropped when nothing at all has come in for 45 s since a ping went out. While an
+     * attachment uploads, the server can't answer before it has read all of it, so the watch
+     * waits; the upload's own time limit covers a link that died under it.
+     */
+    private fun startHeartbeat(ws: WebSocket) {
+        heartbeatJob?.cancel()
+        lastInboundAt = nowMs()
+        heartbeatJob = scope.launch {
+            var lastPingAt = 0L
+            while (webSocket === ws) {
+                delay(HEARTBEAT_INTERVAL_MS)
+                if (webSocket !== ws) break
+                if (largeSendsInFlight.get() > 0) continue
+                val now = nowMs()
+                val silentMs = now - lastInboundAt
+                if (lastPingAt > lastInboundAt && silentMs >= HEARTBEAT_DEADLINE_MS) {
+                    dropSilentSocket(ws, "no reply from the server for ${silentMs / 1000}s")
+                    break
+                }
+                lastPingAt = now
+                // A string id: the reply is no request of ours, and handleResponse lets it go.
+                val ping = """{"jsonrpc":"2.0","id":"hb-${heartbeatSeq.incrementAndGet()}","method":"gateway.ping","params":{}}"""
+                if (!ws.send(ping)) {
+                    dropSilentSocket(ws, "heartbeat send failed (socket dead)")
+                    break
+                }
+            }
+        }
+    }
+
+    /** A socket that stopped answering: dropped and redialled, as a missed pong was. */
+    private fun dropSilentSocket(ws: WebSocket, reason: String) {
+        if (webSocket !== ws) return
+        Timber.e("[Gateway] WebSocket failure: $reason")
+        tailnet.stalled(ws.request().url.host)
+        handleDisconnect(reason)
+        // No longer the current socket, so its own failure callback is ignored.
+        ws.cancel()
+    }
+
+    private fun nowMs(): Long = System.nanoTime() / 1_000_000
 
     // ── Reconnection ───────────────────────────────────────────────────────
 
@@ -810,11 +895,13 @@ class OkHttpGatewayClient @Inject constructor(
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             if (!isCurrent(webSocket)) return
+            lastInboundAt = nowMs()
             handleMessage(text, onState)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
             if (!isCurrent(webSocket)) return
+            lastInboundAt = nowMs()
             handleMessage(bytes.utf8(), onState)
         }
 
@@ -1185,6 +1272,17 @@ class OkHttpGatewayClient @Inject constructor(
         /** Clamp for the backoff shift: 1s,2s,4s,8s then the 15s ceiling. */
         private const val RECONNECT_BACKOFF_MAX_EXP = 4
         private const val MAX_RECONNECT_WINDOW_MS = 120_000L // 2 minutes
+
+        /** As the Hermes desktop's DEFAULT_HEARTBEAT_INTERVAL_MS / _DEADLINE_MS. */
+        private const val HEARTBEAT_INTERVAL_MS = 15_000L
+        private const val HEARTBEAT_DEADLINE_MS = 45_000L
+
+        /** A request this big (an attachment's base64) holds the socket while it uploads. */
+        private const val LARGE_REQUEST_CHARS = 256 * 1024
+        private const val LARGE_REQUEST_BASE_MS = 30_000L
+
+        /** The slowest uplink an upload is given time for: 32 KB/s, about 256 kbit/s. */
+        private const val MIN_UPLINK_BYTES_PER_S = 32 * 1024L
     }
 }
 

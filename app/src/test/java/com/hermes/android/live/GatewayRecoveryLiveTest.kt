@@ -150,7 +150,8 @@ class GatewayRecoveryLiveTest {
         val frozenAt = System.currentTimeMillis()
         relay.freeze()
         runBlocking {
-            withTimeout(60_000) { phone.gateway.connectionState.first { it !is ConnectionState.Connected } }
+            // The heartbeat drops a socket silent for 45 s after a ping, checked every 15 s.
+            withTimeout(75_000) { phone.gateway.connectionState.first { it !is ConnectionState.Connected } }
         }
         println("[live] frozen link detected after ${System.currentTimeMillis() - frozenAt} ms")
         awaitConnected(phone, 90_000)
