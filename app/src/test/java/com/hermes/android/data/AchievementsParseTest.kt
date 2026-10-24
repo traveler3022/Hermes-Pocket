@@ -1,6 +1,7 @@
 package com.hermes.android.data
 
 import com.hermes.android.domain.achievements.Achievement
+import com.hermes.android.domain.achievements.Tier
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,8 +44,8 @@ class AchievementsParseTest {
 
         val cook = board.items[0]
         assertEquals(Achievement.State.UNLOCKED, cook.state)
-        assertEquals("Silver", cook.tier)
-        assertEquals("Gold", cook.nextTier)
+        assertEquals(Tier.Silver, cook.tier)
+        assertEquals(Tier.Gold, cook.nextTier)
         assertEquals(640L, cook.progress)
         assertEquals(1200L, cook.nextThreshold)
         assertEquals(53, cook.percent)
@@ -66,5 +67,17 @@ class AchievementsParseTest {
         assertEquals("Could not open SessionDB", board.error)
         assertEquals(0, board.total)
         assertTrue(parseAchievementBoard(Json.parseToJsonElement("null")).items.isEmpty())
+    }
+
+    @Test
+    fun tierNamesMapToTheLadderInOrder() {
+        assertEquals(Tier.Olympian, Tier.fromHermes("Olympian"))
+        assertEquals(Tier.Gold, Tier.fromHermes("gold"))
+        assertEquals(Tier.Unknown("Mythic"), Tier.fromHermes("Mythic"))
+        assertNull(Tier.fromHermes(null))
+        assertNull(Tier.fromHermes("  "))
+        assertTrue(Tier.rank(Tier.Copper) < Tier.rank(Tier.Silver) && Tier.rank(Tier.Diamond) < Tier.rank(Tier.Olympian))
+        assertTrue(Tier.rank(Tier.Unknown("Mythic")) < Tier.rank(Tier.Copper))
+        assertTrue(Tier.rank(null) < Tier.rank(Tier.Copper))
     }
 }

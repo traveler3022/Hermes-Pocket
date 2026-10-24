@@ -32,10 +32,10 @@ data class Achievement(
     /** "Agent Autonomy", "Vibe Coding"…, as Hermes names it. */
     val category: String,
     val state: State,
-    /** Tier reached (Copper, Silver, Gold, Diamond, Olympian); null below the first. */
-    val tier: String?,
-    /** Next tier to reach; null at the top or for a one-step achievement. */
-    val nextTier: String?,
+    /** Medal reached; null below the first. */
+    val tier: Tier?,
+    /** Next medal to reach; null at the top or for a one-step achievement. */
+    val nextTier: Tier?,
     val progress: Long,
     val nextThreshold: Long?,
     /** 0–100 toward the next step. */
@@ -46,4 +46,33 @@ data class Achievement(
     val unlockedAt: Long?,
 ) {
     enum class State { UNLOCKED, DISCOVERED, SECRET }
+}
+
+/** Hermes' medal ladder, lowest first. */
+sealed interface Tier {
+    /** The name as Hermes writes it. */
+    val hermesName: String
+
+    data object Copper : Tier { override val hermesName = "Copper" }
+    data object Silver : Tier { override val hermesName = "Silver" }
+    data object Gold : Tier { override val hermesName = "Gold" }
+    data object Diamond : Tier { override val hermesName = "Diamond" }
+    data object Olympian : Tier { override val hermesName = "Olympian" }
+
+    /** A rung this app has no entry for, e.g. one a newer Hermes added; shown by Hermes' own name. */
+    data class Unknown(override val hermesName: String) : Tier
+
+    companion object {
+        val ladder: List<Tier> = listOf(Copper, Silver, Gold, Diamond, Olympian)
+
+        /** Null only when Hermes names no tier; a name that isn't on the ladder becomes [Unknown]. */
+        fun fromHermes(name: String?): Tier? {
+            val clean = name?.trim().orEmpty()
+            if (clean.isEmpty()) return null
+            return ladder.firstOrNull { it.hermesName.equals(clean, ignoreCase = true) } ?: Unknown(clean)
+        }
+
+        /** Position on the ladder; an [Unknown] rung ranks below all of them. */
+        fun rank(tier: Tier?): Int = if (tier == null) -1 else ladder.indexOf(tier)
+    }
 }
