@@ -73,7 +73,7 @@ import com.hermes.android.ui.viewmodel.statusWith
 /**
  * MCP servers — Hermes desktop's MCP page on the gateway's mcp.* RPCs: your servers with a
  * live status each (tap for test, sign-in, API key, remove), the curated catalog, and adding a
- * server by URL or command. The raw mcp_servers editor stays under Advanced.
+ * server by URL or command. The raw mcp_servers block is in config.yaml (Maintenance › config.yaml).
  *
  * Depends ONLY on [McpViewModel].
  */
