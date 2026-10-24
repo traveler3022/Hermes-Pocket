@@ -25,6 +25,10 @@ class RemoteAuthInterceptor @Inject constructor(
         val request = chain.request()
         val tokens = auth.tokensFor(request.url) ?: return chain.proceed(request)
         val url = request.url.newBuilder().removeAllQueryParameters("token").build()
+        // The app reconnects on its own the moment it opens, before anything brought the in-app
+        // Tailscale up: that dial went out without the tunnel (DNS fails on .ts.net) or before it
+        // knew the server (CONNECT 403). Wait for the tunnel here, for every dial to the server.
+        auth.ensureRouteBlocking(url.host)
 
         if (TICKET_PATHS.any { url.encodedPath.endsWith(it) }) {
             val ticket = auth.mintTicketBlocking(tokens)
