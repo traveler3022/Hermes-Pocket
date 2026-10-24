@@ -688,6 +688,8 @@
     <string name="search_providers">Search providers…</string>
     <string name="search_sessions">Search sessions...</string>
     <string name="search_skills">Search skills...</string>
+    <string name="search_mcp_servers">Search MCP servers...</string>
+    <string name="no_matching_mcp_servers">No MCP server matches</string>
     <string name="search_tasks">Search tasks</string>
     <string name="select">Select</string>
     <string name="select_chats">Select chats</string>

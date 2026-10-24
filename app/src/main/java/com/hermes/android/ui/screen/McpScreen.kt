@@ -13,11 +13,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -90,7 +93,7 @@ fun McpScreen(
             viewModel.clearNotice()
         }
     }
-    // Sign-in happens in the phone's own browser; the gateway's loopback takes the redirect.
+    // Sign-in happens in the phone's own browser; the app's loopback takes the redirect.
     LaunchedEffect(state.openUrl) {
         val url = state.openUrl ?: return@LaunchedEffect
         viewModel.urlOpened()
@@ -106,6 +109,14 @@ fun McpScreen(
     var catalogPick by remember { mutableStateOf<McpCatalogEntry?>(null) }
     var keyFor by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    val needle = query.trim()
+    val servers = if (needle.isEmpty()) state.servers else state.servers.filter { server ->
+        listOfNotNull(server.name, server.url, server.command).any { it.contains(needle, ignoreCase = true) }
+    }
+    val catalog = if (needle.isEmpty()) state.catalog else state.catalog.filter { entry ->
+        entry.name.contains(needle, ignoreCase = true) || entry.description.contains(needle, ignoreCase = true)
+    }
 
     HermesScaffold(
         title = stringResource(R.string.mcp_servers),
@@ -141,8 +152,40 @@ fun McpScreen(
             state.signingIn?.let { name ->
                 item { SignInBanner(name, onCancel = viewModel::cancelSignIn) }
             }
-            item { SectionHeader(stringResource(R.string.your_servers)) }
-            if (state.servers.isEmpty()) {
+            item {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text(stringResource(R.string.search_mcp_servers)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    trailingIcon = if (query.isEmpty()) null else {
+                        {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
+                    singleLine = true,
+                    shape = RoundedCornerShape(50),
+                )
+            }
+            if (needle.isNotEmpty() && servers.isEmpty() && catalog.isEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.no_matching_mcp_servers),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = HxSpace.screen, vertical = HxSpace.sm),
+                    )
+                }
+            }
+            if (needle.isEmpty() || servers.isNotEmpty()) {
+                item { SectionHeader(stringResource(R.string.your_servers)) }
+            }
+            if (state.servers.isEmpty() && needle.isEmpty()) {
                 item {
                     Text(
                         stringResource(R.string.no_mcp_servers_yet_add_one_from_the),
@@ -151,10 +194,10 @@ fun McpScreen(
                         modifier = Modifier.padding(horizontal = HxSpace.screen),
                     )
                 }
-            } else {
+            } else if (servers.isNotEmpty()) {
                 item {
                     SettingsGroup {
-                        state.servers.forEachIndexed { index, server ->
+                        servers.forEachIndexed { index, server ->
                             if (index > 0) GroupDivider()
                             val probe = state.probes[server.name]
                             val status = server.statusWith(probe)
@@ -172,11 +215,11 @@ fun McpScreen(
                     }
                 }
             }
-            if (state.catalog.isNotEmpty()) {
+            if (catalog.isNotEmpty()) {
                 item { SectionHeader(stringResource(R.string.catalog)) }
                 item {
                     SettingsGroup {
-                        state.catalog.forEachIndexed { index, entry ->
+                        catalog.forEachIndexed { index, entry ->
                             if (index > 0) GroupDivider()
                             SettingRow(
                                 title = entry.name,

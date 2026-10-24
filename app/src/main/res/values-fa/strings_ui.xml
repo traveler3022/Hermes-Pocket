@@ -687,6 +687,8 @@
     <string name="search_providers">جستجوی پرووایدر…</string>
     <string name="search_sessions">جستجوی گفتگوها...</string>
     <string name="search_skills">جستجوی مهارت‌ها...</string>
+    <string name="search_mcp_servers">جستجوی سرورهای MCP...</string>
+    <string name="no_matching_mcp_servers">سرور MCP مطابقی پیدا نشد</string>
     <string name="search_tasks">جستجوی کارها</string>
     <string name="select">انتخاب</string>
     <string name="select_chats">انتخاب گفتگوها</string>

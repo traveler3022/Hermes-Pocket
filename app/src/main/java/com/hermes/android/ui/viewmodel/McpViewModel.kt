@@ -6,10 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
+import com.hermes.android.gateway.OAuthLoopbackReceiver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -235,8 +237,11 @@ class McpViewModel @Inject constructor(
     }
 
     /**
-     * OAuth sign-in (lib/mcp-dashboard-oauth.ts): the gateway runs on this phone, so its own
-     * loopback receiver takes the browser's redirect; the app opens the URL and polls.
+     * OAuth sign-in (lib/mcp-dashboard-oauth.ts): the app opens the URL in the phone's browser and
+     * polls. The redirect lands on the phone's own loopback ([OAuthLoopbackReceiver]) and is
+     * relayed to the gateway, so it works when the gateway is a remote server too. A gateway
+     * that ignores `client_redirect_uri` (older build, pinned port) keeps its own loopback,
+     * which only the built-in Linux can serve.
      */
     fun signIn(name: String) {
         if (signInJob?.isActive == true) return
@@ -244,22 +249,34 @@ class McpViewModel @Inject constructor(
             _uiState.update { it.copy(signingIn = name) }
             var flowId: String? = null
             var approved = false
+            val receiver = runCatching { OAuthLoopbackReceiver() }
+                .onFailure { Timber.w(it, "[MCP] No local OAuth receiver") }.getOrNull()
             try {
-                val started = rpcOk(GatewayMethods.MCP_OAUTH_START, params("name" to name))
-                flowId = started.str("session_id").ifBlank { null }
+                val started = rpcOk(GatewayMethods.MCP_OAUTH_START, params(
+                    "name" to name,
+                    "client_redirect_uri" to receiver?.redirectUri,
+                ))
+                val sessionId = started.str("session_id").ifBlank { null }
+                flowId = sessionId
                 val authUrl = started.str("auth_url")
-                if (flowId == null || authUrl.isBlank()) {
+                if (sessionId == null || authUrl.isBlank()) {
                     error("OAuth server did not provide an authorization URL and session")
                 }
-                // Open only a flow that returns to the gateway's own loopback, as the desktop does.
+                // Open only a flow that returns to a loopback, as the desktop does.
                 val redirect = Uri.parse(Uri.parse(authUrl).getQueryParameter("redirect_uri").orEmpty())
                 if (redirect.scheme != "http" || redirect.host != "127.0.0.1" || redirect.port <= 0 ||
                     redirect.path != "/callback"
                 ) {
                     error("OAuth server did not provide a local loopback callback URL")
                 }
+                val relayed = receiver != null && redirect.toString() == receiver.redirectUri
+                if (!relayed) Timber.w("[MCP] Gateway kept its own OAuth loopback: $redirect")
                 _uiState.update { it.copy(openUrl = authUrl) }
-                val tools = awaitApproval(name, flowId)
+                // A failed relay fails the whole scope with its own reason.
+                val tools = coroutineScope {
+                    val relay = if (relayed && receiver != null) launch { relayCallback(receiver, name, sessionId) } else null
+                    awaitApproval(name, sessionId).also { relay?.cancel() }
+                }
                 approved = true
                 probeCache.clear()
                 _uiState.update { it.copy(
@@ -274,6 +291,7 @@ class McpViewModel @Inject constructor(
                 Timber.e(e, "[MCP] Sign-in to $name failed")
                 _uiState.update { it.copy(notice = failed(e)) }
             } finally {
+                receiver?.close()
                 val flow = flowId
                 if (!approved && flow != null) {
                     withContext(NonCancellable) {
@@ -285,6 +303,19 @@ class McpViewModel @Inject constructor(
                 _uiState.update { it.copy(signingIn = null, openUrl = null) }
             }
         }
+    }
+
+    /** Hands the browser's redirect (code/state or error) to the gateway's flow. */
+    private suspend fun relayCallback(receiver: OAuthLoopbackReceiver, name: String, flowId: String) {
+        val query = receiver.await()
+        rpcOk(GatewayMethods.MCP_OAUTH_CALLBACK, params(
+            "name" to name,
+            "session_id" to flowId,
+            "code" to query["code"],
+            "state" to query["state"],
+            "error" to (query["error_description"] ?: query["error"]),
+            "iss" to query["iss"],
+        ))
     }
 
     /** Polls each second until approved (the tool count) or failed; six minutes at most. */
