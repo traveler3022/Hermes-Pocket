@@ -139,4 +139,57 @@ class ProjectsRepositoryTest {
         assertEquals("s1", detail?.sessions?.get(0)?.id)
         assertEquals("fix reconnect", detail?.sessions?.get(0)?.title)
     }
+    @Test
+    fun `createProject sends name and folders and parses the snake_case ProjectInfo`() = runTest {
+        var sent: Map<String, JsonElement> = emptyMap()
+        val gateway = FakeGatewayClient { method, params ->
+            assertEquals(GatewayMethods.PROJECTS_CREATE, method)
+            sent = params
+            buildJsonObject {
+                put(
+                    "project",
+                    buildJsonObject {
+                        put("id", "p_1a2b3c4d")
+                        put("slug", "pocket")
+                        put("name", "Pocket")
+                        put("primary_path", "/root/Hermes-Pocket")
+                        put("archived", false)
+                        put("created_at", 1)
+                        put(
+                            "folders",
+                            buildJsonArray {
+                                add(buildJsonObject { put("path", "/root/Hermes-Pocket"); put("is_primary", true) })
+                                add(buildJsonObject { put("path", "/root/docs") })
+                            },
+                        )
+                    },
+                )
+            }
+        }
+        val project = ProjectsRepository(gateway).createProject("Pocket", "~/Hermes-Pocket")
+        assertEquals(setOf("name", "folders"), sent.keys)
+        assertEquals("[\"~/Hermes-Pocket\"]", sent["folders"].toString())
+        assertEquals("p_1a2b3c4d", project?.id)
+        assertEquals("/root/Hermes-Pocket", project?.primaryPath)
+        assertEquals(listOf("/root/Hermes-Pocket", "/root/docs"), project?.folders)
+        assertEquals(false, project?.archived)
+    }
+
+    @Test
+    fun `projectTree marks only user-made projects as stored`() = runTest {
+        val gateway = FakeGatewayClient { _, _ ->
+            buildJsonObject {
+                put(
+                    "projects",
+                    buildJsonArray {
+                        add(buildJsonObject { put("id", "__no_project__"); put("isNoProject", true) })
+                        add(buildJsonObject { put("id", "/root/repo"); put("isAuto", true) })
+                        add(buildJsonObject { put("id", "p_1"); put("isAuto", false); put("isNoProject", false) })
+                    },
+                )
+            }
+        }
+        val stored = ProjectsRepository(gateway).projectTree().associate { it.id to it.isStored }
+        assertEquals(mapOf("__no_project__" to false, "/root/repo" to false, "p_1" to true), stored)
+    }
 }
