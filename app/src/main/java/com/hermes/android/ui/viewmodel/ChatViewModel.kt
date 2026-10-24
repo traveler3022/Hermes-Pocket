@@ -978,6 +978,7 @@ class ChatViewModel @Inject constructor(
             event !is GatewayEvent.ClarifyRequest &&
             event !is GatewayEvent.SudoRequest &&
             event !is GatewayEvent.SecretRequest &&
+            event !is GatewayEvent.VaultRequest &&
             event !is GatewayEvent.RequestCancel &&
             event !is GatewayEvent.BackgroundComplete &&
             // A background chat renaming itself still repaints the drawer.
@@ -1162,6 +1163,8 @@ class ChatViewModel @Inject constructor(
             is GatewayEvent.SudoRequest -> requestsDelegate.onSudoRequest(event)
 
             is GatewayEvent.SecretRequest -> requestsDelegate.onSecretRequest(event)
+
+            is GatewayEvent.VaultRequest -> requestsDelegate.onVaultRequest(event)
 
             is GatewayEvent.RequestCancel -> requestsDelegate.onRequestCancel(event.requestId)
 

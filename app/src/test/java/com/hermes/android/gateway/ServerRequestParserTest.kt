@@ -165,7 +165,28 @@ class ServerRequestParserTest {
 
     @Test
     fun `a request kind the app has no card for is not turned into an event`() {
-        assertNull(parse("vault.code", buildJsonObject { put("session_id", "s1") }))
+        assertNull(parse("terminal.read", buildJsonObject { put("session_id", "s1") }))
         assertNull(parse("preview.act", buildJsonObject { put("session_id", "s1"); put("action", "click") }))
+    }
+
+    @Test
+    fun `vault prompts become vault cards`() {
+        val unlock = parse("vault.unlock_prompt", buildJsonObject {
+            put("session_id", "s1"); put("backend", "bitwarden"); put("display_name", "Bitwarden")
+        }) as GatewayEvent.VaultRequest
+        assertEquals(GatewayEvent.VaultRequest.Kind.UNLOCK, unlock.kind)
+        assertEquals("Bitwarden", unlock.name)
+
+        val save = parse("vault.save_login", buildJsonObject {
+            put("session_id", "s1"); put("origin", "https://example.com"); put("site", "example.com")
+        }) as GatewayEvent.VaultRequest
+        assertEquals(GatewayEvent.VaultRequest.Kind.SAVE_LOGIN, save.kind)
+        assertEquals("example.com", save.name)
+        assertEquals("https://example.com", save.detail)
+
+        val code = parse("vault.code", buildJsonObject { put("session_id", "s1"); put("site", null as String?) })
+            as GatewayEvent.VaultRequest
+        assertEquals(GatewayEvent.VaultRequest.Kind.CODE, code.kind)
+        assertEquals("", code.name)
     }
 }

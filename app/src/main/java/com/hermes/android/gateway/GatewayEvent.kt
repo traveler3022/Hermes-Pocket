@@ -271,6 +271,21 @@ sealed class GatewayEvent {
         val requestId: String,
     ) : GatewayEvent()
 
+    /**
+     * The agent's credential vault asks the user ([kind]): a password manager's master
+     * password ([name] its display name), a login to save for the site [name] at [detail]
+     * (its origin), or a one-time code for the site [name] ([detail] the hint).
+     */
+    data class VaultRequest(
+        override val sessionId: String?,
+        val requestId: String,
+        val kind: Kind,
+        val name: String,
+        val detail: String,
+    ) : GatewayEvent() {
+        enum class Kind { UNLOCK, SAVE_LOGIN, CODE }
+    }
+
     /** Env var secret needed. */
     data class SecretRequest(
         override val sessionId: String?,
