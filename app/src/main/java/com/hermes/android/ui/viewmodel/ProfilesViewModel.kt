@@ -1,10 +1,12 @@
 package com.hermes.android.ui.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.gateway.GatewayException
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,10 @@ class ProfilesViewModel @Inject constructor(
         val isLoadingEditor: Boolean = false,
         /** Saving, renaming or deleting: the editor's buttons wait. */
         val isBusy: Boolean = false,
+        /** Images of the profiles that have one, by name; the others show their first letter. */
+        val avatars: Map<String, ByteArray> = emptyMap(),
+        /** An avatar is being set or removed. */
+        val isSavingAvatar: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -42,10 +48,57 @@ class ProfilesViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val profiles = repository.list()
-                _uiState.update { it.copy(profiles = profiles, isLoading = false) }
+                _uiState.update { state ->
+                    state.copy(
+                        profiles = profiles,
+                        isLoading = false,
+                        // A removed image (here or on another client) goes back to the letter.
+                        avatars = state.avatars.filterKeys { name -> profiles.any { it.name == name && it.hasAvatar } },
+                    )
+                }
+                loadAvatars(profiles.filter { it.hasAvatar && it.name !in _uiState.value.avatars })
             } catch (e: Exception) {
                 Timber.w(e, "[Profiles] list failed")
                 _uiState.update { it.copy(isLoading = false, error = e.userMessage()) }
+            }
+        }
+    }
+
+    private fun loadAvatars(profiles: List<HermesProfiles.Profile>) {
+        profiles.forEach { profile ->
+            viewModelScope.launch {
+                try {
+                    val image = repository.avatar(profile.name) ?: return@launch
+                    _uiState.update { it.copy(avatars = it.avatars + (profile.name to image)) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "[Profiles] avatar of %s not loaded", profile.name)
+                }
+            }
+        }
+    }
+
+    /** Sets profile [name]'s avatar from [image]; null removes it. */
+    fun setAvatar(name: String, image: Uri?) {
+        if (_uiState.value.isSavingAvatar) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingAvatar = true, error = null) }
+            try {
+                repository.setAvatar(name, image)
+                val stored = if (image == null) null else repository.avatar(name)
+                _uiState.update { state ->
+                    state.copy(
+                        isSavingAvatar = false,
+                        avatars = if (stored == null) state.avatars - name else state.avatars + (name to stored),
+                        profiles = state.profiles.map { if (it.name == name) it.copy(hasAvatar = stored != null) else it },
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Profiles] avatar not saved")
+                _uiState.update { it.copy(isSavingAvatar = false, error = e.userMessage()) }
             }
         }
     }

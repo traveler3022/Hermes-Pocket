@@ -145,6 +145,8 @@ object GatewayMethods {
     const val PROFILES_CREATE = "profiles.create"
     const val PROFILES_DESCRIBE = "profiles.describe"
     const val PROFILES_CONFIGURE = "profiles.configure"
+    const val PROFILES_GET_ASSET = "profiles.get_asset"
+    const val PROFILES_SET_ASSET = "profiles.set_asset"
 
     // Group Chat: rooms the gateway itself drives (tui_gateway/methods_groups.py).
     const val GROUPS_CAPABILITIES = "groups.capabilities"

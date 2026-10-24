@@ -1,5 +1,11 @@
 package com.hermes.android.ui.screen
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,6 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +73,7 @@ internal fun ProfilePickerSheet(
     onEdit: (HermesProfiles.Profile) -> Unit,
     onSave: (name: String, newName: String, description: String, soul: String, onDone: () -> Unit) -> Unit,
     onDelete: (name: String, onDone: () -> Unit) -> Unit,
+    onSetAvatar: (name: String, image: Uri?) -> Unit,
     onCloseEditor: () -> Unit,
     onClearError: () -> Unit,
     onDismiss: () -> Unit,
@@ -96,6 +106,7 @@ internal fun ProfilePickerSheet(
                     onSave(name, newName, description, soul) { editing = null }
                 },
                 onDelete = { name -> onDelete(name) { editing = null } },
+                onSetAvatar = onSetAvatar,
                 onBack = {
                     onCloseEditor()
                     editing = null
@@ -122,6 +133,7 @@ internal fun ProfilePickerSheet(
                     val selected = if (active == null) profile.isDefault else profile.name == active
                     ProfileRow(
                         profile = profile,
+                        avatar = state.avatars[profile.name],
                         selected = selected,
                         onClick = { onSelect(profile) },
                         onEdit = {
@@ -146,6 +158,7 @@ internal fun ProfilePickerSheet(
 @Composable
 private fun ProfileRow(
     profile: HermesProfiles.Profile,
+    avatar: ByteArray?,
     selected: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -153,7 +166,7 @@ private fun ProfileRow(
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        leadingContent = { ProfileAvatar(profile.title) },
+        leadingContent = { ProfileAvatar(profile.title, image = avatar) },
         headlineContent = {
             Text(
                 profile.title,
@@ -183,9 +196,12 @@ private fun ProfileRow(
     )
 }
 
-/** First letter on a tinted circle, until profiles get real avatars here. */
+/** The profile's [image] when it has one (`profiles.set_asset`), else its first letter on a tinted circle. */
 @Composable
-internal fun ProfileAvatar(title: String, size: Int = 36) {
+internal fun ProfileAvatar(title: String, size: Int = 36, image: ByteArray? = null) {
+    val bitmap = remember(image) {
+        image?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() }
+    }
     Box(
         Modifier
             .size(size.dp)
@@ -193,11 +209,20 @@ internal fun ProfileAvatar(title: String, size: Int = 36) {
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            title.firstOrNull()?.uppercase() ?: "?",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                title.firstOrNull()?.uppercase() ?: "?",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
@@ -320,9 +345,13 @@ private fun ProfileEditor(
     isActive: Boolean,
     onSave: (name: String, newName: String, description: String, soul: String) -> Unit,
     onDelete: (name: String) -> Unit,
+    onSetAvatar: (name: String, image: Uri?) -> Unit,
     onBack: () -> Unit,
 ) {
     val details = state.editing
+    val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onSetAvatar(profile.name, uri)
+    }
     // The default profile's id cannot change; renaming it sets the name it is shown with.
     var newName by remember(details) { mutableStateOf(if (profile.isDefault) profile.title else profile.name) }
     var description by remember(details) { mutableStateOf(details?.description.orEmpty()) }
@@ -345,6 +374,28 @@ private fun ProfileEditor(
                 }
             }
             return@LazyColumn
+        }
+        item {
+            val avatar = state.avatars[profile.name]
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(HxSpace.sm),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                ProfileAvatar(newName.ifBlank { profile.title }, size = 56, image = avatar)
+                if (state.isSavingAvatar) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    TextButton(onClick = {
+                        pickAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) { Text(stringResource(R.string.profile_avatar_choose)) }
+                    if (avatar != null) {
+                        TextButton(onClick = { onSetAvatar(profile.name, null) }) {
+                            Text(stringResource(R.string.profile_avatar_remove))
+                        }
+                    }
+                }
+            }
         }
         item {
             OutlinedTextField(

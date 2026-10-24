@@ -1397,4 +1397,6 @@
     <string name="foreign_sessions_you">تو</string>
     <string name="foreign_sessions_import">وارد کن و باز کن</string>
     <string name="foreign_sessions_open">قبلاً وارد شده؛ باز کن</string>
+    <string name="profile_avatar_choose">انتخاب عکس</string>
+    <string name="profile_avatar_remove">حذف عکس</string>
 </resources>

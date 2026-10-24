@@ -1,5 +1,9 @@
 package com.hermes.android.data
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.profiles.HermesProfiles.Profile
 import com.hermes.android.domain.profiles.HermesProfiles.Details
@@ -7,6 +11,8 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
 import com.hermes.android.gateway.ProfileScope
 import com.hermes.android.gateway.hermesPythonCommand
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonArray
@@ -14,6 +20,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +32,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ProfilesRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val gatewayClient: GatewayClient,
     private val scope: ProfileScope,
 ) : HermesProfiles {
@@ -51,6 +60,7 @@ class ProfilesRepository @Inject constructor(
                 description = it.str("description"),
                 model = it.str("model"),
                 isDefault = it.str("is_default") == "true",
+                hasAvatar = it.str("has_avatar") == "true",
             )
         }.filter { it.name.isNotEmpty() }
         // A selection this server does not have (another server, or deleted
@@ -223,6 +233,62 @@ class ProfilesRepository @Inject constructor(
     /** Talk to [name] from now on; null goes back to the gateway's own profile. */
     override fun select(name: String?) = scope.select(name)
 
+    /** `profiles.get_asset`: `{found, mime, data: "data:<mime>;base64,..."}`; no image is `found: false`. */
+    override suspend fun avatar(name: String): ByteArray? {
+        val result = gatewayClient.request(
+            GatewayMethods.PROFILES_GET_ASSET,
+            mapOf("name" to JsonPrimitive(name), "asset" to JsonPrimitive("avatar")),
+            trackSession = false,
+        ) as? JsonObject ?: return null
+        if (result.str("found") != "true") return null
+        val data = result.str("data").substringAfter("base64,", "")
+        if (data.isEmpty()) return null
+        return runCatching { java.util.Base64.getDecoder().decode(data) }.getOrNull()
+    }
+
+    /**
+     * `profiles.set_asset` takes PNG/JPEG/WebP up to 2 MB, so the picked image goes as a JPEG at
+     * most [AVATAR_SIDE] px on its long side (ImageDecoder also turns it upright).
+     */
+    override suspend fun setAvatar(name: String, image: Uri?) {
+        val params = buildMap<String, JsonElement> {
+            put("name", JsonPrimitive(name))
+            put("asset", JsonPrimitive("avatar"))
+            if (image == null) {
+                put("clear", JsonPrimitive(true))
+            } else {
+                val jpeg = withContext(Dispatchers.IO) { avatarJpeg(image) }
+                put("data", JsonPrimitive("data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(jpeg)))
+            }
+        }
+        gatewayClient.request(GatewayMethods.PROFILES_SET_ASSET, params, trackSession = false)
+    }
+
+    private fun avatarJpeg(image: Uri): ByteArray {
+        val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, image)) { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            val longest = maxOf(info.size.width, info.size.height)
+            if (longest > AVATAR_SIDE) {
+                val scale = AVATAR_SIDE.toFloat() / longest
+                decoder.setTargetSize(
+                    (info.size.width * scale).toInt().coerceAtLeast(1),
+                    (info.size.height * scale).toInt().coerceAtLeast(1),
+                )
+            }
+        }
+        try {
+            val out = ByteArrayOutputStream()
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)) throw IllegalStateException("Could not read this image")
+            return out.toByteArray()
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     private fun JsonObject.str(key: String): String =
         (this[key] as? JsonPrimitive)?.contentOrNull ?: ""
+
+    private companion object {
+        const val AVATAR_SIDE = 512
+    }
 }
