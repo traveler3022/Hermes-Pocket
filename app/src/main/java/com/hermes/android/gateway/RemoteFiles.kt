@@ -36,8 +36,8 @@ import kotlin.coroutines.coroutineContext
  * through [client] with Range requests (see MediaStreams).
  *
  * [client] carries the server sign-in and the Tailscale route of the app's shared client,
- * over HTTP/1.1: on HTTP/2 the shared client's 15 s ping fails the whole connection when its
- * pong queues behind a large file on a slow link ("stream was reset: PROTOCOL_ERROR").
+ * over HTTP/1.1: a large file gets a connection of its own instead of sharing one HTTP/2
+ * connection with every other call to the server.
  *
  * A cut transfer goes on from where it stopped (Range + If-Range against the file's ETag, which
  * Hermes' FileResponse answers with 206). A cached file is checked with a one-byte ranged

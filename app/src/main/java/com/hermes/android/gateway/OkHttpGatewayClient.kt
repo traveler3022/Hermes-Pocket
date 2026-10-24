@@ -36,7 +36,6 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -118,15 +117,8 @@ class OkHttpGatewayClient @Inject constructor(
     @Volatile
     private var webSocket: WebSocket? = null
 
-    /**
-     * The gateway socket's own client, without OkHttp's ping. OkHttp drops the socket the
-     * moment one pong is late, and a pong is late whenever the line is busy: the server reads
-     * an attachment's whole frame before it answers anything, and a big download fills the
-     * line ahead of it. [startHeartbeat] keeps watch instead.
-     */
-    private val socketClient: OkHttpClient by lazy {
-        httpClient.newBuilder().pingInterval(0, TimeUnit.MILLISECONDS).build()
-    }
+    /** Keeps watch over the socket: the client has no ping (see GatewayModule). */
+    private val linkWatch = LinkWatch(tailnet, httpClient.connectionPool)
 
     /** Frames received on the current socket, for [startHeartbeat]. */
     private val framesReceived = AtomicLong(0)
@@ -331,7 +323,7 @@ class OkHttpGatewayClient @Inject constructor(
             val newSocket = if (stdio) {
                 stdioHub.open(listener)
             } else {
-                socketClient.newWebSocket(Request.Builder().url(url).build(), listener)
+                httpClient.newWebSocket(Request.Builder().url(url).build(), listener)
             }
             synchronized(this) {
                 webSocket = newSocket
@@ -570,52 +562,21 @@ class OkHttpGatewayClient @Inject constructor(
     // ── Heartbeat ──────────────────────────────────────────────────────────
 
     /**
-     * Watches [ws]: a dead link is one from which nothing at all arrives, not one whose answer
-     * is slow. Every [PING_INTERVAL_MS] something must have come from the server: a frame, or
-     * any byte the tunnel received from it (file data, the TCP acknowledgements of an upload).
-     * To make sure an idle link has something to say, each round sends a `gateway.ping`, which
-     * the server answers on its read loop even mid-turn; when data is still waiting to go out,
-     * its acknowledgements serve instead (a ping queued behind it couldn't be answered first).
+     * Watches [ws] with [LinkWatch]. An idle link is given a `gateway.ping` to answer, which the
+     * server does on its read loop, even mid-turn.
      */
     private fun startHeartbeat(ws: WebSocket) {
         heartbeatJob?.cancel()
-        val host = ws.request().url.host
-        heartbeatJob = scope.launch {
-            var frames = framesReceived.get()
-            var bytes = receivedFrom(host)
-            var expecting = false
-            while (webSocket === ws) {
-                delay(PING_INTERVAL_MS)
-                if (webSocket !== ws) break
-                val nowFrames = framesReceived.get()
-                val nowBytes = receivedFrom(host)
-                val heard = nowFrames != frames || (nowBytes != null && bytes != null && nowBytes > bytes)
-                frames = nowFrames
-                bytes = nowBytes
-                if (expecting && !heard) {
-                    dropSilentSocket(ws, "nothing from the server for ${PING_INTERVAL_MS / 1000}s")
-                    break
-                }
-                expecting = true
-                if (ws.queueSize() > 0) continue
-                // A string id: the reply is no request of ours, and handleResponse lets it go.
-                val ping = """{"jsonrpc":"2.0","id":"hb-${heartbeatSeq.incrementAndGet()}","method":"gateway.ping","params":{}}"""
-                if (!ws.send(ping)) {
-                    dropSilentSocket(ws, "ping could not be sent (socket dead)")
-                    break
-                }
-            }
-        }
+        heartbeatJob = linkWatch.watch(
+            scope,
+            ws,
+            frames = framesReceived::get,
+            // A string id: the reply is no request of ours, and handleResponse lets it go.
+            probe = { it.send("""{"jsonrpc":"2.0","id":"hb-${heartbeatSeq.incrementAndGet()}","method":"gateway.ping","params":{}}""") },
+            current = { webSocket === ws },
+            onDead = { dropSilentSocket(ws, it) },
+        )
     }
-
-    /**
-     * Bytes received so far from [host]'s side: the tunnel's count for a tailnet server, else
-     * everything this app received (a server reached directly has no count of its own).
-     */
-    private suspend fun receivedFrom(host: String): Long? =
-        tailnet.receivedFrom(host)
-            ?: runCatching { android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid()) }
-                .getOrNull()?.takeIf { it >= 0 }
 
     /** A socket that stopped answering: dropped and redialled, as a missed pong was. */
     private fun dropSilentSocket(ws: WebSocket, reason: String) {
@@ -1274,9 +1235,6 @@ class OkHttpGatewayClient @Inject constructor(
         /** Clamp for the backoff shift: 1s,2s,4s,8s then the 15s ceiling. */
         private const val RECONNECT_BACKOFF_MAX_EXP = 4
         private const val MAX_RECONNECT_WINDOW_MS = 120_000L // 2 minutes
-
-        /** How often the heartbeat checks that something came from the server. */
-        private const val PING_INTERVAL_MS = 20_000L
 
         /** A request this big (an attachment's base64) is answered only once it is uploaded. */
         private const val LARGE_REQUEST_CHARS = 256 * 1024

@@ -18,10 +18,12 @@ import com.hermes.android.domain.kanban.KanbanRepository.Run
 import com.hermes.android.domain.kanban.KanbanRepository.Task
 import com.hermes.android.domain.kanban.KanbanRepository.TaskDiagnostics
 import com.hermes.android.gateway.GatewayClient
+import com.hermes.android.gateway.LinkWatch
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.KanbanSwitch
 import com.hermes.android.runtime.remote.RemoteServerSettings
+import com.hermes.android.runtime.remote.TailnetRoute
 import com.hermes.android.runtime.remote.remoteHttpBase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -53,6 +55,7 @@ import java.io.File
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -77,7 +80,11 @@ class ServerKanbanRepository @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val switch: KanbanSwitch,
     @ApplicationContext context: Context,
+    tailnet: TailnetRoute = TailnetRoute.None,
 ) : KanbanRepository {
+    /** Keeps watch over the event stream: the client has no ping (see GatewayModule). */
+    private val linkWatch = LinkWatch(tailnet, http.connectionPool)
+
     /** The app's client (sign-in, Tailscale route) with a deadline: it has none for its WebSocket. */
     private val rest = http.newBuilder()
         .readTimeout(30, TimeUnit.SECONDS)
@@ -171,13 +178,16 @@ class ServerKanbanRepository @Inject constructor(
     override fun changes(): Flow<Unit> = callbackFlow {
         val base = base() ?: throw IOException("Kanban needs a connected server.")
         val url = base.replaceFirst("https://", "wss://") + API + scoped("/events")
-        // The shared client: sign-in ticket (RemoteAuthInterceptor), Tailscale route, ping.
+        val frames = AtomicLong(0)
+        // The shared client: sign-in ticket (RemoteAuthInterceptor), Tailscale route.
         val socket = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                frames.incrementAndGet()
                 trySend(Unit)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                frames.incrementAndGet()
                 trySend(Unit)
             }
 
@@ -190,6 +200,12 @@ class ServerKanbanRepository @Inject constructor(
                 close(IOException("Kanban stream failed: ${t.message}", t))
             }
         })
+        // The server sends only when the board changes, and ignores what it is sent: an idle
+        // board is probed with an empty message, whose TCP acknowledgement shows the link alive.
+        linkWatch.watch(this, socket, frames::get, probe = { it.send("{}") }) { reason ->
+            socket.cancel()
+            close(IOException("Kanban stream: $reason"))
+        }
         awaitClose { socket.cancel() }
     }
 
