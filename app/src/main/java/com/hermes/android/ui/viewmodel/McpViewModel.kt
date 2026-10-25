@@ -12,7 +12,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import timber.log.Timber
+import java.io.IOException
 import javax.inject.Inject
 
 /**
@@ -275,7 +278,14 @@ class McpViewModel @Inject constructor(
                 // A failed relay fails the whole scope with its own reason.
                 val tools = coroutineScope {
                     val relay = if (relayed && receiver != null) launch { relayCallback(receiver, name, sessionId) } else null
-                    awaitApproval(name, sessionId).also { relay?.cancel() }
+                    try {
+                        awaitApproval(name, sessionId)
+                    } finally {
+                        // The relay's accept() never sees a cancel and this scope waits for it:
+                        // closing the receiver is what lets a timed-out or cancelled sign-in end.
+                        relay?.cancel()
+                        receiver?.close()
+                    }
                 }
                 approved = true
                 probeCache.clear()
@@ -307,7 +317,13 @@ class McpViewModel @Inject constructor(
 
     /** Hands the browser's redirect (code/state or error) to the gateway's flow. */
     private suspend fun relayCallback(receiver: OAuthLoopbackReceiver, name: String, flowId: String) {
-        val query = receiver.await()
+        val query = try {
+            receiver.await()
+        } catch (e: IOException) {
+            // Closed because the sign-in ended without the browser coming back: not a failure.
+            currentCoroutineContext().ensureActive()
+            throw e
+        }
         rpcOk(GatewayMethods.MCP_OAUTH_CALLBACK, params(
             "name" to name,
             "session_id" to flowId,
