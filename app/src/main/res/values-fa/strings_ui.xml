@@ -475,7 +475,7 @@
     <string name="new_chat">گفتگوی جدید</string>
     <string name="new_chat_2">چت جدید</string>
     <string name="new_group">گروه جدید</string>
-    <string name="group_one_room_limit">فعلاً فقط یک گروه: با دو گروه، هرمس سرور را مدام درگیر نگه می‌دارد (باگ هرمس). برای ساخت گروه تازه، این گروه را حذف کنید.</string>
+    <string name="group_one_room_limit">فعلاً فقط یک گروه می‌شود ساخت. برای ساخت گروه تازه، این گروه را حذف کنید.</string>
     <string name="new_job">کار جدید</string>
     <string name="new_key_for">کلید تازه برای %1$s</string>
     <string name="new_profile">پروفایل جدید</string>
