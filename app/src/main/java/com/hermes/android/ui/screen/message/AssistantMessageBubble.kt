@@ -115,6 +115,10 @@ internal fun AssistantMessageBubble(
                             kaomoji = kaomoji,
                         )
                     }
+                    // Hermes is drawing an image: hold its place until the reply shows it.
+                    if (message.isStreaming) {
+                        runningImageGeneration(traceItems)?.let { ImageGenerationPlaceholder(it) }
+                    }
                     // A turn can end on a tool rather than a sentence, leaving
                     // this message with no text at all. Only a turn still in
                     // flight is waiting for words; once the thinking line is up

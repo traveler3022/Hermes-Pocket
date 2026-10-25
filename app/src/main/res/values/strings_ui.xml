@@ -980,6 +980,7 @@
     <string name="attach_take_photo">Take photo</string>
     <string name="attach_no_camera">No camera app found</string>
     <string name="attach_pasted_text">Pasted text</string>
+    <string name="generating_image">Generating image…</string>
     <string name="btw_title">Side question</string>
     <string name="btw_question">Question</string>
     <string name="btw_answering">Answering from a snapshot of this chat…</string>

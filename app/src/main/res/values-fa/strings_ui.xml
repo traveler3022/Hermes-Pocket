@@ -978,6 +978,7 @@
     <string name="attach_take_photo">گرفتن عکس</string>
     <string name="attach_no_camera">برنامهٔ دوربین پیدا نشد</string>
     <string name="attach_pasted_text">متن چسبانده‌شده</string>
+    <string name="generating_image">در حال ساخت عکس…</string>
     <string name="btw_title">سؤال فرعی</string>
     <string name="btw_question">سؤال</string>
     <string name="btw_answering">در حال پاسخ از روی نسخه‌ای از همین گفتگو…</string>
