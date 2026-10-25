@@ -867,6 +867,8 @@
     <string name="turn_off">خاموش کردن</string>
     <string name="turned_off_built_in_memory_only">خاموش شد. فقط حافظهٔ داخلی.</string>
     <string name="type_answer">جواب بنویسید...</string>
+    <string name="clarify_other">پاسخ دیگر…</string>
+    <string name="clarify_skip">رد کردن</string>
     <string name="ui_language">fa</string>
     <string name="unassigned">بدون مسئول</string>
     <string name="unassigned_2">بدون مسئول</string>

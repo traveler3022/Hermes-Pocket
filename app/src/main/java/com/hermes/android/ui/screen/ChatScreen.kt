@@ -1018,6 +1018,7 @@ fun ChatScreen(
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToClarifyBatch = viewModel::respondToClarifyBatch,
+                                onSkipClarify = viewModel::skipClarify,
                                 onRespondToSudo = viewModel::respondToSudo,
                                 onRespondToSecret = viewModel::respondToSecret,
                                 onImageClick = { url -> fullscreenImageUrl = url },

@@ -839,6 +839,7 @@ class ChatViewModel @Inject constructor(
     fun respondToClarify(requestId: String, picked: List<String>) = requestsDelegate.respondToClarify(requestId, picked)
     fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) =
         requestsDelegate.respondToClarifyBatch(requestId, answers)
+    fun skipClarify(requestId: String) = requestsDelegate.skipClarify(requestId)
     fun respondToSudo(requestId: String, password: String) = requestsDelegate.respondToSudo(requestId, password)
     fun respondToSecret(requestId: String, value: String) = requestsDelegate.respondToSecret(requestId, value)
 

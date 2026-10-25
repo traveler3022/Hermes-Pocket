@@ -122,6 +122,7 @@ internal fun MessageBubble(
     onRetry: () -> Unit = {},
     onRespondToClarify: (requestId: String, picked: List<String>) -> Unit = { _, _ -> },
     onRespondToClarifyBatch: (requestId: String, answers: Map<String, List<String>>) -> Unit = { _, _ -> },
+    onSkipClarify: (requestId: String) -> Unit = {},
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
     onImageClick: (String) -> Unit = {},
@@ -239,6 +240,7 @@ internal fun MessageBubble(
             message = message,
             onRespondToClarify = onRespondToClarify,
             onRespondToClarifyBatch = onRespondToClarifyBatch,
+            onSkipClarify = onSkipClarify,
             onRespondToSudo = onRespondToSudo,
             onRespondToSecret = onRespondToSecret,
         )

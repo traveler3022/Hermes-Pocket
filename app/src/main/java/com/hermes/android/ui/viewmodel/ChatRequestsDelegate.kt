@@ -83,6 +83,15 @@ internal class ChatRequestsDelegate(
         )
     }
 
+    /**
+     * Skip: an empty result, as the desktop's Skip sends. Hermes keeps any answer already locked
+     * and tells the agent the rest went unanswered.
+     */
+    fun skipClarify(requestId: String) {
+        findInteractiveRequest(requestId) ?: return
+        answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(emptyMap()))
+    }
+
     fun respondToSudo(requestId: String, password: String) =
         answerServerRequest(requestId, kotlinx.serialization.json.JsonObject(mapOf("value" to JsonPrimitive(password))))
 

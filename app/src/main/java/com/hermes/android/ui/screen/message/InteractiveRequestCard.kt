@@ -48,6 +48,8 @@ internal fun InteractiveRequestCard(
     message: ChatMessage.InteractiveRequest,
     onRespondToClarify: (requestId: String, picked: List<String>) -> Unit = { _, _ -> },
     onRespondToClarifyBatch: (requestId: String, answers: Map<String, List<String>>) -> Unit = { _, _ -> },
+    /** Skips the whole clarify card, as the desktop's Skip does. */
+    onSkipClarify: (requestId: String) -> Unit = {},
     onRespondToSudo: (requestId: String, password: String) -> Unit = { _, _ -> },
     onRespondToSecret: (requestId: String, value: String) -> Unit = { _, _ -> },
 ) {
@@ -80,11 +82,17 @@ internal fun InteractiveRequestCard(
                 message.answered -> CardStatus(stringResource(R.string.answered))
                 message.expired -> CardStatus(stringResource(R.string.no_longer_waiting_for_an_answer))
                 message.kind == InteractiveKind.CLARIFY && message.questions.isNotEmpty() ->
-                    BatchClarify(message.questions) { onRespondToClarifyBatch(message.requestId, it) }
+                    BatchClarify(message.questions, onSkip = { onSkipClarify(message.requestId) }) {
+                        onRespondToClarifyBatch(message.requestId, it)
+                    }
                 message.kind == InteractiveKind.CLARIFY -> {
                     var picked by remember(message.requestId) { mutableStateOf(emptyList<String>()) }
                     ClarifyAnswerInput(message.choices, message.multiSelect, picked) { picked = it }
-                    SendButton(enabled = picked.any { it.isNotBlank() }) {
+                    SendRow(
+                        enabled = picked.any { it.isNotBlank() },
+                        onSkip = { onSkipClarify(message.requestId) },
+                        skipLabel = stringResource(R.string.clarify_skip),
+                    ) {
                         onRespondToClarify(message.requestId, picked)
                     }
                 }
@@ -124,18 +132,31 @@ internal fun InteractiveRequestCard(
 }
 
 @Composable
-private fun ColumnScope.BatchClarify(questions: List<ClarifyQuestionUi>, onSubmit: (Map<String, List<String>>) -> Unit) {
+private fun ColumnScope.BatchClarify(
+    questions: List<ClarifyQuestionUi>,
+    onSkip: () -> Unit,
+    onSubmit: (Map<String, List<String>>) -> Unit,
+) {
     var answers by remember(questions) { mutableStateOf(emptyMap<String, List<String>>()) }
     questions.forEach { q ->
         Text(q.question, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         ClarifyAnswerInput(q.choices, q.multiSelect, answers[q.qid].orEmpty()) { answers = answers + (q.qid to it) }
     }
-    SendButton(enabled = questions.all { q -> answers[q.qid].orEmpty().any { it.isNotBlank() } }) {
+    // One answer is enough, as on the desktop: a question left empty goes back as skipped.
+    SendRow(
+        enabled = questions.any { q -> answers[q.qid].orEmpty().any { it.isNotBlank() } },
+        onSkip = onSkip,
+        skipLabel = stringResource(R.string.clarify_skip),
+    ) {
         onSubmit(answers)
     }
 }
 
-/** Free text when there are no choices; otherwise a radio list, or checkboxes when [multiSelect]. */
+/**
+ * Free text when there are no choices; otherwise a radio list, or checkboxes when [multiSelect],
+ * with an "Other" field under it (Hermes always offers one). A typed answer replaces the picked
+ * choice, or with [multiSelect] is one more answer beside the ticked ones.
+ */
 @Composable
 private fun ClarifyAnswerInput(
     choices: List<String>?,
@@ -152,8 +173,10 @@ private fun ClarifyAnswerInput(
         )
         return
     }
+    val chosen = picked.filter { it in choices }
+    val typed = picked.firstOrNull { it !in choices }.orEmpty()
     choices.forEach { choice ->
-        val selected = choice in picked
+        val selected = choice in chosen
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -177,6 +200,15 @@ private fun ClarifyAnswerInput(
             Text(choice, style = MaterialTheme.typography.bodyMedium)
         }
     }
+    OutlinedTextField(
+        value = typed,
+        onValueChange = { text ->
+            val answer = if (text.isEmpty()) emptyList() else listOf(text)
+            onPickedChange(if (multiSelect) chosen + answer else answer)
+        },
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text(stringResource(R.string.clarify_other)) },
+    )
 }
 
 private val VAULT_KINDS = setOf(InteractiveKind.VAULT_UNLOCK, InteractiveKind.VAULT_SAVE_LOGIN, InteractiveKind.VAULT_CODE)

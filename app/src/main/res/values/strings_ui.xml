@@ -869,6 +869,8 @@
     <string name="turn_off">Turn off</string>
     <string name="turned_off_built_in_memory_only">Turned off. Built-in memory only.</string>
     <string name="type_answer">Type answer...</string>
+    <string name="clarify_other">Other answer…</string>
+    <string name="clarify_skip">Skip</string>
     <string name="ui_language">en</string>
     <string name="unassigned">Unassigned</string>
     <string name="unassigned_2">unassigned</string>
