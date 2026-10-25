@@ -5,8 +5,10 @@ import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.ProfileScope
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -153,8 +155,15 @@ class DashboardApi @Inject constructor(
             .post(form)
             .build()
         val call = uploadHttp.newCall(request)
-        // A blocking write does not see cancellation; cancelling the call ends it.
-        val cancelHook = coroutineContext.job.invokeOnCompletion { call.cancel() }
+        // A blocking execute() never sees the caller's cancel (the chip removed), and a completion
+        // hook would run only once the whole file is up: this watcher cancels the call at once.
+        val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                call.cancel()
+            }
+        }
         try {
             call.execute().use { response ->
                 val text = response.body?.string().orEmpty()
@@ -168,7 +177,7 @@ class DashboardApi @Inject constructor(
                 parsed
             }
         } finally {
-            cancelHook.dispose()
+            watcher.cancel()
         }
     }
 
