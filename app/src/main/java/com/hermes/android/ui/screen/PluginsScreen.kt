@@ -86,6 +86,13 @@ fun PluginsScreen(
             viewModel.clearNotice()
         }
     }
+    val restartText = uiState.restartNotice?.let { stringResource(R.string.plugin_off_until_restart, it) }
+    LaunchedEffect(uiState.restartNotice) {
+        restartText?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearRestartNotice()
+        }
+    }
     var showAdd by remember { mutableStateOf(false) }
     var showCatalog by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<PluginItem?>(null) }
@@ -214,6 +221,7 @@ fun PluginsScreen(
                                         Switch(
                                             checked = plugin.enabled,
                                             onCheckedChange = { viewModel.togglePlugin(plugin, it) },
+                                            enabled = plugin.key !in uiState.togglingKeys,
                                         )
                                         PluginMenu(
                                             plugin = plugin,

@@ -1048,6 +1048,7 @@
     <string name="plugin_consent_title">%1$s wants more access</string>
     <string name="plugin_consent_body">This update adds new tools, hooks or permissions.</string>
     <string name="plugin_consent_accept">Allow and update</string>
+    <string name="plugin_off_until_restart">%1$s is off. Hermes keeps running it until Hermes restarts.</string>
     <string name="webhooks_title">Webhooks</string>
     <string name="webhooks_subtitle">Let other services start your agent</string>
     <string name="webhooks_nav_subtitle">Events from GitHub, GitLab and other services</string>

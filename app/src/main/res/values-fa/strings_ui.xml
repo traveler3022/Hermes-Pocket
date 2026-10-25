@@ -1046,6 +1046,7 @@
     <string name="plugin_consent_title">%1$s دسترسی بیشتری می‌خواهد</string>
     <string name="plugin_consent_body">این به‌روزرسانی ابزار، hook یا مجوز تازه اضافه می‌کند.</string>
     <string name="plugin_consent_accept">اجازه بده و به‌روز کن</string>
+    <string name="plugin_off_until_restart">%1$s خاموش شد. تا وقتی هرمس ری‌استارت نشود، همچنان کار می‌کند.</string>
     <string name="webhooks_title">وب‌هوک‌ها</string>
     <string name="webhooks_subtitle">سرویس‌های دیگر کار عامل را شروع کنند</string>
     <string name="webhooks_nav_subtitle">رویدادهای GitHub، GitLab و سرویس‌های دیگر</string>

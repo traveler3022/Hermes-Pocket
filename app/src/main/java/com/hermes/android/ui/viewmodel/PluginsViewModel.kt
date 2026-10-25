@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject
 import kotlinx.serialization.json.contentOrNull
@@ -86,36 +87,46 @@ class PluginsViewModel @Inject constructor(
         return try {
             val obj = result as? JsonObject ?: return emptyList()
             val pluginsArr = obj["plugins"] as? JsonArray ?: return emptyList()
-            pluginsArr.mapNotNull { pluginEl ->
-                val plugin = pluginEl as? JsonObject ?: return@mapNotNull null
-                val name = (plugin["name"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-                val status = (plugin["status"] as? JsonPrimitive)?.contentOrNull ?: ""
-                PluginItem(
-                    name = name,
-                    // The canonical registry key: bare names collide across plugin categories,
-                    // and the server resolves a toggle by key first.
-                    key = (plugin["key"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: name,
-                    description = (plugin["description"] as? JsonPrimitive)?.contentOrNull ?: "",
-                    source = (plugin["source"] as? JsonPrimitive)?.contentOrNull ?: "",
-                    status = status,
-                    enabled = status.lowercase() == "enabled",
-                    catalogName = (plugin["catalog_name"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
-                    updateAvailable = (plugin["update_available"] as? JsonPrimitive)?.booleanOrNull == true,
-                    settings = (plugin["settings_schema"] as? JsonArray).orEmpty().mapNotNull(::parseSetting),
-                )
-            }.filter { isListedPlugin(it) }
+            pluginsArr.mapNotNull { (it as? JsonObject)?.let(::parsePlugin) }.filter { isListedPlugin(it) }
         } catch (e: Exception) {
             Timber.e(e, "[Plugins] Parse error")
             emptyList()
         }
     }
 
+    /** One `plugins.manage` row: a `list` entry, or the `plugin` a toggle answers with. */
+    private fun parsePlugin(plugin: JsonObject): PluginItem? {
+        val name = (plugin["name"] as? JsonPrimitive)?.contentOrNull ?: return null
+        val status = (plugin["status"] as? JsonPrimitive)?.contentOrNull ?: ""
+        return PluginItem(
+            name = name,
+            // The canonical registry key: bare names collide across plugin categories,
+            // and the server resolves a toggle by key first.
+            key = (plugin["key"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: name,
+            description = (plugin["description"] as? JsonPrimitive)?.contentOrNull ?: "",
+            source = (plugin["source"] as? JsonPrimitive)?.contentOrNull ?: "",
+            status = status,
+            enabled = status.lowercase() == "enabled",
+            catalogName = (plugin["catalog_name"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+            updateAvailable = (plugin["update_available"] as? JsonPrimitive)?.booleanOrNull == true,
+            settings = (plugin["settings_schema"] as? JsonArray).orEmpty().mapNotNull(::parseSetting),
+        )
+    }
+
     /**
-     * Fix: the screen had no way to actually enable/disable a plugin at all
-     * — plugins.manage's `toggle` action (name + enable) was never called
-     * from anywhere. "Plugins Manager" only ever listed plugins.
+     * The switch moves at once and stays locked until the server answers: a toggle takes
+     * seconds (6 s measured on a server), and the switch used to sit still that long, then
+     * vanish behind a full reload. As Hermes desktop's toggleAgentPlugin, the answer's own
+     * `plugin` row replaces this one; a failure puts the switch back. Turning a plugin off
+     * only edits config.yaml: Hermes keeps running it until a restart (`restart_required`).
      */
     fun togglePlugin(plugin: PluginItem, enable: Boolean) {
+        if (plugin.key in _uiState.value.togglingKeys) return
+        fun patch(row: (PluginItem) -> PluginItem) = _uiState.update { s ->
+            s.copy(plugins = s.plugins.map { if (it.key == plugin.key) row(it) else it })
+        }
+        _uiState.update { it.copy(togglingKeys = it.togglingKeys + plugin.key) }
+        patch { it.copy(enabled = enable) }
         viewModelScope.launch {
             try {
                 val params = buildJsonObject {
@@ -123,17 +134,26 @@ class PluginsViewModel @Inject constructor(
                     put("key", plugin.key)
                     put("enable", enable)
                 }
-                gatewayClient.request(GatewayMethods.PLUGINS_MANAGE, params.toMap())
+                val r = gatewayClient.request(GatewayMethods.PLUGINS_MANAGE, params.toMap()) as? JsonObject
                 Timber.i("[Plugins] ${plugin.key} -> enabled=$enable")
-                loadPlugins()
-            } catch (e: GatewayException) {
+                val fresh = (r?.get("plugin") as? JsonObject)?.let(::parsePlugin)
+                if (fresh != null) patch { fresh } else loadPlugins()
+                if (!enable && (r?.get("restart_required") as? JsonPrimitive)?.booleanOrNull == true) {
+                    _uiState.update { it.copy(restartNotice = plugin.name) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 Timber.e(e, "[Plugins] Failed to toggle ${plugin.key}")
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to toggle ${plugin.name}: ${e.message}",
-                )
+                patch { it.copy(enabled = plugin.enabled) }
+                _uiState.update { it.copy(errorMessage = "Failed to toggle ${plugin.name}: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(togglingKeys = it.togglingKeys - plugin.key) }
             }
         }
     }
+
+    fun clearRestartNotice() = _uiState.update { it.copy(restartNotice = null) }
 
     private fun parseSetting(el: JsonElement): PluginSetting? {
         val o = el as? JsonObject ?: return null
@@ -267,6 +287,10 @@ data class PluginsUiState(
     val catalogError: String? = null,
     /** An update that widens the plugin, with what it adds, waiting for the user's yes. */
     val pendingConsent: Pair<PluginItem, List<String>>? = null,
+    /** Plugins whose switch waits for the server's answer. */
+    val togglingKeys: Set<String> = emptySet(),
+    /** The plugin just turned off that keeps running until Hermes restarts. */
+    val restartNotice: String? = null,
 )
 
 /** One `config_schema` key of a plugin (PluginSettingField); a secret carries no value, only [env]. */
