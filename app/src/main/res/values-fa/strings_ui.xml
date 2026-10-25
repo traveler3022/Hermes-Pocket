@@ -1201,6 +1201,10 @@
     <string name="analytics_cache">خواندن از کش</string>
     <string name="analytics_reasoning">استدلال</string>
     <string name="analytics_daily_usage">مصرف روزانه</string>
+    <string name="analytics_today">امروز</string>
+    <string name="analytics_today_empty">امروز هنوز گفتگویی شروع نشده.</string>
+    <string name="analytics_tokens">توکن</string>
+    <string name="analytics_yesterday">دیروز: %1$s</string>
     <string name="analytics_day_line">ورودی %1$s · خروجی %2$s · کش %3$s · %4$d گفتگو · %5$d فراخوانی</string>
     <string name="analytics_model_line">ورودی %1$s · خروجی %2$s · %3$d گفتگو · %4$d فراخوانی</string>
     <string name="analytics_auxiliary">کارهای فرعی (فشرده‌سازی، بینایی…)</string>

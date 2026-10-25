@@ -11,7 +11,12 @@ interface UsageAnalytics {
     data class Report(
         val days: Int,
         val totals: Totals,
+        /** One entry per calendar day of the window, quiet days as zeros, ending with today. */
         val daily: List<Day>,
+        /** Sessions started today (by the server's calendar); zeros when there were none. */
+        val today: Day,
+        /** The day before [today], for comparison; null when the window has no such day. */
+        val yesterday: Day?,
         val models: List<ModelUse>,
         /** Side jobs such as compression and vision, which the main counters leave out. */
         val auxiliary: List<AuxiliaryUse>,

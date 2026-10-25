@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -95,6 +97,7 @@ fun AnalyticsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
+            state.report?.let { report -> item(key = "today") { TodayCard(report.today, report.yesterday) } }
             item(key = "window") { WindowChips(state, viewModel::selectDays) }
             state.loadError?.let { error ->
                 item(key = "error") {
@@ -205,10 +208,86 @@ private fun Totals(report: Report) {
         HxSplitBar(
             parts = listOf(
                 HxBarPart(stringResource(R.string.in_text), t.inputTokens, MaterialTheme.colorScheme.primary),
-                HxBarPart(stringResource(R.string.out), t.outputTokens, MaterialTheme.colorScheme.tertiary),
+                // Reasoning tokens are part of the output count, so they are taken out of it here
+                // instead of being drawn twice.
+                HxBarPart(
+                    stringResource(R.string.out),
+                    (t.outputTokens - t.reasoningTokens).coerceAtLeast(0L),
+                    MaterialTheme.colorScheme.tertiary,
+                ),
                 HxBarPart(stringResource(R.string.analytics_reasoning), t.reasoningTokens, MaterialTheme.colorScheme.secondary),
             ),
         )
+    }
+}
+
+/**
+ * Today's sessions, whatever window is picked below: tokens and cost up front, the split and
+ * yesterday's figure under them. The server counts a session on the day it started, so a chat
+ * begun yesterday and still going adds nothing here.
+ */
+@Composable
+private fun TodayCard(today: Day, yesterday: Day?) {
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle(stringResource(R.string.analytics_today))
+            Spacer(Modifier.weight(1f))
+            Text(today.day, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (today.sessions == 0L && today.tokens == 0L) {
+            Text(
+                stringResource(R.string.analytics_today_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    hxCompactCount(today.tokens),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+                Text(
+                    " " + stringResource(R.string.analytics_tokens),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp).weight(1f),
+                )
+                Text(
+                    formatCost(today.cost),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            HxSplitBar(
+                parts = listOf(
+                    HxBarPart(stringResource(R.string.in_text), today.inputTokens, MaterialTheme.colorScheme.primary),
+                    HxBarPart(stringResource(R.string.out), today.outputTokens, MaterialTheme.colorScheme.tertiary),
+                ),
+                barHeight = 6.dp,
+            )
+            Text(
+                stringResource(
+                    R.string.analytics_day_line,
+                    hxCompactCount(today.inputTokens),
+                    hxCompactCount(today.outputTokens),
+                    hxCompactCount(today.cacheReadTokens),
+                    today.sessions.toInt(),
+                    today.apiCalls.toInt(),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (yesterday != null) {
+            Text(
+                stringResource(
+                    R.string.analytics_yesterday,
+                    hxCompactCount(yesterday.tokens) + if (yesterday.cost > 0.0) " · " + formatCost(yesterday.cost) else "",
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

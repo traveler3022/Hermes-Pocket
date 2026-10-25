@@ -42,32 +42,42 @@ class UsageAnalyticsRepository @Inject constructor(
             null
         }
         val totals = usage.obj("totals")
+        val auxRows = usage.list("by_task")
+        val daily = withEmptyDays(
+            usage.list("daily").mapNotNull { d ->
+                val day = d.str("day") ?: return@mapNotNull null
+                Day(
+                    day = day,
+                    inputTokens = d.long("input_tokens"),
+                    outputTokens = d.long("output_tokens"),
+                    cacheReadTokens = d.long("cache_read_tokens"),
+                    sessions = d.long("sessions"),
+                    apiCalls = d.long("api_calls"),
+                    cost = d.costOf("actual_cost", "estimated_cost"),
+                )
+            },
+            days,
+        )
+        val today = LocalDate.now().toString()
         return Report(
             days = days,
+            // The sessions counters leave out side jobs (compression, vision…), which the server
+            // keeps only per task. Added back here so the totals match the models list, which
+            // already includes them.
             totals = Totals(
                 sessions = totals.long("total_sessions"),
-                apiCalls = totals.long("total_api_calls"),
-                inputTokens = totals.long("total_input"),
-                outputTokens = totals.long("total_output"),
+                apiCalls = totals.long("total_api_calls") + auxRows.sumOf { it.long("api_calls") },
+                inputTokens = totals.long("total_input") + auxRows.sumOf { it.long("input_tokens") },
+                outputTokens = totals.long("total_output") + auxRows.sumOf { it.long("output_tokens") },
                 cacheReadTokens = totals.long("total_cache_read"),
                 reasoningTokens = totals.long("total_reasoning"),
-                estimatedCost = totals.double("total_estimated_cost"),
+                estimatedCost = totals.double("total_estimated_cost") + auxRows.sumOf { it.double("estimated_cost") },
                 actualCost = totals.double("total_actual_cost"),
             ),
-            daily = withEmptyDays(
-                usage.list("daily").mapNotNull { d ->
-                    val day = d.str("day") ?: return@mapNotNull null
-                    Day(
-                        day = day,
-                        inputTokens = d.long("input_tokens"),
-                        outputTokens = d.long("output_tokens"),
-                        cacheReadTokens = d.long("cache_read_tokens"),
-                        sessions = d.long("sessions"),
-                        apiCalls = d.long("api_calls"),
-                        cost = d.costOf("actual_cost", "estimated_cost"),
-                    )
-                },
-            ),
+            daily = daily,
+            // The newest day of the list: the phone's today, or the server's if its clock is a day ahead.
+            today = daily.lastOrNull()?.takeIf { it.day >= today } ?: emptyDay(today),
+            yesterday = daily.getOrNull(daily.lastIndex - 1)?.takeIf { daily.last().day >= today },
             models = (models?.objects() ?: usage.list("by_model")).mapNotNull { m ->
                 val model = m.str("model") ?: return@mapNotNull null
                 ModelUse(
@@ -80,7 +90,7 @@ class UsageAnalyticsRepository @Inject constructor(
                     cost = m.costOf("actual_cost", "estimated_cost"),
                 )
             },
-            auxiliary = usage.list("by_task").mapNotNull { t ->
+            auxiliary = auxRows.mapNotNull { t ->
                 val task = t.str("task") ?: return@mapNotNull null
                 AuxiliaryUse(
                     task = task,
@@ -100,21 +110,27 @@ class UsageAnalyticsRepository @Inject constructor(
     }
 
     /**
-     * The server lists only days that had a session: put the quiet days in between back as
-     * zeros, so the chart's bars are one per calendar day and a gap shows as a gap.
+     * The server lists only days that had a session: put the quiet days back as zeros, from the
+     * start of the window up to today, so the chart has one bar per calendar day, a gap shows as
+     * a gap, and its last bar is today rather than the last day something happened.
      */
-    private fun withEmptyDays(days: List<Day>): List<Day> {
+    private fun withEmptyDays(days: List<Day>, window: Int): List<Day> {
         val byDate = days.mapNotNull { d ->
             runCatching { LocalDate.parse(d.day) }.getOrNull()?.let { it to d }
         }.toMap()
-        if (byDate.size != days.size || byDate.isEmpty()) return days
-        val first = byDate.keys.min()
-        val last = byDate.keys.max()
+        if (byDate.size != days.size) return days
+        val now = LocalDate.now()
+        val last = byDate.keys.maxOrNull()?.takeIf { it.isAfter(now) } ?: now
+        // The window is the last `window` × 24 hours, so a session from the day before the
+        // first full day can be in it; that day keeps its bar.
+        val first = minOf(byDate.keys.minOrNull() ?: last, last.minusDays(window - 1L))
         return generateSequence(first) { it.plusDays(1) }
             .takeWhile { !it.isAfter(last) }
-            .map { date -> byDate[date] ?: Day(date.toString(), 0, 0, 0, 0, 0, 0.0) }
+            .map { date -> byDate[date] ?: emptyDay(date.toString()) }
             .toList()
     }
+
+    private fun emptyDay(day: String) = Day(day, 0, 0, 0, 0, 0, 0.0)
 
     private fun JsonObject?.obj(key: String): JsonObject? = this?.get(key) as? JsonObject
 
