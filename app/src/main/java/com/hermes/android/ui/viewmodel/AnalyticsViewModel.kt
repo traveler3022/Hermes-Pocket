@@ -24,11 +24,17 @@ data class AnalyticsUiState(
 ) {
     companion object {
         const val DEFAULT_DAYS = 30
-        val WINDOWS = listOf(7, 30, 90)
+
+        /**
+         * The "Today" chip. The server only takes whole 24-hour windows, so it asks for one and
+         * the page reads today's calendar day out of it (see [Report.today]).
+         */
+        const val TODAY = 1
+        val WINDOWS = listOf(TODAY, 7, 30, 90)
     }
 }
 
-/** Token and cost statistics over 7, 30 or 90 days, read from the server's analytics routes. */
+/** Token and cost statistics for today or over 7, 30 or 90 days, read from the server's analytics routes. */
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val analytics: UsageAnalytics,

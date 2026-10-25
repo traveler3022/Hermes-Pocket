@@ -97,9 +97,6 @@ fun AnalyticsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            // Always the first item, empty until the report arrives: a keyed item added above the
-            // first visible one later would be kept above the screen's top, out of sight.
-            item(key = "today") { state.report?.let { TodayCard(it.today, it.yesterday) } }
             item(key = "window") { WindowChips(state, viewModel::selectDays) }
             state.loadError?.let { error ->
                 item(key = "error") {
@@ -113,15 +110,26 @@ fun AnalyticsScreen(
             if (report == null) {
                 return@LazyColumn
             }
+            // The report of the window still loading after a chip tap is the old one; it shows
+            // under the new chip until the new one lands.
+            val todayOnly = report.days == AnalyticsUiState.TODAY
+            if (todayOnly) {
+                item(key = "today") { TodayCard(report.today) }
+            }
             if (report.totals.sessions == 0L && report.models.isEmpty()) {
-                item(key = "empty") { Note(stringResource(R.string.analytics_empty)) }
+                if (!todayOnly) item(key = "empty") { Note(stringResource(R.string.analytics_empty)) }
                 return@LazyColumn
             }
-            item(key = "totals") { Totals(report) }
-            if (report.daily.isNotEmpty()) {
-                item(key = "daily") { DailyUsage(report.daily) }
+            if (!todayOnly) {
+                item(key = "totals") { Totals(report) }
+                if (report.daily.isNotEmpty()) {
+                    item(key = "daily") { DailyUsage(report.daily) }
+                }
             }
             item(key = "tabs") { TabChips(tab) { tab = it } }
+            if (todayOnly) {
+                item(key = "last-24h") { Note(stringResource(R.string.analytics_last_24h)) }
+            }
             when (tab) {
                 AnalyticsTab.MODELS -> {
                     if (report.models.isEmpty()) {
@@ -161,7 +169,15 @@ private fun WindowChips(state: AnalyticsUiState, onSelect: (Int) -> Unit) {
             FilterChip(
                 selected = state.days == days,
                 onClick = { onSelect(days) },
-                label = { Text(stringResource(R.string.analytics_days, days)) },
+                label = {
+                    Text(
+                        if (days == AnalyticsUiState.TODAY) {
+                            stringResource(R.string.analytics_today)
+                        } else {
+                            stringResource(R.string.analytics_days, days)
+                        },
+                    )
+                },
             )
         }
     }
@@ -224,12 +240,13 @@ private fun Totals(report: Report) {
 }
 
 /**
- * Today's sessions, whatever window is picked below: tokens and cost up front, the split and
- * yesterday's figure under them. The server counts a session on the day it started, so a chat
- * begun yesterday and still going adds nothing here.
+ * The "Today" chip's page head: tokens and cost of today's sessions up front, the split under
+ * them. Read from today's calendar day, not the 24-hour window the server was asked for. The
+ * server counts a session on the day it started, so a chat begun yesterday and still going adds
+ * nothing here.
  */
 @Composable
-private fun TodayCard(today: Day, yesterday: Day?) {
+private fun TodayCard(today: Day) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SectionTitle(stringResource(R.string.analytics_today))
@@ -277,16 +294,6 @@ private fun TodayCard(today: Day, yesterday: Day?) {
                     today.apiCalls.toInt(),
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (yesterday != null) {
-            Text(
-                stringResource(
-                    R.string.analytics_yesterday,
-                    hxCompactCount(yesterday.tokens) + if (yesterday.cost > 0.0) " · " + formatCost(yesterday.cost) else "",
-                ),
-                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

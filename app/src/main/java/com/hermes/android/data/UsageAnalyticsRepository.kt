@@ -77,7 +77,6 @@ class UsageAnalyticsRepository @Inject constructor(
             daily = daily,
             // The newest day of the list: the phone's today, or the server's if its clock is a day ahead.
             today = daily.lastOrNull()?.takeIf { it.day >= today } ?: emptyDay(today),
-            yesterday = daily.getOrNull(daily.lastIndex - 1)?.takeIf { daily.last().day >= today },
             models = (models?.objects() ?: usage.list("by_model")).mapNotNull { m ->
                 val model = m.str("model") ?: return@mapNotNull null
                 ModelUse(
