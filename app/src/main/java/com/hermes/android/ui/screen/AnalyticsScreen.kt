@@ -97,7 +97,9 @@ fun AnalyticsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(HxSpace.sm),
         ) {
-            state.report?.let { report -> item(key = "today") { TodayCard(report.today, report.yesterday) } }
+            // Always the first item, empty until the report arrives: a keyed item added above the
+            // first visible one later would be kept above the screen's top, out of sight.
+            item(key = "today") { state.report?.let { TodayCard(it.today, it.yesterday) } }
             item(key = "window") { WindowChips(state, viewModel::selectDays) }
             state.loadError?.let { error ->
                 item(key = "error") {
