@@ -2,12 +2,12 @@ package com.hermes.android.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -35,12 +36,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
+import com.hermes.android.domain.analytics.UsageAnalytics
 import com.hermes.android.domain.analytics.UsageAnalytics.AuxiliaryUse
 import com.hermes.android.domain.analytics.UsageAnalytics.Counted
 import com.hermes.android.domain.analytics.UsageAnalytics.Day
@@ -110,21 +111,17 @@ fun AnalyticsScreen(
             if (report == null) {
                 return@LazyColumn
             }
-            // The report of the window still loading after a chip tap is the old one; it shows
-            // under the new chip until the new one lands.
+            // Read off the report, not the chip: the old report stays up while a new window loads.
             val todayOnly = report.days == AnalyticsUiState.TODAY
-            if (todayOnly) {
-                item(key = "today") { TodayCard(report.today) }
-            }
             if (report.totals.sessions == 0L && report.models.isEmpty()) {
-                if (!todayOnly) item(key = "empty") { Note(stringResource(R.string.analytics_empty)) }
+                item(key = "empty") {
+                    Note(stringResource(if (todayOnly) R.string.analytics_today_empty else R.string.analytics_empty))
+                }
                 return@LazyColumn
             }
-            if (!todayOnly) {
-                item(key = "totals") { Totals(report) }
-                if (report.daily.isNotEmpty()) {
-                    item(key = "daily") { DailyUsage(report.daily) }
-                }
+            item(key = "totals") { Totals(report) }
+            if (report.daily.isNotEmpty()) {
+                item(key = "daily") { DailyUsage(report.daily, monthly = report.days > UsageAnalytics.MAX_DAILY_BARS) }
             }
             item(key = "tabs") { TabChips(tab) { tab = it } }
             if (todayOnly) {
@@ -164,17 +161,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.countedList(
 
 @Composable
 private fun WindowChips(state: AnalyticsUiState, onSelect: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(HxSpace.xs),
+    ) {
         AnalyticsUiState.WINDOWS.forEach { days ->
             FilterChip(
                 selected = state.days == days,
                 onClick = { onSelect(days) },
                 label = {
                     Text(
-                        if (days == AnalyticsUiState.TODAY) {
-                            stringResource(R.string.analytics_today)
-                        } else {
-                            stringResource(R.string.analytics_days, days)
+                        when (days) {
+                            AnalyticsUiState.TODAY -> stringResource(R.string.analytics_today)
+                            365 -> stringResource(R.string.analytics_year)
+                            else -> stringResource(R.string.analytics_days, days)
                         },
                     )
                 },
@@ -240,83 +240,22 @@ private fun Totals(report: Report) {
 }
 
 /**
- * The "Today" chip's page head: tokens and cost of today's sessions up front, the split under
- * them. Read from today's calendar day, not the 24-hour window the server was asked for. The
- * server counts a session on the day it started, so a chat begun yesterday and still going adds
- * nothing here.
+ * One bar per day (per month on the yearly chart), as tall as its tokens (in + out) against the
+ * busiest one: costs are often all 0 (free or unpriced models), which left every bar the same.
+ * Tap a bar for its numbers; the newest is shown first.
  */
 @Composable
-private fun TodayCard(today: Day) {
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SectionTitle(stringResource(R.string.analytics_today))
-            Spacer(Modifier.weight(1f))
-            Text(today.day, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (today.sessions == 0L && today.tokens == 0L) {
-            Text(
-                stringResource(R.string.analytics_today_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    hxCompactCount(today.tokens),
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-                )
-                Text(
-                    " " + stringResource(R.string.analytics_tokens),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp).weight(1f),
-                )
-                Text(
-                    formatCost(today.cost),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            HxSplitBar(
-                parts = listOf(
-                    HxBarPart(stringResource(R.string.in_text), today.inputTokens, MaterialTheme.colorScheme.primary),
-                    HxBarPart(stringResource(R.string.out), today.outputTokens, MaterialTheme.colorScheme.tertiary),
-                ),
-                barHeight = 6.dp,
-            )
-            Text(
-                stringResource(
-                    R.string.analytics_day_line,
-                    hxCompactCount(today.inputTokens),
-                    hxCompactCount(today.outputTokens),
-                    hxCompactCount(today.cacheReadTokens),
-                    today.sessions.toInt(),
-                    today.apiCalls.toInt(),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * One bar per day, as tall as that day's tokens (in + out) against the busiest day: costs are
- * often all 0 (free or unpriced models), which left every bar the same. Tap a bar for that day's
- * numbers; the newest day is shown first.
- */
-@Composable
-private fun DailyUsage(daily: List<Day>) {
+private fun DailyUsage(daily: List<Day>, monthly: Boolean) {
     val top = daily.maxOf { it.tokens }
     var selected by rememberSaveable(daily.size, daily.last().day) { mutableStateOf(daily.lastIndex) }
     val day = daily.getOrNull(selected) ?: daily.last()
     Card {
-        SectionTitle(stringResource(R.string.analytics_daily_usage))
+        SectionTitle(stringResource(if (monthly) R.string.analytics_monthly_usage else R.string.analytics_daily_usage))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (daily.size > 31) 1.dp else 2.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             daily.forEachIndexed { i, d ->

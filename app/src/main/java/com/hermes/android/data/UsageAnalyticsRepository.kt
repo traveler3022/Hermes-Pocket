@@ -30,53 +30,76 @@ class UsageAnalyticsRepository @Inject constructor(
 ) : UsageAnalytics {
 
     override suspend fun load(days: Int): Report {
-        val usage = dashboard.call("GET", "/api/analytics/usage?days=$days") as? JsonObject
+        val todayOnly = days == UsageAnalytics.TODAY
+        val window = if (todayOnly) 1 else days
+        val usage = dashboard.call("GET", "/api/analytics/usage?days=$window") as? JsonObject
             ?: throw IOException("No answer from Hermes")
         // An older server may lack the per-provider route; the page then lists models without it.
         val models = try {
-            (dashboard.call("GET", "/api/analytics/models?days=$days") as? JsonObject)?.get("models") as? JsonArray
+            (dashboard.call("GET", "/api/analytics/models?days=$window") as? JsonObject)?.get("models") as? JsonArray
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.w(e, "[Analytics] models route failed; falling back to the usage route")
             null
         }
-        val totals = usage.obj("totals")
-        val auxRows = usage.list("by_task")
+        val chartUsage = if (todayOnly) {
+            dashboard.call("GET", "/api/analytics/usage?days=${UsageAnalytics.TODAY_CHART_DAYS}") as? JsonObject
+        } else {
+            usage
+        }
         val daily = withEmptyDays(
-            usage.list("daily").mapNotNull { d ->
+            chartUsage.list("daily").mapNotNull { d ->
                 val day = d.str("day") ?: return@mapNotNull null
                 Day(
                     day = day,
                     inputTokens = d.long("input_tokens"),
                     outputTokens = d.long("output_tokens"),
                     cacheReadTokens = d.long("cache_read_tokens"),
+                    reasoningTokens = d.long("reasoning_tokens"),
                     sessions = d.long("sessions"),
                     apiCalls = d.long("api_calls"),
-                    cost = d.costOf("actual_cost", "estimated_cost"),
+                    estimatedCost = d.double("estimated_cost"),
+                    actualCost = d.double("actual_cost"),
                 )
             },
-            days,
+            if (todayOnly) UsageAnalytics.TODAY_CHART_DAYS else days,
         )
-        val today = LocalDate.now().toString()
+        val auxRows = usage.list("by_task")
         return Report(
             days = days,
-            // The sessions counters leave out side jobs (compression, vision…), which the server
-            // keeps only per task. Added back here so the totals match the models list, which
-            // already includes them.
-            totals = Totals(
-                sessions = totals.long("total_sessions"),
-                apiCalls = totals.long("total_api_calls") + auxRows.sumOf { it.long("api_calls") },
-                inputTokens = totals.long("total_input") + auxRows.sumOf { it.long("input_tokens") },
-                outputTokens = totals.long("total_output") + auxRows.sumOf { it.long("output_tokens") },
-                cacheReadTokens = totals.long("total_cache_read"),
-                reasoningTokens = totals.long("total_reasoning"),
-                estimatedCost = totals.double("total_estimated_cost") + auxRows.sumOf { it.double("estimated_cost") },
-                actualCost = totals.double("total_actual_cost"),
-            ),
-            daily = daily,
-            // The newest day of the list: the phone's today, or the server's if its clock is a day ahead.
-            today = daily.lastOrNull()?.takeIf { it.day >= today } ?: emptyDay(today),
+            totals = if (todayOnly) {
+                // Today's bar of the chart, so the two agree. Side jobs are kept per task only,
+                // never per day, so they are left out here.
+                val today = daily.lastOrNull()?.takeIf { it.day >= LocalDate.now().toString() }
+                    ?: emptyDay(LocalDate.now().toString())
+                Totals(
+                    sessions = today.sessions,
+                    apiCalls = today.apiCalls,
+                    inputTokens = today.inputTokens,
+                    outputTokens = today.outputTokens,
+                    cacheReadTokens = today.cacheReadTokens,
+                    reasoningTokens = today.reasoningTokens,
+                    estimatedCost = today.estimatedCost,
+                    actualCost = today.actualCost,
+                )
+            } else {
+                val totals = usage.obj("totals")
+                // The sessions counters leave out side jobs (compression, vision…), which the server
+                // keeps only per task. Added back here so the totals match the models list, which
+                // already includes them.
+                Totals(
+                    sessions = totals.long("total_sessions"),
+                    apiCalls = totals.long("total_api_calls") + auxRows.sumOf { it.long("api_calls") },
+                    inputTokens = totals.long("total_input") + auxRows.sumOf { it.long("input_tokens") },
+                    outputTokens = totals.long("total_output") + auxRows.sumOf { it.long("output_tokens") },
+                    cacheReadTokens = totals.long("total_cache_read"),
+                    reasoningTokens = totals.long("total_reasoning"),
+                    estimatedCost = totals.double("total_estimated_cost") + auxRows.sumOf { it.double("estimated_cost") },
+                    actualCost = totals.double("total_actual_cost"),
+                )
+            },
+            daily = if (days > UsageAnalytics.MAX_DAILY_BARS) byMonth(daily) else daily,
             models = (models?.objects() ?: usage.list("by_model")).mapNotNull { m ->
                 val model = m.str("model") ?: return@mapNotNull null
                 ModelUse(
@@ -129,7 +152,11 @@ class UsageAnalyticsRepository @Inject constructor(
             .toList()
     }
 
-    private fun emptyDay(day: String) = Day(day, 0, 0, 0, 0, 0, 0.0)
+    private fun emptyDay(day: String) = Day(day, 0, 0, 0, 0, 0, 0, 0.0, 0.0)
+
+    /** A year of daily bars is too thin to see or tap: one per month ("2026-10") instead. */
+    private fun byMonth(days: List<Day>): List<Day> =
+        days.groupBy { it.day.take(7) }.map { (month, list) -> list.reduce(Day::plus).copy(day = month) }
 
     private fun JsonObject?.obj(key: String): JsonObject? = this?.get(key) as? JsonObject
 

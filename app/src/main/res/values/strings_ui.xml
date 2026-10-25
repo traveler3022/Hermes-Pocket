@@ -1203,9 +1203,10 @@
     <string name="analytics_cache">cache read</string>
     <string name="analytics_reasoning">reasoning</string>
     <string name="analytics_daily_usage">Usage per day</string>
+    <string name="analytics_year">1 year</string>
+    <string name="analytics_monthly_usage">Usage per month</string>
     <string name="analytics_today">Today</string>
     <string name="analytics_today_empty">No sessions started today yet.</string>
-    <string name="analytics_tokens">tokens</string>
     <string name="analytics_last_24h">Models, skills and tools: last 24 hours.</string>
     <string name="analytics_day_line">in %1$s · out %2$s · cache %3$s · %4$d sessions · %5$d calls</string>
     <string name="analytics_model_line">in %1$s · out %2$s · %3$d sessions · %4$d calls</string>
