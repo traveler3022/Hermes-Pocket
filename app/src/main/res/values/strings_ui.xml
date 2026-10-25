@@ -476,6 +476,7 @@
     <string name="new_chat">New chat</string>
     <string name="new_chat_2">New chat</string>
     <string name="new_group">New group</string>
+    <string name="group_one_room_limit">One group at a time for now: with two, Hermes keeps the server busy (a Hermes bug). Delete this group to make a new one.</string>
     <string name="new_job">New job</string>
     <string name="new_key_for">New key for %1$s</string>
     <string name="new_profile">New profile</string>

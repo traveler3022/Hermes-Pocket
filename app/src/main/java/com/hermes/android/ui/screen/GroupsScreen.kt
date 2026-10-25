@@ -65,6 +65,13 @@ fun GroupsScreen(
     var creating by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    val roomLimitText = stringResource(R.string.group_one_room_limit)
+    LaunchedEffect(state.roomLimitHit) {
+        if (state.roomLimitHit) {
+            snackbarHostState.showSnackbar(roomLimitText)
+            viewModel.clearRoomLimit()
+        }
+    }
     LaunchedEffect(state.error) {
         // Errors of the create sheet show inside it.
         if (!creating) {
@@ -83,8 +90,10 @@ fun GroupsScreen(
             if (state.available == true) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        viewModel.loadProfiles()
-                        creating = true
+                        if (viewModel.mayCreate()) {
+                            viewModel.loadProfiles()
+                            creating = true
+                        }
                     },
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
                     text = { Text(stringResource(R.string.new_group)) },

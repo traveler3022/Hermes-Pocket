@@ -30,6 +30,8 @@ class GroupsViewModel @Inject constructor(
         val profiles: List<HermesProfiles.Profile> = emptyList(),
         val isCreating: Boolean = false,
         val error: String? = null,
+        /** A second group was refused (see [MAX_LIVE_ROOMS]); the screen says why. */
+        val roomLimitHit: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -60,9 +62,22 @@ class GroupsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Whether a new group may be made. Hermes' room driver (tui_gateway/hosted_room_driver.py)
+     * never sleeps again once two live rooms wake each other: one message held the server at
+     * 100–136% CPU until a restart, and with one live room the same message settles back to idle.
+     */
+    fun mayCreate(): Boolean {
+        if (_uiState.value.rooms.size < MAX_LIVE_ROOMS) return true
+        _uiState.update { it.copy(roomLimitHit = true) }
+        return false
+    }
+
+    fun clearRoomLimit() = _uiState.update { it.copy(roomLimitHit = false) }
+
     /** Creates the group and hands its id to [onCreated] (the screen opens it). */
     fun create(name: String, members: List<HermesProfiles.Profile>, onCreated: (String) -> Unit) {
-        if (_uiState.value.isCreating) return
+        if (_uiState.value.isCreating || !mayCreate()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true, error = null) }
             try {
@@ -80,4 +95,9 @@ class GroupsViewModel @Inject constructor(
 
     private fun Exception.userMessage(): String =
         (this as? GatewayException)?.rpcMessage ?: message ?: toString()
+
+    private companion object {
+        /** Until Hermes fixes the driver loop above; groups.list counts only live rooms. */
+        const val MAX_LIVE_ROOMS = 1
+    }
 }
