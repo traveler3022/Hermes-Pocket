@@ -761,6 +761,8 @@ class ChatViewModel @Inject constructor(
 
     fun newCameraPhotoUri(): Uri? = attachmentDelegate.newCameraPhotoUri()
 
+    fun attachPastedText(text: String): Boolean = attachmentDelegate.attachPastedText(_uiState, text)
+
     fun closeSideQuestion() = _uiState.update { it.copy(sideQuestion = null) }
 
     fun downloadFile(url: String, filename: String) = attachmentDelegate.downloadFile(_uiState, url, filename)

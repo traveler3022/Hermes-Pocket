@@ -19,6 +19,7 @@ import androidx.compose.foundation.content.consume
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
@@ -88,6 +89,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxSoftShadow
+import com.hermes.android.ui.viewmodel.PASTED_TEXT_PREFIX
 import com.hermes.android.ui.viewmodel.PendingAttachment
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.i18n.SlashCommandDescriptions
@@ -110,6 +112,8 @@ internal fun InputBar(
     onPasteImages: (List<Uri>, Any) -> Unit = { _, _ -> },
     /** A new file for the camera to write its photo to; null when none could be made. */
     newCameraPhotoUri: () -> Uri? = { null },
+    /** Text pasted past [LARGE_PASTE_CHARS], to send as a file; false keeps it in the box. */
+    onPasteLongText: ((String) -> Boolean)? = null,
     onRemoveAttachment: (PendingAttachment) -> Unit = {},
     activeModel: String? = null,
     onModelClick: () -> Unit = {},
@@ -190,6 +194,19 @@ internal fun InputBar(
         }
     }
     val currentOnPasteImages by rememberUpdatedState(onPasteImages)
+    // One insert past the limit (a paste, from the menu or the keyboard's clipboard) goes as a
+    // .txt attachment instead of flooding the box, like Hermes desktop. Typing and text the app
+    // sets itself never pass through here.
+    val currentOnPasteLongText by rememberUpdatedState(onPasteLongText)
+    val largePaste = remember {
+        InputTransformation {
+            val take = currentOnPasteLongText ?: return@InputTransformation
+            if (changes.changeCount != 1) return@InputTransformation
+            val range = changes.getRange(0)
+            if (range.length <= LARGE_PASTE_CHARS) return@InputTransformation
+            if (take(asCharSequence().substring(range.start, range.end))) revertAllChanges()
+        }
+    }
     val imageReceiver = remember(context) { pastedImageReceiver(context) { uris, grant -> currentOnPasteImages(uris, grant) } }
     val voiceInput = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -315,8 +332,13 @@ internal fun InputBar(
                         },
                         label = {
                             val progress = attachment.progress
+                            val name = if (attachment.name.startsWith(PASTED_TEXT_PREFIX)) {
+                                stringResource(R.string.attach_pasted_text)
+                            } else {
+                                attachment.name
+                            }
                             Text(
-                                if (progress != null) "${(progress * 100).toInt()}% · ${attachment.name}" else attachment.name,
+                                if (progress != null) "${(progress * 100).toInt()}% · $name" else name,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -351,6 +373,7 @@ internal fun InputBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .contentReceiver(imageReceiver),
+                inputTransformation = largePaste,
                 placeholder = { Text(stringResource(R.string.ask_hermes)) },
                 lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
                 colors = TextFieldDefaults.colors(
@@ -641,6 +664,9 @@ private fun pastedImageReceiver(
         return transferableContent.consume { it.uri in taken && it.text == null && it.htmlText == null }
     }
 }
+
+/** A single insert longer than this is sent as a text file (Hermes desktop's threshold). */
+private const val LARGE_PASTE_CHARS = 3_000
 
 /** How long a typed value counts as possibly echoed back late from the view model. */
 private const val ECHO_WINDOW_MS = 500L

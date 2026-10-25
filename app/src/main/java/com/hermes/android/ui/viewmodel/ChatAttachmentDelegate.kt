@@ -37,6 +37,9 @@ import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.serialization.json.contentOrNull
 
+/** File name start of a long paste sent as an attachment; its chip says "Pasted text". */
+internal const val PASTED_TEXT_PREFIX = "pasted_content_"
+
 internal class ChatAttachmentDelegate(
     private val gatewayClient: GatewayClient,
     private val hermesRuntime: HermesRuntime,
@@ -99,6 +102,26 @@ internal class ChatAttachmentDelegate(
     } catch (e: Exception) {
         Timber.e(e, "[Chat] No file for the camera photo")
         null
+    }
+
+    /**
+     * Text pasted past the composer's limit, sent as a `.txt` attachment the way Hermes desktop
+     * does (large-paste.ts, same `pasted_content_<stamp>.txt` name). False when there is no chat
+     * to attach to or the file can't be written: the text then stays in the box.
+     */
+    fun attachPastedText(state: MutableStateFlow<ChatUiState>, text: String): Boolean {
+        if (state.value.activeSessionId == null) return false
+        val uri = try {
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            val file = java.io.File(attachDir(), "$PASTED_TEXT_PREFIX$stamp.txt")
+            file.writeText(text)
+            FileProvider.getUriForFile(context, "${context.packageName}.shared", file)
+        } catch (e: Exception) {
+            Timber.e(e, "[Chat] No file for the pasted text")
+            return false
+        }
+        attachFromUris(state, listOf(uri))
+        return true
     }
 
     private fun runBatch(state: MutableStateFlow<ChatUiState>, any: Boolean, uris: suspend () -> List<Uri>) {

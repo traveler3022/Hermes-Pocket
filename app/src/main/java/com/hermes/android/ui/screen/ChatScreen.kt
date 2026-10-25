@@ -1138,6 +1138,7 @@ fun ChatScreen(
                     onAttachFiles = viewModel::attachFromUris,
                     onPasteImages = viewModel::attachPastedImages,
                     newCameraPhotoUri = viewModel::newCameraPhotoUri,
+                    onPasteLongText = viewModel::attachPastedText,
                     onRemoveAttachment = viewModel::removeAttachment,
                     activeModel = modelPickerState.activeModel,
                     onModelClick = { showModelSheet = true },
