@@ -95,7 +95,12 @@ class SetupViewModel @Inject constructor(
             }
             repository.saveKey(provider, key)
             val models = if (provider.needsBaseUrl) check.models else repository.models(provider)
-            _state.update { it.copy(models = models, modelQuery = "", step = SetupStep.Model) }
+            // The base that served the model list is the one to save (a bare host root may only
+            // answer under /v1); pickModel sends state.baseUrl.
+            val resolved = check.resolvedBaseUrl.takeIf { provider.needsBaseUrl && it.isNotBlank() }
+            _state.update {
+                it.copy(models = models, modelQuery = "", step = SetupStep.Model, baseUrl = resolved ?: it.baseUrl)
+            }
         }
     }
 

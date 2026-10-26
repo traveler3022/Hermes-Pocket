@@ -266,6 +266,9 @@ private fun ProviderStep(state: SetupUiState, viewModel: SetupViewModel) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    // The rows stay off while Hermes is asked whether a model is set already (slower on the
+    // built-in Linux); without this the list just looks dead.
+    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     Card(modifier = Modifier.fillMaxWidth()) {
         state.providers.forEachIndexed { index, provider ->
             if (index > 0) HorizontalDivider()

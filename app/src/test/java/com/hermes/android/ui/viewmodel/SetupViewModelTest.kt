@@ -96,6 +96,20 @@ class SetupViewModelTest {
     }
 
     @Test
+    fun `a custom endpoint saves the base its validation resolved`() {
+        coEvery { repository.checkKey(custom, "", "http://10.0.0.2:8080") } returns
+            KeyCheck(ok = true, reachable = true, message = "", models = listOf("llama-3"), resolvedBaseUrl = "http://10.0.0.2:8080/v1")
+        coEvery { repository.setDefaultModel(custom, "llama-3", any(), any(), false) } returns DefaultModelResult.Applied
+        val vm = viewModelAtKeyStep(custom)
+        vm.setBaseUrl("http://10.0.0.2:8080")
+
+        vm.submitKey()
+        vm.pickModel("llama-3")
+
+        coVerify { repository.setDefaultModel(custom, "llama-3", "", "http://10.0.0.2:8080/v1", false) }
+    }
+
+    @Test
     fun `picking a model saves it and completes setup`() {
         coEvery { repository.setDefaultModel(openRouter, "openai/gpt-4o", any(), any(), false) } returns DefaultModelResult.Applied
         val vm = viewModelAtKeyStep()

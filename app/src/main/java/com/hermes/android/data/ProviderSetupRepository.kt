@@ -108,6 +108,7 @@ class ProviderSetupRepository @Inject constructor(
             reachable = result.bool("reachable"),
             message = result.text("message").orEmpty(),
             models = (result["models"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
+            resolvedBaseUrl = result.text("resolved_base_url").orEmpty(),
         )
     }
 
@@ -303,41 +304,65 @@ class ProviderSetupRepository @Inject constructor(
 
     /** Probes a key (or custom endpoint) directly, mirroring the dashboard's /api/providers/validate. */
     private suspend fun probeKey(provider: SetupProvider, apiKey: String, baseUrl: String): KeyCheck = withContext(Dispatchers.IO) {
+        if (provider.needsBaseUrl) return@withContext probeEndpoint(apiKey, baseUrl)
         val unknown = KeyCheck(ok = true, reachable = false, message = "")
-        val request = if (provider.needsBaseUrl) {
-            val url = baseUrl.trimEnd('/') + "/models"
-            Request.Builder().url(url.toHttpUrl()).apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
-        } else {
-            val (url, bearer) = CredentialProbes[provider.envVar] ?: return@withContext unknown
-            if (provider.envVar == "GEMINI_API_KEY" && apiKey.startsWith("AQ.")) return@withContext unknown
-            val builder = url.toHttpUrl().newBuilder()
-            if (!bearer) builder.addQueryParameter("key", apiKey)
-            Request.Builder().url(builder.build()).apply { if (bearer) header("Authorization", "Bearer $apiKey") }
-        }.header("Accept", "application/json").build()
+        val (url, bearer) = CredentialProbes[provider.envVar] ?: return@withContext unknown
+        if (provider.envVar == "GEMINI_API_KEY" && apiKey.startsWith("AQ.")) return@withContext unknown
+        val builder = url.toHttpUrl().newBuilder()
+        if (!bearer) builder.addQueryParameter("key", apiKey)
+        val request = Request.Builder().url(builder.build())
+            .apply { if (bearer) header("Authorization", "Bearer $apiKey") }
+            .header("Accept", "application/json").build()
 
         val response = try {
             http.newCall(request).execute()
         } catch (e: Exception) {
-            val where = if (provider.needsBaseUrl) request.url.toString() else "the provider"
-            return@withContext KeyCheck(ok = false, reachable = false, message = "Could not reach $where.")
+            return@withContext KeyCheck(ok = false, reachable = false, message = "Could not reach the provider.")
         }
         response.use {
-            val text = it.body?.string().orEmpty()
             when {
-                provider.needsBaseUrl -> {
-                    val models = modelIds(text)
-                    if (models.isEmpty() && !it.isSuccessful) {
-                        KeyCheck(false, true, "${request.url} answered HTTP ${it.code}.")
-                    } else {
-                        KeyCheck(true, true, "", models)
-                    }
-                }
                 it.code == 401 || it.code == 403 ->
                     KeyCheck(false, true, "That API key was rejected. Double-check it and try again.")
                 it.code == 429 || it.isSuccessful -> KeyCheck(true, true, "")
                 else -> KeyCheck(false, true, "Provider returned HTTP ${it.code} for this key.")
             }
         }
+    }
+
+    /**
+     * A custom endpoint, as the dashboard's `_probe_openai_compatible_models`: `{base}/models`, then
+     * `{base}/v1/models` (or the `/v1`-stripped base) when the first is not a success. The base that
+     * answered is returned to be saved, since a host root that only lists models under `/v1` would
+     * 404 every chat.
+     */
+    private fun probeEndpoint(apiKey: String, baseUrl: String): KeyCheck {
+        val base = baseUrl.trimEnd('/')
+        val alternate = if (base.endsWith("/v1", ignoreCase = true)) base.dropLast(3).trimEnd('/') else "$base/v1"
+        var resolved = base
+        var answer: Pair<Int, String>? = null
+        for (candidate in listOf(base, alternate)) {
+            // A malformed address throws here, which the setup shows as its error, as before.
+            val url = (candidate + "/models").toHttpUrl()
+            val request = Request.Builder().url(url)
+                .apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
+                .header("Accept", "application/json").build()
+            val got = try {
+                http.newCall(request).execute().use { it.code to it.body?.string().orEmpty() }
+            } catch (e: Exception) {
+                continue
+            }
+            val success = got.first in 200..299
+            // Keep the most telling failure: a 401 from the /v1 alternate beats the root's 404.
+            if (answer == null || success || answer.first == 404) {
+                resolved = candidate
+                answer = got
+            }
+            if (success) break
+        }
+        val (code, body) = answer ?: return KeyCheck(ok = false, reachable = false, message = "Could not reach $base/models.")
+        val models = modelIds(body)
+        if (models.isEmpty() && code !in 200..299) return KeyCheck(false, true, "$resolved/models answered HTTP $code.")
+        return KeyCheck(true, true, "", models, resolvedBaseUrl = resolved)
     }
 
     /** OpenAI `/models` shape: `{"data":[{"id":…}]}`. */

@@ -61,7 +61,17 @@ data class SetupProvider(
     val needsBaseUrl: Boolean = false,
 )
 
-data class KeyCheck(val ok: Boolean, val reachable: Boolean, val message: String, val models: List<String> = emptyList())
+/**
+ * [resolvedBaseUrl]: for a custom endpoint, the base that served the model list (the typed one, or it
+ * with `/v1` added or dropped). It is the one to save: Hermes appends `/chat/completions` to it as is.
+ */
+data class KeyCheck(
+    val ok: Boolean,
+    val reachable: Boolean,
+    val message: String,
+    val models: List<String> = emptyList(),
+    val resolvedBaseUrl: String = "",
+)
 
 sealed interface DefaultModelResult {
     data object Applied : DefaultModelResult
