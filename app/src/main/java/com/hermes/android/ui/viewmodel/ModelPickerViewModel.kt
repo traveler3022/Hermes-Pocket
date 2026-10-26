@@ -3,6 +3,7 @@ package com.hermes.android.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hermes.android.runtime.ServerIdentity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -20,7 +21,7 @@ data class ModelPickerUiState(
     val activeModel: String? = null,
     val activeProvider: String? = null,
     val isLoading: Boolean = false,
-    // Starred models pinned atop the sheet (local prefs, max ModelFavorites.MAX).
+    // Starred models pinned atop the sheet (local prefs per server, max ModelFavorites.MAX).
     val favorites: List<ModelFavorite> = emptyList(),
     val confirm: ModelSwitchConfirm? = null,
     // One-shot switch feedback, shown as a snackbar.
@@ -34,6 +35,7 @@ data class ModelPickerUiState(
 @HiltViewModel
 class ModelPickerViewModel @Inject constructor(
     private val modelSwitcher: ModelSwitcher,
+    private val servers: ServerIdentity,
     @ApplicationContext context: Context,
 ) : ViewModel() {
 
@@ -49,9 +51,45 @@ class ModelPickerViewModel @Inject constructor(
     /** The in-flight catalogue fetch; a newer [load] supersedes it so a slow stale reply can't land last. */
     private var loadJob: Job? = null
 
+    /** The server the shown stars belong to: a provider name only means something on its own server. */
+    private var server: String = servers.current()
+
     init {
-        _uiState.update { it.copy(favorites = ModelFavorites.decode(prefs.getString(KEY_FAVORITES, null))) }
+        useServer(server)
+        viewModelScope.launch {
+            servers.changes.collect { key ->
+                if (key == server) return@collect
+                server = key
+                useServer(key)
+                load(null)
+            }
+        }
         load(null)
+    }
+
+    private fun favoritesKey(server: String) = "$KEY_FAVORITES@$server"
+
+    private fun useServer(key: String) {
+        _uiState.update { it.copy(favorites = ModelFavorites.decode(prefs.getString(favoritesKey(key), null))) }
+    }
+
+    /**
+     * Stars saved before they were kept per server go to the first server whose catalogue
+     * has them, so another server never shows a pick it can't switch to.
+     */
+    private fun adoptLegacyFavorites(catalogServer: String, models: List<ModelOption>) {
+        if (catalogServer != server) return
+        val key = favoritesKey(server)
+        if (prefs.contains(key) || !prefs.contains(KEY_FAVORITES)) return
+        val offered = models.mapTo(HashSet()) { ModelFavorite(it.provider, it.modelId) }
+        val legacy = ModelFavorites.decode(prefs.getString(KEY_FAVORITES, null))
+        val mine = legacy.filter { it in offered }
+        if (mine.isEmpty()) return
+        val rest = legacy - mine.toSet()
+        val edit = prefs.edit().putString(key, ModelFavorites.encode(mine))
+        if (rest.isEmpty()) edit.remove(KEY_FAVORITES) else edit.putString(KEY_FAVORITES, ModelFavorites.encode(rest))
+        edit.apply()
+        _uiState.update { it.copy(favorites = mine) }
     }
 
     /** [liveSessionId]: the open chat — its running model is reported instead of config.yaml's default. */
@@ -59,9 +97,11 @@ class ModelPickerViewModel @Inject constructor(
         val sid = liveSessionId?.takeIf { it.isNotBlank() }
         _uiState.update { it.copy(isLoading = true) }
         loadJob?.cancel()
+        val catalogServer = server
         loadJob = viewModelScope.launch {
             try {
                 val catalog = modelSwitcher.loadCatalog(sid)
+                adoptLegacyFavorites(catalogServer, catalog.models)
                 _uiState.update { state ->
                     // A queued mid-turn pick isn't on the agent yet, and config.yaml's
                     // default must not replace a chat model already known.
@@ -135,7 +175,7 @@ class ModelPickerViewModel @Inject constructor(
     /** Star/unstar a model (no-op when starring past the cap). */
     fun toggleFavorite(model: ModelOption) {
         val updated = ModelFavorites.toggle(_uiState.value.favorites, ModelFavorite(model.provider, model.modelId))
-        prefs.edit().putString(KEY_FAVORITES, ModelFavorites.encode(updated)).apply()
+        prefs.edit().putString(favoritesKey(server), ModelFavorites.encode(updated)).apply()
         _uiState.update { it.copy(favorites = updated) }
     }
 
