@@ -5,7 +5,6 @@ import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.StdioGatewayHub
 import com.hermes.android.runtime.HermesRuntime
 import com.hermes.android.runtime.linux.ProotEnvironment
-import com.sun.net.httpserver.HttpServer
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -16,40 +15,45 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.net.InetSocketAddress
+import java.net.InetAddress
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 /** The built-in Linux probes a custom endpoint itself; it must find the base the dashboard would. */
 class CustomEndpointProbeTest {
 
     private val custom = SetupProvider("custom", "Custom", "OPENAI_BASE_URL", "", needsBaseUrl = true)
     private val hits = mutableListOf<String>()
-    private lateinit var server: HttpServer
+    private lateinit var server: ServerSocket
     private lateinit var root: String
 
     /** Path → (status, body); anything else is a 404. */
     private var routes: Map<String, Pair<Int, String>> = emptyMap()
 
+    /** A bare HTTP/1.1 server, one request per connection (the JDK's HttpServer is not on Android's test classpath). */
     @Before
     fun setUp() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/") { exchange ->
-            val path = exchange.requestURI.path
-            synchronized(hits) { hits += path }
-            val (code, body) = routes[path] ?: (404 to """{"error":"not found"}""")
-            val bytes = body.toByteArray()
-            exchange.sendResponseHeaders(code, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+        server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+        thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val socket = runCatching { server.accept() }.getOrNull() ?: break
+                socket.use {
+                    val reader = it.getInputStream().bufferedReader()
+                    val path = reader.readLine().orEmpty().split(' ').getOrElse(1) { "/" }.substringBefore('?')
+                    while (reader.readLine()?.isNotEmpty() == true) Unit
+                    synchronized(hits) { hits += path }
+                    val (code, body) = routes[path] ?: (404 to """{"error":"not found"}""")
+                    val bytes = body.toByteArray()
+                    val head = "HTTP/1.1 $code X\r\nContent-Type: application/json\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+                    it.getOutputStream().apply { write(head.toByteArray()); write(bytes); flush() }
+                }
+            }
         }
-        server.start()
-        root = "http://127.0.0.1:${server.address.port}"
+        root = "http://127.0.0.1:${server.localPort}"
     }
-
-    private var stopped = false
 
     @After
-    fun tearDown() {
-        if (!stopped) server.stop(0)
-    }
+    fun tearDown() = server.close()
 
     private fun repository(): ProviderSetupRepository {
         val runtime = mockk<HermesRuntime>(relaxed = true)
@@ -103,8 +107,7 @@ class CustomEndpointProbeTest {
 
     @Test
     fun `nothing listening is unreachable`() = runBlocking {
-        server.stop(0)
-        stopped = true
+        server.close()
 
         val check = repository().checkKey(custom, "", root)
 
