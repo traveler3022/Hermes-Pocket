@@ -212,7 +212,14 @@ class ProotLinuxRuntime @Inject constructor(
                 environment.guestFile("/root/.hermes/hermes-agent")
                     .listFiles { f -> f.name.startsWith(".git-old-") }
                     ?.forEach(::deleteTree)
-                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT\n$CONFIG_MIGRATE_SCRIPT", 60, 90, log, ::report)
+                // The new checkout may pin a newer Node (NODE_SCRIPT reads it from pm/lock.json). The
+                // Node already there still works, so a failure here leaves the update standing.
+                try {
+                    runStage("node", NODE_SCRIPT, 60, 63, log, ::report, verify = NODE_VERIFY, forApk = true)
+                } catch (e: InstallFailure) {
+                    Timber.w(e, "[Linux] Node was not updated; the installed Node stays")
+                }
+                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT\n$CONFIG_MIGRATE_SCRIPT", 63, 90, log, ::report)
                 report("verify", "Checking hermes --version…", 92)
                 val version = readHermesVersion()
                     ?: throw InstallFailure("Hermes command not found after the update.")
@@ -483,10 +490,36 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
         private const val PACKAGES_VERIFY = "python3 --version && git --version && curl --version && bash --version"
 
+        // The Node major Hermes pins (pm/lock.json; its package.json requires it too), from the
+        // Linux's own repo as nodejsNN, so a Hermes that moves to a newer Node gets it on the next
+        // install or update without an app change. Before the first clone the lock comes from
+        // GitHub. apk swaps the old nodejsNN out (npm stays). A major the repo lacks is said, and
+        // the repo's default Node stays.
         private val NODE_SCRIPT = """
             set -e
             $RETRY_FN
-            apk_add nodejs npm
+            major() { python3 -c "import json, sys; print(json.load(sys.stdin)['packages']['node']['version'].split('.')[0])"; }
+            LOCK=/root/.hermes/hermes-agent/pm/lock.json
+            if [ -f "${'$'}LOCK" ]; then
+                WANT=${'$'}(major < "${'$'}LOCK" 2>/dev/null || true)
+            else
+                WANT=${'$'}(curl -fsSL --retry 3 https://raw.githubusercontent.com/NousResearch/hermes-agent/main/pm/lock.json 2>/dev/null | major 2>/dev/null || true)
+            fi
+            PKG=nodejs
+            if [ -n "${'$'}WANT" ]; then
+                retry apk update -q || true
+                if apk search -x "nodejs${'$'}WANT" 2>/dev/null | grep -q .; then
+                    PKG="nodejs${'$'}WANT"
+                else
+                    echo "Hermes wants Node ${'$'}WANT; the Linux's package repo has no nodejs${'$'}WANT, so its default Node stays"
+                fi
+            fi
+            echo "Node for Hermes: ${'$'}PKG (Hermes pins ${'$'}{WANT:-unknown})"
+            # An older nodejsNN this step put in apk's world would conflict with the new one.
+            if [ "${'$'}PKG" != nodejs ]; then
+                sed -i -E "/^nodejs[0-9]+${'$'}/{/^${'$'}PKG${'$'}/!d}" /etc/apk/world
+            fi
+            apk_add "${'$'}PKG" npm
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
