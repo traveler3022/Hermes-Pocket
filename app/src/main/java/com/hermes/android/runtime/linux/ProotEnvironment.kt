@@ -73,9 +73,8 @@ class ProotEnvironment @Inject constructor(
         extraEnv: Map<String, String> = emptyMap(),
         mergeStderr: Boolean = true,
         forApk: Boolean = false,
-        fakeRoot: Boolean = true,
     ): ProcessBuilder =
-        ProcessBuilder(prootArgs(listOf("/bin/sh", "-lc", command), extraEnv, forApk, fakeRoot)).apply {
+        ProcessBuilder(prootArgs(listOf("/bin/sh", "-lc", command), extraEnv, forApk)).apply {
             directory(baseDir)
             redirectErrorStream(mergeStderr)
             environment().apply {
@@ -105,12 +104,7 @@ class ProotEnvironment @Inject constructor(
         )
     }
 
-    private fun prootArgs(
-        guestCommand: List<String>,
-        extraEnv: Map<String, String>,
-        forApk: Boolean = false,
-        fakeRoot: Boolean = true,
-    ): List<String> {
+    private fun prootArgs(guestCommand: List<String>, extraEnv: Map<String, String>, forApk: Boolean = false): List<String> {
         prepareHost()
         val args = mutableListOf(prootBinary.absolutePath, "--kill-on-exit")
         // apk-tools 3 commits its db with O_TMPFILE + linkat() on /proc/self/fd, which
@@ -119,11 +113,8 @@ class ProotEnvironment @Inject constructor(
         // it: git and uv read back their own objects wrong through it, so `hermes update`
         // failed on the phone. Links it made earlier still read fine without it.
         if (forApk) args += "--link2symlink"
-        // Fake root (proot's fake_id0) makes proot stop at the end of every stat, access and
-        // get*id call as well, to rewrite owners and ids: about twice the work for each file
-        // check. Commands that need root (apk) keep it; [fakeRoot] false runs as the app's uid.
-        if (fakeRoot) args += "-0"
         args += listOf(
+            "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev",
             "-b", "/proc",

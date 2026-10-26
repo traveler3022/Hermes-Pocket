@@ -350,9 +350,7 @@ class ProotLinuxRuntime @Inject constructor(
         val logFile = environment.guestFile(GATEWAY_LOG)
         logFile.parentFile?.mkdirs()
         val process = withContext(Dispatchers.IO) {
-            // Without fake root: Hermes starts and checks files with fewer proot stops. Hermes
-            // doesn't need root; package installs (apk) still go through the app with it.
-            environment.processBuilder(command = GATEWAY_SCRIPT, mergeStderr = false, fakeRoot = false)
+            environment.processBuilder(command = GATEWAY_SCRIPT, mergeStderr = false)
                 .redirectError(ProcessBuilder.Redirect.to(logFile))
                 .start()
         }
@@ -726,9 +724,6 @@ class ProotLinuxRuntime @Inject constructor(
             export DISPLAY=:99
             # Settings the app owns (BROWSER_CDP_URL, …). Env beats config.yaml, so the app
             # never has to spend seconds in `hermes config set` to change them.
-            # Hermes adds --no-sandbox for Chromium only when it runs as root (tools/browser_tool_session.py),
-            # and the Chromium sandbox cannot start under proot. gateway.env may still override it.
-            export AGENT_BROWSER_ARGS="${'$'}{AGENT_BROWSER_ARGS:---no-sandbox,--disable-dev-shm-usage}"
             ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
             [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
             # Kanban, when the user turned it on (Settings › General; LinuxKanban writes the flag).
