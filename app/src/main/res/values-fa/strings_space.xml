@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="space_where_it_goes">فضا کجا رفته؟</string>
+    <string name="space_where_it_goes_hint">همهٔ پوشه‌های لینوکس داخلی، اینکه هرکدوم چیه و پاک کردنش امنه یا نه</string>
+    <string name="space_total" formatted="false">لینوکس داخلی %s جا گرفته</string>
+    <string name="space_scanning">در حال گشتن همهٔ پوشه‌ها…</string>
+    <string name="space_safe">قابل پاک کردن</string>
+    <string name="space_careful">با احتیاط پاک کنید</string>
+    <string name="space_needed">هرمس لازمشان دارد</string>
+    <string name="space_needed_locked">لازم است — اینجا پاک نمی‌شود</string>
+    <string name="space_empty">اینجا چیزی نیست.</string>
+    <string name="space_place_your_files">فایل‌های شما و کارهای ایجنت</string>
+    <string name="space_place_your_files_desc">دانلودها، پروژه‌ها و هرچه ایجنت در پوشهٔ خانه ساخته.</string>
+    <string name="space_place_uploads">فایل‌های فرستاده‌شده در چت</string>
+    <string name="space_place_uploads_desc">پیوست‌های شما و هرمس در چت‌ها. در چت‌های قدیمی دیگر باز نمی‌شوند.</string>
+    <string name="space_place_hermes_made">فایل‌هایی که هرمس ساخته</string>
+    <string name="space_place_hermes_made_desc">عکس و صدای ساخته‌شده، اسکرین‌شات‌ها، دانلودها، فایل‌های موقت کار، کش‌ها و لاگ‌ها.</string>
+    <string name="space_place_caches">کش برنامه‌ها</string>
+    <string name="space_place_caches_desc">دانلودهایی که برنامه‌ها برای سرعت نگه می‌دارند: pip، npm، مدل‌های هوش مصنوعی، مرورگرها. هر وقت لازم شود دوباره دانلود می‌شوند.</string>
+    <string name="space_place_temp">فایل‌های موقت و لاگ‌ها</string>
+    <string name="space_place_temp_desc">جامانده از برنامه‌ها. بعداً به کاری نمی‌آیند.</string>
+    <string name="space_place_installed">برنامه‌هایی که ایجنت نصب کرده</string>
+    <string name="space_place_installed_desc">ابزارهایی که با pip، npm، cargo و مانند آن نصب شده‌اند. هرمس کار می‌کند؛ مهارتی که از آن استفاده می‌کرد دوباره نصبش می‌کند یا کار نمی‌کند.</string>
+    <string name="space_place_backups">پشتیبان‌های هرمس</string>
+    <string name="space_place_backups_desc">کپی داده‌های هرمس از قبل از به‌روزرسانی‌ها و تعمیرها. فقط برای برگشتن لازم است.</string>
+    <string name="space_place_hermes">خود هرمس</string>
+    <string name="space_place_hermes_desc">ایجنت، پایتون و ابزارهایش.</string>
+    <string name="space_place_hermes_data">داده‌های هرمس</string>
+    <string name="space_place_hermes_data_desc">چت‌ها، حافظه، تنظیمات، مهارت‌ها و کلیدها.</string>
+    <string name="space_place_system">سیستم لینوکس</string>
+    <string name="space_place_system_desc">لینوکس داخلی، برنامه‌هایش و تنظیماتشان.</string>
+    <string name="space_delete_title">%1$s پاک شود؟</string>
+    <string name="space_delete_text">%1$s مورد برای همیشه پاک می‌شود.</string>
+    <string name="space_delete_careful">بعضی‌شان برنامه یا پشتیبان هستند: چیزی که از آن‌ها استفاده می‌کرد تا نصب دوباره ممکن است کار نکند.</string>
+    <string name="space_deleting">در حال پاک کردن…</string>
+    <string name="space_hint_models">مدل‌های هوش مصنوعی دانلودشده</string>
+    <string name="space_hint_browsers">مرورگرهای دانلودشده برای خودکارسازی</string>
+    <string name="space_hint_python">دانلودهای بسته‌های پایتون</string>
+    <string name="space_hint_node">بسته‌های Node.js</string>
+    <string name="space_hint_python_env">یک محیط پایتون با بسته‌هایش</string>
+</resources>

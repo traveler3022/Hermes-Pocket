@@ -36,6 +36,7 @@ import com.hermes.android.data.SessionRepository
 import com.hermes.android.data.SetupState
 import com.hermes.android.data.StorageCleaner
 import com.hermes.android.data.StorageFiles
+import com.hermes.android.data.StorageSpace
 import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.achievements.Achievements
 import com.hermes.android.domain.session.ArchivedChats
@@ -78,6 +79,7 @@ import com.hermes.android.domain.setup.ProviderSetup
 import com.hermes.android.domain.setup.SetupProgress
 import com.hermes.android.domain.storage.FileCleaner
 import com.hermes.android.domain.storage.JunkCleaner
+import com.hermes.android.domain.storage.SpaceExplorer
 import com.hermes.android.domain.updates.AppUpdates
 import com.hermes.android.gateway.RemoteFiles
 import com.hermes.android.service.AppForegroundState
@@ -210,6 +212,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindFileCleaner(impl: StorageFiles): FileCleaner
+
+    @Binds
+    abstract fun bindSpaceExplorer(impl: StorageSpace): SpaceExplorer
 
     @Binds
     abstract fun bindDownloads(impl: DownloadStorage): Downloads

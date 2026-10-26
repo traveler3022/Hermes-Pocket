@@ -535,6 +535,13 @@ private fun HermesNavHost(
         composable("storage") {
             com.hermes.android.ui.screen.StorageScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+                onOpenSpace = dropUnlessResumed { navController.navigate("storage/space") },
+            )
+        }
+
+        composable("storage/space") {
+            com.hermes.android.ui.screen.StorageSpaceScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }
 

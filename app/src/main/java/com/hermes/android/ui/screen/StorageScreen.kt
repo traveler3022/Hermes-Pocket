@@ -102,6 +102,7 @@ import com.hermes.android.ui.component.CacheChartState
 import com.hermes.android.ui.component.EaseOutQuint
 import com.hermes.android.ui.component.roundPercents
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.icons.automirrored.filled.ArrowForwardIos
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.ExpandMore
 import com.hermes.android.ui.viewmodel.StorageEvent
@@ -206,6 +207,7 @@ private fun kindTitle(kind: JunkKind): String = when (kind) {
 @Composable
 fun StorageScreen(
     onNavigateBack: () -> Unit,
+    onOpenSpace: () -> Unit = {},
     viewModel: StorageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -296,6 +298,7 @@ fun StorageScreen(
                     },
                 )
             }
+            item(key = "space") { SpaceEntryRow(onClick = onOpenSpace) }
             if (state.calculating) {
                 items(5) { LoadingSectionRow() }
             } else {
@@ -407,6 +410,38 @@ private fun DeletePickedButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(stringResource(R.string.delete), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+    }
+}
+
+/** The way to "Where the space goes": every folder of the built-in Linux, not only leftovers. */
+@Composable
+private fun SpaceEntryRow(onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 21.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.space_where_it_goes),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    stringResource(R.string.space_where_it_goes_hint),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForwardIos,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 }
 

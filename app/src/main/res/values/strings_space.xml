@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="space_where_it_goes">Where the space goes</string>
+    <string name="space_where_it_goes_hint">Every folder of the built-in Linux, what it is and whether it may go</string>
+    <string name="space_total" formatted="false">The built-in Linux takes %s</string>
+    <string name="space_scanning">Looking through every folder…</string>
+    <string name="space_safe">Safe to delete</string>
+    <string name="space_careful">Delete with care</string>
+    <string name="space_needed">Hermes needs these</string>
+    <string name="space_needed_locked">Needed — can\'t be deleted here</string>
+    <string name="space_empty">Nothing here.</string>
+    <string name="space_place_your_files">Your files and the agent\'s work</string>
+    <string name="space_place_your_files_desc">Downloads, projects and everything the agent made in the home folder.</string>
+    <string name="space_place_uploads">Files sent in chats</string>
+    <string name="space_place_uploads_desc">What you and Hermes attached in chats. Old chats will show them as missing.</string>
+    <string name="space_place_hermes_made">Files Hermes made</string>
+    <string name="space_place_hermes_made_desc">Generated images and audio, screenshots, downloads, scratch files, caches and logs.</string>
+    <string name="space_place_caches">Program caches</string>
+    <string name="space_place_caches_desc">Downloads programs keep to go faster: pip, npm, AI models, browsers. Downloaded again when needed.</string>
+    <string name="space_place_temp">Temporary files and logs</string>
+    <string name="space_place_temp_desc">Left behind by programs. Nothing needs them later.</string>
+    <string name="space_place_installed">Programs the agent installed</string>
+    <string name="space_place_installed_desc">Tools installed with pip, npm, cargo and the like. Hermes keeps working; a skill that used one installs it again or stops.</string>
+    <string name="space_place_backups">Hermes backups</string>
+    <string name="space_place_backups_desc">Copies of Hermes\' data from before updates and repairs. Only needed to go back.</string>
+    <string name="space_place_hermes">Hermes itself</string>
+    <string name="space_place_hermes_desc">The agent, its Python and its tools.</string>
+    <string name="space_place_hermes_data">Hermes data</string>
+    <string name="space_place_hermes_data_desc">Chats, memory, settings, skills and keys.</string>
+    <string name="space_place_system">Linux system</string>
+    <string name="space_place_system_desc">The built-in Linux, its programs and their settings.</string>
+    <string name="space_delete_title">Delete %1$s?</string>
+    <string name="space_delete_text">%1$s items will be deleted for good.</string>
+    <string name="space_delete_careful">Some of them are programs or backups: what used them may stop working until it is installed again.</string>
+    <string name="space_deleting">Deleting…</string>
+    <string name="space_hint_models">AI models downloaded by programs</string>
+    <string name="space_hint_browsers">Browsers downloaded for automation</string>
+    <string name="space_hint_python">Python package downloads</string>
+    <string name="space_hint_node">Node.js packages</string>
+    <string name="space_hint_python_env">A Python environment with its packages</string>
+</resources>
