@@ -500,6 +500,9 @@ internal fun InputBar(
                         },
                         contentDescription = stringResource(R.string.stop),
                         filled = true,
+                        // The same blue as Send: the theme's primary is a pale sky blue in
+                        // dark Carbon, where the white square sat at 2.8:1.
+                        discColor = SendBlue,
                     ) {
                         Icon(
                             Icons.Default.Stop,

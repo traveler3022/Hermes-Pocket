@@ -58,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -806,31 +805,6 @@ fun ChatScreen(
                 }
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
-            // Feature #4: Scroll-to-bottom FAB
-            floatingActionButton = {
-                AnimatedVisibility(
-                    visible = showScrollToBottom,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            scope.launch {
-                                if (visibleMessages.isNotEmpty()) {
-                                    listState.animateScrollToItem(visibleMessages.lastIndex)
-                                }
-                            }
-                        },
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowDown,
-                            contentDescription = stringResource(R.string.scroll_to_bottom),
-                        )
-                    }
-                }
-            },
         ) { padding ->
             // Only the message list runs under the top bar; anything shown above
             // it (banners, the loading skeleton) keeps the bar's space clear.
@@ -891,11 +865,19 @@ fun ChatScreen(
                     // Message list
                     val copiedToast = stringResource(R.string.copied)
                     val codeCopiedToast = stringResource(R.string.code_copied)
+                    // The list and its scroll-to-bottom button share a box, so the button sits
+                    // at the foot of the list, above the composer and with it above the
+                    // keyboard. As the Scaffold's FAB it was placed at the screen's foot, on
+                    // top of the composer's send button.
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             // HxSpace.screen, the same inset every other screen
                             // uses. The chat had a hand-written 12dp, which is
                             // why its text ran to the edges while the rest of
@@ -1076,6 +1058,30 @@ fun ChatScreen(
                             )
                             Spacer(modifier = Modifier.fillParentMaxHeight(spacerFraction))
                         }
+                    }
+                    // Feature #4: scroll-to-bottom, in the header buttons' style. Named in full:
+                    // inside this Column the ColumnScope overload would be picked, and fail.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showScrollToBottom,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 8.dp),
+                    ) {
+                        HxHeaderCircleButton(
+                            icon = Icons.Default.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.scroll_to_bottom),
+                            onClick = {
+                                scope.launch {
+                                    if (visibleMessages.isNotEmpty()) {
+                                        listState.animateScrollToItem(visibleMessages.lastIndex)
+                                    }
+                                }
+                            },
+                            size = 40.dp,
+                        )
+                    }
                     }
                 }
 

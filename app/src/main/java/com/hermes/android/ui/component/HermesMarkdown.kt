@@ -52,7 +52,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -113,6 +115,8 @@ fun HermesMarkdown(
     linkColor: Color = MaterialTheme.colorScheme.primary,
     persianDigits: Boolean = stringResource(R.string.ui_language) == "fa",
     math: Boolean = true,
+    /** The chat search's query; blank marks nothing. */
+    highlight: String = "",
 ) {
     val parser = remember { IncrementalMdParser() }
     val blocks = remember(markdown) { footnotesLast(parser.parse(markdown)) }
@@ -142,6 +146,9 @@ fun HermesMarkdown(
             onCodeBg = MaterialTheme.colorScheme.onSurfaceVariant,
             markBg = MaterialTheme.colorScheme.tertiaryContainer,
             math = math,
+            highlight = highlight,
+            hitColor = MaterialTheme.colorScheme.tertiary,
+            hitBg = MaterialTheme.colorScheme.tertiaryContainer,
         ),
         persianDigits = persianDigits,
     )
@@ -619,7 +626,12 @@ private fun MdText(
     modifier: Modifier = Modifier,
     align: TextAlign = TextAlign.Start,
 ) {
-    val text = remember(raw, inlineStyle) { inline(raw, inlineStyle) }
+    val text = remember(raw, inlineStyle) {
+        inline(raw, inlineStyle).withSearchHits(
+            inlineStyle.highlight,
+            SpanStyle(color = inlineStyle.hitColor, fontWeight = FontWeight.Bold, background = inlineStyle.hitBg),
+        )
+    }
     val direction = remember(raw) {
         when (isRtlText(raw)) {
             true -> TextDirection.Rtl
@@ -686,6 +698,25 @@ private fun MathBlock(latex: String, size: TextUnit, color: Color) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
             LatexAutoWrap(latex = latex, config = config)
+        }
+    }
+}
+
+/**
+ * This text with every occurrence of [query] (ignoring case) given [hit]: the chat
+ * search's mark. Found in the text itself, so the ranges never drift from it.
+ */
+fun AnnotatedString.withSearchHits(query: String, hit: SpanStyle): AnnotatedString {
+    if (query.isBlank()) return this
+    val plain = text
+    var at = plain.indexOf(query, 0, ignoreCase = true)
+    if (at < 0) return this
+    val source = this
+    return buildAnnotatedString {
+        append(source)
+        while (at >= 0) {
+            addStyle(hit, at, at + query.length)
+            at = plain.indexOf(query, at + query.length, ignoreCase = true)
         }
     }
 }

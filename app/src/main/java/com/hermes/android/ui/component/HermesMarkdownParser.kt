@@ -78,6 +78,10 @@ internal data class InlineStyle(
     val markBg: Color = codeBg,
     /** Whether `$…$`, `$$…$$` and `\(…\)` are formulas; off, they stay as typed. */
     val math: Boolean = true,
+    /** The chat search's query: every occurrence is marked, as in the user's own bubbles. */
+    val highlight: String = "",
+    val hitColor: Color = Color.Unspecified,
+    val hitBg: Color = markBg,
 )
 
 /**

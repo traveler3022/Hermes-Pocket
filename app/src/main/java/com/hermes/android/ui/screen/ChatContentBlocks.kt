@@ -143,6 +143,7 @@ import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.component.rememberHighlightedCode
+import com.hermes.android.ui.component.withSearchHits
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -247,9 +248,17 @@ internal fun CodeBlockCard(
     language: String,
     code: String,
     onCopyCode: (String) -> Unit,
+    /** The chat search's query, marked in the code as in the prose around it. */
+    searchQuery: String = "",
 ) {
     val cardColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val highlighted = rememberHighlightedCode(code, language, cardColor)
+    val hit = SpanStyle(
+        color = MaterialTheme.colorScheme.tertiary,
+        fontWeight = FontWeight.Bold,
+        background = MaterialTheme.colorScheme.tertiaryContainer,
+    )
+    val coloured = rememberHighlightedCode(code, language, cardColor)
+    val highlighted = remember(coloured, searchQuery, hit) { coloured.withSearchHits(searchQuery, hit) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),

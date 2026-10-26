@@ -166,6 +166,7 @@ internal fun AssistantMessageBubble(
                                             style = MaterialTheme.typography.bodyLarge.copy(
                                                 color = MaterialTheme.colorScheme.onSurface,
                                             ),
+                                            highlight = searchQuery,
                                         )
                                         is ContentBlock.Image -> InlineImageBlock(
                                             alt = block.alt, url = block.url,
@@ -175,6 +176,7 @@ internal fun AssistantMessageBubble(
                                         is ContentBlock.Code -> CodeBlockCard(
                                             language = block.language, code = block.code,
                                             onCopyCode = onCopyCode,
+                                            searchQuery = searchQuery,
                                         )
                                         is ContentBlock.Mermaid -> MermaidBlockCard(
                                             code = block.code, onCopyCode = onCopyCode,
