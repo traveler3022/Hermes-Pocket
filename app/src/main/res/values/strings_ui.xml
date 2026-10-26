@@ -397,6 +397,7 @@
     <string name="kb">%1$s KB</string>
     <string name="keep_focus_on_optional">Keep focus on (optional)</string>
     <string name="keep_my_current_model_and_finish">Keep my current model and finish</string>
+    <string name="skip_provider_setup">Skip — set it up later in Settings › Models › Providers</string>
     <string name="key">Key</string>
     <string name="keyboard">Keyboard</string>
     <string name="language">Language</string>

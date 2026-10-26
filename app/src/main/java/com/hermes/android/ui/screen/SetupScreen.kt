@@ -281,10 +281,13 @@ private fun ProviderStep(state: SetupUiState, viewModel: SetupViewModel) {
             }
         }
     }
-    if (state.alreadyConfigured) {
-        TextButton(onClick = viewModel::finish, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.keep_my_current_model_and_finish))
-        }
+    // Always offered: a server someone signed in to usually has its model set already, and
+    // the provider check can fail or still be running; Settings › Models › Providers does it later.
+    TextButton(onClick = viewModel::finish, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            if (state.alreadyConfigured) stringResource(R.string.keep_my_current_model_and_finish)
+            else stringResource(R.string.skip_provider_setup),
+        )
     }
 }
 

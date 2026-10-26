@@ -396,6 +396,7 @@
     <string name="kb">%1$s کیلوبایت</string>
     <string name="keep_focus_on_optional">تمرکز روی (اختیاری)</string>
     <string name="keep_my_current_model_and_finish">همین مدل فعلی بماند و تمام</string>
+    <string name="skip_provider_setup">رد شدن — بعداً از تنظیمات › مدل‌ها › پرووایدرها</string>
     <string name="key">کلید</string>
     <string name="keyboard">کیبورد</string>
     <string name="language">زبان</string>
