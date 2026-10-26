@@ -212,7 +212,7 @@ class ProotLinuxRuntime @Inject constructor(
                 environment.guestFile("/root/.hermes/hermes-agent")
                     .listFiles { f -> f.name.startsWith(".git-old-") }
                     ?.forEach(::deleteTree)
-                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT", 60, 90, log, ::report)
+                runStage("hermes", "export HERMES_SKIP_PULL=1\n$HERMES_INSTALL_SCRIPT\n$CONFIG_MIGRATE_SCRIPT", 60, 90, log, ::report)
                 report("verify", "Checking hermes --version…", 92)
                 val version = readHermesVersion()
                     ?: throw InstallFailure("Hermes command not found after the update.")
@@ -490,10 +490,21 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
         private const val NODE_VERIFY = "node --version && npm --version"
 
-        // Brings the checkout to GitHub's main, stopping at the first way that gets there: Hermes'
-        // own `hermes update`, a plain pull, then (after saying what is broken) fresh git data
-        // fetched beside the old one. Nothing is moved or reinstalled; the venv and untracked
-        // files stay. The install script then syncs the dependencies.
+        // What `hermes update` does to config.yaml after a pull (update_cmd_config.py, its unattended
+        // pass): new options get their defaults and the version stamp moves; nothing is asked. A
+        // failure leaves the update standing, as it does there.
+        private val CONFIG_MIGRATE_SCRIPT = """
+            cd /root/.hermes/hermes-agent && venv/bin/python -c "from hermes_cli.config import migrate_config; migrate_config(interactive=False, quiet=True)" </dev/null ||
+                echo "config migration failed — run 'hermes config migrate'"
+        """.trimIndent()
+
+        // Brings the checkout to GitHub's main, stopping at the first way that gets there: a plain
+        // pull, then (after saying what is broken) fresh git data fetched beside the old one.
+        // Nothing is moved or reinstalled; the venv and untracked files stay. The install script
+        // then syncs the dependencies and CONFIG_MIGRATE_SCRIPT brings config.yaml up to date.
+        // Not `hermes update`: its dependency step fetches Hermes' own Python, Node and ffmpeg
+        // (~960 MB this runtime never runs) and its npm self-install aborted under proot
+        // ("double free or corruption") while every other step was fine.
         private val HERMES_UPDATE_SCRIPT = """
             export HERMES_HOME=/root/.hermes
             REPO="${'$'}HERMES_HOME/hermes-agent"
@@ -537,23 +548,14 @@ class ProotLinuxRuntime @Inject constructor(
             done_with() { drop_broken_node; fix_pip; echo "== Updated by: ${'$'}1"; exit 0; }
             at_target && healthy && done_with "nothing to do, already the newest"
 
-            echo "== [1/3] hermes update"
-            if [ -x "${'$'}REPO/venv/bin/hermes" ]; then
-                (cd "${'$'}REPO" && export UV_LINK_MODE=copy && t 900 "${'$'}REPO/venv/bin/hermes" update --yes --no-gateway-restart </dev/null) || echo "hermes update failed (exit ${'$'}?)"
-                drop_broken_node
-                at_target && healthy && done_with "hermes update"
-            else
-                echo "hermes command missing — skipping"
-            fi
-
-            echo "== [2/3] git pull from GitHub"
+            echo "== [1/2] git pull from GitHub"
             # A step killed by its timeout can leave git children and index.lock behind; clear both.
             pkill -x git 2>/dev/null && sleep 1
             find "${'$'}REPO/.git" -maxdepth 2 -name '*.lock' -delete 2>/dev/null
             t 600 git -C "${'$'}REPO" pull --ff-only "${'$'}REMOTE" "${'$'}BRANCH" </dev/null || echo "git pull failed (exit ${'$'}?)"
             at_target && healthy && done_with "git pull"
 
-            echo "== [3/3] diagnose and repair the git data"
+            echo "== [2/2] diagnose and repair the git data"
             if [ ! -d "${'$'}REPO/.git" ]; then
                 echo "diagnosis: ${'$'}REPO/.git is missing"
             else
