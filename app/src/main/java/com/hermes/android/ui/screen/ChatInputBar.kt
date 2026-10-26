@@ -455,14 +455,19 @@ internal fun InputBar(
                     // moves under a thumb when Send appears beside it.
                     if (text.isNotBlank()) {
                         Box {
-                            IconButton(
+                            // The same disc as Send when idle, so it reads as Send; the
+                            // menu under it asks which kind of send is meant.
+                            ComposerDiscButton(
                                 onClick = { sendChoiceOpen = true },
-                                modifier = Modifier.size(48.dp),
+                                contentDescription = stringResource(R.string.send_options),
+                                filled = true,
+                                discColor = SendBlue,
                             ) {
                                 Icon(
                                     HxIcons.ArrowUp,
-                                    contentDescription = stringResource(R.string.send_options),
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White,
                                 )
                             }
                             DropdownMenu(

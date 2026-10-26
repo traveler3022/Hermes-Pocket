@@ -142,8 +142,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.hermes.android.ui.component.ContentBlock
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.parseContentBlocks
-import com.hermes.android.ui.component.rememberHighlightedCode
-import com.hermes.android.ui.component.withSearchHits
+import com.hermes.android.ui.component.HermesCodeBlock
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -251,48 +250,7 @@ internal fun CodeBlockCard(
     /** The chat search's query, marked in the code as in the prose around it. */
     searchQuery: String = "",
 ) {
-    val cardColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val hit = SpanStyle(
-        color = MaterialTheme.colorScheme.tertiary,
-        fontWeight = FontWeight.Bold,
-        background = MaterialTheme.colorScheme.tertiaryContainer,
-    )
-    val coloured = rememberHighlightedCode(code, language, cardColor)
-    val highlighted = remember(coloured, searchQuery, hit) { coloured.withSearchHits(searchQuery, hit) }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = cardColor,
-    ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = language.ifBlank { "code" },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { onCopyCode(code) }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.copy_code),
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Text(
-                text = highlighted,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-            )
-        }
-    }
+    HermesCodeBlock(language = language, code = code, onCopy = onCopyCode, searchQuery = searchQuery)
 }
 
 @Composable

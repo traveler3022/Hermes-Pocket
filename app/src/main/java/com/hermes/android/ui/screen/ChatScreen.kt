@@ -643,14 +643,10 @@ fun ChatScreen(
                                 )
                             )
                         },
+                        // Red text, as every other delete in the app confirms.
                         confirmButton = {
-                            Button(
-                                onClick = { viewModel.drawerConfirmDelete() },
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                ),
-                            ) {
-                                Text(stringResource(R.string.delete))
+                            TextButton(onClick = { viewModel.drawerConfirmDelete() }) {
+                                Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
                         dismissButton = {
@@ -753,7 +749,8 @@ fun ChatScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.stats)) },
+                                    // Named as the sheet it opens is titled.
+                                    text = { Text(stringResource(R.string.context)) },
                                     leadingIcon = { Icon(Icons.Default.DataUsage, contentDescription = null) },
                                     onClick = {
                                         showOverflow = false
@@ -854,11 +851,24 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth().padding(8.dp),
                             shape = RoundedCornerShape(8.dp),
                         ) {
-                            Text(
-                                text = notif.text ?: "",
-                                modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            // A notice the server sends with no time limit stays until the
+                            // server clears it, so the reader can put it away too.
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = notif.text ?: "",
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                IconButton(onClick = viewModel::dismissNotification) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = stringResource(R.string.close),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
 

@@ -223,7 +223,12 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
             )
         }
 
-        is MdBlock.Code -> CodeBlock(block, body, base, theme.codeBg, theme.onCode, muted)
+        is MdBlock.Code -> HermesCodeBlock(
+            language = block.language,
+            code = block.code,
+            modifier = Modifier.padding(vertical = 6.dp),
+            searchQuery = inlineStyle.highlight,
+        )
 
         is MdBlock.Math -> if (inlineStyle.math) {
             MathBlock(block.latex, base * 1.15f, body.color)
@@ -258,7 +263,12 @@ private fun MdBlockView(block: MdBlock, theme: MdTheme) {
                 }
                 MdText(
                     raw = block.text,
-                    style = body.copy(color = muted, fontStyle = FontStyle.Italic),
+                    // Persian has no italic (Vazirmatn ships none, so it was a synthetic slant
+                    // that bent the letters); a right-to-left quote is told apart by its bar and colour.
+                    style = body.copy(
+                        color = muted,
+                        fontStyle = if (isRtlText(block.text) == true) FontStyle.Normal else FontStyle.Italic,
+                    ),
                     inlineStyle = inlineStyle,
                     modifier = Modifier.weight(1f),
                 )
@@ -423,54 +433,6 @@ private fun BlockRow(text: String, content: @Composable () -> Unit) {
         null -> fallback
     }
     CompositionLocalProvider(LocalLayoutDirection provides direction) { content() }
-}
-
-@Composable
-private fun CodeBlock(
-    block: MdBlock.Code,
-    style: TextStyle,
-    base: TextUnit,
-    codeBg: Color,
-    onCode: Color,
-    muted: Color,
-) {
-    // Code is always LTR, whatever the surrounding prose direction is.
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Column(
-            Modifier
-                .padding(vertical = 6.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(codeBg),
-        ) {
-            if (block.language.isNotBlank()) {
-                Text(
-                    text = block.language,
-                    style = style.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = base * 0.82f,
-                        color = muted,
-                    ),
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp),
-                )
-            }
-            Box(
-                Modifier
-                    .padding(10.dp)
-                    .horizontalScroll(rememberScrollState()),
-            ) {
-                Text(
-                    text = rememberHighlightedCode(block.code, block.language, codeBg),
-                    style = style.copy(
-                        fontFamily = FontFamily.Monospace,
-                        color = onCode,
-                        lineHeight = base * 1.5f,
-                        textDirection = TextDirection.Ltr,
-                    ),
-                    softWrap = false,
-                )
-            }
-        }
-    }
 }
 
 /**

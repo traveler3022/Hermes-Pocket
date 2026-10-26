@@ -63,6 +63,11 @@ class ChatViewModel @Inject constructor(
     private val _notification = MutableStateFlow<NotificationUi?>(null)
     val notification: StateFlow<NotificationUi?> = _notification.asStateFlow()
 
+    /** The reader closed the notice banner; a later notice shows again. */
+    fun dismissNotification() {
+        _notification.value = null
+    }
+
     val slashCommands: StateFlow<List<SlashCommandSuggestion>> get() = slashDelegate.suggestions
 
     private var eventCollectionJob: Job? = null
