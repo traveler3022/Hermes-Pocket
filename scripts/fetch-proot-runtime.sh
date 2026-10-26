@@ -24,8 +24,8 @@ fetch_deb() {
 while read -r abi arch alpine_arch proot_sha talloc_sha shmem_sha alpine_sha; do
   dir="$WORK/$abi"
   mkdir -p "$dir"
-  fetch_deb "$dir" "pool/main/p/proot/proot_5.1.107.101_${arch}.deb" "$proot_sha"
-  fetch_deb "$dir" "pool/main/libt/libtalloc/libtalloc_2.5.0_${arch}.deb" "$talloc_sha"
+  fetch_deb "$dir" "pool/main/p/proot/proot_5.1.107.92_${arch}.deb" "$proot_sha"
+  fetch_deb "$dir" "pool/main/libt/libtalloc/libtalloc_2.4.3_${arch}.deb" "$talloc_sha"
   fetch_deb "$dir" "pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_${arch}.deb" "$shmem_sha"
 
   prefix="$dir/data/data/com.termux/files/usr"
@@ -42,6 +42,6 @@ while read -r abi arch alpine_arch proot_sha talloc_sha shmem_sha alpine_sha; do
   install -m 0644 "$dir/alpine.tar.gz" "$ASSETS/alpine-minirootfs-$abi.tar.gz"
   ls -l "$out" "$ASSETS/alpine-minirootfs-$abi.tar.gz"
 done <<'EOF'
-arm64-v8a aarch64 aarch64 a28355e9be257e1f87f4e9294b3118470d4fd7a5442fed8b278f4443c83407d7 556591f43bb773ad8777e1a29522640866a55f95dab71914418b94a8c58ad5a7 0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6 b17a57958e29735ff0e6e64254d958e65903687a70ca30cc430b33a965ad49d7
-x86_64 x86_64 x86_64 85adb8d0d2e1edc6c56e60c17136adf05e54ce75f69407ec7116a4c5997eaed5 b8c6d95f20075dc1f9ec6573575b2444e8d526e48e0d8d6d5cf4e071e6e06530 ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797 6fc0e3639a1c01f156970d7626aab90bc90697117069dbc39ad880b84efa319a
+arm64-v8a aarch64 aarch64 1f1c983509701f6826f568482c70673ee453a9ba38c9f5fa445a472d6b7524e9 ac81ad623d74c209718b9f3acb2dd702cc8a88c431e820d212229910b4db29da 0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6 b17a57958e29735ff0e6e64254d958e65903687a70ca30cc430b33a965ad49d7
+x86_64 x86_64 x86_64 70236632826c30ec0245082b633bbc7ef1e9fa5531bd51bd4f20231bfcdc999b 7ca2eaae2e53b28228a01301bc410b62845403d6317c25b8e0a7f40681de0628 ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797 6fc0e3639a1c01f156970d7626aab90bc90697117069dbc39ad880b84efa319a
 EOF
