@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,9 +62,9 @@ internal fun InteractiveRequestCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(HxRadius.md))
             .background(accent.copy(alpha = if (settled) 0.05f else 0.1f))
-            .border(1.dp, accent.copy(alpha = if (settled) 0.2f else 0.35f), RoundedCornerShape(12.dp)),
+            .border(1.dp, accent.copy(alpha = if (settled) 0.2f else 0.35f), RoundedCornerShape(HxRadius.md)),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -180,7 +181,7 @@ private fun ClarifyAnswerInput(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(HxRadius.sm))
                 .clickable {
                     onPickedChange(
                         when {

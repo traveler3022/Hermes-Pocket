@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -210,7 +211,7 @@ internal fun MessageBubble(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                         .horizontalScroll(rememberScrollState()),
                 ) {
@@ -260,9 +261,9 @@ internal fun MessageBubble(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(HxRadius.md))
                     .background(subagentAccent.copy(alpha = 0.06f))
-                    .border(1.dp, subagentAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .border(1.dp, subagentAccent.copy(alpha = 0.2f), RoundedCornerShape(HxRadius.md))
                     .clickable(enabled = openSheet != null || isLongSubagent) {
                         if (openSheet != null) {
                             openSheet()

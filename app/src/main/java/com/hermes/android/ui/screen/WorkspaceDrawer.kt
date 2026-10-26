@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.ui.res.stringResource
@@ -123,7 +124,7 @@ internal fun WorkspaceDrawerSheet(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .clickable(onClick = onProfileClick)
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -290,7 +291,7 @@ private fun DrawerSessionRow(
             // colour alone — blue text read as a link, and colour is no cue at
             // all for someone who cannot tell it apart.
             .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(HxRadius.sm))
             .then(
                 if (isActive) Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 else Modifier,

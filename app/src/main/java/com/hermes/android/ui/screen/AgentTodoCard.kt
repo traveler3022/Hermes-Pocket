@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
@@ -93,7 +94,7 @@ internal fun AgentTodoCard(todos: List<TodoItemUi>) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(HxRadius.md),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(

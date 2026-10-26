@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,7 +85,7 @@ fun SideQuestionSheet(
             Spacer(Modifier.height(HxSpace.sm))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(HxRadius.md),
                 color = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 Column(Modifier.padding(HxSpace.md)) {

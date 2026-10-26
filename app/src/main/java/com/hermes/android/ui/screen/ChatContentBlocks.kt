@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -165,7 +166,7 @@ internal fun InlineImageBlock(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp)),
+            .clip(RoundedCornerShape(HxRadius.md)),
     ) {
         // SubcomposeAsyncImage (not AsyncImage) so a load that never resolves —
         // e.g. the server screenshot download endpoint being unreachable — shows
@@ -177,7 +178,7 @@ internal fun InlineImageBlock(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 120.dp, max = 320.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(HxRadius.md))
                 .clickable { onImageClick(url) },
             contentScale = ContentScale.Fit,
             loading = {
@@ -262,7 +263,7 @@ internal fun MermaidBlockCard(
     // code card header so the user can still copy the diagram source.
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
@@ -340,7 +341,7 @@ internal fun HtmlBlockCard(
     }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
@@ -432,7 +433,7 @@ internal fun ArtifactCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(

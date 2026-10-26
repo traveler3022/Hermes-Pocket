@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -53,8 +54,8 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
+            .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(HxRadius.md))
+            .clip(RoundedCornerShape(HxRadius.md))
             .background(toolAccent.copy(alpha = 0.07f)),
     ) {
         Column(

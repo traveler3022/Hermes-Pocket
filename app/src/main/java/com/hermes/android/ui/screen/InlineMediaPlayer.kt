@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -285,7 +286,7 @@ internal fun InlineVideoPlayer(url: String, name: String, onDownload: () -> Unit
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(HxRadius.md))
                 .background(Color.Black),
         ) {
             if (player == null) {

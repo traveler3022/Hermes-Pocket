@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -126,7 +127,7 @@ internal fun ReactionSlot(
             ReactionBadge(
                 reactions = reactions,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(HxRadius.sm))
                     .clickable(enabled = enabled, role = Role.Button) { open = true }
                     .padding(horizontal = 2.dp),
             )

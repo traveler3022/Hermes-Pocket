@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -69,9 +70,9 @@ internal fun UserMessageBubble(
     var showMenu by remember { mutableStateOf(false) }
 
     val bubbleShape = if (isLastInGroup) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = HxRadius.md, topEnd = HxRadius.md, bottomStart = HxRadius.md, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(16.dp)
+        RoundedCornerShape(HxRadius.md)
     }
     // A soft primary tint (no hard fill or border) with a gentle shadow — readable
     // in every theme because the tint is translucent and the text stays onSurface.
@@ -115,7 +116,7 @@ internal fun UserMessageBubble(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .heightIn(max = 200.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
+                                                .clip(RoundedCornerShape(HxRadius.sm)),
                                             contentScale = ContentScale.Fit,
                                         )
                                     } else {
@@ -123,7 +124,7 @@ internal fun UserMessageBubble(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(HxRadius.sm))
                                                 .background(bubbleTextColor.copy(alpha = 0.15f))
                                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                                         ) {

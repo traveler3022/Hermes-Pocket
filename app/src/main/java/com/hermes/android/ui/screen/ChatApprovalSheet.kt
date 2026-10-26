@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -83,7 +84,7 @@ internal fun ApprovalSheet(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -117,7 +118,7 @@ internal fun ApprovalSheet(
             // language, because it's shell text. A long script takes only the
             // space left and scrolls, so the answer buttons stay on screen.
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(HxRadius.sm),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
             ) {

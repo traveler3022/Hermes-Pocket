@@ -1,5 +1,6 @@
 package com.hermes.android.ui.component
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -386,8 +387,8 @@ private fun MdAlert(block: MdBlock.Alert, theme: MdTheme) {
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 6.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(1.dp, theme.rule, RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(HxRadius.sm))
+                .border(1.dp, theme.rule, RoundedCornerShape(HxRadius.sm))
                 .background(theme.codeBg.copy(alpha = 0.25f))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
@@ -474,7 +475,7 @@ private fun MdTable(
     Box(
         Modifier
             .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(HxRadius.sm))
             .background(inlineStyle.codeBg.copy(alpha = 0.45f))
             .horizontalScroll(rememberScrollState()),
     ) {

@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.os.SystemClock
 import android.app.Activity
 import android.content.Context
@@ -271,7 +272,7 @@ internal fun InputBar(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
                     .heightIn(max = 260.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(HxRadius.md))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 items(suggestions, key = { it.command }) { cmd ->
@@ -363,8 +364,8 @@ internal fun InputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(26.dp))
-                .clip(RoundedCornerShape(26.dp))
+                .hxSoftShadow(radius = 10.dp, shape = RoundedCornerShape(HxRadius.lg))
+                .clip(RoundedCornerShape(HxRadius.lg))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(4.dp),
         ) {

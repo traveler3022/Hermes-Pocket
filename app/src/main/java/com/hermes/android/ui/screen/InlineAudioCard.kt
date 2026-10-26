@@ -3,6 +3,7 @@
 // AppleMusicShared.kt for the thin slider and the press-inflate.
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.annotation.OptIn
@@ -112,7 +113,7 @@ internal fun InlineAudioCard(
     val title = metadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: name
     val artist = metadata?.artist?.toString()?.takeIf { it.isNotBlank() }
 
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = background, contentColor = Color.White) {
+    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(HxRadius.md), color = background, contentColor = Color.White) {
         Column(modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(

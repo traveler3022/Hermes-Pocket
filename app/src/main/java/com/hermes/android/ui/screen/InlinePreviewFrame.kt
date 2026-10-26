@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.Context
@@ -335,7 +336,7 @@ internal fun InlinePreviewFrame(
                     .fillMaxWidth()
                     .height(height)
                     .alpha(pulse)
-                    .background(colors.onSurface.copy(alpha = 0.04f), RoundedCornerShape(6.dp)),
+                    .background(colors.onSurface.copy(alpha = 0.04f), RoundedCornerShape(HxRadius.sm)),
             )
         } else {
             val bridge = remember(token) {

@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -185,7 +186,7 @@ internal fun ConnectionIndicator(
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
     ) {
         Text(
             text = label,
@@ -241,7 +242,7 @@ private fun StartupProgressIndicator(
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -286,7 +287,7 @@ internal fun AgentWorkingIndicator(label: String) {
     )
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -330,7 +331,7 @@ internal fun ConnectionRetryBanner(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(HxRadius.md),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -404,7 +405,7 @@ internal fun ShimmerSkeleton() {
                     .fillMaxWidth(0.7f)
                     .widthIn(max = 280.dp)
                     .height(48.dp)
-                    .background(shimmerBrush, RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)),
+                    .background(shimmerBrush, RoundedCornerShape(HxRadius.md, 4.dp, HxRadius.md, HxRadius.md)),
             )
         }
         // Fake assistant message (left-aligned, tall)
@@ -417,7 +418,7 @@ internal fun ShimmerSkeleton() {
                     .fillMaxWidth(0.85f)
                     .widthIn(max = 320.dp)
                     .height(80.dp)
-                    .background(shimmerBrush, RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)),
+                    .background(shimmerBrush, RoundedCornerShape(4.dp, HxRadius.md, HxRadius.md, HxRadius.md)),
             )
         }
         // Fake user message
@@ -430,7 +431,7 @@ internal fun ShimmerSkeleton() {
                     .fillMaxWidth(0.5f)
                     .widthIn(max = 200.dp)
                     .height(40.dp)
-                    .background(shimmerBrush, RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)),
+                    .background(shimmerBrush, RoundedCornerShape(HxRadius.md, 4.dp, HxRadius.md, HxRadius.md)),
             )
         }
         // Fake assistant message (left-aligned)
@@ -443,7 +444,7 @@ internal fun ShimmerSkeleton() {
                     .fillMaxWidth(0.9f)
                     .widthIn(max = 350.dp)
                     .height(100.dp)
-                    .background(shimmerBrush, RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)),
+                    .background(shimmerBrush, RoundedCornerShape(4.dp, HxRadius.md, HxRadius.md, HxRadius.md)),
             )
         }
     }

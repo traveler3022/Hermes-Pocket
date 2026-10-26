@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -796,7 +797,7 @@ fun ChatScreen(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(HxRadius.lg),
                         )
                     }
                 }
@@ -849,7 +850,7 @@ fun ChatScreen(
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             },
                             modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(HxRadius.md),
                         ) {
                             // A notice the server sends with no time limit stays until the
                             // server clears it, so the reader can put it away too.
@@ -1187,7 +1188,7 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxHeight().width(322.dp),
                     drawerContainerColor = MaterialTheme.colorScheme.surface,
                     drawerContentColor = MaterialTheme.colorScheme.onSurface,
-                    drawerShape = RoundedCornerShape(topEnd = 30.dp, bottomEnd = 30.dp),
+                    drawerShape = RoundedCornerShape(topEnd = HxRadius.lg, bottomEnd = HxRadius.lg),
                     content = drawerBody,
                 )
             },

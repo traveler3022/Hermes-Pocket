@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import com.hermes.android.ui.design.HxRadius
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -69,7 +70,7 @@ internal fun ImageGenerationPlaceholder(call: ChatMessage.ToolCall, modifier: Mo
             .widthIn(max = if (ratio < 1f) 200.dp else 320.dp)
             .fillMaxWidth()
             .aspectRatio(ratio)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(HxRadius.md))
             .background(base)
             // Read in the draw phase only, so the sweep never recomposes the reply.
             .drawBehind {
