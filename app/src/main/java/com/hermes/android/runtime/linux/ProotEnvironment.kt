@@ -20,6 +20,8 @@ import javax.inject.Singleton
 @Singleton
 class ProotEnvironment @Inject constructor(
     @ApplicationContext private val context: Context,
+    // Lazy: the bridge runs its apk through this class.
+    private val apkBridge: dagger.Lazy<GuestApkBridge>,
 ) {
     val baseDir = File(context.filesDir, "linux")
     val rootfsDir = ProotEnvironment.rootfsDir(context)
@@ -106,12 +108,15 @@ class ProotEnvironment @Inject constructor(
 
     private fun prootArgs(guestCommand: List<String>, extraEnv: Map<String, String>, forApk: Boolean = false): List<String> {
         prepareHost()
+        // Everything but apk itself runs without link2symlink; its apk goes through the app.
+        if (!forApk) apkBridge.get().ensureRunning()
         val args = mutableListOf(prootBinary.absolutePath, "--kill-on-exit")
         // apk-tools 3 commits its db with O_TMPFILE + linkat() on /proc/self/fd, which
         // Android denies in app-private storage ("failed to write database: Permission
         // denied"). proot's handler copies such an fd into a real file instead. Only apk gets
         // it: git and uv read back their own objects wrong through it, so `hermes update`
-        // failed on the phone. Links it made earlier still read fine without it.
+        // failed on the phone (uv still does: proot field test). Links it made earlier still
+        // read fine without it. The agent's and the terminal's apk get it via GuestApkBridge.
         if (forApk) args += "--link2symlink"
         args += listOf(
             "-0",
@@ -132,7 +137,9 @@ class ProotEnvironment @Inject constructor(
         // on UTC: a cron job set for 09:00 fired at 12:30 in Tehran, and the agent read the clock
         // three and a half hours off. The C library takes a POSIX TZ string without any zone database.
         val zone = mapOf("TZ" to posixTimeZone(java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis())))
-        (GuestEnv + zone + extraEnv).forEach { (key, value) -> args += "$key=$value" }
+        // The app's own apk runs have link2symlink already: /usr/local/sbin/apk runs the real one.
+        val direct = if (forApk) mapOf(GuestApkBridge.DIRECT_ENV to "1") else emptyMap()
+        (GuestEnv + zone + direct + extraEnv).forEach { (key, value) -> args += "$key=$value" }
         args += guestCommand
         return args
     }
