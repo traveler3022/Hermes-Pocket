@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,12 +59,17 @@ class VaultViewModel @Inject constructor(
         _uiState.update { it.copy(loading = true, loadError = null) }
         loadJob = viewModelScope.launch {
             try {
-                val sources = async { vault.sources() }
-                val items = async { vault.items() }
+                // coroutineScope, so a failed call is thrown here and caught below; a bare
+                // async would fail the launch itself and crash the app (gateway disconnected).
+                val (sources, items) = coroutineScope {
+                    val sources = async { vault.sources() }
+                    val items = async { vault.items() }
+                    sources.await() to items.await()
+                }
                 _uiState.update {
                     it.copy(
-                        items = items.await(),
-                        managers = sources.await().filter { s -> s.needsUnlock },
+                        items = items,
+                        managers = sources.filter { s -> s.needsUnlock },
                         loading = false,
                     )
                 }
