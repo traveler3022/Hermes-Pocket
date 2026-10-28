@@ -282,7 +282,9 @@
     <string name="every_connect_drop_and_retry_with_what">Every connect, drop and retry, with what the phone was doing at the time — kept on disk across restarts. Copy this when reporting a dropped connection.</string>
     <string name="every_day">Every day</string>
     <string name="every_few_minutes">Every few minutes</string>
-    <string name="every_hour">Every hour</string>
+    <string name="every_hour">Every few hours</string>
+    <string name="every_n_hours">every %1$s h</string>
+    <string name="every_n_hours_at_minute">every %1$s h, at minute %2$s</string>
     <string name="every_key_provider_is_already_connected">Every key provider is already connected.</string>
     <string name="every_min">every %1$s min</string>
     <string name="every_risky_command_asks_for_your">Every risky command asks for your permission before running — the safest mode.</string>

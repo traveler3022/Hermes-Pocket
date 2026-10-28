@@ -281,7 +281,9 @@
     <string name="every_connect_drop_and_retry_with_what">هر اتصال، قطعی و تلاش دوباره، همراه با وضعیت گوشی در همان لحظه — روی حافظه می‌ماند و با بسته شدن برنامه پاک نمی‌شود. موقع گزارش قطعی، همین را کپی کنید.</string>
     <string name="every_day">هر روز</string>
     <string name="every_few_minutes">هر چند دقیقه</string>
-    <string name="every_hour">هر ساعت</string>
+    <string name="every_hour">هر چند ساعت</string>
+    <string name="every_n_hours">هر %1$s ساعت</string>
+    <string name="every_n_hours_at_minute">هر %1$s ساعت، دقیقه‌ی %2$s</string>
     <string name="every_key_provider_is_already_connected">همهٔ پرووایدرهای کلیدی وصل‌اند.</string>
     <string name="every_min">هر %1$s دقیقه</string>
     <string name="every_risky_command_asks_for_your">هر فرمان پرریسک قبل از اجرا از شما اجازه می‌گیرد — امن‌ترین حالت.</string>
