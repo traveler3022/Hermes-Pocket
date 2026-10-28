@@ -79,8 +79,9 @@ class HermesGatewayService : Service() {
     private var cronRearmJob: Job? = null
     private var cronWakeJob: Job? = null
 
-    /** True while the cron alarm's wake holds Hermes up for a job. */
-    private val cronWaking = MutableStateFlow(false)
+    /** Set while the cron alarm's wake holds Hermes up; [jobName] is the job running now. */
+    private data class CronCard(val jobName: String?)
+    private val cronCard = MutableStateFlow<CronCard?>(null)
     private var wakeLock: PowerManager.WakeLock? = null
 
     /** Startup problem or progress to show while not connected (null = derive from state). */
@@ -102,7 +103,7 @@ class HermesGatewayService : Service() {
         // restarts the service on every foreground; when the gateway is already connected
         // nothing re-emits (connect() no-ops, status stays null), so the render loop never
         // ran again and this placeholder stayed pinned as "Connecting…" forever.
-        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value, foregroundState.visible.value, cronWaking.value)
+        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value, foregroundState.visible.value, cronCard.value)
 
         // Proactive notifications: watch gateway events for the whole life of
         // the background connection (ChatViewModel's collector dies with the
@@ -113,10 +114,10 @@ class HermesGatewayService : Service() {
         if (renderJob?.isActive != true) {
             renderJob = scope.launch {
                 combine(
-                    gatewayClient.connectionState, agentEventObserver.work, status, foregroundState.visible, cronWaking,
-                ) { state, work, text, visible, waking -> RenderInput(state, work, text, visible, waking) }
-                    .collectLatest { (state, work, text, visible, waking) ->
-                    render(state, work, text, visible, waking)
+                    gatewayClient.connectionState, agentEventObserver.work, status, foregroundState.visible, cronCard,
+                ) { state, work, text, visible, cron -> RenderInput(state, work, text, visible, cron) }
+                    .collectLatest { (state, work, text, visible, cron) ->
+                    render(state, work, text, visible, cron)
                     delay(RENDER_INTERVAL_MS) // Android drops bursts of updates; tool steps can be rapid.
                 }
             }
@@ -155,7 +156,7 @@ class HermesGatewayService : Service() {
                 merge(
                     gatewayClient.connectionState.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it },
                     agentEventObserver.work.map { it == null }.distinctUntilChanged().filter { it },
-                ).collect { if (!cronWaking.value) rearmCron() } // a wake sets it when done
+                ).collect { if (cronCard.value == null) rearmCron() } // a wake sets it when done
             }
         }
 
@@ -169,7 +170,7 @@ class HermesGatewayService : Service() {
 
     /** Hold Hermes up until the job's minute, fire what is due, set the next alarm. */
     private suspend fun runCronWake(dueAt: Long) {
-        cronWaking.value = true
+        cronCard.value = CronCard(jobName = null)
         try {
             // Hermes that does not come up in time will not: don't keep the CPU awake for it.
             val connected = withTimeoutOrNull(CRON_CONNECT_MAX_MS) {
@@ -177,20 +178,28 @@ class HermesGatewayService : Service() {
             }
             if (connected == null) {
                 Timber.w("[GatewayService] Cron wake: Hermes did not connect in ${CRON_CONNECT_MAX_MS / 60_000} min")
+                notifyCronResult(null, false, tr("Hermes did not start", "Hermes روشن نشد"))
             } else {
                 val wait = dueAt - System.currentTimeMillis()
                 if (wait > 0) delay(wait)
-                withTimeoutOrNull(CRON_RUN_MAX_MS) { cronWake.runDue(dueAt) }
-                    ?: Timber.w("[GatewayService] Cron wake: jobs still running after ${CRON_RUN_MAX_MS / 60_000} min")
+                val runs = withTimeoutOrNull(CRON_RUN_MAX_MS) {
+                    cronWake.runDue(dueAt) { name -> cronCard.value = CronCard(name) }
+                }
+                if (runs == null) {
+                    Timber.w("[GatewayService] Cron wake: jobs still running after ${CRON_RUN_MAX_MS / 60_000} min")
+                    notifyCronResult(cronCard.value?.jobName, false, tr("Still running after 30 minutes", "بعد از ۳۰ دقیقه هنوز تمام نشده"))
+                }
+                runs?.forEach { notifyCronResult(it.name, it.ok, it.detail) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "[GatewayService] Cron wake failed")
+            notifyCronResult(cronCard.value?.jobName, false, e.message)
         } finally {
             withContext(NonCancellable) {
                 rearmCron()
-                cronWaking.value = false
+                cronCard.value = null
             }
         }
         // Woken only for the job: let the process go back to sleep, as it was.
@@ -198,6 +207,42 @@ class HermesGatewayService : Service() {
             Timber.i("[GatewayService] Cron wake done — stopping service")
             stopSelf()
         }
+    }
+
+    /**
+     * What a scheduled run did, left in the shade: a job that runs while the phone sleeps must
+     * never be invisible, or it looks no different from something running behind the user's back.
+     */
+    private fun notifyCronResult(name: String?, ok: Boolean, detail: String?) {
+        val title = when {
+            ok -> tr("Scheduled task done", "کار زمان‌بندی‌شده انجام شد")
+            else -> tr("Scheduled task failed", "کار زمان‌بندی‌شده انجام نشد")
+        }
+        val text = listOfNotNull(name, detail?.takeIf { it.isNotBlank() }).joinToString(" — ")
+            .ifBlank { tr("Tap to open", "برای باز کردن بزنید") }
+        val notification = HermesNotifications.builder(this, CRON_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .build()
+        runCatching {
+            getSystemService(NotificationManager::class.java).notify(CRON_RESULT_ID_BASE + cronResults++, notification)
+        }
+    }
+
+    private var cronResults = 0
+
+    private fun cronNotification(jobName: String?): Notification {
+        val text = jobName ?: tr("Starting Hermes for the job…", "در حال روشن کردن Hermes برای کار…")
+        return HermesNotifications.builder(this, CRON_CHANNEL_ID)
+            .setContentTitle(tr("Hermes is running a scheduled task", "Hermes در حال اجرای کار زمان‌بندی‌شده است"))
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .build()
     }
 
     private suspend fun rearmCron() {
@@ -213,9 +258,9 @@ class HermesGatewayService : Service() {
     /** What the card currently says, so an unchanged render is not re-posted. */
     private var shownKey: String? = null
 
-    private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean, val waking: Boolean)
+    private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean, val cron: CronCard?)
 
-    private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean, waking: Boolean) {
+    private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean, cron: CronCard?) {
         // The app on screen already shows all of this; the card comes up once the user
         // leaves. Not a turn's card, though: it goes up with the turn, on screen or not.
         // Taking it down on screen meant taking the foreground back from the background
@@ -223,7 +268,8 @@ class HermesGatewayService : Service() {
         // after the app leaves the screen (or with the battery exemption). A phone busy
         // with the built-in Linux can miss that, and Hermes was left mid-turn in a
         // background process the system may kill. On screen, entering is always allowed.
-        if (visible && work == null) {
+        // A scheduled run shows its card on screen too: the user sees it happen either way.
+        if (visible && work == null && cron == null) {
             holdWakeLock(false)
             if (shownKey != null) {
                 shownKey = null
@@ -242,11 +288,11 @@ class HermesGatewayService : Service() {
                 holdWakeLock(true)
             }
             // Woken by the cron alarm: in the foreground with the CPU awake until the job is done.
-            waking -> {
-                val line = tr("Running a scheduled task…", "در حال اجرای کار زمان‌بندی‌شده…")
-                if (line != shownKey) {
-                    shownKey = line
-                    promote(statusNotification(line))
+            cron != null -> {
+                val key = "cron:${cron.jobName}"
+                if (key != shownKey) {
+                    shownKey = key
+                    promote(cronNotification(cron.jobName))
                 }
                 holdWakeLock(true)
             }
@@ -367,6 +413,12 @@ class HermesGatewayService : Service() {
         )
         HermesNotifications.ensureChannel(
             this,
+            NotificationChannel(CRON_CHANNEL_ID, tr("Scheduled tasks", "کارهای زمان‌بندی‌شده"), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = tr("Shown whenever a cron job runs, and with what it did", "هر بار که یک کرون اجرا می‌شود، همراه با نتیجه‌اش")
+            },
+        )
+        HermesNotifications.ensureChannel(
+            this,
             NotificationChannel(WORKING_CHANNEL_ID, tr("Working", "در حال کار"), NotificationManager.IMPORTANCE_LOW).apply {
                 description = tr("Shown while Hermes is working on a task", "وقتی Hermes روی کاری کار می‌کند نمایش داده می‌شود")
                 setShowBadge(false)
@@ -456,6 +508,8 @@ class HermesGatewayService : Service() {
     companion object {
         private const val STATUS_CHANNEL_ID = "hermes_gateway_service"
         private const val WORKING_CHANNEL_ID = "hermes_working"
+        private const val CRON_CHANNEL_ID = "hermes_cron"
+        private const val CRON_RESULT_ID_BASE = 7200
         private const val NOTIFICATION_ID = 1
         private const val RENDER_INTERVAL_MS = 400L
         private const val WAKE_LOCK_MAX_MS = 60 * 60 * 1000L

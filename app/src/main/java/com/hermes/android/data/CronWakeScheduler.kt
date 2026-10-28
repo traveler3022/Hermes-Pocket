@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.hermes.android.domain.cron.CronJobs
 import com.hermes.android.domain.cron.CronWake
+import com.hermes.android.domain.cron.CronWake.JobRun
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
@@ -45,7 +46,7 @@ class CronWakeScheduler @Inject constructor(
     // picked again, or its alarm would fire at once, forever.
     private val prefs = context.getSharedPreferences("cron_wake", Context.MODE_PRIVATE)
 
-    private data class Due(val id: String, val atMillis: Long)
+    private data class Due(val id: String, val name: String, val atMillis: Long)
 
     override suspend fun rearm() {
         if (runtime.type != RuntimeType.PROOT_LINUX) {
@@ -63,24 +64,29 @@ class CronWakeScheduler @Inject constructor(
         schedule(next, now)
     }
 
-    override suspend fun runDue(dueAtMillis: Long) {
-        if (runtime.type != RuntimeType.PROOT_LINUX) return
+    override suspend fun runDue(dueAtMillis: Long, onStart: (String) -> Unit): List<JobRun> {
+        if (runtime.type != RuntimeType.PROOT_LINUX) return emptyList()
         val now = System.currentTimeMillis()
         val cutoff = maxOf(dueAtMillis, now) + SLACK_MS
         val due = upcoming(now).filter { it.atMillis <= cutoff }.sortedBy { it.atMillis }
         Timber.i("[CronWake] ${due.size} job(s) due")
-        for (job in due) {
+        val runs = due.map { job ->
+            onStart(job.name)
             try {
                 val outcome = cronJobs.runNow(job.id)
                 Timber.i("[CronWake] Job ${job.id} ran: ${outcome.status ?: "?"}")
+                val ok = outcome.status == null || outcome.status == "ok"
+                JobRun(job.name, ok, outcome.error ?: outcome.status?.takeIf { !ok })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // 409: already running or claimed elsewhere. Either way it is not ours to repeat.
                 Timber.w(e, "[CronWake] Job ${job.id} did not run")
+                JobRun(job.name, false, e.message)
             }
         }
         prefs.edit().putLong(KEY_HANDLED_UNTIL, cutoff).apply()
+        return runs
     }
 
     /** Enabled jobs with a time not handled yet; one missed by up to [CATCH_UP_MS] still counts. */
@@ -98,7 +104,7 @@ class CronWakeScheduler @Inject constructor(
             val id = str("job_id") ?: return@mapNotNull null
             if (str("enabled") == "false" || str("state") == "paused") return@mapNotNull null
             val at = str("next_run_at")?.let(::parseMillis) ?: return@mapNotNull null
-            Due(id, at).takeIf { at > handled && at > now - CATCH_UP_MS }
+            Due(id, str("name") ?: id, at).takeIf { at > handled && at > now - CATCH_UP_MS }
         }
     }
 

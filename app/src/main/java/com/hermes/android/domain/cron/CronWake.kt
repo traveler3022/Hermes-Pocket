@@ -14,8 +14,14 @@ interface CronWake {
      */
     suspend fun rearm()
 
-    /** Fires every enabled job due by [dueAtMillis] (or by now, if later), one after another. */
-    suspend fun runDue(dueAtMillis: Long)
+    /**
+     * Fires every enabled job due by [dueAtMillis] (or by now, if later), one after another.
+     * [onStart] gets each job's name as it begins; the result lists how each one ended.
+     */
+    suspend fun runDue(dueAtMillis: Long, onStart: (String) -> Unit): List<JobRun>
+
+    /** [detail]: the job's error, or its status when that is not "ok". */
+    data class JobRun(val name: String, val ok: Boolean, val detail: String?)
 
     companion object {
         /** Broadcast the alarm sends; the receiver turns it into a wake of the gateway service. */
