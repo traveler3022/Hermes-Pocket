@@ -249,9 +249,10 @@ internal object SpaceWalk {
         val attrs = runCatching {
             Files.readAttributes(root, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
         }.getOrNull() ?: return 0
+        // Also for a picked folder: /tmp/.X11-unix itself holds the running desktop's display socket.
+        val rootName = root.fileName.toString()
+        if (rootName.startsWith(LINK2SYMLINK_PREFIX) || X_ENTRIES.matches(rootName)) return 0
         if (!attrs.isDirectory) {
-            val name = root.fileName.toString()
-            if (name.startsWith(LINK2SYMLINK_PREFIX) || X_ENTRIES.matches(name)) return 0
             return if (runCatching { Files.delete(root) }.isSuccess && attrs.isRegularFile) attrs.size() else 0
         }
         val keepRoot = guest in RULE_DIRS

@@ -120,4 +120,13 @@ class SpaceWalkTest {
         assertEquals(20L, SpaceWalk.delete(rootfs.toPath(), "/root/.cache/uv"))
         assertTrue(l2s.isFile)
     }
+
+    @Test
+    fun aPickedXSocketFolderKeepsTheDisplaySocket() {
+        val rootfs = tmp.newFolder("rootfs")
+        val display = file(rootfs, "/tmp/.X11-unix/X99", 0)
+
+        assertEquals(0L, SpaceWalk.delete(rootfs.toPath(), "/tmp/.X11-unix"))
+        assertTrue(display.exists())
+    }
 }
