@@ -282,6 +282,9 @@
     <string name="every_connect_drop_and_retry_with_what">Every connect, drop and retry, with what the phone was doing at the time — kept on disk across restarts. Copy this when reporting a dropped connection.</string>
     <string name="every_day">Every day</string>
     <string name="every_few_minutes">Every few minutes</string>
+    <string name="only_today">Only today</string>
+    <string name="today_at">today at %1$s</string>
+    <string name="time_passed_today">This time has already passed today</string>
     <string name="every_hour">Every few hours</string>
     <string name="every_n_hours">every %1$s h</string>
     <string name="every_n_hours_at_minute">every %1$s h, at minute %2$s</string>

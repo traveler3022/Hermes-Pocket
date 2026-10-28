@@ -67,6 +67,11 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.CronJob
 import com.hermes.android.ui.viewmodel.CronViewModel
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * Cron Scheduler screen — list, create, edit, pause/resume, delete jobs.
@@ -402,7 +407,7 @@ private fun humanizeCron(schedule: String): String? {
  * [toCron] is the only place the expression gets written, and [parseCron] reads one back
  * so editing an existing job opens on the same controls that would have created it.
  */
-private enum class ScheduleMode { DAILY, DAYS, HOURLY, MINUTES, CUSTOM }
+private enum class ScheduleMode { DAILY, ONCE, DAYS, HOURLY, MINUTES, CUSTOM }
 
 private data class SchedulePick(
     val mode: ScheduleMode,
@@ -424,6 +429,9 @@ private fun SchedulePick.toCron(): String = when (mode) {
         else "$minute $hour * * ${days.sorted().joinToString(",")}"
     ScheduleMode.HOURLY -> if (everyHours <= 1) "$minute * * * *" else "$minute */$everyHours * * *"
     ScheduleMode.MINUTES -> "*/$everyN * * * *"
+    // Hermes takes an ISO time as a one-shot job; the phone's offset makes it today's wall clock.
+    ScheduleMode.ONCE -> ZonedDateTime.of(LocalDate.now(), LocalTime.of(hour, minute), ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
     ScheduleMode.CUSTOM -> raw
 }
 
@@ -435,6 +443,15 @@ private fun SchedulePick.toCron(): String = when (mode) {
 private fun parseCron(schedule: String?): SchedulePick {
     val raw = schedule?.trim().orEmpty()
     if (raw.isEmpty()) return SchedulePick(ScheduleMode.DAILY)
+    // Hermes lists a one-shot as "once at 2026-10-28 21:45". Today's opens on its clock; another
+    // day's stays as typed text, since "only today" would quietly move it to today.
+    Regex("""^once at (\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})""").find(raw)?.destructured?.let { (date, h, m) ->
+        return if (date == LocalDate.now().toString()) {
+            SchedulePick(ScheduleMode.ONCE, hour = h.toInt(), minute = m.toInt(), raw = raw)
+        } else {
+            SchedulePick(ScheduleMode.CUSTOM, raw = "${date}T$h:$m")
+        }
+    }
     val parts = raw.split(Regex("\\s+"))
     if (parts.size != 5) return SchedulePick(ScheduleMode.CUSTOM, raw = raw)
     val (min, hour, dom, month, dow) = parts
@@ -536,6 +553,9 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
     var timeSource by remember(existingJob) { mutableIntStateOf(0) }
     var prompt by remember(existingJob) { mutableStateOf(existingJob?.let { it.fullPrompt ?: it.promptPreview } ?: "") }
     val schedule = pick.toCron()
+    // Hermes refuses a one-shot more than two minutes in the past; say so here instead.
+    val passedToday = pick.mode == ScheduleMode.ONCE &&
+        LocalTime.of(pick.hour, pick.minute).isBefore(LocalTime.now().withSecond(0).withNano(0))
     val isEdit = existingJob != null
     val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog
 
@@ -604,6 +624,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 ) {
                     listOf(
                         ScheduleMode.DAILY to stringResource(R.string.every_day),
+                        ScheduleMode.ONCE to stringResource(R.string.only_today),
                         ScheduleMode.DAYS to stringResource(R.string.certain_days),
                         ScheduleMode.HOURLY to stringResource(R.string.every_hour),
                         ScheduleMode.MINUTES to stringResource(R.string.every_few_minutes),
@@ -630,7 +651,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 // "every day at 9" is a question with no answer, and the old single
                 // cron field was five of those at once.
                 when (pick.mode) {
-                    ScheduleMode.DAILY, ScheduleMode.DAYS -> {
+                    ScheduleMode.DAILY, ScheduleMode.DAYS, ScheduleMode.ONCE -> {
                         if (pick.mode == ScheduleMode.DAYS) {
                             Text(
                                 text = stringResource(R.string.days),
@@ -745,7 +766,18 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
 
                 // The sentence is the answer; the expression under it is only there so
                 // anyone who does read cron can confirm the picker meant what they meant.
-                humanizeCron(schedule)?.let { human ->
+                val human = when (pick.mode) {
+                    ScheduleMode.ONCE -> stringResource(R.string.today_at, "%02d:%02d".format(pick.hour, pick.minute))
+                    else -> humanizeCron(schedule)
+                }
+                if (passedToday) {
+                    Text(
+                        text = stringResource(R.string.time_passed_today),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                human?.let { human ->
                     Text(
                         text = human,
                         style = MaterialTheme.typography.labelMedium,
@@ -768,7 +800,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && schedule.isNotBlank()) {
+                    if (name.isNotBlank() && schedule.isNotBlank() && !passedToday) {
                         if (isEdit) {
                             val jobId = existingJob?.id; if (jobId != null) viewModel.updateJob(jobId, name, schedule, prompt)
                         } else {
