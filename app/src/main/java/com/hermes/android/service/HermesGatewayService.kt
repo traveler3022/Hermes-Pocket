@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.hermes.android.domain.cron.CronWake
 import com.hermes.android.gateway.ConnectionState
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.runtime.DetectionResult
@@ -21,13 +22,21 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -61,9 +70,17 @@ class HermesGatewayService : Service() {
     @Inject
     lateinit var runtimeSelection: com.hermes.android.runtime.RuntimeSelection
 
+    @Inject
+    lateinit var cronWake: CronWake
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var connectionWatchJob: Job? = null
     private var renderJob: Job? = null
+    private var cronRearmJob: Job? = null
+    private var cronWakeJob: Job? = null
+
+    /** True while the cron alarm's wake holds Hermes up for a job. */
+    private val cronWaking = MutableStateFlow(false)
     private var wakeLock: PowerManager.WakeLock? = null
 
     /** Startup problem or progress to show while not connected (null = derive from state). */
@@ -85,7 +102,7 @@ class HermesGatewayService : Service() {
         // restarts the service on every foreground; when the gateway is already connected
         // nothing re-emits (connect() no-ops, status stays null), so the render loop never
         // ran again and this placeholder stayed pinned as "Connecting…" forever.
-        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value, foregroundState.visible.value)
+        render(gatewayClient.connectionState.value, agentEventObserver.work.value, status.value, foregroundState.visible.value, cronWaking.value)
 
         // Proactive notifications: watch gateway events for the whole life of
         // the background connection (ChatViewModel's collector dies with the
@@ -96,10 +113,10 @@ class HermesGatewayService : Service() {
         if (renderJob?.isActive != true) {
             renderJob = scope.launch {
                 combine(
-                    gatewayClient.connectionState, agentEventObserver.work, status, foregroundState.visible,
-                ) { state, work, text, visible -> RenderInput(state, work, text, visible) }
-                    .collectLatest { (state, work, text, visible) ->
-                    render(state, work, text, visible)
+                    gatewayClient.connectionState, agentEventObserver.work, status, foregroundState.visible, cronWaking,
+                ) { state, work, text, visible, waking -> RenderInput(state, work, text, visible, waking) }
+                    .collectLatest { (state, work, text, visible, waking) ->
+                    render(state, work, text, visible, waking)
                     delay(RENDER_INTERVAL_MS) // Android drops bursts of updates; tool steps can be rapid.
                 }
             }
@@ -131,15 +148,74 @@ class HermesGatewayService : Service() {
             }
         }
 
+        // The cron alarm: set it again whenever Hermes connects and after every turn, since the
+        // agent itself may have added or changed a job.
+        if (cronRearmJob?.isActive != true) {
+            cronRearmJob = scope.launch {
+                merge(
+                    gatewayClient.connectionState.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it },
+                    agentEventObserver.work.map { it == null }.distinctUntilChanged().filter { it },
+                ).collect { if (!cronWaking.value) rearmCron() } // a wake sets it when done
+            }
+        }
+
+        if (intent?.action == ACTION_CRON_WAKE && cronWakeJob?.isActive != true) {
+            val dueAt = intent.getLongExtra(CronWake.EXTRA_DUE_AT, 0L)
+            cronWakeJob = scope.launch { runCronWake(dueAt) }
+        }
+
         return START_NOT_STICKY
+    }
+
+    /** Hold Hermes up until the job's minute, fire what is due, set the next alarm. */
+    private suspend fun runCronWake(dueAt: Long) {
+        cronWaking.value = true
+        try {
+            // Hermes that does not come up in time will not: don't keep the CPU awake for it.
+            val connected = withTimeoutOrNull(CRON_CONNECT_MAX_MS) {
+                gatewayClient.connectionState.first { it is ConnectionState.Connected }
+            }
+            if (connected == null) {
+                Timber.w("[GatewayService] Cron wake: Hermes did not connect in ${CRON_CONNECT_MAX_MS / 60_000} min")
+            } else {
+                val wait = dueAt - System.currentTimeMillis()
+                if (wait > 0) delay(wait)
+                withTimeoutOrNull(CRON_RUN_MAX_MS) { cronWake.runDue(dueAt) }
+                    ?: Timber.w("[GatewayService] Cron wake: jobs still running after ${CRON_RUN_MAX_MS / 60_000} min")
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "[GatewayService] Cron wake failed")
+        } finally {
+            withContext(NonCancellable) {
+                rearmCron()
+                cronWaking.value = false
+            }
+        }
+        // Woken only for the job: let the process go back to sleep, as it was.
+        if (!foregroundState.visible.value && agentEventObserver.work.value == null) {
+            Timber.i("[GatewayService] Cron wake done — stopping service")
+            stopSelf()
+        }
+    }
+
+    private suspend fun rearmCron() {
+        try {
+            cronWake.rearm()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "[GatewayService] Could not set the cron alarm")
+        }
     }
 
     /** What the card currently says, so an unchanged render is not re-posted. */
     private var shownKey: String? = null
 
-    private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean)
+    private data class RenderInput(val state: ConnectionState, val work: AgentWork?, val text: String?, val visible: Boolean, val waking: Boolean)
 
-    private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean) {
+    private fun render(state: ConnectionState, work: AgentWork?, text: String?, visible: Boolean, waking: Boolean) {
         // The app on screen already shows all of this; the card comes up once the user
         // leaves. Not a turn's card, though: it goes up with the turn, on screen or not.
         // Taking it down on screen meant taking the foreground back from the background
@@ -162,6 +238,15 @@ class HermesGatewayService : Service() {
                 if (key != shownKey) {
                     shownKey = key
                     promote(workingNotification(work, reconnecting))
+                }
+                holdWakeLock(true)
+            }
+            // Woken by the cron alarm: in the foreground with the CPU awake until the job is done.
+            waking -> {
+                val line = tr("Running a scheduled task…", "در حال اجرای کار زمان‌بندی‌شده…")
+                if (line != shownKey) {
+                    shownKey = line
+                    promote(statusNotification(line))
                 }
                 holdWakeLock(true)
             }
@@ -374,6 +459,9 @@ class HermesGatewayService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val RENDER_INTERVAL_MS = 400L
         private const val WAKE_LOCK_MAX_MS = 60 * 60 * 1000L
+        private const val CRON_CONNECT_MAX_MS = 5 * 60 * 1000L
+        private const val CRON_RUN_MAX_MS = 30 * 60 * 1000L
+        private const val ACTION_CRON_WAKE = "com.hermes.android.action.CRON_WAKE"
 
         fun start(context: Context) {
             val intent = Intent(context, HermesGatewayService::class.java)
@@ -382,6 +470,14 @@ class HermesGatewayService : Service() {
             } else {
                 context.startService(intent)
             }
+        }
+
+        /** From the cron alarm: boot Hermes and fire the job due at [dueAt]. */
+        fun wakeForCron(context: Context, dueAt: Long) {
+            val intent = Intent(context, HermesGatewayService::class.java)
+                .setAction(ACTION_CRON_WAKE)
+                .putExtra(CronWake.EXTRA_DUE_AT, dueAt)
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {

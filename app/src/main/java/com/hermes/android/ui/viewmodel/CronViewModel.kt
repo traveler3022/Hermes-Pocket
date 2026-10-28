@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.domain.cron.CronWake
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
 import com.hermes.android.gateway.GatewayMethods
@@ -38,6 +39,7 @@ class CronViewModel @Inject constructor(
     private val gatewayClient: GatewayClient,
     private val blueprints: CronBlueprints,
     private val cronJobs: CronJobs,
+    private val cronWake: CronWake,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CronUiState())
@@ -60,6 +62,7 @@ class CronViewModel @Inject constructor(
                     isLoading = false,
                 )
                 Timber.i("[Cron] Loaded ${jobs.size} jobs")
+                rearmAlarm()
             } catch (e: GatewayException) {
                 Timber.e(e, "[Cron] Failed to load")
                 _uiState.value = _uiState.value.copy(
@@ -67,6 +70,17 @@ class CronViewModel @Inject constructor(
                     errorMessage = "Failed to load cron jobs: ${e.message}",
                 )
             }
+        }
+    }
+
+    /** Every change to the list moves the phone's alarm for the next job (built-in Linux only). */
+    private suspend fun rearmAlarm() {
+        try {
+            cronWake.rearm()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "[Cron] Could not set the cron alarm")
         }
     }
 
@@ -232,6 +246,7 @@ class CronViewModel @Inject constructor(
                     put("name", jobId)
                 })
                 Timber.i("[Cron] Job $jobId -> $action")
+                rearmAlarm()
                 _uiState.value = _uiState.value.copy(
                     jobs = _uiState.value.jobs.map {
                         if (it.id == jobId) it.copy(enabled = enabled) else it
