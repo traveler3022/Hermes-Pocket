@@ -36,8 +36,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.HermesEmptyState
@@ -498,10 +506,13 @@ internal fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
 /** Handles both create (existingJob = null) and edit (pre-filled; edit is a
  *  remove+add under the hood since cron.manage has no update verb, but the
  *  user just sees one form either way). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = null) {
     var name by remember(existingJob) { mutableStateOf(existingJob?.name ?: "") }
     var pick by remember(existingJob) { mutableStateOf(parseCron(existingJob?.schedule)) }
+    // Bumped when a template sets the time, so the clock below starts again from it.
+    var timeSource by remember(existingJob) { mutableIntStateOf(0) }
     var prompt by remember(existingJob) { mutableStateOf(existingJob?.let { it.fullPrompt ?: it.promptPreview } ?: "") }
     val schedule = pick.toCron()
     val isEdit = existingJob != null
@@ -546,6 +557,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                 onClick = {
                                     name = idAndSchedule.first
                                     pick = parseCron(idAndSchedule.second)
+                                    timeSource++
                                     prompt = promptText
                                 },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
@@ -626,31 +638,22 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                 }
                             }
                         }
-                        Text(
-                            text = stringResource(R.string.hour),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            (0..23).forEach { h ->
-                                FilterChip(
-                                    selected = pick.hour == h,
-                                    onClick = { pick = pick.copy(hour = h) },
-                                    label = { Text("%02d".format(h), style = MaterialTheme.typography.labelSmall) },
-                                )
+                        // A clock like any other: one box for the hour, one for the minute, any
+                        // minute of the day. 24 hour chips and 5-minute steps were neither.
+                        key(timeSource) {
+                            val time = rememberTimePickerState(
+                                initialHour = pick.hour,
+                                initialMinute = pick.minute,
+                                is24Hour = true,
+                            )
+                            LaunchedEffect(time.hour, time.minute) {
+                                pick = pick.copy(hour = time.hour, minute = time.minute)
+                            }
+                            // Hour on the left in Persian too, as every clock writes it.
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                TimeInput(state = time)
                             }
                         }
-                        Text(
-                            text = stringResource(R.string.minute),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        MinuteChips(selected = pick.minute) { pick = pick.copy(minute = it) }
                     }
                     ScheduleMode.HOURLY -> {
                         Text(
