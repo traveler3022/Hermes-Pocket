@@ -1,10 +1,10 @@
 package com.hermes.android.domain.cron
 
 /**
- * Cron jobs on the built-in Linux, where nothing ticks Hermes' scheduler: the app's gateway is the
- * stdio one, and the ticker lives in `hermes gateway`, which the phone never runs. The phone's own
- * alarm keeps the time instead. It wakes the app a little before the next job, and the app fires
- * the due jobs itself through the same claim the scheduler uses.
+ * Cron jobs on the built-in Linux, where Hermes only runs while the app does. Hermes' own
+ * scheduler runs the jobs (the app's gateway script starts its ticker); the app only keeps the
+ * phone's alarm on the next job's time, so the phone boots Hermes a little before it, and tells
+ * the user afterwards what Hermes recorded.
  */
 interface CronWake {
 
@@ -15,13 +15,16 @@ interface CronWake {
     suspend fun rearm()
 
     /**
-     * Fires every enabled job due by [dueAtMillis] (or by now, if later), one after another.
-     * [onStart] gets each job's name as it begins; the result lists how each one ended.
+     * Waits until Hermes has run every enabled job due by [dueAtMillis] (or by now, if later), up
+     * to [maxWaitMillis], and returns what Hermes recorded for each. [onWaiting] gets the name of
+     * the job still awaited. Changes nothing in Hermes; it only reads the cron list.
      */
-    suspend fun runDue(dueAtMillis: Long, onStart: (String) -> Unit): List<JobRun>
+    suspend fun awaitDue(dueAtMillis: Long, maxWaitMillis: Long, onWaiting: (String) -> Unit): List<JobRun>
 
-    /** [detail]: the job's error, or its status when that is not "ok". */
-    data class JobRun(val name: String, val ok: Boolean, val detail: String?)
+    enum class Outcome { OK, FAILED, NO_RESULT }
+
+    /** [detail]: Hermes' error for the run, when there is one. */
+    data class JobRun(val name: String, val outcome: Outcome, val detail: String?)
 
     companion object {
         /** Broadcast the alarm sends; the receiver turns it into a wake of the gateway service. */

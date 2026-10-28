@@ -168,7 +168,7 @@ class HermesGatewayService : Service() {
         return START_NOT_STICKY
     }
 
-    /** Hold Hermes up until the job's minute, fire what is due, set the next alarm. */
+    /** Hold Hermes up until it has run the due jobs, say how they went, set the next alarm. */
     private suspend fun runCronWake(dueAt: Long) {
         cronCard.value = CronCard(jobName = null)
         try {
@@ -180,16 +180,18 @@ class HermesGatewayService : Service() {
                 Timber.w("[GatewayService] Cron wake: Hermes did not connect in ${CRON_CONNECT_MAX_MS / 60_000} min")
                 notifyCronResult(null, false, tr("Hermes did not start", "Hermes روشن نشد"))
             } else {
-                val wait = dueAt - System.currentTimeMillis()
-                if (wait > 0) delay(wait)
-                val runs = withTimeoutOrNull(CRON_RUN_MAX_MS) {
-                    cronWake.runDue(dueAt) { name -> cronCard.value = CronCard(name) }
-                }
-                if (runs == null) {
-                    Timber.w("[GatewayService] Cron wake: jobs still running after ${CRON_RUN_MAX_MS / 60_000} min")
-                    notifyCronResult(cronCard.value?.jobName, false, tr("Still running after 30 minutes", "بعد از ۳۰ دقیقه هنوز تمام نشده"))
-                }
-                runs?.forEach { notifyCronResult(it.name, it.ok, it.detail) }
+                // Hermes' own ticker runs the job; this only waits for its record of the run.
+                cronWake.awaitDue(dueAt, CRON_RUN_MAX_MS) { name -> cronCard.value = CronCard(name) }
+                    .forEach { run ->
+                        when (run.outcome) {
+                            CronWake.Outcome.OK -> notifyCronResult(run.name, true, run.detail)
+                            CronWake.Outcome.FAILED -> notifyCronResult(run.name, false, run.detail)
+                            CronWake.Outcome.NO_RESULT -> notifyCronResult(
+                                run.name, false,
+                                tr("Hermes recorded no run within 30 minutes", "Hermes تا ۳۰ دقیقه اجرایی ثبت نکرد"),
+                            )
+                        }
+                    }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

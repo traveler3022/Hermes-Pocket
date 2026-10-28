@@ -705,6 +705,9 @@ class ProotLinuxRuntime @Inject constructor(
         // Plus Kanban when the user turned it on (KanbanSwitch, LinuxKanban): a stand-in for the
         // dashboard API and the gateway dispatcher, which this runtime has neither of.
         //
+        // Plus Hermes' cron ticker, which only `hermes gateway` starts otherwise: without it no
+        // job ever fired on its own here (domain/cron/CronWake).
+        //
         // Plus android.dashboard: the few dashboard routes the app calls on every runtime
         // (data/DashboardApi), served in-process.
         private val GATEWAY_SCRIPT = """
@@ -745,6 +748,16 @@ class ProotLinuxRuntime @Inject constructor(
                 except Exception:
                     logging.getLogger("hosted-rooms").exception("Group Chat room worker did not start")
             threading.Thread(target=start_rooms, name="hosted-rooms-start", daemon=True).start()
+            # Cron without `hermes gateway`: Hermes own 60 s ticker, started the way the gateway
+            # starts it (gateway/run.py _start_cron_ticker). The phone alarm (CronWake) only boots
+            # Hermes before a job; this ticker decides what is due and runs it.
+            def start_cron():
+                try:
+                    from cron.scheduler_provider import InProcessCronScheduler
+                    InProcessCronScheduler().start(threading.Event(), interval=60)
+                except Exception:
+                    logging.getLogger("android-cron").exception("cron ticker stopped")
+            threading.Thread(target=start_cron, name="android-cron", daemon=True).start()
             # Kanban without a dashboard: android.kanban hands a request to the dashboard Kanban
             # plugin router (plugins/kanban/dashboard/plugin_api.py) in this process, so the app
             # sends the same calls as to a server; a thread does what the gateway dispatcher
