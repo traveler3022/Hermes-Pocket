@@ -12,7 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.unit.LayoutDirection
 import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import java.util.Locale
@@ -37,6 +39,8 @@ val LocalAppLanguage = compositionLocalOf { AppLanguage.AUTO }
  * Wraps a screen so `stringResource` follows the in-app language choice: for anything but
  * AUTO, LocalResources comes from a context with that locale, so values-<lang>/ is used
  * whatever the device language is. LocalContext stays the activity.
+ * The layout direction follows the chosen language too, so English on a Persian
+ * phone is left-to-right and Persian on an English phone is right-to-left.
  */
 @Composable
 fun ProvideAppLanguage(language: AppLanguage, content: @Composable () -> Unit) {
@@ -51,9 +55,15 @@ fun ProvideAppLanguage(language: AppLanguage, content: @Composable () -> Unit) {
             context.createConfigurationContext(localized).resources
         }
     }
+    val direction = when (language) {
+        AppLanguage.AUTO -> LocalLayoutDirection.current
+        AppLanguage.ENGLISH -> LayoutDirection.Ltr
+        AppLanguage.FARSI -> LayoutDirection.Rtl
+    }
     CompositionLocalProvider(
         LocalAppLanguage provides language,
         LocalResources provides resources,
+        LocalLayoutDirection provides direction,
         content = content,
     )
 }
