@@ -80,6 +80,9 @@ internal fun AssistantMessageBubble(
     onReact: ((String?) -> Unit)? = null,
     /** Settings > Hermes kaomoji: the agent's face and verb on the thinking line. */
     kaomoji: Boolean = false,
+    /** Opens the turn's trace sheet the chat hosts; null: the trace hosts its own. */
+    onOpenTraceSheet: (() -> Unit)? = null,
+    onTraceElapsed: (Long?) -> Unit = {},
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -113,6 +116,8 @@ internal fun AssistantMessageBubble(
                             messageId = message.id,
                             status = thinkingStatus,
                             kaomoji = kaomoji,
+                            onOpenSheet = onOpenTraceSheet,
+                            onElapsed = onTraceElapsed,
                         )
                     }
                     // Hermes is drawing an image: hold its place until the reply shows it.

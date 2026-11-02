@@ -70,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.text.style.TextOverflow
@@ -324,6 +325,20 @@ fun ChatScreen(
     val visibleMessages = remember(filteredMessages, turnWork, searching) {
         visibleChatMessages(filteredMessages, turnWork, searching)
     }
+
+    // With short replies folded, a turn's whole trace hangs off the reply that
+    // ends it, and that moves to a new bubble every time an interim reply is
+    // sealed. A sheet held by the bubble closed with it, mid-turn. So in this
+    // mode the sheet belongs to the turn and lives here, and stays open while
+    // the turn moves on beneath it. Unfolded, each reply keeps its own sheet.
+    val traceOwners = remember(filteredMessages, foldNarration) {
+        if (foldNarration) traceOwnersByTurn(filteredMessages) else emptyMap()
+    }
+    val traceTurnOf = remember(traceOwners) {
+        traceOwners.entries.associate { (turn, owner) -> owner to turn }
+    }
+    var openTraceTurn by remember { mutableStateOf<String?>(null) }
+    val traceElapsed = remember { mutableStateMapOf<String, Long?>() }
 
     // What the agent is doing right now (null = idle). Derived, not stored —
     // the running tool cards / streaming flags already carry the state.
@@ -1027,6 +1042,8 @@ fun ChatScreen(
                                 onDeleteMessage = { id -> deleteFromMessageId = id },
                                 reactionsEnabled = themeModeState?.messageReactions == true,
                                 kaomoji = themeModeState?.kaomojiStatus == true,
+                                onOpenTraceSheet = traceTurnOf[message.id]?.let { turn -> { openTraceTurn = turn } },
+                                onTraceElapsed = { seconds -> traceElapsed[message.id] = seconds },
                                 onReact = viewModel::reactToMessage,
                                 onOpenSubagent = uiState.activeSessionId?.let { sid ->
                                     { subagentId: String, text: String -> subagents.open(sid, subagentId, text) }
@@ -1215,6 +1232,23 @@ fun ChatScreen(
                 TextButton(onClick = { deleteFromMessageId = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+
+    openTraceTurn?.let { turn ->
+        val owner = traceOwners[turn]
+        val items = owner?.let { turnWork[it] }.orEmpty()
+        if (items.isEmpty()) {
+            // Another chat, or search unfolded the turn: nothing left to show.
+            LaunchedEffect(turn) { openTraceTurn = null }
+        } else {
+            val ownerMessage = filteredMessages.firstOrNull { it.id == owner } as? ChatMessage.Assistant
+            HxThinkingSheet(
+                items = items,
+                isComplete = ownerMessage?.isStreaming != true,
+                elapsedSeconds = traceElapsed[owner],
+                onDismiss = { openTraceTurn = null },
+            )
+        }
     }
 
     // Fullscreen image viewer — rendered at ChatScreen level (outside LazyColumn) to avoid BadTokenException
