@@ -22,7 +22,10 @@ jobs:
           sudo mkdir -p /opt/rf/opt/bench /opt/rf/tmp
           sudo cp ci/speed/install.sh ci/speed/bench.sh ci/speed/micro.py /opt/rf/opt/bench/
           for d in proc dev sys; do sudo mount --bind /$d /opt/rf/$d; done
-          sudo chroot /opt/rf /usr/bin/env -i HOME=/root PATH=/root/.hermes/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin /bin/sh /opt/bench/install.sh
+          sudo chroot /opt/rf /usr/bin/env -i HOME=/root USER=root LANG=C.UTF-8 TERM=xterm-256color TMPDIR=/tmp \
+            PIP_BREAK_SYSTEM_PACKAGES=1 UV_BREAK_SYSTEM_PACKAGES=1 HERMES_DISABLE_LAZY_INSTALLS=1 GIT_OPTIONAL_LOCKS=0 \
+            PATH=/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            /bin/sh /opt/bench/install.sh
       - name: Bench native (chroot)
         run: |
           for i in 1 2 3; do
