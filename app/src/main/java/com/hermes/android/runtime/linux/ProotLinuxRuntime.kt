@@ -21,6 +21,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -30,6 +31,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -401,6 +407,82 @@ class ProotLinuxRuntime @Inject constructor(
         if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly()
     }
 
+    /**
+     * Cron on the built-in Linux. Hermes runs a cron job only in its full gateway (`hermes
+     * gateway run`, the session owner; cron/scheduler_authority.py), and the stdio gateway holds
+     * the home's gateway.lock for as long as it runs (tui_gateway/entry.py, _claim_launch_home).
+     * Beside it the full one never starts: Hermes reads the held lock as a gateway still starting
+     * and gives up after 60 s ("Gateway starting: deadline"). So for [block] the full gateway
+     * runs in its place: the stdio one is stopped first, and [startGateway] waits until [block]
+     * is done. The full gateway is stopped when [block] returns.
+     */
+    suspend fun <T> withFullGateway(block: suspend (FullGateway) -> T): T {
+        if (updating) installMutex.withLock { }
+        return gatewayMutex.withLock {
+            if (!isHermesInstalled()) throw IllegalStateException("Install Hermes in the built-in Linux runtime first.")
+            if (gatewayProcess != null) {
+                stopProcess()
+                Timber.i("[Linux] App gateway stopped for a cron run")
+            }
+            if (_state.value is RuntimeState.Running) _state.value = RuntimeState.Installed(currentInfo())
+            val log = environment.guestFile(CRON_GATEWAY_LOG)
+            val pidFile = environment.guestFile(CRON_GATEWAY_PID)
+            val process = withContext(Dispatchers.IO) {
+                log.parentFile?.mkdirs()
+                pidFile.parentFile?.mkdirs()
+                pidFile.delete()
+                environment.processBuilder(command = FULL_GATEWAY_SCRIPT)
+                    .redirectOutput(ProcessBuilder.Redirect.to(log))
+                    .start()
+                    .also { it.outputStream.close() } // no input, as when Hermes starts one itself
+            }
+            Timber.i("[Linux] Full gateway started for a cron run")
+            try {
+                block(FullGateway(process, pidFile, environment.guestFile(GATEWAY_STATE), log))
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) { stopFullGateway(process, pidFile, log) }
+            }
+        }
+    }
+
+    /** The full gateway of [withFullGateway], as far as its caller needs to watch it. */
+    class FullGateway internal constructor(
+        private val process: Process,
+        private val pidFile: File,
+        private val stateFile: File,
+        private val log: File,
+    ) {
+        val isAlive: Boolean get() = process.isAlive
+
+        /** Hermes has finished starting: this process wrote its runtime state as serving. */
+        fun isReady(): Boolean {
+            val pid = readPid(pidFile) ?: return false
+            return runCatching {
+                val state = Json.parseToJsonElement(stateFile.readText()).jsonObject
+                state["pid"]?.jsonPrimitive?.intOrNull == pid &&
+                    state["gateway_state"]?.jsonPrimitive?.contentOrNull in SERVING_STATES
+            }.getOrDefault(false)
+        }
+
+        /** The last thing Hermes printed, for a run that went wrong. */
+        fun lastLogLine(): String? = runCatching {
+            log.readLines().lastOrNull { it.isNotBlank() && !it.startsWith("[diag]") }?.trim()?.take(300)
+        }.getOrNull()
+    }
+
+    /** Hermes' own shutdown first (SIGTERM, as `hermes gateway stop` sends it), proot's if it does not end. */
+    private fun stopFullGateway(process: Process, pidFile: File, log: File) {
+        val pid = readPid(pidFile)
+        if (pid != null && process.isAlive) runCatching { android.os.Process.sendSignal(pid, SIGTERM) }
+        if (!process.waitFor(FULL_GATEWAY_STOP_MS, TimeUnit.MILLISECONDS)) {
+            process.destroy()
+            if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly()
+        }
+        pidFile.delete()
+        val tail = runCatching { log.readLines().takeLast(EXIT_LOG_LINES).joinToString("\n") }.getOrDefault("")
+        Timber.i("[Linux] Full gateway of the cron run stopped; last lines of its log:\n$tail")
+    }
+
     override suspend fun fetchLogs() {
         val logs = withContext(Dispatchers.IO) {
             listOf(GATEWAY_LOG, "/root/.hermes/logs/app-install.log").joinToString("\n\n") { path ->
@@ -459,6 +541,31 @@ class ProotLinuxRuntime @Inject constructor(
         private const val GATEWAY_READY_TIMEOUT_MS = 90_000L
         private const val EXIT_LOG_LINES = 40
         private const val GATEWAY_LOG = "/root/.hermes/logs/gateway_stderr.log"
+
+        // The full gateway of a cron run (withFullGateway): its output, its PID (the script's
+        // own, kept by exec), and the runtime state Hermes writes for it (gateway/status.py).
+        private const val CRON_GATEWAY_LOG = "/root/.hermes/logs/android-cron-gateway.log"
+        private const val CRON_GATEWAY_PID = "/root/.hermes/android/cron-gateway.pid"
+        private const val GATEWAY_STATE = "/root/.hermes/gateway_state.json"
+        private const val SIGTERM = 15
+        private const val FULL_GATEWAY_STOP_MS = 20_000L
+
+        // Hermes' full gateway, for a cron run: the stdio script's environment, then `gateway run`
+        // the way Hermes starts one itself (hermes_cli/gateway_runtime_start.py: the default
+        // profile named, no banner). Its PID goes to CRON_GATEWAY_PID first; exec keeps it.
+        private val FULL_GATEWAY_SCRIPT = """
+            export HERMES_HOME=/root/.hermes
+            REPO="${'$'}HERMES_HOME/hermes-agent"
+            export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+            export VIRTUAL_ENV="${'$'}REPO/venv" PATH="${'$'}REPO/venv/bin:${'$'}PATH"
+            export DISPLAY=:99
+            ENV_FILE="${'$'}HERMES_HOME/android/gateway.env"
+            [ -f "${'$'}ENV_FILE" ] && . "${'$'}ENV_FILE"
+            echo "[diag] cron gateway start ${'$'}(date -u +%FT%TZ)"
+            echo ${'$'}${'$'} > "$CRON_GATEWAY_PID"
+            cd "${'$'}REPO" && exec "${'$'}REPO/venv/bin/python" -m hermes_cli.main --profile default gateway run --quiet
+        """.trimIndent()
+
         private const val MIN_FREE_BYTES = 1_000_000_000L
         private val AnsiEscape = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 
@@ -705,8 +812,8 @@ class ProotLinuxRuntime @Inject constructor(
         // Plus Kanban when the user turned it on (KanbanSwitch, LinuxKanban): a stand-in for the
         // dashboard API and the gateway dispatcher, which this runtime has neither of.
         //
-        // Plus Hermes' cron ticker, which only `hermes gateway` starts otherwise: without it no
-        // job ever fired on its own here (domain/cron/CronWake).
+        // No cron ticker here: a job runs only in Hermes' full gateway, which cannot start while
+        // this one runs (withFullGateway).
         //
         // Plus android.dashboard: the few dashboard routes the app calls on every runtime
         // (data/DashboardApi), served in-process.
@@ -717,6 +824,10 @@ class ProotLinuxRuntime @Inject constructor(
             # PID: a pkill -f pattern also matches this script's own command line and kills it.
             PIDFILE="${'$'}HERMES_HOME/gateway.pid"
             if [ -f "${'$'}PIDFILE" ]; then kill "${'$'}(cat "${'$'}PIDFILE")" 2>/dev/null && sleep 1; rm -f "${'$'}PIDFILE"; fi
+            # Same for the full gateway of a cron run, left behind if the app died during it
+            # (withFullGateway): it holds gateway.lock, and Hermes refuses this gateway beside it.
+            CRONPID="$CRON_GATEWAY_PID"
+            if [ -f "${'$'}CRONPID" ]; then kill -9 "${'$'}(cat "${'$'}CRONPID")" 2>/dev/null && sleep 1; rm -f "${'$'}CRONPID"; fi
             echo ${'$'}${'$'} > "${'$'}PIDFILE"
             export PYTHONPATH="${'$'}REPO" HERMES_PYTHON_SRC_ROOT="${'$'}REPO" PYTHONUNBUFFERED=1
             # Commands the gateway runs for the app (shell.exec → `python3 -`) must get
@@ -748,16 +859,6 @@ class ProotLinuxRuntime @Inject constructor(
                 except Exception:
                     logging.getLogger("hosted-rooms").exception("Group Chat room worker did not start")
             threading.Thread(target=start_rooms, name="hosted-rooms-start", daemon=True).start()
-            # Cron without `hermes gateway`: Hermes own 60 s ticker, started the way the gateway
-            # starts it (gateway/run.py _start_cron_ticker). The phone alarm (CronWake) only boots
-            # Hermes before a job; this ticker decides what is due and runs it.
-            def start_cron():
-                try:
-                    from cron.scheduler_provider import InProcessCronScheduler
-                    InProcessCronScheduler().start(threading.Event(), interval=60)
-                except Exception:
-                    logging.getLogger("android-cron").exception("cron ticker stopped")
-            threading.Thread(target=start_cron, name="android-cron", daemon=True).start()
             # Kanban without a dashboard: android.kanban hands a request to the dashboard Kanban
             # plugin router (plugins/kanban/dashboard/plugin_api.py) in this process, so the app
             # sends the same calls as to a server; a thread does what the gateway dispatcher
@@ -876,3 +977,8 @@ class ProotLinuxRuntime @Inject constructor(
         """.trimIndent()
     }
 }
+
+/** Hermes' runtime states for a gateway that has finished starting (gateway/run_startup.py). */
+private val SERVING_STATES = setOf("running", "degraded")
+
+private fun readPid(file: File): Int? = runCatching { file.readText().trim().toInt() }.getOrNull()

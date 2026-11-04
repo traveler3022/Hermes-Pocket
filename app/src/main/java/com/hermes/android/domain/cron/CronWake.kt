@@ -1,29 +1,42 @@
 package com.hermes.android.domain.cron
 
 /**
- * Cron jobs on the built-in Linux, where Hermes only runs while the app does. Hermes' own
- * scheduler runs the jobs (the app's gateway script starts its ticker); the app only keeps the
- * phone's alarm on the next job's time, so the phone boots Hermes a little before it, and tells
- * the user afterwards what Hermes recorded.
+ * Cron jobs on the built-in Linux, where Hermes only runs while the app does. The app keeps the
+ * phone's alarm on the next job's time; when it goes off, Hermes' full gateway runs the job (only
+ * it can; it takes the place of the app's own Hermes meanwhile), and the app tells the user how
+ * it went.
  */
 interface CronWake {
 
     /**
      * Sets the alarm for the next enabled job, or clears it when there is none or Hermes does
-     * not run on the phone. Needs the gateway connected; does nothing otherwise.
+     * not run on the phone. Reads Hermes' cron store directly, so the gateway need not be up.
      */
     suspend fun rearm()
 
     /**
-     * Waits until Hermes has run every enabled job due by [dueAtMillis] (or by now, if later), up
-     * to [maxWaitMillis], and returns what Hermes recorded for each. [onWaiting] gets the name of
-     * the job still awaited. Changes nothing in Hermes; it only reads the cron list.
+     * Runs Hermes' full gateway until it has run every enabled job due by [dueAtMillis] (or by
+     * now, if later), up to [maxWaitMillis], and returns what Hermes recorded for each. The app's
+     * own Hermes is down meanwhile; nothing is started when no job is due. [onWaiting] gets the
+     * name of the job still awaited.
      */
-    suspend fun awaitDue(dueAtMillis: Long, maxWaitMillis: Long, onWaiting: (String) -> Unit): List<JobRun>
+    suspend fun runDue(dueAtMillis: Long, maxWaitMillis: Long, onWaiting: (String) -> Unit): List<JobRun>
 
-    enum class Outcome { OK, FAILED, NO_RESULT }
+    enum class Outcome {
+        OK,
+        FAILED,
 
-    /** [detail]: Hermes' error for the run, when there is one. */
+        /** Hermes passed over this time without running it (it was too late to catch up). */
+        SKIPPED,
+
+        /** Hermes' full gateway did not come up in time, or ended before it was up. */
+        NOT_STARTED,
+
+        /** No result in the time allowed, or the gateway ended during the run. */
+        NO_RESULT,
+    }
+
+    /** [detail]: Hermes' error for a failed run; for NOT_STARTED / NO_RESULT, Hermes' last log line if it ended. */
     data class JobRun(val name: String, val outcome: Outcome, val detail: String?)
 
     companion object {
