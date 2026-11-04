@@ -27,7 +27,11 @@ jobs:
             PATH=/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
             /bin/sh /opt/bench/install.sh
       - name: App shell.exec commands
-        run: sudo python3 ci/speed/appcalls.py /opt/rf/opt/bench
+        run: |
+          sudo python3 ci/speed/appcalls.py /opt/rf/opt/bench
+          sudo cp ci/speed/filtercheck.py /opt/rf/opt/bench/
+          sudo chroot /opt/rf /usr/bin/env -i HOME=/root HERMES_HOME=/root/.hermes HERMES_DISABLE_LAZY_INSTALLS=1 \
+            PATH=/usr/local/bin:/usr/bin:/bin /root/.hermes/hermes-agent/venv/bin/python /opt/bench/filtercheck.py
       - name: Bench native (chroot)
         run: |
           for i in 1 2 3; do

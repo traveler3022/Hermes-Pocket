@@ -16,11 +16,12 @@ t hermes_version venv/bin/hermes --version
 t git_status git status --porcelain
 t spawn100 bash -c 'for i in $(seq 100); do /bin/true; done'
 t find_venv find venv -type f
-APPENV="PATH=$REPO/venv/bin:$PATH VIRTUAL_ENV=$REPO/venv PYTHONPATH=$REPO HERMES_PYTHON_SRC_ROOT=$REPO HERMES_HOME=/root/.hermes"
+# What Hermes hands shell.exec children (tools/environments/local_pythonpath.py): PYTHONPATH and
+# VIRTUAL_ENV stripped, PATH kept with the gateway's venv/bin first.
+APPENV="PATH=$REPO/venv/bin:$PATH HERMES_HOME=/root/.hermes"
 t app_cat_memory env $APPENV sh -c "cat ~/.hermes/memories/USER.md 2>/dev/null || echo '(not found)'"
-t app_rt_query env $APPENV sh -c 'hermes --print-runtime-command'
-t app_exec_python env $APPENV sh /opt/bench/exec_python.sh
-t app_exec_python_nort env $APPENV sh /opt/bench/exec_python_nort.sh
-echo "INFO $L rt_query: $(env $APPENV sh -c 'hermes --print-runtime-command; echo rc=$?' 2>&1 | tail -c 300 | tr '\n' ' ')"
-echo "INFO $L exec_python: $(env $APPENV sh /opt/bench/exec_python.sh 2>&1 | tail -c 300 | tr '\n' ' ')"
+t app_exec_python_old env $APPENV sh /opt/bench/exec_python_old.sh
+t app_exec_python_new env $APPENV sh /opt/bench/exec_python_new.sh
+echo "INFO $L old: $(env $APPENV sh /opt/bench/exec_python_old.sh 2>&1 | tail -c 300 | tr '\n' ' ')"
+echo "INFO $L new: $(env $APPENV sh /opt/bench/exec_python_new.sh 2>&1 | tail -c 300 | tr '\n' ' ')"
 venv/bin/python /opt/bench/micro.py "$L"
