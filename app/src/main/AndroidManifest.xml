@@ -26,6 +26,13 @@
     <!-- Wake lock — keep CPU awake during long tool execution -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Cron on the built-in Linux: an exact alarm wakes Hermes for the next job.
+         USE_EXACT_ALARM from 13 on (granted at install); SCHEDULE_EXACT_ALARM before. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
     <!-- Vibrate — notification feedback for tool approvals -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -140,6 +147,15 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The cron alarm (domain/cron/CronWake.kt): wakes Hermes for the next job -->
+        <receiver
+            android:name=".service.CronAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermes.android.action.CRON_ALARM" />
             </intent-filter>
         </receiver>
 
