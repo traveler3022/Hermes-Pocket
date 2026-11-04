@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.hermes.android.R
@@ -106,7 +107,17 @@ object BrandMarks {
 @Composable
 fun BrandMark.vector(): ImageVector = ImageVector.vectorResource(icon)
 
-/** The brand's color, or the theme's text color for a black or white mark. */
+/**
+ * The brand's color, or the theme's text color for a black or white mark and for a color that would
+ * vanish on the theme: Sentry's and PayPal's dark marks on a dark theme, Hugging Face's yellow on a light one.
+ */
 @Composable
 @ReadOnlyComposable
-fun BrandMark.tint(): Color = color ?: MaterialTheme.colorScheme.onSurface
+fun BrandMark.tint(): Color {
+    val scheme = MaterialTheme.colorScheme
+    val brand = color ?: return scheme.onSurface
+    val a = brand.luminance()
+    val b = scheme.surface.luminance()
+    val contrast = (maxOf(a, b) + 0.05f) / (minOf(a, b) + 0.05f)
+    return if (contrast < 2f) scheme.onSurface else brand
+}
