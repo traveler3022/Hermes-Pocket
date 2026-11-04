@@ -15,4 +15,7 @@ export UV_PYTHON="$PY" UV_PROJECT_ENVIRONMENT="$REPO/venv" UV_LINK_MODE=copy
 "$UV" sync --locked --no-dev --extra web || { [ -x venv/bin/python ] || "$UV" venv venv; "$UV" pip install --python venv/bin/python -e '.[web]'; }
 PYTHONPATH="$REPO" venv/bin/python -c "import tui_gateway.server"
 venv/bin/python --version
+cp cli-config.yaml.example "$HERMES_HOME/config.yaml" 2>/dev/null || true
+mkdir -p "$HERMES_HOME/memories" && echo "# user notes" > "$HERMES_HOME/memories/USER.md"
+ln -sf "$REPO/venv/bin/hermes" /usr/local/bin/hermes
 echo "INSTALL OK"
