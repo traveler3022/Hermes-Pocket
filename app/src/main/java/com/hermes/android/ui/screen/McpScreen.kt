@@ -52,12 +52,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
+import com.hermes.android.ui.design.BrandMarks
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
+import com.hermes.android.ui.design.tint
+import com.hermes.android.ui.design.vector
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.Dns
 import com.hermes.android.ui.icons.filled.Link
@@ -201,14 +204,15 @@ fun McpScreen(
                             if (index > 0) GroupDivider()
                             val probe = state.probes[server.name]
                             val status = server.statusWith(probe)
+                            val brand = BrandMarks.forMcpServer(server.name)
                             SettingRow(
                                 title = server.name,
                                 subtitle = listOfNotNull(
                                     statusText(server, status, probe),
                                     server.url ?: server.command,
                                 ).joinToString(" · ").ifEmpty { null },
-                                icon = if (server.url != null) Icons.Default.Link else Icons.Default.Terminal,
-                                iconTint = statusColor(status),
+                                icon = brand?.vector() ?: if (server.url != null) Icons.Default.Link else Icons.Default.Terminal,
+                                iconTint = brand?.tint() ?: statusColor(status),
                                 onClick = { selected = server.name },
                             )
                         }
@@ -221,11 +225,12 @@ fun McpScreen(
                     SettingsGroup {
                         catalog.forEachIndexed { index, entry ->
                             if (index > 0) GroupDivider()
+                            val brand = BrandMarks.forMcpServer(entry.name)
                             SettingRow(
                                 title = entry.name,
                                 subtitle = entry.description.ifBlank { null },
-                                icon = Icons.Default.Dns,
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                icon = brand?.vector() ?: Icons.Default.Dns,
+                                iconTint = brand?.tint() ?: MaterialTheme.colorScheme.onSurfaceVariant,
                                 trailing = {
                                     if (entry.installed) {
                                         Text(
