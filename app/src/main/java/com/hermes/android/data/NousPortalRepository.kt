@@ -4,11 +4,15 @@ import com.hermes.android.domain.portal.Connector
 import com.hermes.android.domain.portal.ConnectorAccount
 import com.hermes.android.domain.portal.ConnectorList
 import com.hermes.android.domain.portal.ConnectorOperation
+import com.hermes.android.domain.portal.ConnectorTool
 import com.hermes.android.domain.portal.NousPortal
 import com.hermes.android.domain.portal.PortalFeature
 import com.hermes.android.domain.portal.PortalStatus
+import com.hermes.android.domain.portal.PortalUsage
+import com.hermes.android.domain.portal.UsageBar
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayMethods
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -16,6 +20,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -112,6 +117,81 @@ class NousPortalRepository @Inject constructor(
     override suspend fun removeAccount(connectionId: String) {
         call(GatewayMethods.CONNECTORS_ACCOUNTS_REMOVE, mapOf("connection_id" to JsonPrimitive(connectionId)))
     }
+
+    override suspend fun renameAccount(connectionId: String, alias: String) {
+        call(
+            GatewayMethods.CONNECTORS_ACCOUNTS_RENAME,
+            mapOf("connection_id" to JsonPrimitive(connectionId), "alias" to JsonPrimitive(alias)),
+        )
+    }
+
+    override suspend fun tools(slug: String): List<ConnectorTool> {
+        val root = call(GatewayMethods.CONNECTORS_TOOLS, mapOf("slug" to JsonPrimitive(slug)))
+        return (root["tools"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val row = element as? JsonObject ?: return@mapNotNull null
+            val toolSlug = row.text("slug") ?: return@mapNotNull null
+            ConnectorTool(
+                slug = toolSlug,
+                name = row.text("name") ?: toolSlug,
+                description = row.text("description").orEmpty(),
+                facet = row.text("facet").orEmpty(),
+            )
+        }
+    }
+
+    /**
+     * `billing.state` (balance, organization), `subscription.state` (the plan and a scheduled
+     * change) and `free_tier.status`, each on its own: a signed-out or free account answers only
+     * some. The two bars ride on the first two; `usage.bars` is asked only when neither had them.
+     */
+    override suspend fun usage(): PortalUsage {
+        val billing = attempt(GatewayMethods.BILLING_STATE)
+        val subscription = attempt(GatewayMethods.SUBSCRIPTION_STATE)
+        val freeTier = attempt(GatewayMethods.FREE_TIER_STATUS)
+        if (billing.isFailure && subscription.isFailure && freeTier.isFailure) {
+            throw billing.exceptionOrNull() ?: IllegalStateException("Hermes sent no usage")
+        }
+        val bill = billing.getOrNull()
+        val sub = subscription.getOrNull()
+        val model = listOfNotNull(bill?.get("usage") as? JsonObject, sub?.get("usage") as? JsonObject)
+            .firstOrNull { it.bool("available") }
+            ?: attempt(GatewayMethods.USAGE_BARS).getOrNull()?.takeIf { it.bool("available") }
+        val current = sub?.get("current") as? JsonObject
+        val free = freeTier.getOrNull()
+        return PortalUsage(
+            planName = model?.text("plan_name") ?: current?.text("tier_name"),
+            renews = model?.text("renews_display"),
+            balance = bill?.text("balance_display"),
+            organization = bill?.text("org_name") ?: sub?.text("org_name"),
+            totalSpendable = model?.text("total_spendable_display"),
+            bars = listOfNotNull(barOf(model?.get("plan_bar"), topUp = false), barOf(model?.get("topup_bar"), topUp = true)),
+            pendingDowngrade = listOfNotNull(current?.text("pending_downgrade_tier_name"), current?.text("pending_downgrade_display"))
+                .joinToString(" · ").takeIf { it.isNotEmpty() },
+            cancellation = current?.takeIf { it.bool("cancel_at_period_end") }?.text("cancellation_effective_display"),
+            freeModel = free?.takeIf { it.bool("available") }?.let { it.text("label") ?: it.text("model") },
+            portalUrl = bill?.text("portal_url") ?: sub?.text("portal_url"),
+        )
+    }
+
+    private fun barOf(element: JsonElement?, topUp: Boolean): UsageBar? {
+        val bar = element as? JsonObject ?: return null
+        return UsageBar(
+            topUp = topUp,
+            remaining = bar.text("remaining_display") ?: return null,
+            total = bar.text("total_display").orEmpty(),
+            percentUsed = (bar["pct_used"] as? JsonPrimitive)?.intOrNull,
+            fill = ((bar["fill_fraction"] as? JsonPrimitive)?.doubleOrNull ?: 0.0).toFloat().coerceIn(0f, 1f),
+        )
+    }
+
+    private suspend fun attempt(method: String): Result<JsonObject> =
+        try {
+            Result.success(call(method, emptyMap()))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
 
     private fun operationOf(root: JsonObject): ConnectorOperation {
         val targets = (root["targets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }

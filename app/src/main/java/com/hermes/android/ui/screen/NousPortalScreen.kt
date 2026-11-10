@@ -1,17 +1,20 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,13 +23,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -41,7 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
 import com.hermes.android.domain.portal.Connector
 import com.hermes.android.domain.portal.ConnectorAccount
+import com.hermes.android.domain.portal.ConnectorTool
 import com.hermes.android.domain.portal.PortalStatus
+import com.hermes.android.domain.portal.PortalUsage
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.viewmodel.NousPortalViewModel
@@ -68,6 +76,7 @@ fun NousPortalScreen(
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+    var renaming by remember { mutableStateOf<ConnectorAccount?>(null) }
 
     HermesScaffold(
         title = stringResource(R.string.portal_title),
@@ -87,6 +96,14 @@ fun NousPortalScreen(
             if (state.loading) item(key = "loading") { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
             item(key = "status") {
                 PortalStatusCard(state.status, state.statusError, state.loading) { url -> runCatching { uriHandler.openUri(url) } }
+            }
+            state.usage?.let { usage ->
+                item(key = "usage") {
+                    // The account card already has the Portal button when the server gave its address.
+                    PortalUsageCard(usage, showPortalButton = state.status?.subscriptionUrl == null) { url ->
+                        runCatching { uriHandler.openUri(url) }
+                    }
+                }
             }
             item(key = "connectors-title") {
                 Text(
@@ -115,11 +132,147 @@ fun NousPortalScreen(
                         onConnect = { viewModel.connect(connector) },
                         onCancel = viewModel::cancelConnect,
                         onRemove = viewModel::removeAccount,
+                        onRename = { renaming = it },
+                        onTools = { viewModel.showTools(connector) },
                     )
                 }
             }
         }
     }
+
+    renaming?.let { account ->
+        RenameAccountDialog(
+            account = account,
+            onRename = { alias ->
+                viewModel.renameAccount(account, alias)
+                renaming = null
+            },
+            onDismiss = { renaming = null },
+        )
+    }
+    state.toolsFor?.let { connector ->
+        ConnectorToolsDialog(connector, state.tools, state.toolsError, onDismiss = viewModel::hideTools)
+    }
+}
+
+@Composable
+private fun PortalUsageCard(usage: PortalUsage, showPortalButton: Boolean, onOpen: (String) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.portal_usage), style = MaterialTheme.typography.titleMedium)
+            usage.planName?.let { PortalLine(stringResource(R.string.portal_usage_plan), it) }
+            usage.renews?.let { PortalLine(stringResource(R.string.portal_usage_renews), it) }
+            usage.organization?.let { PortalLine(stringResource(R.string.portal_usage_organization), it) }
+            usage.balance?.let { PortalLine(stringResource(R.string.portal_usage_balance), it) }
+            usage.bars.forEach { bar ->
+                PortalLine(
+                    label = stringResource(if (bar.topUp) R.string.portal_usage_topup_credits else R.string.portal_usage_plan_credits),
+                    value = if (bar.total.isBlank() || bar.topUp) {
+                        stringResource(R.string.portal_usage_left, bar.remaining)
+                    } else {
+                        stringResource(R.string.portal_usage_left_of, bar.remaining, bar.total)
+                    },
+                )
+                LinearProgressIndicator(progress = { bar.fill }, modifier = Modifier.fillMaxWidth())
+            }
+            usage.totalSpendable?.let { PortalLine(stringResource(R.string.portal_usage_spendable), it) }
+            usage.freeModel?.let { PortalLine(stringResource(R.string.portal_usage_free_model), it) }
+            usage.pendingDowngrade?.let { PortalLine(stringResource(R.string.portal_usage_changes_to), it) }
+            usage.cancellation?.let { PortalLine(stringResource(R.string.portal_usage_ends), it) }
+            val portal = usage.portalUrl
+            if (showPortalButton && portal != null) {
+                OutlinedButton(onClick = { onOpen(portal) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.portal_usage_open_portal))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenameAccountDialog(account: ConnectorAccount, onRename: (String) -> Unit, onDismiss: () -> Unit) {
+    var alias by remember(account.connectionId) { mutableStateOf(account.alias.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.portal_account_rename)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (account.label.isNotBlank()) {
+                    Text(
+                        text = account.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedTextField(
+                    value = alias,
+                    onValueChange = { alias = it },
+                    label = { Text(stringResource(R.string.portal_account_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onRename(alias) }, enabled = alias.isNotBlank() && alias.trim() != account.alias) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun ConnectorToolsDialog(connector: Connector, tools: List<ConnectorTool>?, error: String?, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.portal_tools_of, connector.name)) },
+        text = {
+            when {
+                tools == null -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                error != null -> PortalNote(error)
+                tools.isEmpty() -> PortalNote(stringResource(R.string.portal_tools_empty))
+                else -> LazyColumn(
+                    modifier = Modifier.heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(tools) { tool ->
+                        Column {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(tool.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                val facet = when (tool.facet) {
+                                    "read" -> stringResource(R.string.portal_tool_reads)
+                                    "write" -> stringResource(R.string.portal_tool_writes)
+                                    "destructive" -> stringResource(R.string.portal_tool_deletes)
+                                    else -> null
+                                }
+                                if (facet != null) {
+                                    Text(
+                                        text = facet,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (tool.facet == "destructive") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            if (tool.description.isNotBlank()) {
+                                Text(
+                                    text = tool.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+    )
 }
 
 @Composable
@@ -201,6 +354,8 @@ private fun ConnectorCard(
     onConnect: () -> Unit,
     onCancel: () -> Unit,
     onRemove: (ConnectorAccount) -> Unit,
+    onRename: (ConnectorAccount) -> Unit,
+    onTools: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -231,6 +386,9 @@ private fun ConnectorCard(
                         Text(stringResource(if (connector.connected) R.string.portal_connector_add_account else R.string.connect))
                     }
                 }
+                if (connector.connected && !connecting) {
+                    TextButton(onClick = onTools) { Text(stringResource(R.string.portal_tools)) }
+                }
             }
             if (connector.description.isNotBlank()) {
                 Text(
@@ -255,7 +413,8 @@ private fun ConnectorCard(
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+                        // Tapping the name renames the account.
+                        modifier = Modifier.weight(1f).clickable(enabled = !busy) { onRename(account) },
                     )
                     if (removing == account.connectionId) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)

@@ -88,6 +88,7 @@ import com.hermes.android.ui.viewmodel.ConfigViewModel
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
+import com.hermes.android.ui.viewmodel.ErrorEvent
 import com.hermes.android.ui.viewmodel.SessionItem
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.DrawerValue
@@ -113,6 +114,10 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.platform.LocalResources
 
 // Extracted composables (same package, no import needed):
 // - ChatConnection.kt: ConnectionIndicator, ConnectionRetryBanner, ShimmerSkeleton
@@ -191,6 +196,9 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val confirmTick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm) }
+    val resources = LocalResources.current
     val filesUnavailable = stringResource(R.string.no_files_app_found_open_your_file)
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showChanges by remember { mutableStateOf(false) }
@@ -222,6 +230,21 @@ fun ChatScreen(
                     listOfNotNull(moveFailedText, result.message).joinToString(": ")
             }
             Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
+    }
+    val chatArchivedText = stringResource(R.string.chat_archived)
+    val undoText = stringResource(R.string.undo)
+    LaunchedEffect(viewModel) {
+        viewModel.archivedChats.collect { sessionId ->
+            // Not awaited here: a second archive must not wait for the first bar to leave.
+            launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = chatArchivedText,
+                    actionLabel = undoText,
+                    duration = SnackbarDuration.Short,
+                )
+                if (result == SnackbarResult.ActionPerformed) viewModel.drawerUnarchive(sessionId)
+            }
         }
     }
     var deleteFromMessageId by remember { mutableStateOf<String?>(null) }
@@ -428,7 +451,7 @@ fun ChatScreen(
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
         if (uiState.sessionLoadedAt > 0L && visibleMessages.isNotEmpty()) {
-            listState.scrollToItem(visibleMessages.lastIndex)
+            listState.scrollToChatEnd(visibleMessages.lastIndex, animate = false)
         }
     }
 
@@ -436,7 +459,9 @@ fun ChatScreen(
     LaunchedEffect(uiState.errorEvent) {
         uiState.errorEvent?.let { event ->
             snackbarHostState.showSnackbar(
-                message = event.message,
+                message = (event as? ErrorEvent.Critical)?.messageRes?.let { resources.getString(it) } ?: event.message,
+                // One that stays until dismissed carries the button that dismisses it.
+                withDismissAction = event.autoDismissMs <= 0,
                 duration = if (event.autoDismissMs > 0) SnackbarDuration.Short else SnackbarDuration.Indefinite,
             )
             // Auto-dismiss after specified duration (0 = manual only)
@@ -514,8 +539,8 @@ fun ChatScreen(
                         }
                     },
                     unreadOf = { session -> sessionActivity[session.id]?.unreadReplies ?: 0 },
+                    pinnedIds = uiState.drawerPinnedIds,
                     destinations = rememberWorkspaceDestinations(
-                        onAgent = { closeDrawerThen(onNavigateToSettings) },
                         onScheduled = { closeDrawerThen(onNavigateToCron) },
                         onGroups = { closeDrawerThen(onNavigateToGroups) },
                         onKanban = if (kanbanSwitchedOn && viewModel.kanbanAvailable) {
@@ -533,7 +558,10 @@ fun ChatScreen(
                         },
                     ),
                     onSearch = { closeDrawerThen(onNavigateToSessions) },
-                    onNewChat = { closeDrawerThen { viewModel.newConversation() } },
+                    onNewChat = {
+                        confirmTick()
+                        closeDrawerThen { viewModel.newConversation() }
+                    },
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
                     onSettings = { closeDrawerThen(onNavigateToSettings) },
@@ -560,6 +588,7 @@ fun ChatScreen(
                                 }) { Text(stringResource(R.string.rename)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    confirmTick()
                                     viewModel.drawerTogglePin(target.id)
                                 }) { Text(if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) }
                                 TextButton(onClick = {
@@ -569,6 +598,7 @@ fun ChatScreen(
                                 }) { Text(stringResource(R.string.move_to_project)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    confirmTick()
                                     viewModel.drawerArchive(target.id)
                                 }) { Text(stringResource(R.string.archive)) }
                                 TextButton(onClick = {
@@ -661,7 +691,10 @@ fun ChatScreen(
                         },
                         // Red text, as every other delete in the app confirms.
                         confirmButton = {
-                            TextButton(onClick = { viewModel.drawerConfirmDelete() }) {
+                            TextButton(onClick = {
+                                confirmTick()
+                                viewModel.drawerConfirmDelete()
+                            }) {
                                 Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
@@ -737,7 +770,10 @@ fun ChatScreen(
                         HxHeaderCircleButton(
                             icon = HxIcons.NewChat,
                             contentDescription = stringResource(R.string.new_chat),
-                            onClick = { viewModel.newConversation() },
+                            onClick = {
+                                confirmTick()
+                                viewModel.newConversation()
+                            },
                             iconSize = 25.dp,
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1010,10 +1046,12 @@ fun ChatScreen(
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
                                 onCopyMessage = { text ->
+                                    confirmTick()
                                     clipboardManager.setText(AnnotatedString(text))
                                     Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onCopyCode = { code ->
+                                    confirmTick()
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
@@ -1103,7 +1141,7 @@ fun ChatScreen(
                             onClick = {
                                 scope.launch {
                                     if (visibleMessages.isNotEmpty()) {
-                                        listState.animateScrollToItem(visibleMessages.lastIndex)
+                                        listState.scrollToChatEnd(visibleMessages.lastIndex, animate = true)
                                     }
                                 }
                             },
@@ -1352,5 +1390,24 @@ fun ChatScreen(
                 showProfiles = false
             },
         )
+    }
+}
+
+/**
+ * Scrolls to the end of the chat: the foot of the last message at the foot of the list.
+ * scrollToItem alone puts the message's top at the top, which for a reply taller than the
+ * screen is its first lines. [lastIndex] is the last message, not the spacer after it.
+ */
+private suspend fun androidx.compose.foundation.lazy.LazyListState.scrollToChatEnd(lastIndex: Int, animate: Boolean) {
+    if (lastIndex < 0) return
+    // Already on screen: one move to its foot, not a jump to its top first.
+    if (layoutInfo.visibleItemsInfo.none { it.index == lastIndex }) {
+        if (animate) animateScrollToItem(lastIndex) else scrollToItem(lastIndex)
+    }
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == lastIndex } ?: return
+    val below = item.offset + item.size - (info.viewportEndOffset - info.afterContentPadding)
+    if (below > 0) {
+        if (animate) animateScrollBy(below.toFloat()) else scrollBy(below.toFloat())
     }
 }
