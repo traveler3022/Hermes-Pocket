@@ -1,0 +1,52 @@
+name: Linux speed bench
+
+# Same rootfs, same Hermes install, same proot binary and arguments as the app's built-in Linux,
+# timed natively (chroot) and under proot with and without -0 / seccomp. arm64 runner.
+on:
+  push:
+    branches: [fieldtest/speed]
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rootfs with Hermes, installed natively
+        run: |
+          sudo mkdir -p /opt/rf
+          sudo tar -xzf app/src/main/assets/linux/rootfs-arm64-v8a.tar.gz -C /opt/rf
+          sudo rm -f /opt/rf/etc/resolv.conf
+          printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo tee /opt/rf/etc/resolv.conf >/dev/null
+          sudo mkdir -p /opt/rf/opt/bench /opt/rf/tmp
+          sudo cp ci/speed/install.sh ci/speed/bench.sh ci/speed/micro.py /opt/rf/opt/bench/
+          for d in proc dev sys; do sudo mount --bind /$d /opt/rf/$d; done
+          sudo chroot /opt/rf /usr/bin/env -i HOME=/root USER=root LANG=C.UTF-8 TERM=xterm-256color TMPDIR=/tmp \
+            PIP_BREAK_SYSTEM_PACKAGES=1 UV_BREAK_SYSTEM_PACKAGES=1 HERMES_DISABLE_LAZY_INSTALLS=1 GIT_OPTIONAL_LOCKS=0 \
+            PATH=/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            /bin/sh /opt/bench/install.sh
+      - name: App shell.exec commands
+        run: |
+          sudo python3 ci/speed/appcalls.py /opt/rf/opt/bench
+          sudo cp ci/speed/filtercheck.py /opt/rf/opt/bench/
+          sudo chroot /opt/rf /usr/bin/env -i HOME=/root HERMES_HOME=/root/.hermes HERMES_DISABLE_LAZY_INSTALLS=1 \
+            PATH=/usr/local/bin:/usr/bin:/bin /root/.hermes/hermes-agent/venv/bin/python /opt/bench/filtercheck.py
+      - name: Bench native (chroot)
+        run: |
+          for i in 1 2 3; do
+            sudo chroot /opt/rf /usr/bin/env -i HOME=/root USER=root LANG=C.UTF-8 TERM=xterm-256color TMPDIR=/tmp \
+              GIT_OPTIONAL_LOCKS=0 HERMES_DISABLE_LAZY_INSTALLS=1 \
+              PATH=/root/.local/bin:/root/.hermes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+              /bin/bash /opt/bench/bench.sh chroot
+          done | tee -a /tmp/results.txt
+          for d in proc dev sys; do sudo umount /opt/rf/$d; done
+      - name: Bench proot (app binary and arguments, in termux-docker)
+        run: |
+          docker run -d --name termux --privileged -v /opt/rf:/rf -v "$PWD/app/src/main/jniLibs/arm64-v8a:/jni:ro" \
+            -v "$PWD/ci/speed:/ci:ro" termux/termux-docker:aarch64 sleep infinity
+          sleep 5
+          docker exec termux /data/data/com.termux/files/usr/bin/bash /ci/proot-bench.sh 2>&1 | tee -a /tmp/results.txt
+      - name: Summary
+        if: always()
+        run: python3 ci/speed/summary.py /tmp/results.txt | tee -a "$GITHUB_STEP_SUMMARY"
