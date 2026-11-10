@@ -93,3 +93,56 @@ suspend fun GatewayClient.execPython(script: String): String {
     }
     return (result?.get("stdout") as? JsonPrimitive)?.contentOrNull.orEmpty()
 }
+
+/** Characters of a long result sent per shell.exec call; the gateway keeps only the last 4000 of stdout. */
+private const val LONG_RESULT_CHUNK = 3500
+
+/**
+ * Appended to a script that leaves its answer in `RESULT`: prints a header line and the first
+ * chunk, and parks the whole text in a temp file when it does not fit in one answer.
+ */
+private val LONG_RESULT_FOOTER = """
+    import json as _json, os as _os, sys as _sys, tempfile as _tempfile
+    _path = ''
+    if len(RESULT) > $LONG_RESULT_CHUNK:
+        _fd, _path = _tempfile.mkstemp(prefix='hermes-pocket-')
+        with _os.fdopen(_fd, 'w', encoding='utf-8') as _f:
+            _f.write(RESULT)
+    _sys.stdout.write(_json.dumps({'total': len(RESULT), 'path': _path}) + '\n' + RESULT[:$LONG_RESULT_CHUNK])
+""".trimIndent()
+
+/**
+ * [execPython] for a script whose answer can pass 4000 characters (a provider's model list).
+ * `shell.exec` returns only the tail of stdout, so a long answer arrived without its start and
+ * no longer parsed. The script assigns its answer to `RESULT` instead of printing it; the text
+ * then comes back in chunks, and the temp file is removed with the last one.
+ */
+suspend fun GatewayClient.execPythonLong(script: String): String {
+    val first = execPython(script + "\n" + LONG_RESULT_FOOTER)
+    val header = runCatching {
+        kotlinx.serialization.json.Json.parseToJsonElement(first.substringBefore('\n')) as? JsonObject
+    }.getOrNull() ?: throw IllegalStateException("unreadable script answer")
+    val total = (header["total"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
+    val path = (header["path"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+    val text = StringBuilder(first.substringAfter('\n', ""))
+    // Offsets count what the script sent, not what arrived: the gateway may redact a chunk.
+    var offset = LONG_RESULT_CHUNK
+    while (path.isNotEmpty() && offset < total) {
+        text.append(
+            execPython(
+                """
+                import base64, os, sys
+                p = base64.b64decode('${b64(path)}').decode()
+                with open(p, encoding='utf-8') as f:
+                    s = f.read()
+                a = $offset
+                if a + $LONG_RESULT_CHUNK >= len(s):
+                    os.remove(p)
+                sys.stdout.write(s[a:a + $LONG_RESULT_CHUNK])
+                """.trimIndent(),
+            ),
+        )
+        offset += LONG_RESULT_CHUNK
+    }
+    return text.toString()
+}
