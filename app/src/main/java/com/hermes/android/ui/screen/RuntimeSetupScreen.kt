@@ -458,6 +458,8 @@ internal fun RemoteServerSetupContent(
         onConnect = { url -> viewModel.connectToServer(url) },
         onCancelConnect = { viewModel.cancelConnect() },
         onSignIn = { url, user, password -> viewModel.signInToRemoteServer(url, user, password) },
+        onBrowserSignIn = { url -> viewModel.signInWithBrowser(url) },
+        onCancelSignIn = { viewModel.cancelSignIn() },
         onSignOut = { viewModel.signOut() },
     )
     ConnectionStatusBlock(
@@ -764,6 +766,8 @@ private fun ServerConfigCard(
     onConnect: (url: String) -> Unit,
     onCancelConnect: () -> Unit,
     onSignIn: (url: String, username: String, password: String) -> Unit,
+    onBrowserSignIn: (url: String) -> Unit,
+    onCancelSignIn: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     var url by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
@@ -875,6 +879,21 @@ private fun ServerConfigCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                OutlinedButton(
+                    onClick = { onBrowserSignIn(url) },
+                    enabled = !signingIn && url.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.server_browser_sign_in))
+                }
+                Text(
+                    text = stringResource(R.string.server_browser_sign_in_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (signingIn) {
+                    TextButton(onClick = onCancelSignIn) { Text(stringResource(R.string.cancel)) }
+                }
             }
         }
     }

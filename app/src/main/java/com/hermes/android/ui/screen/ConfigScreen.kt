@@ -137,6 +137,7 @@ fun ConfigScreen(
     onNavigateToVault: () -> Unit = {},
     onNavigateToOps: () -> Unit = {},
     onNavigateToForeignSessions: () -> Unit = {},
+    onNavigateToNousPortal: () -> Unit = {},
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     /** A [SettingsSection] name to open straight into (from Maintenance); back then leaves Settings. */
@@ -212,6 +213,7 @@ fun ConfigScreen(
                     onNavigateToOps = onNavigateToOps,
                     onNavigateToVault = onNavigateToVault,
                     onNavigateToForeignSessions = onNavigateToForeignSessions,
+                    onNavigateToNousPortal = onNavigateToNousPortal,
                 )
                 SettingsSection.GENERAL_SETTINGS -> GeneralSettingsSection(
                     state = uiState,

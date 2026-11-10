@@ -308,6 +308,7 @@ class SettingsScreenshotsTest {
                     onNavigateToOps = {},
                     onNavigateToVault = {},
                     onNavigateToForeignSessions = {},
+                    onNavigateToNousPortal = {},
                 )
             }
         }

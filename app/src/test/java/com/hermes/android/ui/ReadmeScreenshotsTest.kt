@@ -284,6 +284,7 @@ private fun ControlCenter() {
                 onNavigateToOps = {},
                 onNavigateToVault = {},
                 onNavigateToForeignSessions = {},
+                onNavigateToNousPortal = {},
             )
         }
     }

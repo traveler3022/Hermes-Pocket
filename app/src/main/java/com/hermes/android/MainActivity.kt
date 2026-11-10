@@ -391,6 +391,7 @@ private fun HermesNavHost(
                 onNavigateToVault = { navController.navigate("vault") },
                 onNavigateToOps = { navController.navigate("ops") },
                 onNavigateToForeignSessions = { navController.navigate("foreign-sessions") },
+                onNavigateToNousPortal = { navController.navigate("nous-portal") },
                 themeModeState = themeModeState,
                 appLanguageState = appLanguageState,
             )
@@ -445,6 +446,12 @@ private fun HermesNavHost(
 
         composable("achievements") {
             com.hermes.android.ui.screen.AchievementsScreen(
+                onNavigateBack = dropUnlessResumed { navController.popBackStack() },
+            )
+        }
+
+        composable("nous-portal") {
+            com.hermes.android.ui.screen.NousPortalScreen(
                 onNavigateBack = dropUnlessResumed { navController.popBackStack() },
             )
         }

@@ -920,7 +920,7 @@ class ProotLinuxRuntime @Inject constructor(
             def install_dashboard():
                 log = logging.getLogger("android-dashboard")
                 lock, state = threading.Lock(), {}
-                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics", "/api/plugins/hermes-achievements/", "/api/ops/", "/api/actions/", "/api/model/moa", "/api/model/auxiliary", "/api/model/set", "/api/sessions")
+                allowed = ("/api/cron/blueprints", "/api/cron/jobs", "/api/memory", "/api/tools", "/api/env", "/api/config", "/api/learning", "/api/mcp/servers", "/api/skills", "/api/analytics", "/api/plugins/hermes-achievements/", "/api/ops/", "/api/actions/", "/api/model/moa", "/api/model/auxiliary", "/api/model/set", "/api/sessions", "/api/portal")
                 def client():
                     with lock:
                         if "client" not in state:
