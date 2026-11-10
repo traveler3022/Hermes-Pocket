@@ -1423,4 +1423,6 @@
     <string name="project_folder_on_server">پوشه روی سرور</string>
     <string name="project_folder_hint">مثلاً ~/code/my-app</string>
     <string name="project_primary_folder">چت‌های جدید اینجا شروع می‌شن</string>
+    <string name="chat_archived">چت بایگانی شد</string>
+    <string name="undo">واگرد</string>
 </resources>

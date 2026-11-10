@@ -310,7 +310,12 @@ sealed class ErrorEvent {
     /** Actionable error the user should see (send failed, attach failed). */
     data class Error(override val message: String, override val autoDismissMs: Long = 6000) : ErrorEvent()
     /** Critical — connection dead, gateway unreachable. Stays until resolved. */
-    data class Critical(override val message: String, override val autoDismissMs: Long = 0) : ErrorEvent()
+    data class Critical(
+        override val message: String,
+        override val autoDismissMs: Long = 0,
+        /** The same text as a string resource, so the screen shows it in the app's language. */
+        @androidx.annotation.StringRes val messageRes: Int? = null,
+    ) : ErrorEvent()
 }
 
 /**

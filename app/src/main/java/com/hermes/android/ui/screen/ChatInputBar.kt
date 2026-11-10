@@ -57,6 +57,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AttachFile
+import com.hermes.android.ui.icons.outlined.PermMedia
+import androidx.activity.result.PickVisualMediaRequest
 import com.hermes.android.ui.icons.filled.Mic
 import com.hermes.android.ui.icons.filled.PhotoCamera
 import com.hermes.android.ui.icons.filled.Stop
@@ -128,6 +130,10 @@ internal fun InputBar(
     ) { uris -> if (uris.isNotEmpty()) onAttachFiles(uris) }
     // The camera app writes into a file of ours (no CAMERA permission: the app declares none,
     // so TakePicture needs none). Saved, as the app can be killed while the camera is open.
+    // The system photo picker: the gallery's grid, with no storage permission.
+    val galleryPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris -> if (uris.isNotEmpty()) onAttachFiles(uris) }
     var cameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
@@ -313,7 +319,8 @@ internal fun InputBar(
                     // A real trailing icon for "remove", not a ✕ typed into the label.
                     InputChip(
                         selected = false,
-                        onClick = { onRemoveAttachment(attachment) },
+                        // Only the cross removes it: a tap on the name used to, and lost the file.
+                        onClick = {},
                         leadingIcon = {
                             // Still on its way: how much of it has reached Hermes.
                             val progress = attachment.progress
@@ -348,7 +355,11 @@ internal fun InputBar(
                             Icon(
                                 HxIcons.X,
                                 contentDescription = stringResource(R.string.remove_attachment),
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { onRemoveAttachment(attachment) }
+                                    .padding(4.dp)
+                                    .size(16.dp),
                             )
                         },
                     )
@@ -376,7 +387,7 @@ internal fun InputBar(
                     .contentReceiver(imageReceiver),
                 inputTransformation = largePaste,
                 placeholder = { Text(stringResource(R.string.ask_hermes)) },
-                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
+                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 10),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -408,6 +419,20 @@ internal fun InputBar(
                         }
                     }
                     DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.photos)) },
+                            leadingIcon = { Icon(Icons.Outlined.PermMedia, contentDescription = null) },
+                            onClick = {
+                                attachMenuOpen = false
+                                try {
+                                    galleryPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                                    )
+                                } catch (e: ActivityNotFoundException) {
+                                    filePicker.launch("image/*")
+                                }
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.attach_files)) },
                             leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null) },

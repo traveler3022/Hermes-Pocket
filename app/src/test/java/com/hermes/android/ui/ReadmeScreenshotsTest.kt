@@ -232,7 +232,6 @@ private fun Drawer(fa: Boolean) {
             sessions = sessions,
             activeSessionId = "s0",
             destinations = rememberWorkspaceDestinations(
-                onAgent = {},
                 onScheduled = {},
                 onGroups = {},
                 onMedia = {},

@@ -1443,4 +1443,6 @@
     <string name="project_folder_on_server">Folder on the server</string>
     <string name="project_folder_hint">e.g. ~/code/my-app</string>
     <string name="project_primary_folder">New chats start here</string>
+    <string name="chat_archived">Chat archived</string>
+    <string name="undo">Undo</string>
 </resources>

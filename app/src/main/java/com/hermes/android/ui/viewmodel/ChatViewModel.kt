@@ -115,12 +115,17 @@ class ChatViewModel @Inject constructor(
         gatewayClient, hermesRuntime, linuxFiles, context, downloads, viewModelScope, uploads,
     )
 
+    /** A chat the drawer just archived, by stored id: the screen offers to undo it. */
+    private val _archivedChats = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val archivedChats: kotlinx.coroutines.flow.SharedFlow<String> = _archivedChats
+
     private val drawerDelegate = ChatDrawerDelegate(
         gatewayClient, viewModelScope,
         loadSessionList = { sessionDelegate.loadList(it) },
         createNewSession = { sessionDelegate.create(it) },
         renameSession = { id, title -> sessionRepository.rename(id, title) },
-        archiveSession = { id -> checkNotNull(archive) { "archive unavailable" }.setArchived(id, true) },
+        setArchived = { id, archived -> checkNotNull(archive) { "archive unavailable" }.setArchived(id, archived) },
+        onArchived = { id -> _archivedChats.tryEmit(id) },
         forgetSessionActivity = { sessionId ->
             liveIdsFor(sessionId).forEach {
                 backgroundSessions.forget(it)
@@ -346,7 +351,10 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Failed to connect to gateway")
                 _uiState.update { it.copy(
-                    errorEvent = ErrorEvent.Critical("Cannot connect to Hermes gateway. Is it running?"),
+                    errorEvent = ErrorEvent.Critical(
+                        "Cannot connect to Hermes gateway. Is it running?",
+                        messageRes = com.hermes.android.R.string.could_not_connect_to_hermes_gateway,
+                    ),
                     connectionState = ChatConnectionState.Failed,
                 ) }
             }
@@ -833,6 +841,7 @@ class ChatViewModel @Inject constructor(
     fun drawerHideDelete() = drawerDelegate.hideDelete(_uiState)
     fun drawerConfirmDelete() = drawerDelegate.confirmDelete(_uiState)
     fun drawerArchive(sessionId: String) = drawerDelegate.archive(_uiState, sessionId)
+    fun drawerUnarchive(sessionId: String) = drawerDelegate.unarchive(_uiState, sessionId)
 
     // ── Reactions (delegated) ────────────────────────────────────────────
 
