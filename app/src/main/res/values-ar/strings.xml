@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text without an entry here falls back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="notification_channel_gateway_name">خدمة البوابة</string>
+    <string name="notification_channel_gateway_desc">تُبقي بوابة Hermes قيد التشغيل في الخلفية</string>
+    <string name="gateway_notification_title">بوابة Hermes</string>
+    <string name="gateway_notification_text">البوابة قيد التشغيل</string>
+    <string name="notification_channel_approval_name">الموافقة على الأدوات</string>
+    <string name="notification_channel_approval_desc">إشعارات ذات أولوية عالية لطلبات الموافقة على الأدوات</string>
+    <string name="approval_notification_title">مطلوب الموافقة على أداة</string>
+    <string name="approval_approve">موافقة</string>
+    <string name="approval_deny">رفض</string>
+    <string name="boot_notification_text">جارٍ بدء بوابة Hermes…</string>
+    <string name="notification_channel_agent_name">نشاط الوكيل</string>
+    <string name="notification_channel_agent_desc">نتائج المهام والردود التي تكتمل أثناء وجود التطبيق في الخلفية</string>
+    <string name="notification_agent_reply_title">أكمل Hermes الرد</string>
+    <string name="notification_task_done_title">اكتملت مهمة في الخلفية</string>
+    <string name="chat_send">إرسال</string>
+    <string name="chat_stop">إيقاف</string>
+    <string name="chat_input_hint">اكتب رسالة…</string>
+    <string name="new_conversation">محادثة جديدة</string>
+    <string name="settings">الإعدادات</string>
+</resources>
