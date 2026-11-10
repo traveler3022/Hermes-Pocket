@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.portal.Connector
 import com.hermes.android.domain.portal.ConnectorAccount
+import com.hermes.android.domain.portal.ConnectorTool
 import com.hermes.android.domain.portal.NousPortal
 import com.hermes.android.domain.portal.PortalStatus
+import com.hermes.android.domain.portal.PortalUsage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -38,8 +40,15 @@ class NousPortalViewModel @Inject constructor(
         val accounts: List<ConnectorAccount> = emptyList(),
         /** The app whose connection is waiting on the browser. */
         val connecting: String? = null,
-        /** The account being disconnected. */
+        /** The account being disconnected or renamed. */
         val removing: String? = null,
+        /** Plan, balance and credits; null until read, or when the account has none to show. */
+        val usage: PortalUsage? = null,
+        /** The app whose tools are on show. */
+        val toolsFor: Connector? = null,
+        /** Null while they load. */
+        val tools: List<ConnectorTool>? = null,
+        val toolsError: String? = null,
     )
 
     sealed interface Event {
@@ -54,6 +63,7 @@ class NousPortalViewModel @Inject constructor(
     val events: SharedFlow<Event> = _events.asSharedFlow()
 
     private var loadJob: Job? = null
+    private var toolsJob: Job? = null
     private var connectJob: Job? = null
 
     /** The operation waiting on the browser; woken when the user comes back to the app. */
@@ -82,6 +92,9 @@ class NousPortalViewModel @Inject constructor(
                     accounts = accounts.getOrNull().orEmpty(),
                 )
             }
+            // After the rest: these ask the Portal over the network and may take a while.
+            val usage = attempt { portal.usage() }.getOrNull()
+            _uiState.update { it.copy(usage = usage?.takeUnless { read -> read.isEmpty }) }
         }
     }
 
@@ -150,6 +163,41 @@ class NousPortalViewModel @Inject constructor(
             }
             load()
         }
+    }
+
+    fun renameAccount(account: ConnectorAccount, alias: String) {
+        val name = alias.trim()
+        if (name.isEmpty() || _uiState.value.removing != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(removing = account.connectionId) }
+            try {
+                portal.renameAccount(account.connectionId, name)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[NousPortal] Renaming an account failed")
+                _events.tryEmit(Event.Error(e.message ?: "Could not rename"))
+            } finally {
+                _uiState.update { it.copy(removing = null) }
+            }
+            load()
+        }
+    }
+
+    fun showTools(connector: Connector) {
+        toolsJob?.cancel()
+        _uiState.update { it.copy(toolsFor = connector, tools = null, toolsError = null) }
+        toolsJob = viewModelScope.launch {
+            val tools = attempt { portal.tools(connector.slug) }
+            _uiState.update {
+                it.copy(tools = tools.getOrNull().orEmpty(), toolsError = tools.exceptionOrNull()?.let { e -> e.message ?: "Could not read the tools" })
+            }
+        }
+    }
+
+    fun hideTools() {
+        toolsJob?.cancel()
+        _uiState.update { it.copy(toolsFor = null, tools = null, toolsError = null) }
     }
 
     private suspend fun <T> attempt(block: suspend () -> T): Result<T> =
