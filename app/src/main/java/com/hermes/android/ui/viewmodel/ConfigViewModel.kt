@@ -701,7 +701,7 @@ class ConfigViewModel @Inject constructor(
 
     suspend fun probeProviderModels(baseUrl: String, apiKey: String): ProviderProbe {
         return try {
-            val out = execPython(
+            val out = gatewayClient.execPythonLong(
                 """
                 import base64, json, urllib.request
                 base = base64.b64decode('${b64(baseUrl.trim())}').decode().strip()
@@ -732,7 +732,7 @@ class ConfigViewModel @Inject constructor(
                         err = 'endpoint returned no models'
                     except Exception as e:
                         err = str(e)[:200]
-                print(json.dumps({'models': ids, 'error': err}))
+                RESULT = json.dumps({'models': ids, 'error': err})
                 """.trimIndent(),
             )
             val obj = kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject
@@ -767,7 +767,7 @@ class ConfigViewModel @Inject constructor(
                 // {base}/v1/models so it works whether the base URL already
                 // includes /v1 or not, and surface the real failure reason
                 // (HTTP error / "no models") instead of failing silently.
-                val out = execPython(
+                val out = gatewayClient.execPythonLong(
                     """
                     import base64, json, yaml, pathlib, urllib.request
                     p = pathlib.Path.home() / '.hermes' / 'config.yaml'
@@ -837,7 +837,7 @@ class ConfigViewModel @Inject constructor(
                         chosen = hint
                     if chosen: entry['default_model'] = chosen
                     p.write_text(yaml.dump(d, default_flow_style=False, allow_unicode=True))
-                    print(json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands, 'hint_ignored': hint_ignored, 'hint': hint}))
+                    RESULT = json.dumps({'models': ids, 'chosen': chosen, 'error': err, 'tried': cands, 'hint_ignored': hint_ignored, 'hint': hint})
                     """.trimIndent()
                 )
                 // Save the provider's API key

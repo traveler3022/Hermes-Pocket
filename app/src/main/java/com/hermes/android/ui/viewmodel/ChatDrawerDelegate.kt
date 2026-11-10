@@ -14,7 +14,8 @@ internal class ChatDrawerDelegate(
     private val loadSessionList: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val createNewSession: suspend (MutableStateFlow<ChatUiState>) -> Unit,
     private val renameSession: suspend (sessionId: String, title: String) -> Unit,
-    private val archiveSession: suspend (sessionId: String) -> Unit,
+    private val setArchived: suspend (sessionId: String, archived: Boolean) -> Unit,
+    private val onArchived: (sessionId: String) -> Unit,
     private val forgetSessionActivity: (String) -> Unit,
 ) {
     fun togglePin(state: MutableStateFlow<ChatUiState>, sessionId: String) {
@@ -61,12 +62,27 @@ internal class ChatDrawerDelegate(
     fun archive(state: MutableStateFlow<ChatUiState>, sessionId: String) {
         scope.launch {
             try {
-                archiveSession(sessionId)
+                setArchived(sessionId, true)
                 Timber.i("[Chat] Archived $sessionId")
+                onArchived(sessionId)
                 loadSessionList(state)
             } catch (e: Exception) {
                 Timber.e(e, "[Chat] Archive failed")
                 state.update { it.copy(errorEvent = ErrorEvent.Error("Archive failed: ${e.message}")) }
+            }
+        }
+    }
+
+    /** Undo of [archive]: back in the list. */
+    fun unarchive(state: MutableStateFlow<ChatUiState>, sessionId: String) {
+        scope.launch {
+            try {
+                setArchived(sessionId, false)
+                Timber.i("[Chat] Unarchived $sessionId")
+                loadSessionList(state)
+            } catch (e: Exception) {
+                Timber.e(e, "[Chat] Unarchive failed")
+                state.update { it.copy(errorEvent = ErrorEvent.Error("Unarchive failed: ${e.message}")) }
             }
         }
     }

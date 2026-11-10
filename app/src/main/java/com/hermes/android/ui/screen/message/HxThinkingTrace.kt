@@ -368,6 +368,10 @@ internal fun HxThinkingTrace(
     status: String = "",
     /** Settings > "Hermes kaomoji": the agent's own face and verb in place of the star. */
     kaomoji: Boolean = false,
+    /** Opens the turn's sheet where the chat hosts it; null: this line hosts its own. */
+    onOpenSheet: (() -> Unit)? = null,
+    /** How long it thought, for a sheet the chat hosts. */
+    onElapsed: (Long?) -> Unit = {},
 ) {
     if (items.isEmpty()) return
     val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
@@ -391,6 +395,9 @@ internal fun HxThinkingTrace(
         if (startedAt == 0L || finishedAt == 0L) null
         else ((finishedAt - startedAt) / 1000L).coerceAtLeast(1L)
     }
+    if (onOpenSheet != null) {
+        LaunchedEffect(elapsedSeconds) { onElapsed(elapsedSeconds) }
+    }
 
     // The agent's kaomoji status ("(◕‿◕) pondering...") picks one face and one
     // verb per turn — Hermes sends a fresh random pair on every API call, and
@@ -412,7 +419,7 @@ internal fun HxThinkingTrace(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 6.dp, bottom = 4.dp)
-            .noRippleClickable { sheetVisible = true },
+            .noRippleClickable { if (onOpenSheet != null) onOpenSheet() else sheetVisible = true },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -451,20 +458,56 @@ internal fun HxThinkingTrace(
     }
 
     if (sheetVisible) {
-        ModalBottomSheet(
-            onDismissRequest = { sheetVisible = false },
-            sheetState = rememberModalBottomSheetState(),
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            dragHandle = { HxSheetGrabber() },
-        ) {
-            HxThinkingSheetContent(
-                items = items,
-                isComplete = !isStreaming,
-                elapsedSeconds = elapsedSeconds,
-            )
+        HxThinkingSheet(
+            items = items,
+            isComplete = !isStreaming,
+            elapsedSeconds = elapsedSeconds,
+            onDismiss = { sheetVisible = false },
+        )
+    }
+}
+
+/** The full trace of a turn, in a bottom sheet. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun HxThinkingSheet(
+    items: List<HxTraceItem>,
+    isComplete: Boolean,
+    elapsedSeconds: Long?,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        dragHandle = { HxSheetGrabber() },
+    ) {
+        HxThinkingSheetContent(
+            items = items,
+            isComplete = isComplete,
+            elapsedSeconds = elapsedSeconds,
+        )
+    }
+}
+
+/**
+ * With short replies folded, which reply ends each turn and so carries its
+ * trace, keyed by the question that opened the turn ("" before the first).
+ * Same spans as [buildTurnWork]: the owner moves to a new bubble every time
+ * an interim reply is sealed, while the turn stays the same.
+ */
+internal fun traceOwnersByTurn(messages: List<ChatMessage>): Map<String, String> {
+    val owners = mutableMapOf<String, String>()
+    var turn = ""
+    for (msg in messages) {
+        when (msg) {
+            is ChatMessage.User -> turn = msg.id
+            is ChatMessage.Assistant -> owners[turn] = msg.id
+            else -> Unit
         }
     }
+    return owners
 }
 
 /** What the collapsed line reads once the turn is over: how long it thought,

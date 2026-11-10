@@ -7,7 +7,12 @@ import com.hermes.android.R
 enum class AppLanguage(val key: String, val label: String) {
     AUTO("auto", "Auto"),
     ENGLISH("en", "English"),
-    FARSI("fa", "فارسی");
+    FARSI("fa", "فارسی"),
+    ARABIC("ar", "العربية"),
+    GERMAN("de", "Deutsch"),
+    RUSSIAN("ru", "Русский"),
+    JAPANESE("ja", "日本語"),
+    CHINESE("zh", "简体中文");
 
     companion object {
         fun fromKey(key: String): AppLanguage = entries.firstOrNull { it.key == key } ?: AUTO

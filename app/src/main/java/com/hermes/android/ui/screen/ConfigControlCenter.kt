@@ -115,6 +115,7 @@ internal fun ControlCenterMenu(
     onNavigateToOps: () -> Unit,
     onNavigateToVault: () -> Unit,
     onNavigateToForeignSessions: () -> Unit,
+    onNavigateToNousPortal: () -> Unit,
 ) {
     val toolsOn = state.availableTools.count { it.enabled }
     val toolsTotal = state.availableTools.size
@@ -294,6 +295,14 @@ internal fun ControlCenterMenu(
                 tint = HxIconColors.indigo,
                 subtitle = stringResource(R.string.foreign_sessions_nav_subtitle),
                 onClick = onNavigateToForeignSessions,
+            )
+            CcDivider()
+            CcRow(
+                title = stringResource(R.string.portal_title),
+                icon = Icons.Default.Link,
+                tint = HxIconColors.purple,
+                subtitle = stringResource(R.string.portal_nav_subtitle),
+                onClick = onNavigateToNousPortal,
             )
         }
 
@@ -528,6 +537,6 @@ private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
 @Composable
 internal fun languageLabel(lang: AppLanguage): String = when (lang) {
     AppLanguage.AUTO -> stringResource(R.string.auto)
-    AppLanguage.ENGLISH -> "English"
-    AppLanguage.FARSI -> "فارسی"
+    // Every language under its own name, so it can be found from any other.
+    else -> lang.label
 }

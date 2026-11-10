@@ -4,6 +4,7 @@ import com.hermes.android.data.AppReleaseRepository
 import com.hermes.android.data.ChatUploadRepository
 import com.hermes.android.data.CronBlueprintsRepository
 import com.hermes.android.data.CronJobsRepository
+import com.hermes.android.data.CronWakeScheduler
 import com.hermes.android.data.ServerHermesUpdatesRepository
 import com.hermes.android.data.DownloadStorage
 import com.hermes.android.data.GroupsRepository
@@ -11,6 +12,7 @@ import com.hermes.android.data.AchievementsRepository
 import com.hermes.android.data.ArchivedChatsRepository
 import com.hermes.android.data.CredentialVaultRepository
 import com.hermes.android.data.ForeignSessionsRepository
+import com.hermes.android.data.NousPortalRepository
 import com.hermes.android.data.ServerOpsRepository
 import com.hermes.android.data.ModelSlotsRepository
 import com.hermes.android.data.LearningRepository
@@ -41,11 +43,13 @@ import com.hermes.android.data.TaskRegistry
 import com.hermes.android.domain.achievements.Achievements
 import com.hermes.android.domain.session.ArchivedChats
 import com.hermes.android.domain.vault.CredentialVault
+import com.hermes.android.domain.portal.NousPortal
 import com.hermes.android.domain.session.ForeignSessions
 import com.hermes.android.domain.ops.ServerOps
 import com.hermes.android.domain.config.ModelSlots
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.domain.cron.CronWake
 import com.hermes.android.domain.updates.ServerHermesUpdates
 import com.hermes.android.domain.files.Downloads
 import com.hermes.android.domain.files.ServerFiles
@@ -180,6 +184,9 @@ abstract class DataModule {
     abstract fun bindCronJobs(impl: CronJobsRepository): CronJobs
 
     @Binds
+    abstract fun bindCronWake(impl: CronWakeScheduler): CronWake
+
+    @Binds
     abstract fun bindServerHermesUpdates(impl: ServerHermesUpdatesRepository): ServerHermesUpdates
 
     @Binds
@@ -199,6 +206,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindForeignSessions(impl: ForeignSessionsRepository): ForeignSessions
+
+    @Binds
+    abstract fun bindNousPortal(impl: NousPortalRepository): NousPortal
 
     @Binds
     abstract fun bindServerOps(impl: ServerOpsRepository): ServerOps

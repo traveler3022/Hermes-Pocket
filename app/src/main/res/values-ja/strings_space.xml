@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text without an entry here falls back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="space_where_it_goes">容量の内訳</string>
+    <string name="space_where_it_goes_hint">内蔵Linuxの各フォルダの用途と、削除してよいかを表示します</string>
+    <string name="space_total">内蔵Linuxの使用容量: %s</string>
+    <string name="space_scanning">すべてのフォルダを確認中…</string>
+    <string name="space_safe">削除しても安全</string>
+    <string name="space_careful">削除は慎重に</string>
+    <string name="space_needed">Hermesに必要です</string>
+    <string name="space_needed_locked">必要な項目 — ここでは削除できません</string>
+    <string name="space_empty">何もありません。</string>
+    <string name="space_place_your_files">ファイルとエージェントの作業内容</string>
+    <string name="space_place_your_files_desc">ホームフォルダ内のダウンロード、プロジェクト、エージェントが作成したすべてのもの。</string>
+    <string name="space_place_uploads">チャットで送信したファイル</string>
+    <string name="space_place_uploads_desc">あなたとHermesがチャットに添付したファイル。古いチャットではファイルが見つからないと表示されます。</string>
+    <string name="space_place_hermes_made">Hermesが作成したファイル</string>
+    <string name="space_place_hermes_made_desc">生成した画像や音声、スクリーンショット、ダウンロード、作業用ファイル、キャッシュ、ログ。</string>
+    <string name="space_place_caches">プログラムのキャッシュ</string>
+    <string name="space_place_caches_desc">プログラムが動作を速くするために保存するダウンロードデータ：pip、npm、AIモデル、ブラウザなど。必要に応じて再ダウンロードされます。</string>
+    <string name="space_place_temp">一時ファイルとログ</string>
+    <string name="space_place_temp_desc">プログラムが残したファイルです。後で必要になることはありません。</string>
+    <string name="space_place_installed">エージェントがインストールしたプログラム</string>
+    <string name="space_place_installed_desc">pip、npm、cargoなどでインストールしたツール。Hermesの動作には影響しませんが、それを使うスキルは再インストールするか、動作を停止します。</string>
+    <string name="space_place_backups">Hermesのバックアップ</string>
+    <string name="space_place_backups_desc">アップデートや修復前のHermesのデータのコピー。元に戻すときだけ必要です。</string>
+    <string name="space_place_hermes">Hermes本体</string>
+    <string name="space_place_hermes_desc">エージェント本体、Python、ツール。</string>
+    <string name="space_place_hermes_data">Hermesのデータ</string>
+    <string name="space_place_hermes_data_desc">チャット、メモリ、設定、スキル、キー。</string>
+    <string name="space_place_system">Linuxシステム</string>
+    <string name="space_place_system_desc">組み込みのLinux、そのプログラムと設定。</string>
+    <string name="space_delete_title">%1$sを削除しますか？</string>
+    <string name="space_delete_text">%1$s個の項目が完全に削除されます。</string>
+    <string name="space_delete_careful">プログラムやバックアップが含まれている場合があります。使用していた機能は、再インストールするまで動作しなくなることがあります。</string>
+    <string name="space_deleting">削除中…</string>
+    <string name="space_hint_models">プログラムがダウンロードしたAIモデル</string>
+    <string name="space_hint_browsers">自動化用にダウンロードしたブラウザ</string>
+    <string name="space_hint_python">Pythonパッケージのダウンロード</string>
+    <string name="space_hint_node">Node.jsパッケージ</string>
+    <string name="space_hint_python_env">パッケージを含むPython環境</string>
+</resources>

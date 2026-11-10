@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -36,8 +37,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +54,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.HermesEmptyState
@@ -57,6 +67,11 @@ import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.CronJob
 import com.hermes.android.ui.viewmodel.CronViewModel
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * Cron Scheduler screen — list, create, edit, pause/resume, delete jobs.
@@ -347,7 +362,11 @@ private fun humanizeCron(schedule: String): String? {
                 stringResource(R.string.every_min, n)
             }
         min.toIntOrNull() != null && hour == "*" && dom == "*" && month == "*" && dow == "*" ->
-            stringResource(R.string.hourly)
+            stringResource(R.string.every_n_hours_at_minute, 1, min.toInt())
+        min.toIntOrNull() != null && hour.startsWith("*/") && dom == "*" && month == "*" && dow == "*" ->
+            hour.removePrefix("*/").toIntOrNull()?.let { n ->
+                stringResource(R.string.every_n_hours_at_minute, n, min.toInt())
+            }
         dom == "*" && month == "*" && dow == "*" ->
             clock()?.let { stringResource(R.string.daily_at, it) }
         dom == "*" && month == "*" -> {
@@ -388,7 +407,7 @@ private fun humanizeCron(schedule: String): String? {
  * [toCron] is the only place the expression gets written, and [parseCron] reads one back
  * so editing an existing job opens on the same controls that would have created it.
  */
-private enum class ScheduleMode { DAILY, DAYS, HOURLY, MINUTES, CUSTOM }
+private enum class ScheduleMode { DAILY, ONCE, DAYS, HOURLY, MINUTES, CUSTOM }
 
 private data class SchedulePick(
     val mode: ScheduleMode,
@@ -397,6 +416,8 @@ private data class SchedulePick(
     /** Cron day-of-week numbers, 0 = Sunday. Empty behaves as every day. */
     val days: Set<Int> = emptySet(),
     val everyN: Int = 15,
+    /** Every this many hours, at [minute] past the hour; 1 = every hour. */
+    val everyHours: Int = 1,
     /** Whatever was typed in the custom box, kept so switching modes does not lose it. */
     val raw: String = "",
 )
@@ -406,8 +427,11 @@ private fun SchedulePick.toCron(): String = when (mode) {
     ScheduleMode.DAYS ->
         if (days.isEmpty()) "$minute $hour * * *"
         else "$minute $hour * * ${days.sorted().joinToString(",")}"
-    ScheduleMode.HOURLY -> "$minute * * * *"
+    ScheduleMode.HOURLY -> if (everyHours <= 1) "$minute * * * *" else "$minute */$everyHours * * *"
     ScheduleMode.MINUTES -> "*/$everyN * * * *"
+    // Hermes takes an ISO time as a one-shot job; the phone's offset makes it today's wall clock.
+    ScheduleMode.ONCE -> ZonedDateTime.of(LocalDate.now(), LocalTime.of(hour, minute), ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
     ScheduleMode.CUSTOM -> raw
 }
 
@@ -419,6 +443,15 @@ private fun SchedulePick.toCron(): String = when (mode) {
 private fun parseCron(schedule: String?): SchedulePick {
     val raw = schedule?.trim().orEmpty()
     if (raw.isEmpty()) return SchedulePick(ScheduleMode.DAILY)
+    // Hermes lists a one-shot as "once at 2026-10-28 21:45". Today's opens on its clock; another
+    // day's stays as typed text, since "only today" would quietly move it to today.
+    Regex("""^once at (\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})""").find(raw)?.destructured?.let { (date, h, m) ->
+        return if (date == LocalDate.now().toString()) {
+            SchedulePick(ScheduleMode.ONCE, hour = h.toInt(), minute = m.toInt(), raw = raw)
+        } else {
+            SchedulePick(ScheduleMode.CUSTOM, raw = "${date}T$h:$m")
+        }
+    }
     val parts = raw.split(Regex("\\s+"))
     if (parts.size != 5) return SchedulePick(ScheduleMode.CUSTOM, raw = raw)
     val (min, hour, dom, month, dow) = parts
@@ -430,12 +463,25 @@ private fun parseCron(schedule: String?): SchedulePick {
     if (hour == "*" && dom == "*" && month == "*" && dow == "*") {
         return SchedulePick(ScheduleMode.HOURLY, minute = m, raw = raw)
     }
+    val hourStep = hour.removePrefix("*/").toIntOrNull()
+    if (hour.startsWith("*/") && hourStep != null && hourStep in HOUR_STEPS && dom == "*" && month == "*" && dow == "*") {
+        return SchedulePick(ScheduleMode.HOURLY, minute = m, everyHours = hourStep, raw = raw)
+    }
     val h = hour.toIntOrNull() ?: return SchedulePick(ScheduleMode.CUSTOM, raw = raw)
     if (dom != "*" || month != "*") return SchedulePick(ScheduleMode.CUSTOM, raw = raw)
     if (dow == "*") return SchedulePick(ScheduleMode.DAILY, hour = h, minute = m, raw = raw)
     val days = expandDow(dow) ?: return SchedulePick(ScheduleMode.CUSTOM, raw = raw)
     return SchedulePick(ScheduleMode.DAYS, hour = h, minute = m, days = days, raw = raw)
 }
+
+/**
+ * Cron counts hours from midnight again every day, so only steps that divide 24 keep the same
+ * gap all day: "every 5 hours" would run at 20:00 and then again at 00:00.
+ */
+private val HOUR_STEPS = listOf(1, 2, 3, 4, 6, 8, 12)
+
+/** Same for minutes within the hour; nothing under 5, since each run wakes the phone. */
+private val MINUTE_STEPS = listOf(5, 10, 15, 20, 30)
 
 /** "1-5" and "0,6" both mean a set of days; anything else is not ours to interpret. */
 private fun expandDow(dow: String): Set<Int>? {
@@ -498,12 +544,18 @@ internal fun MinuteChips(selected: Int, onPick: (Int) -> Unit) {
 /** Handles both create (existingJob = null) and edit (pre-filled; edit is a
  *  remove+add under the hood since cron.manage has no update verb, but the
  *  user just sees one form either way). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = null) {
     var name by remember(existingJob) { mutableStateOf(existingJob?.name ?: "") }
     var pick by remember(existingJob) { mutableStateOf(parseCron(existingJob?.schedule)) }
+    // Bumped when a template sets the time, so the clock below starts again from it.
+    var timeSource by remember(existingJob) { mutableIntStateOf(0) }
     var prompt by remember(existingJob) { mutableStateOf(existingJob?.let { it.fullPrompt ?: it.promptPreview } ?: "") }
     val schedule = pick.toCron()
+    // Hermes refuses a one-shot more than two minutes in the past; say so here instead.
+    val passedToday = pick.mode == ScheduleMode.ONCE &&
+        LocalTime.of(pick.hour, pick.minute).isBefore(LocalTime.now().withSecond(0).withNano(0))
     val isEdit = existingJob != null
     val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog
 
@@ -546,6 +598,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                 onClick = {
                                     name = idAndSchedule.first
                                     pick = parseCron(idAndSchedule.second)
+                                    timeSource++
                                     prompt = promptText
                                 },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
@@ -571,6 +624,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 ) {
                     listOf(
                         ScheduleMode.DAILY to stringResource(R.string.every_day),
+                        ScheduleMode.ONCE to stringResource(R.string.only_today),
                         ScheduleMode.DAYS to stringResource(R.string.certain_days),
                         ScheduleMode.HOURLY to stringResource(R.string.every_hour),
                         ScheduleMode.MINUTES to stringResource(R.string.every_few_minutes),
@@ -597,7 +651,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 // "every day at 9" is a question with no answer, and the old single
                 // cron field was five of those at once.
                 when (pick.mode) {
-                    ScheduleMode.DAILY, ScheduleMode.DAYS -> {
+                    ScheduleMode.DAILY, ScheduleMode.DAYS, ScheduleMode.ONCE -> {
                         if (pick.mode == ScheduleMode.DAYS) {
                             Text(
                                 text = stringResource(R.string.days),
@@ -626,39 +680,57 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                 }
                             }
                         }
-                        Text(
-                            text = stringResource(R.string.hour),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                        // A clock like any other: one box for the hour, one for the minute, any
+                        // minute of the day. 24 hour chips and 5-minute steps were neither.
+                        key(timeSource) {
+                            val time = rememberTimePickerState(
+                                initialHour = pick.hour,
+                                initialMinute = pick.minute,
+                                is24Hour = true,
+                            )
+                            LaunchedEffect(time.hour, time.minute) {
+                                pick = pick.copy(hour = time.hour, minute = time.minute)
+                            }
+                            // Hour on the left in Persian too, as every clock writes it.
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                TimeInput(state = time)
+                            }
+                        }
+                    }
+                    ScheduleMode.HOURLY -> {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            (0..23).forEach { h ->
+                            HOUR_STEPS.forEach { n ->
                                 FilterChip(
-                                    selected = pick.hour == h,
-                                    onClick = { pick = pick.copy(hour = h) },
-                                    label = { Text("%02d".format(h), style = MaterialTheme.typography.labelSmall) },
+                                    selected = pick.everyHours == n,
+                                    onClick = { pick = pick.copy(everyHours = n) },
+                                    label = {
+                                        Text(
+                                            stringResource(R.string.every_n_hours, n),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    },
                                 )
                             }
                         }
-                        Text(
-                            text = stringResource(R.string.minute),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
+                        // Any minute, typed like the clock's minute box, not 5-minute chips.
+                        var minuteText by remember(timeSource) { mutableStateOf(pick.minute.toString()) }
+                        OutlinedTextField(
+                            value = minuteText,
+                            onValueChange = { typed ->
+                                val digits = typed.filter(Char::isDigit).take(2)
+                                minuteText = digits
+                                digits.toIntOrNull()?.takeIf { it in 0..59 }?.let { pick = pick.copy(minute = it) }
+                            },
+                            label = { Text(stringResource(R.string.at_which_minute_past_the_hour)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = minuteText.toIntOrNull()?.let { it !in 0..59 } ?: true,
                         )
-                        MinuteChips(selected = pick.minute) { pick = pick.copy(minute = it) }
-                    }
-                    ScheduleMode.HOURLY -> {
-                        Text(
-                            text = stringResource(R.string.at_which_minute_past_the_hour),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        MinuteChips(selected = pick.minute) { pick = pick.copy(minute = it) }
                     }
                     ScheduleMode.MINUTES -> {
                         Row(
@@ -667,7 +739,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            listOf(5, 10, 15, 30).forEach { n ->
+                            MINUTE_STEPS.forEach { n ->
                                 FilterChip(
                                     selected = pick.everyN == n,
                                     onClick = { pick = pick.copy(everyN = n) },
@@ -694,7 +766,18 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
 
                 // The sentence is the answer; the expression under it is only there so
                 // anyone who does read cron can confirm the picker meant what they meant.
-                humanizeCron(schedule)?.let { human ->
+                val human = when (pick.mode) {
+                    ScheduleMode.ONCE -> stringResource(R.string.today_at, "%02d:%02d".format(pick.hour, pick.minute))
+                    else -> humanizeCron(schedule)
+                }
+                if (passedToday) {
+                    Text(
+                        text = stringResource(R.string.time_passed_today),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                human?.let { human ->
                     Text(
                         text = human,
                         style = MaterialTheme.typography.labelMedium,
@@ -717,7 +800,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && schedule.isNotBlank()) {
+                    if (name.isNotBlank() && schedule.isNotBlank() && !passedToday) {
                         if (isEdit) {
                             val jobId = existingJob?.id; if (jobId != null) viewModel.updateJob(jobId, name, schedule, prompt)
                         } else {

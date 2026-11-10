@@ -1,0 +1,37 @@
+name: Termux install test
+
+on:
+  push:
+    branches: [fieldtest/termux]
+  workflow_dispatch:
+
+jobs:
+  termux:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract the app's install script
+        run: |
+          mkdir -p /tmp/ci
+          python3 -I scripts/extract-termux-install.py \
+            app/src/main/java/com/hermes/android/runtime/termux/TermuxInstaller.kt > /tmp/ci/install.sh
+          cp ci/termux/gateway.sh /tmp/ci/
+          chmod -R a+rX /tmp/ci
+          bash -n /tmp/ci/install.sh
+      - name: Run install script in Termux
+        run: |
+          docker run -d --name termux --privileged -v /tmp/ci:/ci:ro termux/termux-docker:aarch64 sleep infinity || \
+            docker run -d --name termux --privileged -v /tmp/ci:/ci:ro termux/termux-docker:aarch64 bash -c 'sleep infinity'
+          sleep 5
+          docker ps -a
+          docker exec termux whoami || true
+          docker exec -u system termux /data/data/com.termux/files/usr/bin/bash -lc 'cd ~; bash -x /ci/install.sh; echo "INSTALL EXIT=$?"' 2>&1 | tail -n 300
+      - name: Install log and state
+        if: always()
+        run: |
+          docker exec -u system termux /data/data/com.termux/files/usr/bin/bash -lc 'cat ~/.hermes/install.state; tail -n 80 ~/.hermes/logs/install.log' || true
+      - name: Start gateway like the app
+        if: always()
+        run: |
+          docker exec -u system termux /data/data/com.termux/files/usr/bin/bash -lc 'cd ~; bash /ci/gateway.sh' 2>&1 | tail -n 300

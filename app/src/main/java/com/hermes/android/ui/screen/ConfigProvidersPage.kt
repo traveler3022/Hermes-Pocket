@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.R
 import com.hermes.android.domain.setup.OAuthProvider
+import com.hermes.android.ui.design.BrandMarks
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
@@ -57,6 +58,8 @@ import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.design.StatusChip
+import com.hermes.android.ui.design.tint
+import com.hermes.android.ui.design.vector
 import com.hermes.android.ui.i18n.t
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.Dns
@@ -125,14 +128,15 @@ internal fun ProvidersSection(
                     connected.forEachIndexed { index, row ->
                         if (index > 0) GroupDivider()
                         val account = state.signedInAccount(row.slug)
+                        val brand = BrandMarks.forProvider(row.slug)
                         SettingRow(
                             title = row.name,
                             subtitle = listOfNotNull(
                                 modelsText(row.modelCount),
                                 account?.let { stringResource(R.string.account) },
                             ).joinToString(" · ").ifEmpty { null },
-                            icon = if (account != null) Icons.Default.AccountCircle else Icons.Default.Key,
-                            iconTint = if (row.isCurrent) {
+                            icon = brand?.vector() ?: if (account != null) Icons.Default.AccountCircle else Icons.Default.Key,
+                            iconTint = brand?.tint() ?: if (row.isCurrent) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -264,11 +268,12 @@ internal fun ProviderKeysSection(
                 SettingsGroup {
                     providers.forEachIndexed { index, row ->
                         if (index > 0) GroupDivider()
+                        val brand = BrandMarks.forProvider(row.slug)
                         SettingRow(
                             title = row.name,
                             subtitle = row.keyEnv,
-                            icon = Icons.Default.Key,
-                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            icon = brand?.vector() ?: Icons.Default.Key,
+                            iconTint = brand?.tint() ?: MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = { editing = row },
                         )
                     }
@@ -424,6 +429,7 @@ private fun AccountGroup(accounts: List<OAuthProvider>, onSelect: (OAuthProvider
     SettingsGroup {
         accounts.forEachIndexed { index, account ->
             if (index > 0) GroupDivider()
+            val brand = BrandMarks.forProvider(account.id)
             SettingRow(
                 title = account.name,
                 subtitle = if (account.flow == "device_code") {
@@ -431,8 +437,9 @@ private fun AccountGroup(accounts: List<OAuthProvider>, onSelect: (OAuthProvider
                 } else {
                     stringResource(R.string.sign_in_once_in_your_terminal_then_come)
                 },
-                icon = Icons.Default.AccountCircle,
-                iconTint = if (account.loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                icon = brand?.vector() ?: Icons.Default.AccountCircle,
+                iconTint = brand?.tint()
+                    ?: if (account.loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 onClick = { onSelect(account) },
                 trailing = if (account.loggedIn) {
                     { StatusChip(stringResource(R.string.connected_6), MaterialTheme.colorScheme.primary) }

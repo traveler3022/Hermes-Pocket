@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- RemoteSignInService: keeps the app alive while the browser finishes a server sign-in. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Notifications — tool approval, gateway status (ADR-003) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -25,6 +27,13 @@
 
     <!-- Wake lock — keep CPU awake during long tool execution -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Cron on the built-in Linux: an exact alarm wakes Hermes for the next job.
+         USE_EXACT_ALARM from 13 on (granted at install); SCHEDULE_EXACT_ALARM before. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
 
     <!-- Vibrate — notification feedback for tool approvals -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -125,6 +134,13 @@
         </service>
 
         <!-- The audio viewer's player: plays on in the background with its media notification. -->
+        <!-- Keeps the app alive while the browser finishes a server sign-in, so the redirect to
+             127.0.0.1 is read. dataSync fits: it runs for the length of one sign-in. -->
+        <service
+            android:name=".service.RemoteSignInService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".service.AudioPlaybackService"
             android:exported="true"
@@ -140,6 +156,15 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The cron alarm (domain/cron/CronWake.kt): wakes Hermes for the next job -->
+        <receiver
+            android:name=".service.CronAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermes.android.action.CRON_ALARM" />
             </intent-filter>
         </receiver>
 

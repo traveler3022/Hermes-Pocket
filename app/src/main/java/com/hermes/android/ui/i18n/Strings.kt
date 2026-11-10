@@ -2,6 +2,8 @@ package com.hermes.android.ui.i18n
 
 import android.content.Context
 import android.content.res.Configuration
+import android.text.TextUtils
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -12,7 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.unit.LayoutDirection
 import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import java.util.Locale
@@ -37,6 +41,8 @@ val LocalAppLanguage = compositionLocalOf { AppLanguage.AUTO }
  * Wraps a screen so `stringResource` follows the in-app language choice: for anything but
  * AUTO, LocalResources comes from a context with that locale, so values-<lang>/ is used
  * whatever the device language is. LocalContext stays the activity.
+ * The layout direction follows the chosen language too: Persian and Arabic are right-to-left
+ * on any phone, the other languages left-to-right.
  */
 @Composable
 fun ProvideAppLanguage(language: AppLanguage, content: @Composable () -> Unit) {
@@ -51,9 +57,17 @@ fun ProvideAppLanguage(language: AppLanguage, content: @Composable () -> Unit) {
             context.createConfigurationContext(localized).resources
         }
     }
+    val direction = if (language == AppLanguage.AUTO) {
+        LocalLayoutDirection.current
+    } else if (TextUtils.getLayoutDirectionFromLocale(Locale.forLanguageTag(language.key)) == View.LAYOUT_DIRECTION_RTL) {
+        LayoutDirection.Rtl
+    } else {
+        LayoutDirection.Ltr
+    }
     CompositionLocalProvider(
         LocalAppLanguage provides language,
         LocalResources provides resources,
+        LocalLayoutDirection provides direction,
         content = content,
     )
 }

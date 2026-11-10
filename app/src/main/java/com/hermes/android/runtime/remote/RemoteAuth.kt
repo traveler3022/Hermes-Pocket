@@ -1,6 +1,8 @@
 package com.hermes.android.runtime.remote
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +28,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
+import java.io.Closeable
 import java.io.IOException
+import java.io.OutputStream
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -172,6 +181,114 @@ class RemoteAuth @Inject constructor(
             } catch (e: IOException) {
                 throw reachError(base, e)
             }
+        }
+    }
+
+    /**
+     * Starts a sign-in through the server's own login page in the browser (RFC 8252), for servers
+     * whose login is not a username and password: a Nous Portal account on a Nous-hosted Hermes, or
+     * a single sign-on. Opens a one-shot listener on 127.0.0.1 and builds the page address. The
+     * browser must be able to reach the server itself, so this does not go through the in-app
+     * Tailscale tunnel.
+     */
+    suspend fun beginBrowserSignIn(serverUrl: String): PendingSignIn = withContext(Dispatchers.IO) {
+        val base = encryptedBase(serverUrl)
+        val listener = ServerSocket().apply {
+            bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 4)
+        }
+        val verifier = randomToken(32)
+        val state = randomToken(16)
+        val challenge = b64url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+        // No provider named: the server picks its only one, or shows its own chooser.
+        val authorizeUrl = "$base/auth/native/authorize".toHttpUrl().newBuilder()
+            .addQueryParameter("code_challenge", challenge)
+            .addQueryParameter("code_challenge_method", "S256")
+            .addQueryParameter("redirect_uri", "http://127.0.0.1:${listener.localPort}/callback")
+            .addQueryParameter("state", state)
+            .build()
+            .toString()
+        PendingSignIn(base, authorizeUrl, listener, verifier, state)
+    }
+
+    /**
+     * Waits for the browser to come back with the one-time code, then trades it for tokens and
+     * keeps them. No login is kept: when the server ends this sign-in, the user signs in again.
+     * Throws on timeout, on a refusal from the server, or when the coroutine is cancelled.
+     */
+    suspend fun completeBrowserSignIn(pending: PendingSignIn, timeoutMs: Long = SIGN_IN_TIMEOUT_MS): RemoteTokens =
+        withContext(Dispatchers.IO) {
+            pending.use {
+                val code = awaitCode(pending, timeoutMs)
+                try {
+                    exchange(pending.serverUrl, code, pending.verifier)
+                } catch (e: IOException) {
+                    throw reachError(pending.serverUrl, e)
+                }
+            }
+        }
+
+    private suspend fun awaitCode(pending: PendingSignIn, timeoutMs: Long): String {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        pending.listener.soTimeout = ACCEPT_POLL_MS
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            if (System.currentTimeMillis() > deadline) throw IOException("Sign-in timed out")
+            val socket = try {
+                pending.listener.accept()
+            } catch (e: SocketTimeoutException) {
+                continue
+            }
+            socket.use { readCallback(it, pending) }?.let { return it }
+        }
+    }
+
+    /** The code from one request on the listener, or null when it isn't the redirect this sign-in waits for. */
+    private fun readCallback(socket: Socket, pending: PendingSignIn): String? {
+        socket.soTimeout = 5_000
+        val requestLine = try {
+            socket.getInputStream().bufferedReader(Charsets.US_ASCII).readLine().orEmpty()
+        } catch (e: IOException) {
+            // A connection that sends nothing (a browser's spare socket) is not the redirect.
+            return null
+        }
+        val target = requestLine.split(' ').getOrNull(1).orEmpty()
+        val url = "http://127.0.0.1$target".toHttpUrlOrNull()
+        val out = socket.getOutputStream()
+        if (url == null || url.encodedPath != "/callback") {
+            respond(out, 404, PAGE_FAILED)
+            return null
+        }
+        // Only the browser this sign-in opened knows the state; anything else is ignored.
+        if (url.queryParameter("state") != pending.state) {
+            respond(out, 400, PAGE_FAILED)
+            return null
+        }
+        url.queryParameter("error")?.let { error ->
+            respond(out, 400, PAGE_FAILED)
+            throw IOException("The server refused the sign-in: ${url.queryParameter("error_description") ?: error}")
+        }
+        val code = url.queryParameter("code")
+        if (code.isNullOrBlank()) {
+            respond(out, 400, PAGE_FAILED)
+            throw IOException("The server sent no sign-in code")
+        }
+        respond(out, 200, PAGE_DONE)
+        return code
+    }
+
+    private fun respond(out: OutputStream, status: Int, html: String) {
+        val body = html.toByteArray(Charsets.UTF_8)
+        val reason = when (status) {
+            200 -> "OK"
+            404 -> "Not Found"
+            else -> "Bad Request"
+        }
+        val head = "HTTP/1.1 $status $reason\r\nContent-Type: text/html; charset=utf-8\r\n" +
+            "Content-Length: ${body.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+        runCatching {
+            out.write(head.toByteArray(Charsets.US_ASCII))
+            out.write(body)
+            out.flush()
         }
     }
 
@@ -421,12 +538,30 @@ class RemoteAuth @Inject constructor(
     private companion object {
         val JSON = "application/json".toMediaType()
         const val EXPIRY_SKEW_S = 60L
+        const val SIGN_IN_TIMEOUT_MS = 5 * 60_000L
+        const val ACCEPT_POLL_MS = 1_000
+
+        const val PAGE_DONE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hermes</title></head><body style="font-family:sans-serif;text-align:center;padding:3em 1em"><h2>&#10003; Signed in</h2><p>You can go back to the Hermes app.</p><p dir="rtl">وارد شدید. به اپ هرمس برگردید.</p></body></html>"""
+        const val PAGE_FAILED = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hermes</title></head><body style="font-family:sans-serif;text-align:center;padding:3em 1em"><h2>Sign-in did not finish</h2><p>Go back to the Hermes app and try again.</p><p dir="rtl">ورود کامل نشد. به اپ هرمس برگردید و دوباره امتحان کنید.</p></body></html>"""
 
         /** RFC 8252 loopback redirect the server requires; nothing listens on it (see [passwordLoginBlocking]). */
         const val LOOPBACK_REDIRECT = "http://127.0.0.1:47123/callback"
 
         /** Where server/setup.sh shares its pairing door through Tailscale Serve. */
         const val PAIR_PATH = "/hermes-pocket-pair"
+    }
+}
+
+/** A browser sign-in under way: the page to open and the listener its redirect comes back to. */
+class PendingSignIn internal constructor(
+    val serverUrl: String,
+    val authorizeUrl: String,
+    internal val listener: ServerSocket,
+    internal val verifier: String,
+    internal val state: String,
+) : Closeable {
+    override fun close() {
+        runCatching { listener.close() }
     }
 }
 

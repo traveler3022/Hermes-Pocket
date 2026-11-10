@@ -2,6 +2,7 @@ package com.hermes.android.ui.viewmodel
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.ContextCompat
@@ -17,6 +18,7 @@ import com.hermes.android.runtime.ProgressEmitter
 import com.hermes.android.runtime.RuntimeState
 import com.hermes.android.runtime.RuntimeType
 import com.hermes.android.runtime.remote.PairResult
+import com.hermes.android.runtime.remote.PendingSignIn
 import com.hermes.android.runtime.remote.RemoteAuth
 import com.hermes.android.runtime.remote.RemoteServerConfig
 import com.hermes.android.runtime.remote.RemoteServerSettings
@@ -27,6 +29,7 @@ import com.hermes.android.runtime.remote.tailscale.TailscaleLoginNeeded
 import com.hermes.android.runtime.remote.tailscale.TailscaleNode
 import com.hermes.android.runtime.remote.tailscale.TailscaleStatus
 import com.hermes.android.service.HermesGatewayService
+import com.hermes.android.service.RemoteSignInService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -426,6 +429,57 @@ class RuntimeViewModel @Inject constructor(
                 _signingIn.value = false
             }
         }
+    }
+
+    /**
+     * Signs in to the server at [serverUrl] through the server's own login page in the browser,
+     * then connects. For servers whose login is a Nous Portal account or a single sign-on; the
+     * browser has to reach the server itself.
+     */
+    fun signInWithBrowser(serverUrl: String) {
+        if (serverUrl.isBlank()) {
+            _errorMessage.value = "Enter the server address first."
+            return
+        }
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+            _errorMessage.value = null
+            _signingIn.value = true
+            var pending: PendingSignIn? = null
+            try {
+                remoteServerSettings.save(serverUrl, "")
+                if (!remoteAuth.probe(serverUrl).nativeSignIn) {
+                    _errorMessage.value = "This server's Hermes is too old for app sign-in. Update it."
+                    return@launch
+                }
+                // Foreground first: once the browser is up this app is in the background, where
+                // Android no longer lets it start a foreground service.
+                RemoteSignInService.start(context)
+                val started = remoteAuth.beginBrowserSignIn(serverUrl)
+                pending = started
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(started.authorizeUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                remoteAuth.completeBrowserSignIn(started)
+                rememberServer(serverUrl)
+                connectRemote()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Runtime] Browser sign-in failed")
+                _errorMessage.value = e.message ?: "Sign-in failed"
+            } finally {
+                pending?.close()
+                RemoteSignInService.stop(context)
+                _signingIn.value = false
+            }
+        }
+    }
+
+    /** Stops a sign-in that is under way (the browser may still be open). */
+    fun cancelSignIn() {
+        if (!_signingIn.value) return
+        signInJob?.cancel()
     }
 
     /** Forgets the sign-in on this phone and drops the connection; the server address stays. */
