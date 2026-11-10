@@ -9,6 +9,7 @@ import com.hermes.android.ui.icons.outlined.Folder
 import com.hermes.android.ui.icons.outlined.PermMedia
 import com.hermes.android.ui.icons.filled.Forum
 import com.hermes.android.ui.icons.filled.Inventory2
+import com.hermes.android.ui.icons.filled.PushPin
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -103,6 +104,7 @@ internal fun WorkspaceDrawerSheet(
     onProfileClick: () -> Unit = {},
     pulseOf: (SessionItem) -> SessionPulse = { SessionPulse.None },
     unreadOf: (SessionItem) -> Int = { 0 },
+    pinnedIds: Set<String> = emptySet(),
     onSessionLongClick: (SessionItem) -> Unit = {},
     visibleSessions: Int = 6,
 ) {
@@ -169,6 +171,7 @@ internal fun WorkspaceDrawerSheet(
                 ) { session ->
                     DrawerSessionRow(
                         title = session.title,
+                        isPinned = session.id in pinnedIds,
                         pulse = pulseOf(session),
                         unread = unreadOf(session),
                         isActive = session.id == activeSessionId,
@@ -278,6 +281,7 @@ private fun DrawerDestinationRow(destination: WorkspaceDestination) {
 @Composable
 private fun DrawerSessionRow(
     title: String,
+    isPinned: Boolean,
     pulse: SessionPulse,
     unread: Int,
     isActive: Boolean,
@@ -303,6 +307,15 @@ private fun DrawerSessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
+        // The Sessions screen's mark: a pinned chat is at the top for a reason the row shows.
+        if (isPinned) {
+            Icon(
+                Icons.Default.PushPin,
+                contentDescription = stringResource(R.string.pinned),
+                modifier = Modifier.size(13.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
@@ -391,14 +404,12 @@ private val BadgeTextOnAmber = Color(0xFF1A1205)
  */
 @Composable
 internal fun rememberWorkspaceDestinations(
-    onAgent: () -> Unit,
     onScheduled: () -> Unit,
     onGroups: () -> Unit,
     onMedia: () -> Unit,
     onFiles: () -> Unit,
     onKanban: (() -> Unit)? = null,
 ): List<WorkspaceDestination> {
-    val agent = stringResource(R.string.agent)
     val scheduled = stringResource(R.string.scheduled_2)
     val groups = stringResource(R.string.group_chats)
     val media = stringResource(R.string.media)
@@ -407,13 +418,12 @@ internal fun rememberWorkspaceDestinations(
     // Remembered, as the name says: a new list on every call made the drawer
     // recompose along with the chat behind it.
     return remember(
-        agent, scheduled, groups, media, files, kanban,
-        onAgent, onScheduled, onGroups, onMedia, onFiles, onKanban,
+        scheduled, groups, media, files, kanban,
+        onScheduled, onGroups, onMedia, onFiles, onKanban,
     ) {
         // The board is the work desk now, so it leads when it is switched on.
         listOfNotNull(
             onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it) },
-            WorkspaceDestination(agent, HxIcons.Bot, null, onAgent),
             WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
             WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups),
             WorkspaceDestination(media, Icons.Outlined.PermMedia, null, onMedia),
