@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.composed
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -619,6 +621,31 @@ fun Modifier.hxSoftShadow(
 }
 
 /**
+ * A control that gives under the finger: it shrinks a touch while pressed and springs
+ * back on release. Goes before the shadow and clip so the whole control moves, and reads
+ * the same [interactionSource] the control's clickable is given.
+ */
+fun Modifier.hxPressScale(
+    interactionSource: androidx.compose.foundation.interaction.InteractionSource,
+    enabled: Boolean = true,
+    pressedScale: Float = 0.9f,
+): Modifier = composed {
+    val pressed = interactionSource.collectIsPressedAsState().value
+    val scale = androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed && enabled) pressedScale else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium,
+        ),
+        label = "hx_press_scale",
+    )
+    this.graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+    }
+}
+
+/**
  * Floating circular icon button (Aether's "HeaderCircleButton" idea, written
  * against our design tokens). White-ish circle with a soft shadow — the
  * signature floating control used in chat top bars and drawer headers.
@@ -635,13 +662,20 @@ fun HxHeaderCircleButton(
     iconTint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val surface = MaterialTheme.colorScheme.surface
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(
         modifier = modifier
             .size(size)
+            .hxPressScale(interaction, enabled)
             .hxSoftShadow(radius = 12.dp, shape = CircleShape)
             .clip(CircleShape)
             .background(if (enabled) surface.copy(alpha = 0.96f) else surface.copy(alpha = 0.55f))
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                enabled = enabled,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

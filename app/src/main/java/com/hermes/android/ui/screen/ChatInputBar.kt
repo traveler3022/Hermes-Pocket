@@ -36,6 +36,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
@@ -453,104 +460,110 @@ internal fun InputBar(
                 }
                 ComposerModelButton(activeModel = activeModel, onClick = onModelClick)
                 Spacer(Modifier.weight(1f))
-                if (isSending) {
-                    // Mid-turn the agent is running. Two DIFFERENT things can be
-                    // meant by "send while it's replying", and neither replaces
-                    // the other:
-                    //  - Steer (session.steer): folds a note into the CURRENT
-                    //    turn without interrupting it — but verified against
-                    //    Hermes' own docs, the text only actually lands "after
-                    //    the next tool call" (appended to a tool result). For a
-                    //    turn with no tool calls (a plain text answer), it just
-                    //    queues and never gets delivered — steer alone can look
-                    //    completely broken for ordinary chatty replies.
-                    //  - A normal Send: submits as a new prompt. The gateway's
-                    //    prompt.submit handler explicitly does NOT reject this
-                    //    mid-turn — it queues it and interrupts the live turn
-                    //    (_handle_busy_submit), i.e. exactly "send a message
-                    //    that cuts in", which is what most users expect from a
-                    //    chat app. This used to be unreachable: the button was
-                    //    swapped out entirely while isSending.
-                    // Stop (full interrupt, no follow-up) stays available too.
-                    //
-                    // These used to be three bare icons side by side — steer, send,
-                    // stop — and the difference between the first two lived only
-                    // in their contentDescription. Now there is one Send; tapping it
-                    // asks which of the two the user means, each with a line saying
-                    // what it does. Stop keeps its place at the end so it never
-                    // moves under a thumb when Send appears beside it.
-                    if (text.isNotBlank()) {
-                        Box {
-                            // The same disc as Send when idle, so it reads as Send; the
-                            // menu under it asks which kind of send is meant.
-                            ComposerDiscButton(
-                                onClick = { sendChoiceOpen = true },
-                                contentDescription = stringResource(R.string.send_options),
-                                filled = true,
-                                discColor = SendBlue,
-                            ) {
-                                Icon(
-                                    HxIcons.ArrowUp,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = Color.White,
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = sendChoiceOpen,
-                                onDismissRequest = { sendChoiceOpen = false },
-                            ) {
-                                SendChoiceItem(
-                                    icon = HxIcons.CornerDownRight,
-                                    title = stringResource(R.string.steer_add_title),
-                                    hint = stringResource(R.string.steer_add_hint),
-                                    onClick = {
-                                        sendChoiceOpen = false
-                                        onSteer()
-                                    },
-                                )
-                                SendChoiceItem(
-                                    icon = Icons.AutoMirrored.Filled.Send,
-                                    title = stringResource(R.string.interrupt_send_title),
-                                    hint = stringResource(R.string.interrupt_send_hint),
-                                    onClick = {
-                                        sendChoiceOpen = false
-                                        onSend()
-                                    },
-                                )
-                            }
+                // Mid-turn the agent is running. Two DIFFERENT things can be
+                // meant by "send while it's replying", and neither replaces
+                // the other:
+                //  - Steer (session.steer): folds a note into the CURRENT
+                //    turn without interrupting it — but verified against
+                //    Hermes' own docs, the text only actually lands "after
+                //    the next tool call" (appended to a tool result). For a
+                //    turn with no tool calls (a plain text answer), it just
+                //    queues and never gets delivered — steer alone can look
+                //    completely broken for ordinary chatty replies.
+                //  - A normal Send: submits as a new prompt. The gateway's
+                //    prompt.submit handler explicitly does NOT reject this
+                //    mid-turn — it queues it and interrupts the live turn
+                //    (_handle_busy_submit), i.e. exactly "send a message
+                //    that cuts in", which is what most users expect from a
+                //    chat app. This used to be unreachable: the button was
+                //    swapped out entirely while isSending.
+                // Stop (full interrupt, no follow-up) stays available too.
+                //
+                // These used to be three bare icons side by side — steer, send,
+                // stop — and the difference between the first two lived only
+                // in their contentDescription. Now there is one Send; tapping it
+                // asks which of the two the user means, each with a line saying
+                // what it does. Stop keeps its place at the end so it never
+                // moves under a thumb when Send appears beside it.
+                if (isSending && text.isNotBlank()) {
+                    Box {
+                        // The same disc as Send when idle, so it reads as Send; the
+                        // menu under it asks which kind of send is meant.
+                        ComposerDiscButton(
+                            onClick = { sendChoiceOpen = true },
+                            contentDescription = stringResource(R.string.send_options),
+                            filled = true,
+                            discColor = SendBlue,
+                        ) {
+                            Icon(
+                                HxIcons.ArrowUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = Color.White,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = sendChoiceOpen,
+                            onDismissRequest = { sendChoiceOpen = false },
+                        ) {
+                            SendChoiceItem(
+                                icon = HxIcons.CornerDownRight,
+                                title = stringResource(R.string.steer_add_title),
+                                hint = stringResource(R.string.steer_add_hint),
+                                onClick = {
+                                    sendChoiceOpen = false
+                                    onSteer()
+                                },
+                            )
+                            SendChoiceItem(
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                title = stringResource(R.string.interrupt_send_title),
+                                hint = stringResource(R.string.interrupt_send_hint),
+                                onClick = {
+                                    sendChoiceOpen = false
+                                    onSend()
+                                },
+                            )
                         }
                     }
-                    // Stop sits in the same blue disc as Send, a white square in
-                    // place of the arrow: one button that changes its sign, not
-                    // a red control that reads as an error.
-                    ComposerDiscButton(
-                        onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onStop()
-                        },
-                        contentDescription = stringResource(R.string.stop),
-                        filled = true,
-                        // The same blue as Send: the theme's primary is a pale sky blue in
-                        // dark Carbon, where the white square sat at 2.8:1.
-                        discColor = SendBlue,
-                    ) {
-                        Icon(
-                            Icons.Default.Stop,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = Color.White,
-                        )
-                    }
-                } else {
-                    // One slot, one button: the microphone while the box is empty,
-                    // the arrow once there is something to send. An attachment on
-                    // its own is sendable (sendMessage() handles it), so a picked
-                    // file switches to the arrow too. While a file is still
-                    // uploading the arrow shows but waits, so nothing goes without it.
-                    val canSend = text.isNotBlank() || pendingAttachments.isNotEmpty()
-                    if (!canSend && !isAttaching) {
-                        ComposerDiscButton(
+                }
+                // One slot, three faces: voice, send, stop. They trade places with a small
+                // scale and fade instead of one snapping in where the other was. Stop sits
+                // in the same blue disc as Send, a white square in place of the arrow: one
+                // button that changes its sign, not a red control that reads as an error.
+                val canSend = text.isNotBlank() || pendingAttachments.isNotEmpty()
+                val trailing = when {
+                    isSending -> ComposerTrailing.Stop
+                    !canSend && !isAttaching -> ComposerTrailing.Voice
+                    else -> ComposerTrailing.Send
+                }
+                AnimatedContent(
+                    targetState = trailing,
+                    transitionSpec = {
+                        (scaleIn(tween(160), initialScale = 0.6f) + fadeIn(tween(160)))
+                            .togetherWith(scaleOut(tween(110), targetScale = 0.6f) + fadeOut(tween(110)))
+                    },
+                    contentAlignment = Alignment.Center,
+                    label = "composer_trailing",
+                ) { face ->
+                    when (face) {
+                        ComposerTrailing.Stop -> ComposerDiscButton(
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onStop()
+                            },
+                            contentDescription = stringResource(R.string.stop),
+                            filled = true,
+                            discColor = SendBlue,
+                        ) {
+                            Icon(
+                                Icons.Default.Stop,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = Color.White,
+                            )
+                        }
+                        ComposerTrailing.Voice -> ComposerDiscButton(
                             onClick = startVoiceInput,
                             contentDescription = stringResource(R.string.voice_input),
                             filled = false,
@@ -561,16 +574,13 @@ internal fun InputBar(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else {
-                        ComposerDiscButton(
+                        ComposerTrailing.Send -> ComposerDiscButton(
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onSend()
                             },
                             contentDescription = stringResource(R.string.send),
                             filled = true,
-                            // A deep blue in every theme, like ChatGPT's: the themes'
-                            // sky/cyan primaries read as a pale button.
                             discColor = SendBlue,
                             enabled = canSend && !isAttaching,
                         ) {
@@ -578,8 +588,6 @@ internal fun InputBar(
                                 HxIcons.ArrowUp,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                // White on the blue disc in every theme, like Stop:
-                                // some themes' onPrimary is dark and the arrow sank.
                                 tint = Color.White,
                             )
                         }
@@ -589,6 +597,9 @@ internal fun InputBar(
         }
     }
 }
+
+/** What the composer's trailing button is at the moment. */
+private enum class ComposerTrailing { Voice, Send, Stop }
 
 /** The Send disc's colour; the arrow on it is white. */
 private val SendBlue = Color(0xFF3566EF)

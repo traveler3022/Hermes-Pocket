@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
+import com.hermes.android.ui.design.hxPressScale
 import com.hermes.android.ui.design.HxStatus
 import com.hermes.android.ui.viewmodel.SessionItem
 
@@ -202,11 +203,17 @@ internal fun WorkspaceDrawerSheet(
                     .padding(start = 18.dp, end = 14.dp, top = 8.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val newChatInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 Row(
                     modifier = Modifier
+                        .hxPressScale(newChatInteraction, pressedScale = 0.95f)
                         .clip(RoundedCornerShape(50))
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable(onClick = onNewChat)
+                        .clickable(
+                            interactionSource = newChatInteraction,
+                            indication = androidx.compose.foundation.LocalIndication.current,
+                            onClick = onNewChat,
+                        )
                         .padding(horizontal = 20.dp, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -196,6 +196,8 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val confirmTick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm) }
     val resources = LocalResources.current
     val filesUnavailable = stringResource(R.string.no_files_app_found_open_your_file)
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
@@ -556,7 +558,10 @@ fun ChatScreen(
                         },
                     ),
                     onSearch = { closeDrawerThen(onNavigateToSessions) },
-                    onNewChat = { closeDrawerThen { viewModel.newConversation() } },
+                    onNewChat = {
+                        confirmTick()
+                        closeDrawerThen { viewModel.newConversation() }
+                    },
                     onSessionClick = { session -> closeDrawerThen { viewModel.resumeSession(session.id) } },
                     onSessionLongClick = { session -> drawerMenuTarget = session },
                     onSettings = { closeDrawerThen(onNavigateToSettings) },
@@ -583,6 +588,7 @@ fun ChatScreen(
                                 }) { Text(stringResource(R.string.rename)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    confirmTick()
                                     viewModel.drawerTogglePin(target.id)
                                 }) { Text(if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) }
                                 TextButton(onClick = {
@@ -592,6 +598,7 @@ fun ChatScreen(
                                 }) { Text(stringResource(R.string.move_to_project)) }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
+                                    confirmTick()
                                     viewModel.drawerArchive(target.id)
                                 }) { Text(stringResource(R.string.archive)) }
                                 TextButton(onClick = {
@@ -684,7 +691,10 @@ fun ChatScreen(
                         },
                         // Red text, as every other delete in the app confirms.
                         confirmButton = {
-                            TextButton(onClick = { viewModel.drawerConfirmDelete() }) {
+                            TextButton(onClick = {
+                                confirmTick()
+                                viewModel.drawerConfirmDelete()
+                            }) {
                                 Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
@@ -760,7 +770,10 @@ fun ChatScreen(
                         HxHeaderCircleButton(
                             icon = HxIcons.NewChat,
                             contentDescription = stringResource(R.string.new_chat),
-                            onClick = { viewModel.newConversation() },
+                            onClick = {
+                                confirmTick()
+                                viewModel.newConversation()
+                            },
                             iconSize = 25.dp,
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1033,10 +1046,12 @@ fun ChatScreen(
                                 isLastAssistant = isLastAssistant,
                                 isSending = uiState.isSending,
                                 onCopyMessage = { text ->
+                                    confirmTick()
                                     clipboardManager.setText(AnnotatedString(text))
                                     Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                                 },
                                 onCopyCode = { code ->
+                                    confirmTick()
                                     clipboardManager.setText(AnnotatedString(code))
                                     Toast.makeText(context, codeCopiedToast, Toast.LENGTH_SHORT).show()
                                 },
