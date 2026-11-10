@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text without an entry here falls back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="space_where_it_goes">Wohin der Speicherplatz geht</string>
+    <string name="space_where_it_goes_hint">Alle Ordner des integrierten Linux, wofür sie da sind und ob sie gelöscht werden dürfen</string>
+    <string name="space_total">Das integrierte Linux belegt %s</string>
+    <string name="space_scanning">Ordner werden durchsucht…</string>
+    <string name="space_safe">Kann sicher gelöscht werden</string>
+    <string name="space_careful">Mit Bedacht löschen</string>
+    <string name="space_needed">Wird von Hermes benötigt</string>
+    <string name="space_needed_locked">Benötigt — kann hier nicht gelöscht werden</string>
+    <string name="space_empty">Hier ist nichts.</string>
+    <string name="space_place_your_files">Deine Dateien und die Arbeit des Agenten</string>
+    <string name="space_place_your_files_desc">Downloads, Projekte und alles, was der Agent im Home-Ordner erstellt hat.</string>
+    <string name="space_place_uploads">In Chats gesendete Dateien</string>
+    <string name="space_place_uploads_desc">Dateien, die du und Hermes in Chats angehängt habt. In älteren Chats werden sie als fehlend angezeigt.</string>
+    <string name="space_place_hermes_made">Von Hermes erstellte Dateien</string>
+    <string name="space_place_hermes_made_desc">Erstellte Bilder und Audiodateien, Screenshots, Downloads, temporäre Dateien, Caches und Protokolle.</string>
+    <string name="space_place_caches">Programm-Caches</string>
+    <string name="space_place_caches_desc">Downloads, die Programme für eine höhere Geschwindigkeit speichern: pip, npm, AI-Modelle, Browser. Bei Bedarf erneut heruntergeladen.</string>
+    <string name="space_place_temp">Temporäre Dateien und Protokolle</string>
+    <string name="space_place_temp_desc">Von Programmen hinterlassen. Später braucht sie nichts mehr.</string>
+    <string name="space_place_installed">Vom Agenten installierte Programme</string>
+    <string name="space_place_installed_desc">Mit pip, npm, cargo und ähnlichen Tools installierte Programme. Hermes funktioniert weiter; ein Skill, der eines davon benötigt, installiert es erneut oder funktioniert nicht mehr.</string>
+    <string name="space_place_backups">Hermes-Sicherungen</string>
+    <string name="space_place_backups_desc">Kopien der Hermes-Daten vor Updates und Reparaturen. Nur nötig, um einen früheren Stand wiederherzustellen.</string>
+    <string name="space_place_hermes">Hermes selbst</string>
+    <string name="space_place_hermes_desc">Der Agent, sein Python und seine Tools.</string>
+    <string name="space_place_hermes_data">Hermes-Daten</string>
+    <string name="space_place_hermes_data_desc">Chats, Gedächtnis, Einstellungen, Skills und Schlüssel.</string>
+    <string name="space_place_system">Linux-System</string>
+    <string name="space_place_system_desc">Das integrierte Linux, seine Programme und deren Einstellungen.</string>
+    <string name="space_delete_title">%1$s löschen?</string>
+    <string name="space_delete_text">%1$s Elemente werden endgültig gelöscht.</string>
+    <string name="space_delete_careful">Einige davon sind Programme oder Sicherungen: Was sie verwendet hat, funktioniert möglicherweise erst wieder, wenn es erneut installiert wurde.</string>
+    <string name="space_deleting">Wird gelöscht…</string>
+    <string name="space_hint_models">Von Programmen heruntergeladene AI-Modelle</string>
+    <string name="space_hint_browsers">Für die Automatisierung heruntergeladene Browser</string>
+    <string name="space_hint_python">Python-Paketdownloads</string>
+    <string name="space_hint_node">Node.js-Pakete</string>
+    <string name="space_hint_python_env">Eine Python-Umgebung mit ihren Paketen</string>
+</resources>

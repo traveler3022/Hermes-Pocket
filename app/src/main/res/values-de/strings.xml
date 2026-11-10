@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text without an entry here falls back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="notification_channel_gateway_name">Gateway-Dienst</string>
+    <string name="notification_channel_gateway_desc">Hält das Hermes-Gateway im Hintergrund am Laufen</string>
+    <string name="gateway_notification_title">Hermes Gateway</string>
+    <string name="gateway_notification_text">Gateway läuft</string>
+    <string name="notification_channel_approval_name">Tool-Genehmigungen</string>
+    <string name="notification_channel_approval_desc">Benachrichtigungen mit hoher Priorität für Tool-Genehmigungsanfragen</string>
+    <string name="approval_notification_title">Tool-Genehmigung erforderlich</string>
+    <string name="approval_approve">Genehmigen</string>
+    <string name="approval_deny">Ablehnen</string>
+    <string name="boot_notification_text">Hermes-Gateway wird gestartet…</string>
+    <string name="notification_channel_agent_name">Agent-Aktivität</string>
+    <string name="notification_channel_agent_desc">Ergebnisse von Aufgaben und Antworten, die abgeschlossen werden, während die App im Hintergrund ist</string>
+    <string name="notification_agent_reply_title">Hermes hat eine Antwort beendet</string>
+    <string name="notification_task_done_title">Hintergrundaufgabe abgeschlossen</string>
+    <string name="chat_send">Senden</string>
+    <string name="chat_stop">Stopp</string>
+    <string name="chat_input_hint">Nachricht eingeben…</string>
+    <string name="new_conversation">Neue Unterhaltung</string>
+    <string name="settings">Einstellungen</string>
+</resources>

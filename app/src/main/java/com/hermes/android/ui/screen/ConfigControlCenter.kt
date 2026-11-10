@@ -537,6 +537,6 @@ private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
 @Composable
 internal fun languageLabel(lang: AppLanguage): String = when (lang) {
     AppLanguage.AUTO -> stringResource(R.string.auto)
-    AppLanguage.ENGLISH -> "English"
-    AppLanguage.FARSI -> "فارسی"
+    // Every language under its own name, so it can be found from any other.
+    else -> lang.label
 }

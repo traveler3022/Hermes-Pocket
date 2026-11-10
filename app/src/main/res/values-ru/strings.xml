@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text without an entry here falls back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="notification_channel_gateway_name">Служба шлюза</string>
+    <string name="notification_channel_gateway_desc">Поддерживает работу шлюза Hermes в фоновом режиме</string>
+    <string name="gateway_notification_title">Шлюз Hermes</string>
+    <string name="gateway_notification_text">Шлюз работает</string>
+    <string name="notification_channel_approval_name">Подтверждение действий инструментов</string>
+    <string name="notification_channel_approval_desc">Уведомления высокого приоритета о запросах на разрешение действий инструментов</string>
+    <string name="approval_notification_title">Требуется разрешение на действие инструмента</string>
+    <string name="approval_approve">Разрешить</string>
+    <string name="approval_deny">Запретить</string>
+    <string name="boot_notification_text">Запуск шлюза Hermes…</string>
+    <string name="notification_channel_agent_name">Активность агента</string>
+    <string name="notification_channel_agent_desc">Результаты задач и ответы, завершившиеся в фоновом режиме</string>
+    <string name="notification_agent_reply_title">Hermes завершил ответ</string>
+    <string name="notification_task_done_title">Фоновая задача завершена</string>
+    <string name="chat_send">Отправить</string>
+    <string name="chat_stop">Остановить</string>
+    <string name="chat_input_hint">Введите сообщение…</string>
+    <string name="new_conversation">Новый диалог</string>
+    <string name="settings">Настройки</string>
+</resources>
