@@ -1,0 +1,190 @@
+name: Full app test (emulator)
+
+# The whole app on an Android emulator: a new user's setup on the built-in Linux, then suites of
+# scripted scenarios, an automatic crawler, torture tests and monkey runs. The model is the mock
+# in e2e/mock_llm.py, so nothing costs money and every answer is the same each time.
+on:
+  push:
+    branches: [ 'fulltest/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-app-test-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the APK (x86_64 Linux included)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache the APK by the app's sources
+        id: apk-cache
+        uses: actions/cache@v5
+        with:
+          path: apk/app-debug.apk
+          key: e2e-apk-${{ hashFiles('app/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'tsbridge/**') }}
+
+      - uses: actions/setup-java@v5
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+
+      - name: Cache Tailscale library
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        id: tsbridge-cache
+        uses: actions/cache@v5
+        with:
+          path: app/libs/tsbridge.aar
+          key: tsbridge-${{ hashFiles('tsbridge/**') }}
+
+      - uses: actions/setup-go@v6
+        if: steps.apk-cache.outputs.cache-hit != 'true' && steps.tsbridge-cache.outputs.cache-hit != 'true'
+        with:
+          go-version-file: tsbridge/go.mod
+          cache: false
+
+      - name: Build Tailscale library
+        if: steps.apk-cache.outputs.cache-hit != 'true' && steps.tsbridge-cache.outputs.cache-hit != 'true'
+        run: bash tsbridge/build-aar.sh
+
+      - name: Build the debug APK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug -Phermes.x86_64=true --no-daemon
+          mkdir -p apk && cp app/build/outputs/apk/debug/*.apk apk/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: apk/app-debug.apk
+
+  build-base:
+    name: Build the last release (for the upgrade test)
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: v3.1.4
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v3.1.4
+
+      - name: Cache the base APK
+        id: apk-cache
+        uses: actions/cache@v5
+        with:
+          path: apk/app-debug-base.apk
+          key: e2e-apk-base-${{ env.BASE_REF }}
+
+      - uses: actions/setup-java@v5
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+
+      - uses: actions/setup-go@v6
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        with:
+          go-version-file: tsbridge/go.mod
+          cache: false
+
+      - name: Build the base debug APK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        run: |
+          bash tsbridge/build-aar.sh
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug -Phermes.x86_64=true --no-daemon
+          mkdir -p apk && cp app/build/outputs/apk/debug/*.apk apk/app-debug-base.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-base
+          path: apk/app-debug-base.apk
+
+  e2e:
+    name: e2e ${{ matrix.name }}
+    needs: [build, build-base]
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chat
+            suites: onboarding,chat
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      - uses: actions/download-artifact@v4
+        if: matrix.base
+        with:
+          name: apk-base
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          E2E_OUT: e2e-out
+          APK: apk/app-debug.apk
+          BASE_APK: ${{ matrix.base && 'apk/app-debug-base.apk' || '' }}
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 4
+          ram-size: 4096M
+          heap-size: 576M
+          disk-size: 10G
+          disable-animations: true
+          # No cameras: "Take photo" started the emulated camera, after which the emulator crashed
+          # (three crawler runs, each right after the Attach file menu; the emulator left a crash db).
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-boot-timeout: 900
+          script: bash e2e/ci-job.sh "${{ matrix.suites }}" "${{ matrix.extra }}"
+
+      - name: Why the emulator died, if it did (kernel log, memory, disk)
+        if: always()
+        run: |
+          mkdir -p e2e-out
+          { echo "== dmesg (oom, kills, qemu)"; sudo dmesg -T | grep -iE "oom|killed process|qemu|emulator|segfault|out of memory" | tail -40
+            echo "== free"; free -m; echo "== df"; df -h / /tmp /home/runner 2>/dev/null
+            echo "== emulator crash data"; ls -la /tmp/android-runner/ 2>/dev/null | tail -5; } > e2e-out/host-diagnostics.txt 2>&1
+          cat e2e-out/host-diagnostics.txt
+
+      - name: Summary
+        if: always()
+        run: cat e2e-out/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "no report" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-${{ matrix.name }}
+          path: e2e-out/
