@@ -2,16 +2,16 @@
 <!-- Text without an entry here falls back to English. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="notification_channel_gateway_name">ゲートウェイサービス</string>
-    <string name="notification_channel_gateway_desc">Hermesゲートウェイをバックグラウンドで実行します</string>
+    <string name="notification_channel_gateway_desc">Hermesゲートウェイをバックグラウンドで実行し続けます</string>
     <string name="gateway_notification_title">Hermesゲートウェイ</string>
-    <string name="gateway_notification_text">ゲートウェイが実行中です</string>
+    <string name="gateway_notification_text">ゲートウェイは実行中です</string>
     <string name="notification_channel_approval_name">ツールの承認</string>
     <string name="notification_channel_approval_desc">ツールの承認リクエストを優先度の高い通知でお知らせします</string>
     <string name="approval_notification_title">ツールの承認が必要です</string>
     <string name="approval_approve">承認</string>
     <string name="approval_deny">拒否</string>
     <string name="boot_notification_text">Hermesゲートウェイを起動中…</string>
-    <string name="notification_channel_agent_name">エージェントの動作</string>
+    <string name="notification_channel_agent_name">エージェントのアクティビティ</string>
     <string name="notification_channel_agent_desc">アプリがバックグラウンドにある間に完了したタスクや返信の結果をお知らせします</string>
     <string name="notification_agent_reply_title">Hermesの返信が完了しました</string>
     <string name="notification_task_done_title">バックグラウンドタスクが完了しました</string>

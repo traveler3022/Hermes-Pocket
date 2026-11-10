@@ -7,13 +7,13 @@
     <string name="gateway_notification_text">Gateway läuft</string>
     <string name="notification_channel_approval_name">Tool-Genehmigungen</string>
     <string name="notification_channel_approval_desc">Benachrichtigungen mit hoher Priorität für Tool-Genehmigungsanfragen</string>
-    <string name="approval_notification_title">Tool-Genehmigung erforderlich</string>
+    <string name="approval_notification_title">Genehmigung für Tool erforderlich</string>
     <string name="approval_approve">Genehmigen</string>
     <string name="approval_deny">Ablehnen</string>
     <string name="boot_notification_text">Hermes-Gateway wird gestartet…</string>
     <string name="notification_channel_agent_name">Agent-Aktivität</string>
-    <string name="notification_channel_agent_desc">Ergebnisse von Aufgaben und Antworten, die abgeschlossen werden, während die App im Hintergrund ist</string>
-    <string name="notification_agent_reply_title">Hermes hat eine Antwort beendet</string>
+    <string name="notification_channel_agent_desc">Ergebnisse von Aufgaben und Antworten, die im Hintergrund abgeschlossen werden</string>
+    <string name="notification_agent_reply_title">Hermes hat seine Antwort fertiggestellt</string>
     <string name="notification_task_done_title">Hintergrundaufgabe abgeschlossen</string>
     <string name="chat_send">Senden</string>
     <string name="chat_stop">Stopp</string>
