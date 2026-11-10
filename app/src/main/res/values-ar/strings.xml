@@ -7,10 +7,10 @@
     <string name="gateway_notification_text">البوابة قيد التشغيل</string>
     <string name="notification_channel_approval_name">الموافقة على الأدوات</string>
     <string name="notification_channel_approval_desc">إشعارات ذات أولوية عالية لطلبات الموافقة على الأدوات</string>
-    <string name="approval_notification_title">مطلوب الموافقة على أداة</string>
+    <string name="approval_notification_title">أداة تحتاج إلى موافقة</string>
     <string name="approval_approve">موافقة</string>
     <string name="approval_deny">رفض</string>
-    <string name="boot_notification_text">جارٍ بدء بوابة Hermes…</string>
+    <string name="boot_notification_text">جارٍ تشغيل بوابة Hermes…</string>
     <string name="notification_channel_agent_name">نشاط الوكيل</string>
     <string name="notification_channel_agent_desc">نتائج المهام والردود التي تكتمل أثناء وجود التطبيق في الخلفية</string>
     <string name="notification_agent_reply_title">أكمل Hermes الرد</string>

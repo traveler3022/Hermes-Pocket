@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Text without an entry here falls back to English. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
-    <string name="space_where_it_goes">Куда уходит место</string>
-    <string name="space_where_it_goes_hint">Каждая папка встроенного Linux: что это и можно ли её удалить</string>
+    <string name="space_where_it_goes">На что уходит место</string>
+    <string name="space_where_it_goes_hint">Все папки встроенного Linux: что в них находится и можно ли их удалить</string>
     <string name="space_total">Встроенный Linux занимает %s</string>
-    <string name="space_scanning">Сканирование всех папок…</string>
-    <string name="space_safe">Безопасно удалить</string>
+    <string name="space_scanning">Проверяем все папки…</string>
+    <string name="space_safe">Можно удалить</string>
     <string name="space_careful">Удаляйте осторожно</string>
-    <string name="space_needed">Это нужно Hermes</string>
-    <string name="space_needed_locked">Нужно для работы — здесь удалить нельзя</string>
+    <string name="space_needed">Необходимо для Hermes</string>
+    <string name="space_needed_locked">Необходимо для работы — здесь удалить нельзя</string>
     <string name="space_empty">Здесь ничего нет.</string>
-    <string name="space_place_your_files">Ваши файлы и работа агента</string>
+    <string name="space_place_your_files">Ваши файлы и результаты работы агента</string>
     <string name="space_place_your_files_desc">Загрузки, проекты и всё, что агент создал в домашней папке.</string>
-    <string name="space_place_uploads">Файлы из чатов</string>
+    <string name="space_place_uploads">Файлы, отправленные в чатах</string>
     <string name="space_place_uploads_desc">Файлы, которые вы и Hermes прикрепляли в чатах. В старых чатах они будут отмечены как отсутствующие.</string>
     <string name="space_place_hermes_made">Файлы, созданные Hermes</string>
-    <string name="space_place_hermes_made_desc">Созданные изображения и аудио, снимки экрана, загрузки, временные файлы, кэш и журналы.</string>
-    <string name="space_place_caches">Кэш программ</string>
-    <string name="space_place_caches_desc">Загрузки, которые программы хранят для ускорения работы: pip, npm, модели ИИ, браузеры. При необходимости загрузятся снова.</string>
+    <string name="space_place_hermes_made_desc">Созданные изображения и аудио, снимки экрана, загрузки, временные файлы, кеш и журналы.</string>
+    <string name="space_place_caches">Кеш программ</string>
+    <string name="space_place_caches_desc">Загрузки, которые программы хранят для ускорения работы: pip, npm, модели ИИ, браузеры. При необходимости их можно загрузить заново.</string>
     <string name="space_place_temp">Временные файлы и журналы</string>
-    <string name="space_place_temp_desc">Остались после работы программ. Позже они не понадобятся.</string>
+    <string name="space_place_temp_desc">Остались после работы программ. Позже они никому не понадобятся.</string>
     <string name="space_place_installed">Программы, установленные агентом</string>
-    <string name="space_place_installed_desc">Инструменты, установленные через pip, npm, cargo и другие подобные средства. Hermes продолжит работать; навык, которому нужен такой инструмент, установит его заново или перестанет работать.</string>
+    <string name="space_place_installed_desc">Инструменты, установленные через pip, npm, cargo и другие подобные средства. Hermes продолжит работать, но навык, которому нужен такой инструмент, установит его заново или перестанет работать.</string>
     <string name="space_place_backups">Резервные копии Hermes</string>
     <string name="space_place_backups_desc">Копии данных Hermes, сделанные перед обновлениями и восстановлением. Нужны только для отката.</string>
     <string name="space_place_hermes">Сам Hermes</string>
@@ -29,10 +29,10 @@
     <string name="space_place_hermes_data">Данные Hermes</string>
     <string name="space_place_hermes_data_desc">Чаты, память, настройки, навыки и ключи.</string>
     <string name="space_place_system">Система Linux</string>
-    <string name="space_place_system_desc">Встроенная система Linux, её программы и настройки.</string>
+    <string name="space_place_system_desc">Встроенный Linux, его программы и настройки.</string>
     <string name="space_delete_title">Удалить %1$s?</string>
     <string name="space_delete_text">Элементы (%1$s) будут удалены без возможности восстановления.</string>
-    <string name="space_delete_careful">Некоторые из них — программы или резервные копии. То, что ими пользовалось, может перестать работать, пока вы не установите это снова.</string>
+    <string name="space_delete_careful">Некоторые из них — программы или резервные копии. Связанные с ними функции могут перестать работать, пока вы не установите программы заново.</string>
     <string name="space_deleting">Удаление…</string>
     <string name="space_hint_models">Модели ИИ, загруженные программами</string>
     <string name="space_hint_browsers">Браузеры, загруженные для автоматизации</string>

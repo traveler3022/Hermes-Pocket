@@ -7,7 +7,7 @@
     <string name="gateway_notification_text">网关正在运行</string>
     <string name="notification_channel_approval_name">工具审批</string>
     <string name="notification_channel_approval_desc">工具审批请求的高优先级通知</string>
-    <string name="approval_notification_title">需要审批工具请求</string>
+    <string name="approval_notification_title">需要审批工具调用</string>
     <string name="approval_approve">批准</string>
     <string name="approval_deny">拒绝</string>
     <string name="boot_notification_text">正在启动 Hermes 网关…</string>
