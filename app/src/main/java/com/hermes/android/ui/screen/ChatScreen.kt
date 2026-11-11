@@ -264,11 +264,7 @@ fun ChatScreen(
     val showScrollToBottom by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            if (layoutInfo.totalItemsCount == 0) false
-            else {
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                lastVisibleItem == null || lastVisibleItem.index < layoutInfo.totalItemsCount - 1
-            }
+            chatAwayFromBottom(layoutInfo.totalItemsCount, layoutInfo.visibleItemsInfo.lastOrNull()?.index)
         }
     }
 
@@ -428,7 +424,6 @@ fun ChatScreen(
     // The index must come from visibleMessages — the list the LazyColumn
     // renders. uiState.messages still holds the tool-call cards it hides, so
     // its index pointed further down and pushed the message above the screen.
-    val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
 
     // Diagnostic: a turn running with no reply drawn. Says in the connection journal
     // whether the reply is missing from the state or only from what the list draws.
@@ -443,12 +438,8 @@ fun ChatScreen(
                 "windowed=${windowedMessages.size} visible=${visibleMessages.size}",
         )
     }
-    LaunchedEffect(lastUserMessageId) {
-        val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            listState.scrollToItem(lastUserIndex)
-        }
-    }
+    // The rules live in ChatScroll.kt (chatPinKey / chatPinIndex), tested in ChatScrollTest.
+    PinNewestTurn(listState, visibleMessages)
 
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
