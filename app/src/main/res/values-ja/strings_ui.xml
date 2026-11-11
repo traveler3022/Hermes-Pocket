@@ -1495,15 +1495,20 @@
     <string name="topic_make">トピックにする</string>
     <string name="topic_label">トピック</string>
     <string name="topic_start_fresh">新しく始める</string>
-    <string name="topic_start_fresh_title">「%1$s」を新しく始めますか？</string>
-    <string name="topic_start_fresh_detail">今のチャットは「%1$s · 日時」としてアーカイブに移り、空の新しいチャットがトピックに入ります。</string>
+    <string name="topic_start_fresh_title">%1$s を新しく始めますか？</string>
+    <string name="topic_start_fresh_detail">そのチャットは「%1$s · 日時」としてアーカイブされ、空の新しいチャットに置き換わります。</string>
     <string name="topic_rename">トピック名を変更</string>
-    <string name="topic_rename_detail">トピックのチャットも同じ名前になります。</string>
+    <string name="topic_rename_detail">そのチャットも名前が変わり、新しいチャットもこの名前になります。</string>
     <string name="topic_move_up">上へ移動</string>
     <string name="topic_move_down">下へ移動</string>
-    <string name="topic_remove">トピックから外す</string>
+    <string name="topic_remove">トピックを外す</string>
     <string name="topic_failed">トピックを変更できませんでした</string>
     <string name="section_collapsed">折りたたみ</string>
     <string name="section_expanded">展開</string>
     <string name="all_projects">すべてのプロジェクト</string>
+    <string name="topics_drag_to_reorder">トピック · ドラッグで並べ替え</string>
+    <string name="topic_reorder">並べ替え</string>
+    <string name="topic_drag">%1$s をドラッグ</string>
+    <string name="topic_reorder_done">完了</string>
+    <string name="chat_active_ago">%1$s 前にアクティブ</string>
 </resources>

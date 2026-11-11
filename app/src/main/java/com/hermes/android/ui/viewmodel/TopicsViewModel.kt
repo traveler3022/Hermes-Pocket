@@ -10,6 +10,7 @@ import com.hermes.android.domain.topics.ChatTopic
 import com.hermes.android.domain.topics.ChatTopics
 import com.hermes.android.domain.topics.movedPast
 import com.hermes.android.domain.topics.newTopicId
+import com.hermes.android.domain.topics.ordered
 import com.hermes.android.domain.topics.pointedAt
 import com.hermes.android.domain.topics.renamed
 import com.hermes.android.domain.topics.withTopic
@@ -92,6 +93,11 @@ class TopicsViewModel @Inject constructor(
     /** Moves [topic] to where [neighbour] is: one place up or down. */
     fun move(topic: ChatTopic, neighbour: ChatTopic) = act(Action.Move) {
         repository.change(profiles.active.value) { it.movedPast(topic.id, neighbour.id) }
+    }
+
+    /** Saves the topics in the order of [ids], as a drag left them. */
+    fun reorder(ids: List<String>) = act(Action.Move) {
+        repository.change(profiles.active.value) { it.ordered(ids) }
     }
 
     /**

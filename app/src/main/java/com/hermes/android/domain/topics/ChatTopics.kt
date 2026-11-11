@@ -79,3 +79,16 @@ fun List<ChatTopic>.movedPast(id: String, other: String): List<ChatTopic> {
     rest.add(to.coerceIn(0, rest.size), topic)
     return rest
 }
+
+/**
+ * The topics [ids] names put in its order, in the places they had between them; topics it
+ * leaves out keep their own places. So an order dragged in a narrowed list leaves the hidden
+ * topics where they were, and one made on a list another device has since added to loses nothing.
+ */
+fun List<ChatTopic>.ordered(ids: List<String>): List<ChatTopic> {
+    val byId = associateBy { it.id }
+    val named = ids.distinct().mapNotNull { byId[it] }
+    val namedIds = named.mapTo(HashSet()) { it.id }
+    val next = named.iterator()
+    return map { if (it.id in namedIds) next.next() else it }
+}

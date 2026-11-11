@@ -1496,15 +1496,20 @@
     <string name="topic_make">Zum Thema machen</string>
     <string name="topic_label">Thema</string>
     <string name="topic_start_fresh">Neu beginnen</string>
-    <string name="topic_start_fresh_title">„%1$s“ neu beginnen?</string>
-    <string name="topic_start_fresh_detail">Der aktuelle Chat wandert als „%1$s · Datum und Uhrzeit“ ins Archiv, und ein neuer, leerer Chat nimmt seinen Platz im Thema ein.</string>
+    <string name="topic_start_fresh_title">%1$s neu beginnen?</string>
+    <string name="topic_start_fresh_detail">Sein Chat wird als „%1$s · Datum und Uhrzeit“ archiviert, und ein neuer, leerer tritt an seine Stelle.</string>
     <string name="topic_rename">Thema umbenennen</string>
-    <string name="topic_rename_detail">Der Chat des Themas bekommt denselben Namen.</string>
+    <string name="topic_rename_detail">Sein Chat wird mit umbenannt, und jeder neue Chat bekommt diesen Namen.</string>
     <string name="topic_move_up">Nach oben</string>
     <string name="topic_move_down">Nach unten</string>
-    <string name="topic_remove">Aus Themen entfernen</string>
+    <string name="topic_remove">Thema entfernen</string>
     <string name="topic_failed">Das Thema konnte nicht geändert werden</string>
     <string name="section_collapsed">Eingeklappt</string>
     <string name="section_expanded">Ausgeklappt</string>
     <string name="all_projects">Alle Projekte</string>
+    <string name="topics_drag_to_reorder">Themen · zum Sortieren ziehen</string>
+    <string name="topic_reorder">Sortieren</string>
+    <string name="topic_drag">%1$s ziehen</string>
+    <string name="topic_reorder_done">Fertig</string>
+    <string name="chat_active_ago">Aktiv vor %1$s</string>
 </resources>

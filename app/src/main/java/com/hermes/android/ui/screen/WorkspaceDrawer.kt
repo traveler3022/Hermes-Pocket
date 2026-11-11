@@ -66,6 +66,16 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import com.hermes.android.R
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
@@ -135,8 +145,13 @@ internal fun ageOf(epochMillis: Long, nowMillis: Long): Pair<Long, AgeUnit>? {
 
 /** A row's compact age ("now", "5m", "3h"), in the app's language; empty without a time. */
 @Composable
-private fun shortAge(epochMillis: Long, nowMillis: Long): String {
-    val (count, unit) = ageOf(epochMillis, nowMillis) ?: return ""
+private fun shortAge(epochMillis: Long, nowMillis: Long): String =
+    ageOf(epochMillis, nowMillis)?.let { shortAgeText(it) }.orEmpty()
+
+/** [age] in the row's compact words ("now", "5m", "3h"). */
+@Composable
+internal fun shortAgeText(age: Pair<Long, AgeUnit>): String {
+    val (count, unit) = age
     val n = count.toInt()
     return when (unit) {
         AgeUnit.Now -> stringResource(R.string.age_now)
@@ -188,6 +203,9 @@ internal fun WorkspaceDrawerSheet(
     onTopicLongClick: (ChatTopic) -> Unit = {},
     /** The gateway's projects, as chips that narrow the list to one. */
     projects: List<Projects.ProjectSummary> = emptyList(),
+    /** The Topics section shows drag handles; [onReordered] gets the order once the user is done. */
+    reorderingTopics: Boolean = false,
+    onReordered: (List<String>) -> Unit = {},
 ) {
     // Content only: the host's ModalDrawerSheet owns width, shape and colours,
     // and the rename / delete dialogs that hang off it.
@@ -216,22 +234,24 @@ internal fun WorkspaceDrawerSheet(
         topic to (sessions.firstOrNull { it.id == topic.sessionId } ?: sessions.firstOrNull { it.lineageRootId == topic.sessionId })
     }.filter { (_, row) -> project == null || (row != null && project.holds(row)) }
     val topicChatIds = topics.mapTo(HashSet()) { it.sessionId } + topicRows.mapNotNull { it.second?.id }
-    val pinned = scoped.filter { it.id in pinnedIds && it.id !in topicChatIds }
-    val rest = scoped.filter { it.id !in pinnedIds && it.id !in topicChatIds }
-    fun busy(s: SessionItem) = rowTone(pulseOf(s), unreadOf(s)) != RowTone.Idle
     val topicChat: (ChatTopic, SessionItem?) -> SessionItem = { topic, row ->
         row ?: SessionItem(topic.sessionId, topic.name, null, 0L)
     }
+    fun passes(s: SessionItem) = filter.keeps(pulseOf(s), unreadOf(s))
+    fun busy(s: SessionItem) = rowTone(pulseOf(s), unreadOf(s)) != RowTone.Idle
+    // Every section follows the status filter; the topic rows as the section shows them,
+    // so moving one goes past its neighbour here.
+    val filteredTopics = topicRows.filter { (topic, row) -> passes(topicChat(topic, row)) }
+    val pinned = scoped.filter { it.id in pinnedIds && it.id !in topicChatIds && passes(it) }
+    val rest = scoped.filter { it.id !in pinnedIds && it.id !in topicChatIds && passes(it) }
     // Folded, a section still lists the open chat and those with something going on.
-    val shownTopics = if (!topicsCollapsed) topicRows else topicRows.filter { (topic, row) ->
+    val shownTopics = if (!topicsCollapsed) filteredTopics else filteredTopics.filter { (topic, row) ->
         val chat = topicChat(topic, row)
         chat.id == activeSessionId || topic.sessionId == activeSessionId || busy(chat)
     }
     val shownPinned = if (!pinnedCollapsed) pinned else pinned.filter { it.id == activeSessionId || busy(it) }
-    val shown = when (filter) {
-        DrawerFilter.All -> if (showAll) rest else rest.take(visibleSessions)
-        else -> scoped.filter { filter.keeps(pulseOf(it), unreadOf(it)) }
-    }
+    val shown = if (filter != DrawerFilter.All || showAll) rest else rest.take(visibleSessions)
+    val noneMatch = filter != DrawerFilter.All && filteredTopics.isEmpty() && pinned.isEmpty() && rest.isEmpty()
     // Ages move on while the drawer sits open.
     val now by produceState(System.currentTimeMillis()) {
         while (true) {
@@ -281,59 +301,54 @@ internal fun WorkspaceDrawerSheet(
                 )
             }
 
-            // ── Destinations, two to a row ───────────────────────────────
-            if (destinations.isNotEmpty()) DrawerNavGrid(destinations)
-
-            // ── Filters ──────────────────────────────────────────────────
-            // Kept while a filter is on, so an emptied list (another profile)
-            // can still be set back to All.
-            if (showProjects) {
-                DrawerProjectChips(
-                    projects = projectChips,
-                    selected = project?.id,
-                    onSelect = { projectId = it },
-                )
-            }
-            if (sessions.isNotEmpty() || filter != DrawerFilter.All) {
-                DrawerFilters(
-                    selected = filter,
-                    running = scoped.count { pulseOf(it) == SessionPulse.Running },
-                    needsYou = scoped.count { DrawerFilter.NeedsYou.keeps(pulseOf(it), unreadOf(it)) },
-                    onSelect = { filter = it },
-                )
-            }
-
             // ── Sessions, the list fading out above the footer ───────────
             Box(Modifier.weight(1f)) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                 ) {
-                    if (filter == DrawerFilter.All && topicRows.isNotEmpty()) {
-                        item(key = "label-topics") {
-                            SectionToggle(
-                                title = stringResource(R.string.topics_section),
-                                count = topicRows.size,
-                                collapsed = topicsCollapsed,
-                                onToggle = { topicsCollapsed = !topicsCollapsed },
-                            )
-                        }
-                        items(items = shownTopics, key = { "topic-${it.first.id}" }) { (topic, row) ->
-                            val chat = topicChat(topic, row)
-                            DrawerSessionRow(
-                                title = topic.name,
-                                mark = RowMark.Topic,
-                                pulse = pulseOf(chat),
-                                unread = unreadOf(chat),
-                                age = row?.let { shortAge(it.updatedAt, now) }.orEmpty(),
-                                isActive = chat.id == activeSessionId || topic.sessionId == activeSessionId,
-                                projectLabel = if (project == null) row?.let(projectOf) else null,
-                                onClick = { onTopicClick(topic) },
-                                onLongClick = { onTopicLongClick(topic) },
-                            )
+                    // The destinations scroll with the chats, as the list's header.
+                    if (destinations.isNotEmpty()) item(key = "nav") { DrawerNavGrid(destinations) }
+
+                    // ── Topics ───────────────────────────────────────────
+                    if (filteredTopics.isNotEmpty()) {
+                        if (reorderingTopics && filter == DrawerFilter.All) {
+                            // One item, so a dragged row moves among the others without the list recycling it.
+                            item(key = "topics-reorder") {
+                                TopicReorder(
+                                    rows = filteredTopics,
+                                    projectLabel = { row -> if (project == null) row?.let(projectOf) else null },
+                                    onDone = onReordered,
+                                )
+                            }
+                        } else {
+                            item(key = "label-topics") {
+                                SectionToggle(
+                                    title = stringResource(R.string.topics_section),
+                                    count = filteredTopics.size,
+                                    collapsed = topicsCollapsed,
+                                    onToggle = { topicsCollapsed = !topicsCollapsed },
+                                )
+                            }
+                            items(items = shownTopics, key = { "topic-${it.first.id}" }) { (topic, row) ->
+                                val chat = topicChat(topic, row)
+                                DrawerSessionRow(
+                                    title = topic.name,
+                                    mark = RowMark.Topic,
+                                    pulse = pulseOf(chat),
+                                    unread = unreadOf(chat),
+                                    age = row?.let { shortAge(it.updatedAt, now) }.orEmpty(),
+                                    isActive = chat.id == activeSessionId || topic.sessionId == activeSessionId,
+                                    projectLabel = if (project == null) row?.let(projectOf) else null,
+                                    onClick = { onTopicClick(topic) },
+                                    onLongClick = { onTopicLongClick(topic) },
+                                )
+                            }
                         }
                     }
-                    if (filter == DrawerFilter.All && pinned.isNotEmpty()) {
+
+                    // ── Pinned ───────────────────────────────────────────
+                    if (pinned.isNotEmpty()) {
                         item(key = "label-pinned") {
                             SectionToggle(
                                 title = stringResource(R.string.pinned),
@@ -357,22 +372,30 @@ internal fun WorkspaceDrawerSheet(
                             )
                         }
                     }
-                    items(
-                        items = shown,
-                        key = { it.id },
-                    ) { session ->
-                        DrawerSessionRow(
-                            title = session.title,
-                            mark = if (session.id in pinnedIds) RowMark.Pin else RowMark.None,
-                            pulse = pulseOf(session),
-                            unread = unreadOf(session),
-                            age = shortAge(session.updatedAt, now),
-                            isActive = session.id == activeSessionId,
-                            onClick = { onSessionClick(session) },
-                            onLongClick = { onSessionLongClick(session) },
-                        )
+
+                    // ── The filter chips head the rest, with no label of their own ──
+                    if (showProjects) {
+                        item(key = "projects") {
+                            DrawerProjectChips(
+                                projects = projectChips,
+                                selected = project?.id,
+                                onSelect = { projectId = it },
+                            )
+                        }
                     }
-                    if (filter != DrawerFilter.All && shown.isEmpty()) {
+                    // Kept while a filter is on, so an emptied list (another profile)
+                    // can still be set back to All.
+                    if (sessions.isNotEmpty() || filter != DrawerFilter.All) {
+                        item(key = "filters") {
+                            DrawerFilters(
+                                selected = filter,
+                                running = scoped.count { pulseOf(it) == SessionPulse.Running },
+                                needsYou = scoped.count { DrawerFilter.NeedsYou.keeps(pulseOf(it), unreadOf(it)) },
+                                onSelect = { filter = it },
+                            )
+                        }
+                    }
+                    if (noneMatch) {
                         item(key = "filter-empty") {
                             Text(
                                 text = stringResource(
@@ -384,6 +407,21 @@ internal fun WorkspaceDrawerSheet(
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
                             )
                         }
+                    }
+                    items(
+                        items = shown,
+                        key = { it.id },
+                    ) { session ->
+                        DrawerSessionRow(
+                            title = session.title,
+                            mark = RowMark.None,
+                            pulse = pulseOf(session),
+                            unread = unreadOf(session),
+                            age = shortAge(session.updatedAt, now),
+                            isActive = session.id == activeSessionId,
+                            onClick = { onSessionClick(session) },
+                            onLongClick = { onSessionLongClick(session) },
+                        )
                     }
                     if (filter == DrawerFilter.All && !showAll && rest.size > visibleSessions) {
                         item(key = "show-all") {
@@ -708,6 +746,129 @@ private fun DrawerSessionRow(
                 // Level with the title when a status line follows it.
                 modifier = if (statusLine != null) Modifier.align(Alignment.Top).padding(top = 3.dp) else Modifier,
             )
+        }
+    }
+}
+
+/**
+ * The Topics section while it is being put in order: each row has a handle to drag it up or
+ * down, the rows making way as it passes them, and Done on the label saves the order.
+ * Follows Kyllene's ThreadReorder (SessionsSidebar.kt): Copyright (c) 2026 Giton22, MIT License.
+ */
+@Composable
+private fun TopicReorder(
+    rows: List<Pair<ChatTopic, SessionItem?>>,
+    projectLabel: (SessionItem?) -> String?,
+    onDone: (List<String>) -> Unit,
+) {
+    val order = remember { mutableStateListOf<String>().apply { addAll(rows.map { it.first.id }) } }
+    // A topic added or removed meanwhile (on another device) joins or leaves the order where it stands.
+    LaunchedEffect(rows) {
+        val ids = rows.map { it.first.id }
+        order.retainAll(ids)
+        ids.filterNot { it in order }.forEach { order.add(it) }
+    }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableFloatStateOf(1f) }
+    val byId = rows.associateBy { it.first.id }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 10.dp, top = 6.dp)
+                .semantics(mergeDescendants = true) { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.topics_drag_to_reorder).uppercase(),
+                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.08.em),
+                fontWeight = FontWeight.SemiBold,
+                color = HxTone.textTertiary,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { onDone(order.toList()) }) { Text(stringResource(R.string.topic_reorder_done)) }
+        }
+        order.forEach { id ->
+            val row = byId[id] ?: return@forEach
+            // Keyed, so a row that swaps places keeps its drag going rather than starting over.
+            key(id) {
+                val lifted = dragging == id
+                val dragLabel = stringResource(R.string.topic_drag, row.first.name)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .onSizeChanged { rowHeight = it.height.toFloat().coerceAtLeast(1f) }
+                        .zIndex(if (lifted) 1f else 0f)
+                        .graphicsLayer { translationY = if (lifted) offset else 0f }
+                        .clip(RoundedCornerShape(HxRadius.md))
+                        .then(if (lifted) Modifier.background(HxTone.cardStrong) else Modifier)
+                        .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                        Icon(HxIcons.Hash, contentDescription = null, tint = HxTone.textMuted, modifier = Modifier.size(14.dp))
+                    }
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        val titleStyle = MaterialTheme.typography.bodyLarge
+                        Text(
+                            text = row.first.name,
+                            style = titleStyle.copy(lineHeight = titleStyle.fontSize * 1.3f),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        projectLabel(row.second)?.let { label ->
+                            Text(
+                                text = "· $label",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = HxTone.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 112.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .pointerInput(id) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragging = id
+                                        offset = 0f
+                                    },
+                                    onDragEnd = { dragging = null; offset = 0f },
+                                    onDragCancel = { dragging = null; offset = 0f },
+                                ) { change, amount ->
+                                    change.consume()
+                                    offset += amount.y
+                                    val at = order.indexOf(id)
+                                    // Past half a row, it takes the neighbour's place and the offset starts from there.
+                                    if (offset > rowHeight / 2 && at < order.lastIndex) {
+                                        order.add(at + 1, order.removeAt(at))
+                                        offset -= rowHeight
+                                    } else if (offset < -rowHeight / 2 && at > 0) {
+                                        order.add(at - 1, order.removeAt(at))
+                                        offset += rowHeight
+                                    }
+                                }
+                            }
+                            .semantics { contentDescription = dragLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(HxIcons.GripVertical, contentDescription = null, tint = HxTone.textTertiary, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
         }
     }
 }

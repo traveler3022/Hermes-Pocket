@@ -1497,15 +1497,20 @@
     <string name="topic_make">Сделать темой</string>
     <string name="topic_label">Тема</string>
     <string name="topic_start_fresh">Начать заново</string>
-    <string name="topic_start_fresh_title">Начать «%1$s» заново?</string>
-    <string name="topic_start_fresh_detail">Текущий чат уйдёт в архив под именем «%1$s · дата и время», а его место в теме займёт новый пустой чат.</string>
+    <string name="topic_start_fresh_title">Начать %1$s заново?</string>
+    <string name="topic_start_fresh_detail">Его чат уходит в архив как «%1$s · дата и время», а на его место встаёт новый пустой.</string>
     <string name="topic_rename">Переименовать тему</string>
-    <string name="topic_rename_detail">Чат темы получит то же имя.</string>
+    <string name="topic_rename_detail">Его чат тоже переименуется, и каждый новый чат получит это имя.</string>
     <string name="topic_move_up">Выше</string>
     <string name="topic_move_down">Ниже</string>
-    <string name="topic_remove">Убрать из тем</string>
+    <string name="topic_remove">Убрать тему</string>
     <string name="topic_failed">Не удалось изменить тему</string>
     <string name="section_collapsed">Свёрнуто</string>
     <string name="section_expanded">Развёрнуто</string>
     <string name="all_projects">Все проекты</string>
+    <string name="topics_drag_to_reorder">Темы · перетащите для порядка</string>
+    <string name="topic_reorder">Упорядочить</string>
+    <string name="topic_drag">Перетащить %1$s</string>
+    <string name="topic_reorder_done">Готово</string>
+    <string name="chat_active_ago">Активен %1$s назад</string>
 </resources>

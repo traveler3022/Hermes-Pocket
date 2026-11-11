@@ -1498,15 +1498,20 @@
     <string name="topic_make">تحويل إلى موضوع</string>
     <string name="topic_label">موضوع</string>
     <string name="topic_start_fresh">البدء من جديد</string>
-    <string name="topic_start_fresh_title">هل تبدأ «%1$s» من جديد؟</string>
-    <string name="topic_start_fresh_detail">تنتقل محادثته الحالية إلى الأرشيف باسم «%1$s · التاريخ والوقت»، وتحلّ محلها في الموضوع محادثة جديدة فارغة.</string>
+    <string name="topic_start_fresh_title">هل تبدأ %1$s من جديد؟</string>
+    <string name="topic_start_fresh_detail">تُؤرشف محادثته باسم «%1$s · التاريخ والوقت» وتحلّ محلها محادثة جديدة فارغة.</string>
     <string name="topic_rename">إعادة تسمية الموضوع</string>
-    <string name="topic_rename_detail">تأخذ محادثة الموضوع الاسم نفسه.</string>
+    <string name="topic_rename_detail">تُعاد تسمية محادثته أيضًا، وتأخذ كل محادثة جديدة هذا الاسم.</string>
     <string name="topic_move_up">نقل لأعلى</string>
     <string name="topic_move_down">نقل لأسفل</string>
-    <string name="topic_remove">إزالة من المواضيع</string>
+    <string name="topic_remove">إزالة الموضوع</string>
     <string name="topic_failed">تعذّر تغيير الموضوع</string>
     <string name="section_collapsed">مطوي</string>
     <string name="section_expanded">موسّع</string>
     <string name="all_projects">كل المشاريع</string>
+    <string name="topics_drag_to_reorder">المواضيع · اسحب لإعادة الترتيب</string>
+    <string name="topic_reorder">إعادة الترتيب</string>
+    <string name="topic_drag">اسحب %1$s</string>
+    <string name="topic_reorder_done">تم</string>
+    <string name="chat_active_ago">نشط منذ %1$s</string>
 </resources>

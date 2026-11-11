@@ -3,6 +3,7 @@ package com.hermes.android.data
 import com.hermes.android.domain.topics.ChatTopic
 import com.hermes.android.domain.topics.movedPast
 import com.hermes.android.domain.topics.newTopicId
+import com.hermes.android.domain.topics.ordered
 import com.hermes.android.domain.topics.pointedAt
 import com.hermes.android.domain.topics.renamed
 import com.hermes.android.domain.topics.withTopic
@@ -69,6 +70,13 @@ class TopicsTest {
         assertEquals(listOf(b, a, c), listOf(a, b, c).movedPast("b", "a"))
         assertEquals(listOf(a, c, b), listOf(a, b, c).movedPast("b", "c"))
         assertEquals(listOf(a, b, c), listOf(a, b, c).movedPast("nope", "a"))
+    }
+
+    @Test
+    fun `a dragged order keeps topics it leaves out in place`() {
+        assertEquals(listOf(c, b, a), listOf(a, b, c).ordered(listOf("c", "b", "a")))
+        // b was hidden from the drag: it stays second.
+        assertEquals(listOf(c, b, a), listOf(a, b, c).ordered(listOf("c", "a")))
     }
 
     @Test

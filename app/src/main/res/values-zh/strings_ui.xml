@@ -1498,15 +1498,20 @@
     <string name="topic_make">设为话题</string>
     <string name="topic_label">话题</string>
     <string name="topic_start_fresh">重新开始</string>
-    <string name="topic_start_fresh_title">重新开始“%1$s”？</string>
-    <string name="topic_start_fresh_detail">当前对话将以“%1$s · 日期和时间”归档，一个新的空对话会在话题中取代它。</string>
+    <string name="topic_start_fresh_title">重新开始 %1$s？</string>
+    <string name="topic_start_fresh_detail">它的对话将归档为“%1$s · 日期和时间”，并由一个新的空对话取代。</string>
     <string name="topic_rename">重命名话题</string>
-    <string name="topic_rename_detail">话题的对话也会使用同一名称。</string>
+    <string name="topic_rename_detail">它的对话也会改名，之后每个新对话都使用这个名字。</string>
     <string name="topic_move_up">上移</string>
     <string name="topic_move_down">下移</string>
-    <string name="topic_remove">从话题中移除</string>
+    <string name="topic_remove">移除话题</string>
     <string name="topic_failed">无法更改话题</string>
     <string name="section_collapsed">已折叠</string>
     <string name="section_expanded">已展开</string>
     <string name="all_projects">全部项目</string>
+    <string name="topics_drag_to_reorder">话题 · 拖动以排序</string>
+    <string name="topic_reorder">排序</string>
+    <string name="topic_drag">拖动 %1$s</string>
+    <string name="topic_reorder_done">完成</string>
+    <string name="chat_active_ago">%1$s前活跃</string>
 </resources>
