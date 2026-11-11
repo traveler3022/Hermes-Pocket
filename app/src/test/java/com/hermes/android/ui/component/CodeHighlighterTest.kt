@@ -4,10 +4,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** The hand-written fallback rules. Prism and diff colouring are in [PrismHighlightTest]. */
 class CodeHighlighterTest {
 
     private fun tokens(code: String, lang: String): List<Pair<String, CodeToken>> =
-        CodeHighlighter.spans(code, lang).map { code.substring(it.start, it.end) to it.token }
+        CodeHighlighter.ruleSpans(code, lang).map { code.substring(it.start, it.end) to it.token }
 
     @Test
     fun `a comment marker inside a string stays string`() {
@@ -50,7 +51,7 @@ class CodeHighlighterTest {
     @Test
     fun `spans never overlap and stay inside the text`() {
         val code = "/* open\nfun x() = \"unterminated\n1..10 @Ann 0x1F 'c'"
-        val spans = CodeHighlighter.spans(code, "kotlin")
+        val spans = CodeHighlighter.ruleSpans(code, "kotlin")
         var last = 0
         spans.forEach {
             assertTrue(it.start >= last && it.end > it.start && it.end <= code.length)
