@@ -84,8 +84,20 @@ class ChatViewModel @Inject constructor(
     // ── Delegates ───────────────────────────────────────────────────────
 
     private val sessionDelegate = ChatSessionDelegate(
-        gatewayClient, sessionRepository, viewModelScope
+        gatewayClient, sessionRepository, viewModelScope,
+        onChatCreated = { createdLiveId = it },
     ) { loadReasoningLevel() }
+
+    /** The chat session.new just made: the text typed while it was being made stays in it. */
+    private var createdLiveId: String? = null
+    private val drafts = ChatDrafts(
+        read = { prefs.getString(KEY_DRAFT_PREFIX + it, null) },
+        write = { key, text ->
+            val editor = prefs.edit()
+            if (text == null) editor.remove(KEY_DRAFT_PREFIX + key) else editor.putString(KEY_DRAFT_PREFIX + key, text)
+            editor.apply()
+        },
+    )
 
     private val streamingDelegate = ChatStreamingDelegate(viewModelScope, _uiState)
     private val backgroundSessions = BackgroundSessionTracker()
@@ -157,6 +169,7 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadDraft()
+        watchDraftOwner()
         watchForQueuedPromptFlush()
         connectAndCollect()
         watchProfileSwitch()
@@ -496,7 +509,7 @@ class ChatViewModel @Inject constructor(
             // The new chat's folder comes with its session.info, not the last chat's.
             sessionCwd = null,
             activeTodos = emptyList(),
-            pendingApproval = null,
+            // Queued approvals stay: they belong to other chats, which still wait on them.
             // Starting a new chat mid-turn dropped the session id while isSending
             // stayed true; if session.new then failed nothing ever cleared it and
             // the composer stayed locked.
@@ -786,21 +799,32 @@ class ChatViewModel @Inject constructor(
 
     // ── Draft persistence ────────────────────────────────────────────────
 
-    fun saveDraft() {
-        val text = _uiState.value.inputText
-        prefs.edit().putString(KEY_DRAFT, text).apply()
+    fun saveDraft() = drafts.save(_uiState.value.inputText)
+
+    /** The single draft of older versions: it goes to the first chat that opens. */
+    private fun loadDraft() {
+        val legacy = prefs.getString(KEY_DRAFT, null) ?: return
+        prefs.edit().remove(KEY_DRAFT).apply()
+        if (legacy.isNotEmpty()) _uiState.update { it.copy(inputText = legacy) }
     }
 
-    fun loadDraft() {
-        val draft = prefs.getString(KEY_DRAFT, "") ?: ""
-        if (draft.isNotEmpty()) {
-            _uiState.update { it.copy(inputText = draft) }
+    /** Swaps the composer's text when the open chat changes: each chat keeps its own draft. */
+    private fun watchDraftOwner() {
+        viewModelScope.launch {
+            _uiState
+                .map { ChatDrafts.Chat(it.activeSessionId, it.activeSessionKey) }
+                .distinctUntilChanged()
+                .collect { chat ->
+                    val created = chat.liveId != null && chat.liveId == createdLiveId
+                    if (created) createdLiveId = null
+                    drafts.onChatChanged(chat, _uiState.value.inputText, created)?.let { text ->
+                        _uiState.update { it.copy(inputText = text) }
+                    }
+                }
         }
     }
 
-    private fun clearDraft() {
-        prefs.edit().remove(KEY_DRAFT).apply()
-    }
+    private fun clearDraft() = drafts.clear()
 
     // ── Search ───────────────────────────────────────────────────────────
 
@@ -849,7 +873,7 @@ class ChatViewModel @Inject constructor(
 
     // ── Interactive responds (delegated) ─────────────────────────────────
 
-    fun respondToApproval(choice: String) = requestsDelegate.respondToApproval(choice)
+    fun respondToApproval(requestId: String, choice: String) = requestsDelegate.respondToApproval(requestId, choice)
     fun respondToClarify(requestId: String, picked: List<String>) = requestsDelegate.respondToClarify(requestId, picked)
     fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) =
         requestsDelegate.respondToClarifyBatch(requestId, answers)
@@ -1302,7 +1326,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         private const val PREFS_NAME = "hermes_chat_prefs"
+        /** The single draft of older versions, read once and removed. */
         private const val KEY_DRAFT = "draft_message"
+        private const val KEY_DRAFT_PREFIX = "draft_message:"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
         /** Below this, the gateway was already up and we only re-dialled. */
         private const val MIN_BOOT_SAMPLE_MS = 1_500L

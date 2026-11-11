@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.hermes.android.ui.viewmodel.PendingApprovalUi
@@ -63,6 +64,8 @@ import com.hermes.android.ui.viewmodel.PendingApprovalUi
 internal fun ApprovalSheet(
     approval: PendingApprovalUi,
     onRespond: (choice: String) -> Unit,
+    /** Null for the open chat's request; else the chat it came from ("" = not in the drawer). */
+    otherChatTitle: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
@@ -102,6 +105,19 @@ internal fun ApprovalSheet(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
+                    if (otherChatTitle != null) {
+                        Text(
+                            text = if (otherChatTitle.isNotBlank()) {
+                                stringResource(R.string.approval_from_chat, otherChatTitle)
+                            } else {
+                                stringResource(R.string.approval_from_other_chat)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     if (approval.description.isNotBlank()) {
                         Text(
                             text = approval.description,
