@@ -1359,6 +1359,11 @@
     <string name="steer_add_hint">Hermes 会在下次调用工具后读取</string>
     <string name="interrupt_send_title">停止并发送</string>
     <string name="interrupt_send_hint">结束当前回复并回复你的消息</string>
+    <string name="queue_send_title">完成后发送</string>
+    <string name="queue_send_hint">等这条回复结束后再发送</string>
+    <string name="queued_send_label">等待发送</string>
+    <string name="queued_send_edit">编辑</string>
+    <string name="queued_send_cancel">取消</string>
     <string name="status_done">已完成</string>
     <string name="status_failed">失败</string>
     <string name="status_in_progress">进行中</string>

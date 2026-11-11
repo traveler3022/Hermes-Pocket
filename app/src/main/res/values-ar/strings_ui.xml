@@ -1359,6 +1359,11 @@
     <string name="steer_add_hint">سيقرأه Hermes بعد استدعائه للأداة التالية</string>
     <string name="interrupt_send_title">أوقف وأرسل</string>
     <string name="interrupt_send_hint">ينهي هذا الرد ويجيب عن رسالتك</string>
+    <string name="queue_send_title">أرسل عند الانتهاء</string>
+    <string name="queue_send_hint">ينتظر حتى ينتهي هذا الرد ثم يرسل</string>
+    <string name="queued_send_label">بانتظار الإرسال</string>
+    <string name="queued_send_edit">تعديل</string>
+    <string name="queued_send_cancel">إلغاء</string>
     <string name="status_done">اكتمل</string>
     <string name="status_failed">فشل</string>
     <string name="status_in_progress">جارٍ التنفيذ</string>

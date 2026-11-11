@@ -1371,6 +1371,11 @@
     <string name="steer_add_hint">هرمس بعد از ابزار بعدی‌اش آن را می‌خواند</string>
     <string name="interrupt_send_title">توقف و ارسال</string>
     <string name="interrupt_send_hint">این پاسخ تمام می‌شود و به پیام تو جواب می‌دهد</string>
+    <string name="queue_send_title">ارسال بعد از تمام شدن</string>
+    <string name="queue_send_hint">صبر می‌کند تا این پاسخ تمام شود، بعد می‌فرستد</string>
+    <string name="queued_send_label">در انتظار ارسال</string>
+    <string name="queued_send_edit">ویرایش</string>
+    <string name="queued_send_cancel">لغو</string>
     <string name="status_done">انجام شد</string>
     <string name="status_failed">ناموفق</string>
     <string name="status_in_progress">در حال انجام</string>

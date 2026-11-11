@@ -155,6 +155,10 @@ class ChatViewModel @Inject constructor(
         sendPrompt(text, sessionId, truncateBeforeRowIds = rows, bubbleId = bubbleId, onRefused = onRefused)
     }
 
+    private val queueDelegate = ChatQueueDelegate(gatewayClient, viewModelScope, _uiState) { liveId, item ->
+        sendQueuedInOpenChat(liveId, item)
+    }
+
     init {
         loadDraft()
         watchForQueuedPromptFlush()
@@ -339,6 +343,7 @@ class ChatViewModel @Inject constructor(
                     // of that, would have ended this collector for good.
                     try {
                         handleEvent(event)
+                        if (event is GatewayEvent.MessageComplete) onTurnEndedForQueue(event)
                     } catch (e: Exception) {
                         if (e is kotlinx.coroutines.CancellationException) throw e
                         Timber.e(e, "[Chat] could not handle ${event::class.simpleName}")
@@ -525,11 +530,7 @@ class ChatViewModel @Inject constructor(
 
         clearDraft()
 
-        val refs = attachments.mapNotNull { it.refText }
-        val outgoing = when {
-            refs.isEmpty() -> text.ifEmpty { attachments.joinToString("\n") { "[User attached image: ${it.name}]" } }
-            else -> (text + "\n" + refs.joinToString("\n")).trim()
-        }
+        val outgoing = outgoingFor(text, attachments)
 
         // No live session yet — Hermes is still booting inside Alpine, which takes
         // seconds. Park the prompt instead of rejecting it: the bubble goes up now and
@@ -566,6 +567,74 @@ class ChatViewModel @Inject constructor(
         } else {
             sendPrompt(outgoing, sessionId, bubbleId = userMsg.id)
         }
+    }
+
+    private fun outgoingFor(text: String, attachments: List<PendingAttachment>): String {
+        val refs = attachments.mapNotNull { it.refText }
+        return when {
+            refs.isEmpty() -> text.ifEmpty { attachments.joinToString("\n") { "[User attached image: ${it.name}]" } }
+            else -> (text + "\n" + refs.joinToString("\n")).trim()
+        }
+    }
+
+    // ── Send when done (delegated) ───────────────────────────────────────
+
+    /**
+     * "Send when done": the composer's text waits in the app and goes when this chat's
+     * running turn finishes normally, without interrupting it. Slash commands are not
+     * queued (the menu does not offer it): they run against the chat as it is now.
+     */
+    fun queueMessage() {
+        val state = _uiState.value
+        val text = state.inputText.trim()
+        if (text.isEmpty() || state.editingMessageId != null) return
+        if (state.pendingAttachments.any { it.progress != null }) return
+        if (slashDelegate.isCommand(text)) return
+        val attachments = state.pendingAttachments
+        clearDraft()
+        _uiState.update { it.copy(inputText = "", pendingAttachments = emptyList()) }
+        queueDelegate.enqueue(text, outgoingFor(text, attachments), attachments)
+    }
+
+    /** Takes a queued message back into the composer, ahead of anything typed since. */
+    fun editQueued(id: String) {
+        val item = queueDelegate.takeForEdit(id) ?: return
+        _uiState.update { state ->
+            state.copy(
+                inputText = if (state.inputText.isBlank()) item.text else item.text + "\n" + state.inputText,
+                pendingAttachments = item.attachments + state.pendingAttachments,
+            )
+        }
+    }
+
+    fun cancelQueued(id: String) = queueDelegate.cancel(id)
+
+    /** A turn ended in some chat: its next queued message may go now. */
+    private fun onTurnEndedForQueue(event: GatewayEvent.MessageComplete) {
+        val sid = event.sessionId ?: return
+        val state = _uiState.value
+        val keys = listOfNotNull(
+            storedIdByLiveId[sid],
+            state.activeSessionKey.takeIf { sid == state.activeSessionId },
+            sid,
+        ).distinct()
+        queueDelegate.onTurnEnded(sid, keys, event.status)
+    }
+
+    /** A queued message leaving in the open chat: its bubble goes up as it is sent. */
+    private fun sendQueuedInOpenChat(liveId: String, item: QueuedSend) {
+        val userMsg = ChatMessage.User(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            text = item.text,
+            attachments = item.attachments,
+        )
+        _uiState.update { it.copy(
+            messages = it.messages + userMsg,
+            isSending = true,
+            activeTodos = emptyList(),
+        ) }
+        sendPrompt(item.outgoing, liveId, bubbleId = userMsg.id, queued = true)
     }
 
     /**
@@ -707,6 +776,8 @@ class ChatViewModel @Inject constructor(
         /** The user bubble this send is, to take the row the server stored it as. */
         bubbleId: String? = null,
         onRefused: (() -> Unit)? = null,
+        /** A "Send when done" message: if the chat is busy again, Hermes queues it, never interrupts. */
+        queued: Boolean = false,
     ) {
         viewModelScope.launch {
             try {
@@ -714,6 +785,7 @@ class ChatViewModel @Inject constructor(
                     put("text", text)
                     put("session_id", liveId)
                     if (hidden) put("display_kind", "hidden")
+                    if (queued) put("queued", true)
                     if (truncateBeforeRowId != null) {
                         // A rewind (edit, retry) is aimed at the target's durable row id
                         // alone: ordinals drift — a steered message is stored wherever the

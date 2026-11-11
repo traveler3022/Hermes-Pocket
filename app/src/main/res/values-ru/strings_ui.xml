@@ -1358,6 +1358,11 @@
     <string name="steer_add_hint">Hermes прочитает сообщение после следующего вызова инструмента</string>
     <string name="interrupt_send_title">Остановить и отправить</string>
     <string name="interrupt_send_hint">Завершает этот ответ и отвечает на ваше сообщение</string>
+    <string name="queue_send_title">Отправить после ответа</string>
+    <string name="queue_send_hint">Дождётся конца этого ответа и отправит</string>
+    <string name="queued_send_label">Ждёт отправки</string>
+    <string name="queued_send_edit">Изменить</string>
+    <string name="queued_send_cancel">Отменить</string>
     <string name="status_done">Готово</string>
     <string name="status_failed">Не удалось</string>
     <string name="status_in_progress">Выполняется</string>

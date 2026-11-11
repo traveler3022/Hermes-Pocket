@@ -101,6 +101,7 @@ import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.hxSoftShadow
 import com.hermes.android.ui.viewmodel.PASTED_TEXT_PREFIX
 import com.hermes.android.ui.viewmodel.PendingAttachment
+import com.hermes.android.ui.viewmodel.QueuedSend
 import com.hermes.android.ui.viewmodel.SlashCommandSuggestion
 import com.hermes.android.ui.i18n.SlashCommandDescriptions
 import kotlinx.coroutines.launch
@@ -117,6 +118,12 @@ internal fun InputBar(
     onSend: () -> Unit,
     onStop: () -> Unit,
     onSteer: () -> Unit = {},
+    /** "Send when done" while a turn runs; null hides the choice. */
+    onQueue: (() -> Unit)? = null,
+    /** The open chat's queued messages, shown above the box with Edit and Cancel. */
+    queuedSends: List<QueuedSend> = emptyList(),
+    onEditQueued: (String) -> Unit = {},
+    onCancelQueued: (String) -> Unit = {},
     onAttachFiles: (List<Uri>) -> Unit = {},
     /** Images pasted into the box, with the pasted content that lends their read grant. */
     onPasteImages: (List<Uri>, Any) -> Unit = { _, _ -> },
@@ -279,6 +286,9 @@ internal fun InputBar(
             .fillMaxWidth()
             .imePadding(),
     ) {
+        if (queuedSends.isNotEmpty()) {
+            QueuedSendsPanel(queuedSends, onEdit = onEditQueued, onCancel = onCancelQueued)
+        }
         if (showSuggestions && suggestions.isNotEmpty()) {
             LazyColumn(
                 modifier = Modifier
@@ -524,6 +534,18 @@ internal fun InputBar(
                                     onSend()
                                 },
                             )
+                            // Slash commands act on the chat as it is now, so they are not held.
+                            if (onQueue != null && !text.trimStart().startsWith("/")) {
+                                SendChoiceItem(
+                                    icon = HxIcons.Clock,
+                                    title = stringResource(R.string.queue_send_title),
+                                    hint = stringResource(R.string.queue_send_hint),
+                                    onClick = {
+                                        sendChoiceOpen = false
+                                        onQueue()
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -649,6 +671,66 @@ private fun ComposerDiscButton(
                 .then(if (filled) Modifier.background(discColor) else Modifier),
             contentAlignment = Alignment.Center,
         ) { content() }
+    }
+}
+
+/**
+ * The messages waiting for this chat's turn to finish, oldest first, each with Edit (back
+ * into the box) and Cancel. Capped in height: a long queue scrolls instead of pushing the
+ * chat off the screen.
+ * Adapted from K9i-0/ccpocket (MIT License, Copyright (c) 2026 K9i), queued_input_panel.dart.
+ */
+@Composable
+private fun QueuedSendsPanel(
+    items: List<QueuedSend>,
+    onEdit: (String) -> Unit,
+    onCancel: (String) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .heightIn(max = 168.dp)
+            .clip(RoundedCornerShape(HxRadius.md))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        items(items, key = { it.id }) { item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    HxIcons.Clock,
+                    contentDescription = stringResource(R.string.queued_send_label),
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = item.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onEdit(item.id) }) {
+                    Icon(
+                        HxIcons.SquarePen,
+                        contentDescription = stringResource(R.string.queued_send_edit),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                IconButton(onClick = { onCancel(item.id) }) {
+                    Icon(
+                        HxIcons.X,
+                        contentDescription = stringResource(R.string.queued_send_cancel),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

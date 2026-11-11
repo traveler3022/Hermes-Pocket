@@ -1356,6 +1356,11 @@
     <string name="steer_add_hint">次のツール呼び出し後にHermesが読み取ります</string>
     <string name="interrupt_send_title">停止して送信</string>
     <string name="interrupt_send_hint">現在の返信を中断して、メッセージに回答します</string>
+    <string name="queue_send_title">完了後に送信</string>
+    <string name="queue_send_hint">この返信が終わるのを待ってから送信します</string>
+    <string name="queued_send_label">送信待ち</string>
+    <string name="queued_send_edit">編集</string>
+    <string name="queued_send_cancel">キャンセル</string>
     <string name="status_done">完了</string>
     <string name="status_failed">失敗</string>
     <string name="status_in_progress">進行中</string>

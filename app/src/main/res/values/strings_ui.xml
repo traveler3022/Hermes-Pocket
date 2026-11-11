@@ -1373,6 +1373,11 @@
     <string name="steer_add_hint">Hermes reads it after its next tool call</string>
     <string name="interrupt_send_title">Stop and send</string>
     <string name="interrupt_send_hint">Ends this reply and answers your message</string>
+    <string name="queue_send_title">Send when done</string>
+    <string name="queue_send_hint">Waits until this reply finishes, then sends</string>
+    <string name="queued_send_label">Waiting to send</string>
+    <string name="queued_send_edit">Edit</string>
+    <string name="queued_send_cancel">Cancel</string>
     <string name="status_done">Done</string>
     <string name="status_failed">Failed</string>
     <string name="status_in_progress">In progress</string>

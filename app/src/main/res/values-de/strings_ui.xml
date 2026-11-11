@@ -1357,6 +1357,11 @@
     <string name="steer_add_hint">Hermes liest sie nach dem nächsten Tool-Aufruf</string>
     <string name="interrupt_send_title">Stoppen und senden</string>
     <string name="interrupt_send_hint">Beendet diese Antwort und beantwortet deine Nachricht</string>
+    <string name="queue_send_title">Senden, wenn fertig</string>
+    <string name="queue_send_hint">Wartet, bis diese Antwort fertig ist, und sendet dann</string>
+    <string name="queued_send_label">Wartet auf Senden</string>
+    <string name="queued_send_edit">Bearbeiten</string>
+    <string name="queued_send_cancel">Abbrechen</string>
     <string name="status_done">Fertig</string>
     <string name="status_failed">Fehlgeschlagen</string>
     <string name="status_in_progress">Läuft</string>
