@@ -1483,4 +1483,15 @@
     <string name="diff_deleted_file">حُذف</string>
     <string name="diff_moved_to">نُقل إلى %1$s</string>
     <string name="diff_show_rest">عرض الباقي (%1$d سطر)</string>
+    <string name="drawer_filter_needs_you">بانتظارك</string>
+    <string name="drawer_none_running">لا شيء قيد التشغيل الآن.</string>
+    <string name="drawer_none_waiting">لا شيء بانتظارك الآن.</string>
+    <string name="status_new_reply">رد جديد</string>
+    <string name="age_now">الآن</string>
+    <string name="age_minutes">%1$d د</string>
+    <string name="age_hours">%1$d س</string>
+    <string name="age_days">%1$d ي</string>
+    <string name="age_weeks">%1$d أ</string>
+    <string name="age_months">%1$d ش</string>
+    <string name="age_years">%1$d سنة</string>
 </resources>

@@ -1480,4 +1480,15 @@
     <string name="diff_deleted_file">削除</string>
     <string name="diff_moved_to">%1$s へ移動</string>
     <string name="diff_show_rest">残りを表示 (%1$d 行)</string>
+    <string name="drawer_filter_needs_you">あなた待ち</string>
+    <string name="drawer_none_running">実行中のものはありません。</string>
+    <string name="drawer_none_waiting">あなたを待っているものはありません。</string>
+    <string name="status_new_reply">新しい返信</string>
+    <string name="age_now">今</string>
+    <string name="age_minutes">%1$d分</string>
+    <string name="age_hours">%1$d時間</string>
+    <string name="age_days">%1$d日</string>
+    <string name="age_weeks">%1$d週</string>
+    <string name="age_months">%1$dか月</string>
+    <string name="age_years">%1$d年</string>
 </resources>

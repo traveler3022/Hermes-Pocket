@@ -1483,4 +1483,15 @@
     <string name="diff_deleted_file">已删除</string>
     <string name="diff_moved_to">移动到 %1$s</string>
     <string name="diff_show_rest">显示其余 (%1$d 行)</string>
+    <string name="drawer_filter_needs_you">等你处理</string>
+    <string name="drawer_none_running">当前没有正在运行的对话。</string>
+    <string name="drawer_none_waiting">当前没有等你处理的对话。</string>
+    <string name="status_new_reply">新回复</string>
+    <string name="age_now">刚刚</string>
+    <string name="age_minutes">%1$d分钟</string>
+    <string name="age_hours">%1$d小时</string>
+    <string name="age_days">%1$d天</string>
+    <string name="age_weeks">%1$d周</string>
+    <string name="age_months">%1$d个月</string>
+    <string name="age_years">%1$d年</string>
 </resources>

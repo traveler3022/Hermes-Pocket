@@ -1534,4 +1534,15 @@
     <string name="diff_deleted_file">deleted</string>
     <string name="diff_moved_to">moved to %1$s</string>
     <string name="diff_show_rest">Show the rest (%1$d lines)</string>
+    <string name="drawer_filter_needs_you">Needs you</string>
+    <string name="drawer_none_running">Nothing is running right now.</string>
+    <string name="drawer_none_waiting">Nothing needs you right now.</string>
+    <string name="status_new_reply">New reply</string>
+    <string name="age_now">now</string>
+    <string name="age_minutes">%1$dm</string>
+    <string name="age_hours">%1$dh</string>
+    <string name="age_days">%1$dd</string>
+    <string name="age_weeks">%1$dw</string>
+    <string name="age_months">%1$dmo</string>
+    <string name="age_years">%1$dy</string>
 </resources>

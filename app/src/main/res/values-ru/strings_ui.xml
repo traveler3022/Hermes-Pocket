@@ -1482,4 +1482,15 @@
     <string name="diff_deleted_file">удалён</string>
     <string name="diff_moved_to">перемещён в %1$s</string>
     <string name="diff_show_rest">Показать остальное (строк: %1$d)</string>
+    <string name="drawer_filter_needs_you">Ждёт вас</string>
+    <string name="drawer_none_running">Сейчас ничего не выполняется.</string>
+    <string name="drawer_none_waiting">Сейчас ничего не ждёт вас.</string>
+    <string name="status_new_reply">Новый ответ</string>
+    <string name="age_now">сейчас</string>
+    <string name="age_minutes">%1$d мин</string>
+    <string name="age_hours">%1$d ч</string>
+    <string name="age_days">%1$d д</string>
+    <string name="age_weeks">%1$d нед</string>
+    <string name="age_months">%1$d мес</string>
+    <string name="age_years">%1$d г</string>
 </resources>

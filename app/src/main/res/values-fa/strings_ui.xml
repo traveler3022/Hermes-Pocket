@@ -1514,4 +1514,15 @@
     <string name="diff_deleted_file">حذف شد</string>
     <string name="diff_moved_to">منتقل شد به %1$s</string>
     <string name="diff_show_rest">نمایش بقیه (%1$d خط)</string>
+    <string name="drawer_filter_needs_you">منتظر من</string>
+    <string name="drawer_none_running">الان چیزی در حال اجرا نیست.</string>
+    <string name="drawer_none_waiting">الان چیزی منتظر تو نیست.</string>
+    <string name="status_new_reply">پاسخ تازه</string>
+    <string name="age_now">الان</string>
+    <string name="age_minutes">%1$d دقیقه</string>
+    <string name="age_hours">%1$d ساعت</string>
+    <string name="age_days">%1$d روز</string>
+    <string name="age_weeks">%1$d هفته</string>
+    <string name="age_months">%1$d ماه</string>
+    <string name="age_years">%1$d سال</string>
 </resources>

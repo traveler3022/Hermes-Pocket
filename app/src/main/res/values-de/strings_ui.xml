@@ -1481,4 +1481,15 @@
     <string name="diff_deleted_file">gelöscht</string>
     <string name="diff_moved_to">verschoben nach %1$s</string>
     <string name="diff_show_rest">Rest anzeigen (%1$d Zeilen)</string>
+    <string name="drawer_filter_needs_you">Wartet auf dich</string>
+    <string name="drawer_none_running">Gerade läuft nichts.</string>
+    <string name="drawer_none_waiting">Gerade wartet nichts auf dich.</string>
+    <string name="status_new_reply">Neue Antwort</string>
+    <string name="age_now">jetzt</string>
+    <string name="age_minutes">%1$d Min.</string>
+    <string name="age_hours">%1$d Std.</string>
+    <string name="age_days">%1$d T.</string>
+    <string name="age_weeks">%1$d Wo.</string>
+    <string name="age_months">%1$d Mon.</string>
+    <string name="age_years">%1$d J.</string>
 </resources>
