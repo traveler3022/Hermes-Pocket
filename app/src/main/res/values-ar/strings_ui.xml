@@ -1364,6 +1364,13 @@
     <string name="queued_send_label">بانتظار الإرسال</string>
     <string name="queued_send_edit">تعديل</string>
     <string name="queued_send_cancel">إلغاء</string>
+    <string name="viewer_text_truncated">يُعرض بداية الملف فقط. افتحه في تطبيق آخر لرؤية الباقي.</string>
+    <string name="viewer_not_text">هذا الملف ليس نصًا</string>
+    <string name="viewer_pdf_unreadable">ملف PDF هذا محمي بكلمة مرور أو تالف</string>
+    <string name="viewer_pdf_page">الصفحة %1$d</string>
+    <string name="viewer_show_source">عرض المصدر</string>
+    <string name="viewer_show_rendered">عرض المنسّق</string>
+    <string name="viewer_copy_too_large">أكبر من أن يُنسخ</string>
     <string name="status_done">اكتمل</string>
     <string name="status_failed">فشل</string>
     <string name="status_in_progress">جارٍ التنفيذ</string>

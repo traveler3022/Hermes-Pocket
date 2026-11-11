@@ -1362,6 +1362,13 @@
     <string name="queued_send_label">Wartet auf Senden</string>
     <string name="queued_send_edit">Bearbeiten</string>
     <string name="queued_send_cancel">Abbrechen</string>
+    <string name="viewer_text_truncated">Nur der Anfang der Datei wird angezeigt. Öffne sie in einer anderen App für den Rest.</string>
+    <string name="viewer_not_text">Diese Datei ist kein Text</string>
+    <string name="viewer_pdf_unreadable">Dieses PDF ist passwortgeschützt oder beschädigt</string>
+    <string name="viewer_pdf_page">Seite %1$d</string>
+    <string name="viewer_show_source">Quelltext zeigen</string>
+    <string name="viewer_show_rendered">Formatiert zeigen</string>
+    <string name="viewer_copy_too_large">Zu groß zum Kopieren</string>
     <string name="status_done">Fertig</string>
     <string name="status_failed">Fehlgeschlagen</string>
     <string name="status_in_progress">Läuft</string>

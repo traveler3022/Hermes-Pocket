@@ -1376,6 +1376,13 @@
     <string name="queued_send_label">در انتظار ارسال</string>
     <string name="queued_send_edit">ویرایش</string>
     <string name="queued_send_cancel">لغو</string>
+    <string name="viewer_text_truncated">فقط ابتدای فایل نشان داده شده. برای بقیه‌اش با برنامه‌ی دیگری باز کن.</string>
+    <string name="viewer_not_text">این فایل متنی نیست</string>
+    <string name="viewer_pdf_unreadable">این PDF رمز دارد یا خراب است</string>
+    <string name="viewer_pdf_page">صفحه‌ی %1$d</string>
+    <string name="viewer_show_source">نمایش متن خام</string>
+    <string name="viewer_show_rendered">نمایش قالب‌بندی‌شده</string>
+    <string name="viewer_copy_too_large">برای کپی خیلی بزرگ است</string>
     <string name="status_done">انجام شد</string>
     <string name="status_failed">ناموفق</string>
     <string name="status_in_progress">در حال انجام</string>

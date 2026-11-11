@@ -1378,6 +1378,13 @@
     <string name="queued_send_label">Waiting to send</string>
     <string name="queued_send_edit">Edit</string>
     <string name="queued_send_cancel">Cancel</string>
+    <string name="viewer_text_truncated">Showing the start of the file. Open it in another app for the rest.</string>
+    <string name="viewer_not_text">This file is not text</string>
+    <string name="viewer_pdf_unreadable">This PDF is locked with a password or damaged</string>
+    <string name="viewer_pdf_page">Page %1$d</string>
+    <string name="viewer_show_source">Show source</string>
+    <string name="viewer_show_rendered">Show formatted</string>
+    <string name="viewer_copy_too_large">Too large to copy</string>
     <string name="status_done">Done</string>
     <string name="status_failed">Failed</string>
     <string name="status_in_progress">In progress</string>

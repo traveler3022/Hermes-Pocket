@@ -1363,6 +1363,13 @@
     <string name="queued_send_label">Ждёт отправки</string>
     <string name="queued_send_edit">Изменить</string>
     <string name="queued_send_cancel">Отменить</string>
+    <string name="viewer_text_truncated">Показано только начало файла. Откройте его в другом приложении, чтобы увидеть остальное.</string>
+    <string name="viewer_not_text">Это не текстовый файл</string>
+    <string name="viewer_pdf_unreadable">Этот PDF защищён паролем или повреждён</string>
+    <string name="viewer_pdf_page">Страница %1$d</string>
+    <string name="viewer_show_source">Показать исходник</string>
+    <string name="viewer_show_rendered">Показать оформленным</string>
+    <string name="viewer_copy_too_large">Слишком большой для копирования</string>
     <string name="status_done">Готово</string>
     <string name="status_failed">Не удалось</string>
     <string name="status_in_progress">Выполняется</string>
