@@ -1438,4 +1438,34 @@
     <string name="portal_tool_reads">Liest</string>
     <string name="portal_tool_writes">Schreibt</string>
     <string name="portal_tool_deletes">Kann löschen</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">Liest</string>
+    <string name="tool_verb_read">Gelesen</string>
+    <string name="tool_verb_read_failed">Lesen fehlgeschlagen</string>
+    <string name="tool_verb_searching">Sucht</string>
+    <string name="tool_verb_searched">Gesucht</string>
+    <string name="tool_verb_search_failed">Suche fehlgeschlagen</string>
+    <string name="tool_verb_running">Führt aus</string>
+    <string name="tool_verb_ran">Ausgeführt</string>
+    <string name="tool_verb_run_failed">Ausführen fehlgeschlagen</string>
+    <string name="tool_verb_editing">Bearbeitet</string>
+    <string name="tool_verb_edited">Geändert</string>
+    <string name="tool_verb_edit_failed">Bearbeiten fehlgeschlagen</string>
+    <string name="tool_verb_writing">Schreibt</string>
+    <string name="tool_verb_wrote">Geschrieben</string>
+    <string name="tool_verb_write_failed">Schreiben fehlgeschlagen</string>
+    <string name="tool_verb_searching_web">Sucht im Web nach</string>
+    <string name="tool_verb_searched_web">Im Web gesucht nach</string>
+    <string name="tool_verb_search_web_failed">Websuche fehlgeschlagen</string>
+    <string name="tool_verb_opening">Öffnet</string>
+    <string name="tool_verb_opened">Geöffnet</string>
+    <string name="tool_verb_open_failed">Öffnen fehlgeschlagen</string>
+    <string name="tool_verb_using">Verwendet</string>
+    <string name="tool_verb_used">Benutzt</string>
+    <string name="tool_verb_use_failed">Verwenden fehlgeschlagen</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">neue Datei</string>
+    <string name="diff_deleted_file">gelöscht</string>
+    <string name="diff_moved_to">verschoben nach %1$s</string>
+    <string name="diff_show_rest">Rest anzeigen (%1$d Zeilen)</string>
 </resources>

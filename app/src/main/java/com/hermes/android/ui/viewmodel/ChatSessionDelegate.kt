@@ -386,6 +386,7 @@ internal class ChatSessionDelegate(
                         resultText = msg["result"].asText() ?: content,
                         error = msg["error"].asText(),
                         isRunning = false, durationS = null,
+                        preview = msg["context"].asText()?.takeIf { it.isNotBlank() },
                     )
                     else -> null
                 }

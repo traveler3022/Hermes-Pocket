@@ -1491,4 +1491,34 @@
     <string name="portal_tool_reads">Reads</string>
     <string name="portal_tool_writes">Writes</string>
     <string name="portal_tool_deletes">Can delete</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">Reading</string>
+    <string name="tool_verb_read">Read</string>
+    <string name="tool_verb_read_failed">Couldn\'t read</string>
+    <string name="tool_verb_searching">Searching</string>
+    <string name="tool_verb_searched">Searched</string>
+    <string name="tool_verb_search_failed">Couldn\'t search</string>
+    <string name="tool_verb_running">Running</string>
+    <string name="tool_verb_ran">Ran</string>
+    <string name="tool_verb_run_failed">Couldn\'t run</string>
+    <string name="tool_verb_editing">Editing</string>
+    <string name="tool_verb_edited">Edited</string>
+    <string name="tool_verb_edit_failed">Couldn\'t edit</string>
+    <string name="tool_verb_writing">Writing</string>
+    <string name="tool_verb_wrote">Wrote</string>
+    <string name="tool_verb_write_failed">Couldn\'t write</string>
+    <string name="tool_verb_searching_web">Searching the web for</string>
+    <string name="tool_verb_searched_web">Searched the web for</string>
+    <string name="tool_verb_search_web_failed">Couldn\'t search the web for</string>
+    <string name="tool_verb_opening">Opening</string>
+    <string name="tool_verb_opened">Opened</string>
+    <string name="tool_verb_open_failed">Couldn\'t open</string>
+    <string name="tool_verb_using">Using</string>
+    <string name="tool_verb_used">Used</string>
+    <string name="tool_verb_use_failed">Couldn\'t use</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">new file</string>
+    <string name="diff_deleted_file">deleted</string>
+    <string name="diff_moved_to">moved to %1$s</string>
+    <string name="diff_show_rest">Show the rest (%1$d lines)</string>
 </resources>

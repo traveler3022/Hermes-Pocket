@@ -62,6 +62,8 @@ sealed class ChatMessage {
          *  which part came before the tool and which after. Unset for history. */
         val reasoningOwnerId: String? = null,
         val reasoningMark: Int = 0,
+        /** The server's short argument preview (`context`: the path, the command, the query). */
+        val preview: String? = null,
     ) : ChatMessage()
 
     /** Status/error line. */

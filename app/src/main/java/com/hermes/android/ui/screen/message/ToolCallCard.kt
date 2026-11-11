@@ -32,9 +32,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.gestures.detectTapGestures
+import android.widget.Toast
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.domain.diff.FileEditDiff
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxStatus
@@ -80,10 +90,9 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                         tint = if (failed) HxStatus.error else HxStatus.done,
                     )
                 }
-                Text(
-                    text = message.toolName,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                ToolTitle(
+                    line = toolLine(message.toolName, message.preview, message.isRunning, failed),
+                    failed = failed,
                     modifier = Modifier.weight(1f),
                 )
                 if (message.isRunning) {
@@ -102,6 +111,8 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                 }
             }
             message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
+                // A file edit's arguments read as the diff they make; anything else as they are.
+                val edits = remember(message.toolName, args) { FileEditDiff.fromToolArgs(message.toolName, args) }
                 // Auto-expand while the tool is running so the user can watch
                 // what it's doing; once finished, they can open it on demand.
                 var argsExpanded by remember { mutableStateOf(message.isRunning) }
@@ -112,7 +123,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(R.string.arguments),
+                        text = stringResource(if (edits != null) R.string.changes else R.string.arguments),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
@@ -125,12 +136,16 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     )
                 }
                 AnimatedVisibility(visible = argsExpanded) {
-                    Text(
-                        text = args,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (edits != null) {
+                        FileEditsView(edits)
+                    } else {
+                        Text(
+                            text = args,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             message.resultText?.takeIf { it.isNotBlank() }?.let { result ->
@@ -179,4 +194,40 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
             }
         }
     }
+}
+
+/**
+ * "Read README.md": the verb in the label face, the subject in mono when it is a
+ * path or a command, on one line. A long press copies the subject.
+ */
+@Composable
+private fun ToolTitle(line: ToolLine, failed: Boolean, modifier: Modifier = Modifier) {
+    val verb = line.verb?.let { stringResource(it) }
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val copied = stringResource(R.string.copied)
+    val subjectColor = MaterialTheme.colorScheme.onSurface
+    val verbColor = if (failed) HxStatus.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val text = remember(verb, line, subjectColor, verbColor) {
+        buildAnnotatedString {
+            if (verb != null) {
+                withStyle(SpanStyle(color = verbColor)) { append(verb) }
+                append(' ')
+            }
+            val style = if (line.mono) SpanStyle(fontFamily = FontFamily.Monospace) else SpanStyle()
+            withStyle(style.copy(color = subjectColor)) { append(line.subject) }
+        }
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.pointerInput(line.subject) {
+            detectTapGestures(onLongPress = {
+                clipboard.setText(AnnotatedString(line.subject))
+                Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
+            })
+        },
+    )
 }

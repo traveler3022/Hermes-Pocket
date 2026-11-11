@@ -1440,4 +1440,34 @@
     <string name="portal_tool_reads">القراءة</string>
     <string name="portal_tool_writes">الكتابة</string>
     <string name="portal_tool_deletes">يمكنه الحذف</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">يقرأ</string>
+    <string name="tool_verb_read">قرأ</string>
+    <string name="tool_verb_read_failed">تعذّرت قراءة</string>
+    <string name="tool_verb_searching">يبحث في</string>
+    <string name="tool_verb_searched">بحث في</string>
+    <string name="tool_verb_search_failed">تعذّر البحث في</string>
+    <string name="tool_verb_running">يشغّل</string>
+    <string name="tool_verb_ran">شغّل</string>
+    <string name="tool_verb_run_failed">تعذّر تشغيل</string>
+    <string name="tool_verb_editing">يعدّل</string>
+    <string name="tool_verb_edited">عدّل</string>
+    <string name="tool_verb_edit_failed">تعذّر تعديل</string>
+    <string name="tool_verb_writing">يكتب</string>
+    <string name="tool_verb_wrote">كتب</string>
+    <string name="tool_verb_write_failed">تعذّرت كتابة</string>
+    <string name="tool_verb_searching_web">يبحث في الويب عن</string>
+    <string name="tool_verb_searched_web">بحث في الويب عن</string>
+    <string name="tool_verb_search_web_failed">تعذّر البحث في الويب عن</string>
+    <string name="tool_verb_opening">يفتح</string>
+    <string name="tool_verb_opened">فتح</string>
+    <string name="tool_verb_open_failed">تعذّر فتح</string>
+    <string name="tool_verb_using">يستخدم</string>
+    <string name="tool_verb_used">استخدم</string>
+    <string name="tool_verb_use_failed">تعذّر استخدام</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">ملف جديد</string>
+    <string name="diff_deleted_file">حُذف</string>
+    <string name="diff_moved_to">نُقل إلى %1$s</string>
+    <string name="diff_show_rest">عرض الباقي (%1$d سطر)</string>
 </resources>

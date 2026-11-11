@@ -1437,4 +1437,34 @@
     <string name="portal_tool_reads">読み取り</string>
     <string name="portal_tool_writes">書き込み</string>
     <string name="portal_tool_deletes">削除可能</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">読み込み中</string>
+    <string name="tool_verb_read">読み込み</string>
+    <string name="tool_verb_read_failed">読み込み失敗</string>
+    <string name="tool_verb_searching">検索中</string>
+    <string name="tool_verb_searched">検索</string>
+    <string name="tool_verb_search_failed">検索失敗</string>
+    <string name="tool_verb_running">実行中</string>
+    <string name="tool_verb_ran">実行</string>
+    <string name="tool_verb_run_failed">実行失敗</string>
+    <string name="tool_verb_editing">編集中</string>
+    <string name="tool_verb_edited">編集</string>
+    <string name="tool_verb_edit_failed">編集失敗</string>
+    <string name="tool_verb_writing">書き込み中</string>
+    <string name="tool_verb_wrote">書き込み</string>
+    <string name="tool_verb_write_failed">書き込み失敗</string>
+    <string name="tool_verb_searching_web">ウェブ検索中</string>
+    <string name="tool_verb_searched_web">ウェブ検索</string>
+    <string name="tool_verb_search_web_failed">ウェブ検索失敗</string>
+    <string name="tool_verb_opening">開いています</string>
+    <string name="tool_verb_opened">開きました</string>
+    <string name="tool_verb_open_failed">開けませんでした</string>
+    <string name="tool_verb_using">使用中</string>
+    <string name="tool_verb_used">使用</string>
+    <string name="tool_verb_use_failed">使用失敗</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">新規ファイル</string>
+    <string name="diff_deleted_file">削除</string>
+    <string name="diff_moved_to">%1$s へ移動</string>
+    <string name="diff_show_rest">残りを表示 (%1$d 行)</string>
 </resources>
