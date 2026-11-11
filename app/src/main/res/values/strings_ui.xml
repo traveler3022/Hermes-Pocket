@@ -1492,4 +1492,11 @@
     <string name="skill_lock">Lock against agent edits</string>
     <string name="skill_unlock">Unlock for the agent</string>
     <string name="skill_locked">Locked</string>
+    <string name="cron_stop_run">Stop the run</string>
+    <string name="cron_model">Model</string>
+    <string name="cron_model_main">Main model (follows the agent)</string>
+    <string name="cron_missed_runs">Missed runs (server was off)</string>
+    <string name="cron_catch_up_default">Hermes default</string>
+    <string name="cron_catch_up_once">Run once</string>
+    <string name="cron_catch_up_skip">Skip</string>
 </resources>

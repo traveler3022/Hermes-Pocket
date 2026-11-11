@@ -1439,4 +1439,11 @@
     <string name="skill_lock">Gegen Agent-Änderungen sperren</string>
     <string name="skill_unlock">Für den Agenten entsperren</string>
     <string name="skill_locked">Gesperrt</string>
+    <string name="cron_stop_run">Lauf stoppen</string>
+    <string name="cron_model">Modell</string>
+    <string name="cron_model_main">Hauptmodell (wie der Agent)</string>
+    <string name="cron_missed_runs">Verpasste Läufe (Server war aus)</string>
+    <string name="cron_catch_up_default">Hermes-Standard</string>
+    <string name="cron_catch_up_once">Einmal nachholen</string>
+    <string name="cron_catch_up_skip">Überspringen</string>
 </resources>

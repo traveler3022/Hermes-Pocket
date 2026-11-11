@@ -1441,4 +1441,11 @@
     <string name="skill_lock">锁定，禁止智能体修改</string>
     <string name="skill_unlock">解锁，允许智能体修改</string>
     <string name="skill_locked">已锁定</string>
+    <string name="cron_stop_run">停止运行</string>
+    <string name="cron_model">模型</string>
+    <string name="cron_model_main">主模型（跟随智能体）</string>
+    <string name="cron_missed_runs">错过的运行（服务器关闭时）</string>
+    <string name="cron_catch_up_default">Hermes 默认</string>
+    <string name="cron_catch_up_once">补运行一次</string>
+    <string name="cron_catch_up_skip">跳过</string>
 </resources>

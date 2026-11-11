@@ -1438,4 +1438,11 @@
     <string name="skill_lock">エージェントによる編集をロック</string>
     <string name="skill_unlock">エージェントの編集を許可</string>
     <string name="skill_locked">ロック中</string>
+    <string name="cron_stop_run">実行を停止</string>
+    <string name="cron_model">モデル</string>
+    <string name="cron_model_main">メインモデル（エージェントと同じ）</string>
+    <string name="cron_missed_runs">実行漏れ（サーバー停止中）</string>
+    <string name="cron_catch_up_default">Hermes の既定</string>
+    <string name="cron_catch_up_once">1回だけ実行</string>
+    <string name="cron_catch_up_skip">スキップ</string>
 </resources>
