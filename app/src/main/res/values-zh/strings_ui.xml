@@ -1448,4 +1448,6 @@
     <string name="cron_catch_up_default">Hermes 默认</string>
     <string name="cron_catch_up_once">补运行一次</string>
     <string name="cron_catch_up_skip">跳过</string>
+    <string name="usage_resets_at">%1$s 重置</string>
+    <string name="usage_limited_until">已达上限，直到 %1$s</string>
 </resources>

@@ -1446,4 +1446,6 @@
     <string name="cron_catch_up_default">Hermes-Standard</string>
     <string name="cron_catch_up_once">Einmal nachholen</string>
     <string name="cron_catch_up_skip">Überspringen</string>
+    <string name="usage_resets_at">zurückgesetzt %1$s</string>
+    <string name="usage_limited_until">Limit erreicht bis %1$s</string>
 </resources>

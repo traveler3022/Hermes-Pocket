@@ -1447,4 +1447,6 @@
     <string name="cron_catch_up_default">По умолчанию Hermes</string>
     <string name="cron_catch_up_once">Выполнить один раз</string>
     <string name="cron_catch_up_skip">Пропустить</string>
+    <string name="usage_resets_at">сброс %1$s</string>
+    <string name="usage_limited_until">Лимит исчерпан до %1$s</string>
 </resources>

@@ -152,10 +152,13 @@ internal fun ModelPickerSheet(
                         models.isEmpty() -> item { SheetHint(stringResource(R.string.no_models_loaded)) }
                         else -> items(byProvider.keys.sorted(), key = { "provider:$it" }) { slug ->
                             val providerModels = byProvider.getValue(slug)
+                            val first = providerModels.first()
                             NavRow(
-                                title = providerLabel(providerModels.first()),
+                                title = providerLabel(first),
                                 value = providerModels.size.toString(),
                                 highlighted = providerModels.any(isActive),
+                                subtitle = usageLine(first),
+                                subtitleWarning = first.limitedUntil != null || first.usage.any { it.usedPercent >= 90 },
                             ) { open(ModelSheetPage.Provider(slug)) }
                         }
                     }

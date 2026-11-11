@@ -1448,4 +1448,6 @@
     <string name="cron_catch_up_default">افتراضي Hermes</string>
     <string name="cron_catch_up_once">تشغيل مرة واحدة</string>
     <string name="cron_catch_up_skip">تخطٍّ</string>
+    <string name="usage_resets_at">يتجدد %1$s</string>
+    <string name="usage_limited_until">تم بلوغ الحد حتى %1$s</string>
 </resources>

@@ -1499,4 +1499,6 @@
     <string name="cron_catch_up_default">Hermes default</string>
     <string name="cron_catch_up_once">Run once</string>
     <string name="cron_catch_up_skip">Skip</string>
+    <string name="usage_resets_at">resets %1$s</string>
+    <string name="usage_limited_until">Limit reached until %1$s</string>
 </resources>

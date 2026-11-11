@@ -81,10 +81,28 @@ internal fun SelectedMark(selected: Boolean) {
 }
 
 @Composable
-internal fun NavRow(title: String, value: String?, highlighted: Boolean = false, onClick: () -> Unit) {
+internal fun NavRow(
+    title: String,
+    value: String?,
+    highlighted: Boolean = false,
+    subtitle: String? = null,
+    subtitleWarning: Boolean = false,
+    onClick: () -> Unit,
+) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        supportingContent = subtitle?.let { text ->
+            {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (subtitleWarning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         headlineContent = {
             Text(
                 title,
@@ -149,4 +167,30 @@ internal fun ModelRow(
             }
         },
     )
+}
+
+/**
+ * One line for a provider's login limits: "Session 42% · Weekly 18%", plus when the fullest
+ * window resets; "Limited until …" when the whole login is out. Null when Hermes sent none.
+ */
+@Composable
+internal fun usageLine(option: ModelOption): String? {
+    option.limitedUntil?.let { until ->
+        return stringResource(R.string.usage_limited_until, usageTime(until) ?: until)
+    }
+    if (option.usage.isEmpty()) return null
+    val gauges = option.usage.joinToString(" · ") { "${it.label} ${it.usedPercent}%" }
+    val fullest = option.usage.maxBy { it.usedPercent }
+    val reset = fullest.resetsAt?.let(::usageTime) ?: return gauges
+    return gauges + " · " + stringResource(R.string.usage_resets_at, reset)
+}
+
+/** An ISO instant as the phone's local time; with the date when it isn't today. */
+private fun usageTime(iso: String): String? = try {
+    val at = java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
+    val today = java.time.LocalDate.now()
+    val pattern = if (at.toLocalDate() == today) "HH:mm" else "d MMM HH:mm"
+    at.format(java.time.format.DateTimeFormatter.ofPattern(pattern))
+} catch (e: java.time.format.DateTimeParseException) {
+    null
 }
