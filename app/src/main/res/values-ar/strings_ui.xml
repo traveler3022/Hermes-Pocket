@@ -145,6 +145,7 @@
     <string name="command_approval_2">الموافقة على الأمر</string>
     <string name="approval_from_chat">من المحادثة: %1$s</string>
     <string name="approval_from_other_chat">من محادثة أخرى</string>
+    <string name="approval_position">%1$d من %2$d</string>
     <string name="comments">التعليقات: %1$s</string>
     <string name="comments_2">التعليقات</string>
     <string name="compress_history">ضغط السجل</string>
