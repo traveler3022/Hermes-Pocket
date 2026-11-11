@@ -97,4 +97,27 @@ class ChatDraftsTest {
         open(chatA)
         assertEquals("half typed", composer)
     }
+
+    @Test
+    fun `a draft deleted to empty is removed, not restored later`() {
+        open(chatA)
+        composer = "will delete this"
+        drafts.save(composer)
+        composer = ""
+        drafts.save(composer)
+        assertNull(store["stored-A"])
+        open(chatB)
+        open(chatA)
+        assertEquals("", composer)
+    }
+
+    @Test
+    fun `leaving a chat with an empty composer removes its draft`() {
+        open(chatA)
+        composer = "x"
+        drafts.save(composer)
+        composer = ""
+        open(chatB)
+        assertNull(store["stored-A"])
+    }
 }

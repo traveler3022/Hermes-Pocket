@@ -474,12 +474,11 @@ fun ChatScreen(
         }
     }
 
-    // Feature #23: Save draft when input changes (debounced via LaunchedEffect)
+    // Feature #23: Save draft when input changes (debounced via LaunchedEffect).
+    // Empty text is saved too: it removes the draft, which otherwise came back after a restart.
     LaunchedEffect(uiState.inputText) {
-        if (uiState.inputText.isNotEmpty()) {
-            kotlinx.coroutines.delay(500L)
-            viewModel.saveDraft()
-        }
+        kotlinx.coroutines.delay(500L)
+        viewModel.saveDraft()
     }
 
     // Pre-fill input from share intent

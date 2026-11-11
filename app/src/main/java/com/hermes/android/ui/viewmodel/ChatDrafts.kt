@@ -55,14 +55,14 @@ internal class ChatDrafts(
             owner = key
             return null
         }
-        write(current, text)
+        write(current, text.ifEmpty { null })
         owner = key
         return read(key).orEmpty()
     }
 
-    /** Stores [text] as the open chat's draft. */
+    /** Stores [text] as the open chat's draft; empty text removes it. */
     fun save(text: String) {
-        owner?.let { write(it, text) }
+        owner?.let { write(it, text.ifEmpty { null }) }
     }
 
     /** The open chat's draft was sent. */
