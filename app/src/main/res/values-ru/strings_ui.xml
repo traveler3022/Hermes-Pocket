@@ -1437,4 +1437,29 @@
     <string name="portal_tool_reads">Чтение</string>
     <string name="portal_tool_writes">Запись</string>
     <string name="portal_tool_deletes">Может удалять</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">Читает</string>
+    <string name="tool_verb_read">Прочитал</string>
+    <string name="tool_verb_read_failed">Не удалось прочитать</string>
+    <string name="tool_verb_searching">Ищет</string>
+    <string name="tool_verb_searched">Искал</string>
+    <string name="tool_verb_search_failed">Не удалось найти</string>
+    <string name="tool_verb_running">Выполняет</string>
+    <string name="tool_verb_ran">Выполнил</string>
+    <string name="tool_verb_run_failed">Не удалось выполнить</string>
+    <string name="tool_verb_editing">Редактирует</string>
+    <string name="tool_verb_edited">Изменил</string>
+    <string name="tool_verb_edit_failed">Не удалось изменить</string>
+    <string name="tool_verb_writing">Записывает</string>
+    <string name="tool_verb_wrote">Записал</string>
+    <string name="tool_verb_write_failed">Не удалось записать</string>
+    <string name="tool_verb_searching_web">Ищет в вебе</string>
+    <string name="tool_verb_searched_web">Искал в вебе</string>
+    <string name="tool_verb_search_web_failed">Не удалось поискать в вебе</string>
+    <string name="tool_verb_opening">Открывает</string>
+    <string name="tool_verb_opened">Открыл</string>
+    <string name="tool_verb_open_failed">Не удалось открыть</string>
+    <string name="tool_verb_using">Использует</string>
+    <string name="tool_verb_used">Использовал</string>
+    <string name="tool_verb_use_failed">Не удалось использовать</string>
 </resources>

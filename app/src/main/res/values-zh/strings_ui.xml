@@ -1438,4 +1438,29 @@
     <string name="portal_tool_reads">读取</string>
     <string name="portal_tool_writes">写入</string>
     <string name="portal_tool_deletes">可删除</string>
+    <!-- Tool card titles: verb before the tool's path, command or query -->
+    <string name="tool_verb_reading">正在读取</string>
+    <string name="tool_verb_read">已读取</string>
+    <string name="tool_verb_read_failed">读取失败</string>
+    <string name="tool_verb_searching">正在搜索</string>
+    <string name="tool_verb_searched">已搜索</string>
+    <string name="tool_verb_search_failed">搜索失败</string>
+    <string name="tool_verb_running">正在运行</string>
+    <string name="tool_verb_ran">已运行</string>
+    <string name="tool_verb_run_failed">运行失败</string>
+    <string name="tool_verb_editing">正在编辑</string>
+    <string name="tool_verb_edited">已编辑</string>
+    <string name="tool_verb_edit_failed">编辑失败</string>
+    <string name="tool_verb_writing">正在写入</string>
+    <string name="tool_verb_wrote">已写入</string>
+    <string name="tool_verb_write_failed">写入失败</string>
+    <string name="tool_verb_searching_web">正在网上搜索</string>
+    <string name="tool_verb_searched_web">已在网上搜索</string>
+    <string name="tool_verb_search_web_failed">网上搜索失败</string>
+    <string name="tool_verb_opening">正在打开</string>
+    <string name="tool_verb_opened">已打开</string>
+    <string name="tool_verb_open_failed">打开失败</string>
+    <string name="tool_verb_using">正在使用</string>
+    <string name="tool_verb_used">已使用</string>
+    <string name="tool_verb_use_failed">使用失败</string>
 </resources>
