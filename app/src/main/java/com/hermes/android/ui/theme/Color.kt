@@ -132,3 +132,81 @@ val lajvard_light_surfaceContainerLow = Color(0xFFF8F5EE)
 val lajvard_light_surfaceContainer = Color(0xFFF2EEE5)
 val lajvard_light_surfaceContainerHigh = Color(0xFFECE6DA)
 val lajvard_light_surfaceContainerHighest = Color(0xFFE7E0D2)
+
+// ── Graphite — graphite surfaces that step up in lightness instead of casting
+// shadows, and one blue (#2F6BF5). Night: each layer up (page, card, row,
+// selected row) is one small, even step lighter; hairlines and the third and
+// muted text levels land where HxTone's alphas put them over these surfaces.
+//
+// Surface, text and status values follow the "modern" palette of Kyllene
+// (shared/designsystem/.../ThemeColors.kt, AccentPalette.kt):
+// Copyright (c) 2026 Giton22, MIT License. Permission is hereby granted, free of
+// charge, to any person obtaining a copy of this software and associated
+// documentation files, to deal in the Software without restriction, subject to
+// including the copyright notice and the permission notice in all copies or
+// substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS",
+// WITHOUT WARRANTY OF ANY KIND.
+//
+// Contrast (WCAG): white on the blue 4.6:1; body text 18:1 on both pages;
+// secondary text 10:1; HxTone.textTertiary 5.7:1 night, 4.3:1 day. Blue used as
+// text on the night page reads at 4.3:1, as in the source palette.
+
+val graphite_dark_primary = Color(0xFF2F6BF5)
+val graphite_dark_onPrimary = Color(0xFFFFFFFF)
+val graphite_dark_primaryContainer = Color(0xFF131B2E)
+val graphite_dark_onPrimaryContainer = Color(0xFF7AA5FF)
+val graphite_dark_secondary = Color(0xFF8A8A94)
+val graphite_dark_onSecondary = Color(0xFF0A0A0C)
+val graphite_dark_secondaryContainer = Color(0xFF232329)
+val graphite_dark_onSecondaryContainer = Color(0xFFF4F4F6)
+val graphite_dark_tertiary = Color(0xFF3FB950)
+val graphite_dark_onTertiary = Color(0xFF0A0A0C)
+val graphite_dark_tertiaryContainer = Color(0xFF112115)
+val graphite_dark_onTertiaryContainer = Color(0xFF3FB950)
+val graphite_dark_error = Color(0xFFF85149)
+val graphite_dark_onError = Color(0xFF0A0A0C)
+val graphite_dark_errorContainer = Color(0xFF2B1415)
+val graphite_dark_onErrorContainer = Color(0xFFFFA198)
+val graphite_dark_background = Color(0xFF0A0A0C)
+val graphite_dark_onBackground = Color(0xFFF4F4F6)
+val graphite_dark_surface = Color(0xFF16161A)
+val graphite_dark_onSurface = Color(0xFFF4F4F6)
+val graphite_dark_surfaceVariant = Color(0xFF232329)
+val graphite_dark_onSurfaceVariant = Color(0xFFBCBCC6)
+val graphite_dark_outline = Color(0xFF6B6B75)
+val graphite_dark_outlineVariant = Color(0xFF36363D)
+val graphite_dark_surfaceContainerLowest = Color(0xFF0A0A0C)
+val graphite_dark_surfaceContainerLow = Color(0xFF16161A)
+val graphite_dark_surfaceContainer = Color(0xFF1C1C22)
+val graphite_dark_surfaceContainerHigh = Color(0xFF232329)
+val graphite_dark_surfaceContainerHighest = Color(0xFF2C2C33)
+
+val graphite_light_primary = Color(0xFF2F6BF5)
+val graphite_light_onPrimary = Color(0xFFFFFFFF)
+val graphite_light_primaryContainer = Color(0xFFE3E9F9)
+val graphite_light_onPrimaryContainer = Color(0xFF1F56D6)
+val graphite_light_secondary = Color(0xFF6B6B75)
+val graphite_light_onSecondary = Color(0xFFFFFFFF)
+val graphite_light_secondaryContainer = Color(0xFFE9E9EF)
+val graphite_light_onSecondaryContainer = Color(0xFF0A0A0C)
+val graphite_light_tertiary = Color(0xFF1A7F37)
+val graphite_light_onTertiary = Color(0xFFFFFFFF)
+val graphite_light_tertiaryContainer = Color(0xFFE1EBE6)
+val graphite_light_onTertiaryContainer = Color(0xFF14652C)
+val graphite_light_error = Color(0xFFCF222E)
+val graphite_light_onError = Color(0xFFFFFFFF)
+val graphite_light_errorContainer = Color(0xFFF3E4E7)
+val graphite_light_onErrorContainer = Color(0xFFA40E26)
+val graphite_light_background = Color(0xFFF7F7F9)
+val graphite_light_onBackground = Color(0xFF0A0A0C)
+val graphite_light_surface = Color(0xFFFFFFFF)
+val graphite_light_onSurface = Color(0xFF0A0A0C)
+val graphite_light_surfaceVariant = Color(0xFFE9E9EF)
+val graphite_light_onSurfaceVariant = Color(0xFF2C2C33)
+val graphite_light_outline = Color(0xFF8E8E98)
+val graphite_light_outlineVariant = Color(0xFFD4D4DC)
+val graphite_light_surfaceContainerLowest = Color(0xFFFFFFFF)
+val graphite_light_surfaceContainerLow = Color(0xFFFBFBFD)
+val graphite_light_surfaceContainer = Color(0xFFF4F4F7)
+val graphite_light_surfaceContainerHigh = Color(0xFFEFEFF3)
+val graphite_light_surfaceContainerHighest = Color(0xFFE9E9EF)
