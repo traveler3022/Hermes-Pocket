@@ -1,6 +1,7 @@
 package com.hermes.android.ui.viewer
 
 import kotlin.math.ceil
+import kotlin.math.min
 
 /**
  * The PDF viewer's zoom arithmetic, kept pure so it is tested. The page list is scaled from
@@ -22,7 +23,7 @@ internal object PdfZoom {
         if (scale.isNaN()) MIN_SCALE else scale.coerceIn(MIN_SCALE, MAX_SCALE)
 
     /** Sideways the scaled list may go from its left edge: between this (≤ 0) and 0. */
-    fun minOffsetX(frameWidth: Float, scale: Float): Float = -(frameWidth * scale - frameWidth).coerceAtLeast(0f)
+    fun minOffsetX(frameWidth: Float, scale: Float): Float = min(0f, frameWidth - frameWidth * scale)
 
     fun clampOffsetX(offsetX: Float, frameWidth: Float, scale: Float): Float =
         offsetX.coerceIn(minOffsetX(frameWidth, scale), 0f)
