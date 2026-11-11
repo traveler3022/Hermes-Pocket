@@ -1489,4 +1489,7 @@
     <string name="portal_tool_reads">Reads</string>
     <string name="portal_tool_writes">Writes</string>
     <string name="portal_tool_deletes">Can delete</string>
+    <string name="skill_lock">Lock against agent edits</string>
+    <string name="skill_unlock">Unlock for the agent</string>
+    <string name="skill_locked">Locked</string>
 </resources>

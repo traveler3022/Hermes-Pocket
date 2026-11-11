@@ -1469,4 +1469,7 @@
     <string name="portal_tool_reads">می‌خواند</string>
     <string name="portal_tool_writes">می‌نویسد</string>
     <string name="portal_tool_deletes">می‌تواند پاک کند</string>
+    <string name="skill_lock">قفل در برابر ویرایش عامل</string>
+    <string name="skill_unlock">باز کردن قفل برای عامل</string>
+    <string name="skill_locked">قفل‌شده</string>
 </resources>

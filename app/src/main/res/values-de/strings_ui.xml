@@ -1436,4 +1436,7 @@
     <string name="portal_tool_reads">Liest</string>
     <string name="portal_tool_writes">Schreibt</string>
     <string name="portal_tool_deletes">Kann löschen</string>
+    <string name="skill_lock">Gegen Agent-Änderungen sperren</string>
+    <string name="skill_unlock">Für den Agenten entsperren</string>
+    <string name="skill_locked">Gesperrt</string>
 </resources>

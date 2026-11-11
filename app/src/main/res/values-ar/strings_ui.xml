@@ -1438,4 +1438,7 @@
     <string name="portal_tool_reads">القراءة</string>
     <string name="portal_tool_writes">الكتابة</string>
     <string name="portal_tool_deletes">يمكنه الحذف</string>
+    <string name="skill_lock">قفل ضد تعديلات الوكيل</string>
+    <string name="skill_unlock">فتح القفل للوكيل</string>
+    <string name="skill_locked">مقفل</string>
 </resources>

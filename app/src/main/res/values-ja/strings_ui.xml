@@ -1435,4 +1435,7 @@
     <string name="portal_tool_reads">読み取り</string>
     <string name="portal_tool_writes">書き込み</string>
     <string name="portal_tool_deletes">削除可能</string>
+    <string name="skill_lock">エージェントによる編集をロック</string>
+    <string name="skill_unlock">エージェントの編集を許可</string>
+    <string name="skill_locked">ロック中</string>
 </resources>

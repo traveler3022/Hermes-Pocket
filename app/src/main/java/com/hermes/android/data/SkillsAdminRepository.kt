@@ -29,6 +29,7 @@ class SkillsAdminRepository @Inject constructor(
                 category = o.str("category"),
                 enabled = (o["enabled"] as? JsonPrimitive)?.booleanOrNull ?: true,
                 provenance = o.str("provenance"),
+                locked = (o["locked"] as? JsonPrimitive)?.booleanOrNull,
             )
         }
 
@@ -36,6 +37,13 @@ class SkillsAdminRepository @Inject constructor(
         dashboard.call("PUT", "/api/skills/toggle", buildJsonObject {
             put("name", name)
             put("enabled", enabled)
+        })
+    }
+
+    override suspend fun setLocked(name: String, locked: Boolean) {
+        dashboard.call("PUT", "/api/skills/lock", buildJsonObject {
+            put("name", name)
+            put("locked", locked)
         })
     }
 

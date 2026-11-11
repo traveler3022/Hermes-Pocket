@@ -1438,4 +1438,7 @@
     <string name="portal_tool_reads">读取</string>
     <string name="portal_tool_writes">写入</string>
     <string name="portal_tool_deletes">可删除</string>
+    <string name="skill_lock">锁定，禁止智能体修改</string>
+    <string name="skill_unlock">解锁，允许智能体修改</string>
+    <string name="skill_locked">已锁定</string>
 </resources>

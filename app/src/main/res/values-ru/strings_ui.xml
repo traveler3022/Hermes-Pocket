@@ -1437,4 +1437,7 @@
     <string name="portal_tool_reads">Чтение</string>
     <string name="portal_tool_writes">Запись</string>
     <string name="portal_tool_deletes">Может удалять</string>
+    <string name="skill_lock">Заблокировать от правок агента</string>
+    <string name="skill_unlock">Разблокировать для агента</string>
+    <string name="skill_locked">Заблокировано</string>
 </resources>
