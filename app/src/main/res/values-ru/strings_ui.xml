@@ -143,6 +143,8 @@
     <string name="command">Команда</string>
     <string name="command_approval">Подтверждение команды</string>
     <string name="command_approval_2">Подтверждение команды</string>
+    <string name="approval_from_chat">Из чата: %1$s</string>
+    <string name="approval_from_other_chat">Из другого чата</string>
     <string name="comments">%1$s комментариев</string>
     <string name="comments_2">Комментарии</string>
     <string name="compress_history">Сжать историю</string>

@@ -14,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -32,11 +34,19 @@ fun ZoomableImage(model: Any?, modifier: Modifier = Modifier, onTap: (() -> Unit
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var size by remember { mutableStateOf(IntSize.Zero) }
+    // The picture's own size, once loaded: the fitted picture, not the frame, bounds the drag.
+    var imageSize by remember(model) { mutableStateOf(Size.Unspecified) }
 
     // Keep the zoomed image covering the frame: no dragging it off into empty space.
     fun clamp(o: Offset, s: Float): Offset {
-        val maxX = size.width * (s - 1) / 2
-        val maxY = size.height * (s - 1) / 2
+        val known = imageSize.isSpecified
+        val (maxX, maxY) = zoomPanLimit(
+            imageWidth = if (known) imageSize.width else 0f,
+            imageHeight = if (known) imageSize.height else 0f,
+            frameWidth = size.width.toFloat(),
+            frameHeight = size.height.toFloat(),
+            scale = s,
+        )
         return Offset(o.x.coerceIn(-maxX, maxX), o.y.coerceIn(-maxY, maxY))
     }
 
@@ -44,6 +54,7 @@ fun ZoomableImage(model: Any?, modifier: Modifier = Modifier, onTap: (() -> Unit
         model = model,
         contentDescription = null,
         contentScale = ContentScale.Fit,
+        onSuccess = { imageSize = it.painter.intrinsicSize },
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { size = it }

@@ -1,5 +1,6 @@
 package com.hermes.android.ui.screen
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +11,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -162,10 +165,17 @@ private fun DiffView(
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         ) {
+            // Capped in height, so it scrolls both ways: past 320dp the lines were cut off
+            // with no way to reach them. Code lines are not wrapped.
             Text(
                 text = diff.rendered ?: diff.diff.ifBlank { stringResource(R.string.no_changes) },
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                modifier = Modifier.padding(HxSpace.md).heightIn(max = 320.dp),
+                softWrap = false,
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState())
+                    .padding(HxSpace.md),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(HxSpace.sm)) {

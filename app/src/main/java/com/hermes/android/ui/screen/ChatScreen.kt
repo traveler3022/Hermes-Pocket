@@ -70,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ConfigViewModel
+import com.hermes.android.ui.viewmodel.ApprovalQueue
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -472,12 +474,11 @@ fun ChatScreen(
         }
     }
 
-    // Feature #23: Save draft when input changes (debounced via LaunchedEffect)
+    // Feature #23: Save draft when input changes (debounced via LaunchedEffect).
+    // Empty text is saved too: it removes the draft, which otherwise came back after a restart.
     LaunchedEffect(uiState.inputText) {
-        if (uiState.inputText.isNotEmpty()) {
-            kotlinx.coroutines.delay(500L)
-            viewModel.saveDraft()
-        }
+        kotlinx.coroutines.delay(500L)
+        viewModel.saveDraft()
     }
 
     // Pre-fill input from share intent
@@ -522,8 +523,8 @@ fun ChatScreen(
                 // Read here as values, not inside the row lambdas: rows reading uiState
                 // re-ran on every streaming flush, drawer closed or not.
                 val sessionActivity = uiState.sessionActivity
-                val waitingIds = remember(uiState.pendingApproval) {
-                    uiState.pendingApproval?.let { setOfNotNull(it.sessionId, it.sessionKey) }.orEmpty()
+                val waitingIds = remember(uiState.pendingApprovals) {
+                    ApprovalQueue.waitingIds(uiState.pendingApprovals)
                 }
                 WorkspaceDrawerSheet(
                     sessions = drawerSessions,
@@ -1324,10 +1325,18 @@ fun ChatScreen(
     // level so it overlays the whole screen; see ChatApprovalSheet.kt for
     // why it can't be swiped away.
     uiState.pendingApproval?.let { approval ->
-        ApprovalSheet(
-            approval = approval,
-            onRespond = viewModel::respondToApproval,
+        // A request from another chat names that chat: it looked like the open one's.
+        val otherChat = ApprovalQueue.otherChatTitle(
+            approval, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
         )
+        // Keyed by request: the next queued one gets a fresh sheet, not the answered one's state.
+        key(approval.requestId) {
+            ApprovalSheet(
+                approval = approval,
+                otherChatTitle = otherChat,
+                onRespond = { choice -> viewModel.respondToApproval(approval.requestId, choice) },
+            )
+        }
     }
 
     uiState.sideQuestion?.let { sideQuestion ->
