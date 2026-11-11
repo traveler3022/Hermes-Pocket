@@ -6,6 +6,28 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -214,24 +236,138 @@ internal fun PdfViewer(
     when {
         error != null -> ViewerError(error.orEmpty(), openExternally)
         doc == null -> Loading()
-        else -> BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant)) {
-            val widthPx = constraints.maxWidth
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(doc.pageCount) { index -> PdfPage(doc, index, widthPx) }
-            }
+        else -> ZoomablePdfPages(doc)
+    }
+}
+
+/** One document's zoom: scale, sideways offset, and the scale its pages are rendered for. */
+@Stable
+private class PdfZoomState {
+    var scale by mutableFloatStateOf(1f)
+    var offsetX by mutableFloatStateOf(0f)
+    var renderScale by mutableFloatStateOf(1f)
+    var animation: Job? = null
+
+    val zoomed: Boolean get() = scale > PdfZoom.MIN_SCALE
+
+    /** Scales to [to] about the frame point ([focusX], [focusY]); returns how far the list must scroll. */
+    fun zoomTo(to: Float, focusX: Float, focusY: Float, frameWidth: Float): Float {
+        val from = scale
+        val target = PdfZoom.clampScale(to)
+        offsetX = PdfZoom.focusOffsetX(offsetX, focusX, from, target, frameWidth)
+        scale = target
+        return PdfZoom.focusScroll(focusY, from, target)
+    }
+
+    fun settle() {
+        renderScale = PdfZoom.renderScale(scale)
+    }
+}
+
+/**
+ * The pages, zoomable: pinch (1x to 4x) about the fingers, double-tap to 2.5x or back,
+ * drag sideways while zoomed. Up and down stays the list's own scroll and fling: the list
+ * is scaled from its top-left and laid out 1/scale as tall as the frame, so it still fills
+ * the frame and a finger moves it one to one. Once a zoom ends, the pages in view are
+ * rendered again for it (up to [pdfPageBitmapSize]'s width cap), keeping the old bitmap
+ * until the new one is ready.
+ */
+@Composable
+private fun ZoomablePdfPages(doc: OpenPdf) {
+    val zoom = remember(doc) { PdfZoomState() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .clipToBounds()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            // On the parent, so it sees every event first (Initial pass): two fingers zoom
+            // and are taken from the list; one finger on a zoomed document also pans
+            // sideways, the list keeping its up-and-down scroll.
+            .pointerInput(doc) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val frame = size.width.toFloat()
+                    var pinched = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val fingers = event.changes.count { it.pressed }
+                        if (fingers > 1) {
+                            if (!pinched) {
+                                zoom.animation?.cancel()
+                                pinched = true
+                            }
+                            val centroid = event.calculateCentroid(useCurrent = true)
+                            val pan = event.calculatePan()
+                            var scroll = 0f
+                            if (centroid != Offset.Unspecified) {
+                                scroll = zoom.zoomTo(zoom.scale * event.calculateZoom(), centroid.x, centroid.y, frame)
+                            }
+                            zoom.offsetX = PdfZoom.clampOffsetX(zoom.offsetX + pan.x, frame, zoom.scale)
+                            listState.dispatchRawDelta(scroll - pan.y / zoom.scale)
+                            event.changes.forEach { it.consume() }
+                        } else if (zoom.zoomed) {
+                            val pan = event.calculatePan()
+                            zoom.offsetX = PdfZoom.clampOffsetX(zoom.offsetX + pan.x, frame, zoom.scale)
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (pinched) zoom.settle()
+                }
+            },
+    ) {
+        val widthPx = constraints.maxWidth
+        val heightPx = constraints.maxHeight
+        val frameWidth = widthPx.toFloat()
+        val renderWidth = (widthPx * zoom.renderScale).roundToInt()
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                // Read in placement only: a pinch frame relayouts, it does not recompose.
+                .layout { measurable, _ ->
+                    val height = (heightPx / zoom.scale).roundToInt().coerceAtLeast(1)
+                    val placeable = measurable.measure(Constraints.fixed(widthPx, height))
+                    layout(widthPx, heightPx) {
+                        placeable.placeWithLayer(0, 0) {
+                            transformOrigin = TransformOrigin(0f, 0f)
+                            scaleX = zoom.scale
+                            scaleY = zoom.scale
+                            translationX = zoom.offsetX
+                        }
+                    }
+                }
+                .pointerInput(doc) {
+                    detectTapGestures(
+                        onDoubleTap = { tap ->
+                            // [tap] is in the list's own px; the frame point is tap·scale + offset.
+                            val focusX = tap.x * zoom.scale + zoom.offsetX
+                            val focusY = tap.y * zoom.scale
+                            val from = zoom.scale
+                            val to = PdfZoom.doubleTapTarget(from)
+                            zoom.animation?.cancel()
+                            zoom.animation = scope.launch {
+                                animate(from, to, animationSpec = tween(220)) { value, _ ->
+                                    listState.dispatchRawDelta(zoom.zoomTo(value, focusX, focusY, frameWidth))
+                                }
+                                zoom.settle()
+                            }
+                        },
+                    )
+                },
+        ) {
+            items(doc.pageCount) { index -> PdfPage(doc, index, renderWidth) }
         }
     }
 }
 
 @Composable
 private fun PdfPage(doc: OpenPdf, index: Int, widthPx: Int) {
-    var bitmap by remember(doc, index, widthPx) { mutableStateOf<Bitmap?>(null) }
+    // Kept across a new render width: a zoom swaps the sharper page in, never a blank one.
+    var bitmap by remember(doc, index) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(doc, index, widthPx) {
-        bitmap = withContext(Dispatchers.IO) {
+        val rendered = withContext(Dispatchers.IO) {
             try {
                 doc.render(index, widthPx)
             } catch (e: Exception) {
@@ -240,6 +376,7 @@ private fun PdfPage(doc: OpenPdf, index: Int, widthPx: Int) {
                 null
             }
         }
+        if (rendered != null || bitmap == null) bitmap = rendered
     }
     val page = bitmap
     if (page == null) {
