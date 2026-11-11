@@ -211,7 +211,6 @@ internal fun WorkspaceDrawerSheet(
     // and the rename / delete dialogs that hang off it.
     var showAll by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(DrawerFilter.All) }
-    var topicsCollapsed by rememberSaveable { mutableStateOf(false) }
     var pinnedCollapsed by rememberSaveable { mutableStateOf(false) }
     var projectId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -244,11 +243,7 @@ internal fun WorkspaceDrawerSheet(
     val filteredTopics = topicRows.filter { (topic, row) -> passes(topicChat(topic, row)) }
     val pinned = scoped.filter { it.id in pinnedIds && it.id !in topicChatIds && passes(it) }
     val rest = scoped.filter { it.id !in pinnedIds && it.id !in topicChatIds && passes(it) }
-    // Folded, a section still lists the open chat and those with something going on.
-    val shownTopics = if (!topicsCollapsed) filteredTopics else filteredTopics.filter { (topic, row) ->
-        val chat = topicChat(topic, row)
-        chat.id == activeSessionId || topic.sessionId == activeSessionId || busy(chat)
-    }
+    // Folded, Pinned still lists the open chat and those with something going on.
     val shownPinned = if (!pinnedCollapsed) pinned else pinned.filter { it.id == activeSessionId || busy(it) }
     val shown = if (filter != DrawerFilter.All || showAll) rest else rest.take(visibleSessions)
     val noneMatch = filter != DrawerFilter.All && filteredTopics.isEmpty() && pinned.isEmpty() && rest.isEmpty()
@@ -310,43 +305,6 @@ internal fun WorkspaceDrawerSheet(
                     // The destinations scroll with the chats, as the list's header.
                     if (destinations.isNotEmpty()) item(key = "nav") { DrawerNavGrid(destinations) }
 
-                    // ── Topics ───────────────────────────────────────────
-                    if (filteredTopics.isNotEmpty()) {
-                        if (reorderingTopics && filter == DrawerFilter.All) {
-                            // One item, so a dragged row moves among the others without the list recycling it.
-                            item(key = "topics-reorder") {
-                                TopicReorder(
-                                    rows = filteredTopics,
-                                    projectLabel = { row -> if (project == null) row?.let(projectOf) else null },
-                                    onDone = onReordered,
-                                )
-                            }
-                        } else {
-                            item(key = "label-topics") {
-                                SectionToggle(
-                                    title = stringResource(R.string.topics_section),
-                                    count = filteredTopics.size,
-                                    collapsed = topicsCollapsed,
-                                    onToggle = { topicsCollapsed = !topicsCollapsed },
-                                )
-                            }
-                            items(items = shownTopics, key = { "topic-${it.first.id}" }) { (topic, row) ->
-                                val chat = topicChat(topic, row)
-                                DrawerSessionRow(
-                                    title = topic.name,
-                                    mark = RowMark.Topic,
-                                    pulse = pulseOf(chat),
-                                    unread = unreadOf(chat),
-                                    age = row?.let { shortAge(it.updatedAt, now) }.orEmpty(),
-                                    isActive = chat.id == activeSessionId || topic.sessionId == activeSessionId,
-                                    projectLabel = if (project == null) row?.let(projectOf) else null,
-                                    onClick = { onTopicClick(topic) },
-                                    onLongClick = { onTopicLongClick(topic) },
-                                )
-                            }
-                        }
-                    }
-
                     // ── Pinned ───────────────────────────────────────────
                     if (pinned.isNotEmpty()) {
                         item(key = "label-pinned") {
@@ -374,6 +332,31 @@ internal fun WorkspaceDrawerSheet(
                     }
 
                     // ── The filter chips head the rest, with no label of their own ──
+                    // ── Topics: one line of chips, as the projects are ─────
+                    if (filteredTopics.isNotEmpty()) {
+                        item(key = "topics") {
+                            if (reorderingTopics && filter == DrawerFilter.All) {
+                                TopicReorder(
+                                    rows = filteredTopics,
+                                    projectLabel = { row -> if (project == null) row?.let(projectOf) else null },
+                                    onDone = onReordered,
+                                )
+                            } else {
+                                DrawerTopicChips(
+                                    rows = filteredTopics,
+                                    isActive = { topic, row ->
+                                        topic.sessionId == activeSessionId || (row != null && row.id == activeSessionId)
+                                    },
+                                    toneOf = { topic, row ->
+                                        val chat = topicChat(topic, row)
+                                        rowTone(pulseOf(chat), unreadOf(chat))
+                                    },
+                                    onClick = onTopicClick,
+                                    onLongClick = onTopicLongClick,
+                                )
+                            }
+                        }
+                    }
                     if (showProjects) {
                         item(key = "projects") {
                             DrawerProjectChips(
@@ -915,6 +898,126 @@ private fun SectionToggle(title: String, count: Int, collapsed: Boolean, onToggl
                 .size(16.dp)
                 .rotate(if (!collapsed) 0f else if (rtl) 90f else -90f),
         )
+    }
+}
+
+/**
+ * The topics as one line of chips that scrolls sideways, as the project chips do. A chip
+ * names its topic after a mark of its state: a spinner while a turn runs, a dot in the
+ * state's colour when it waits, failed or has a new reply, else the topic's #. The open
+ * topic's chip is drawn in the text colour. Tap opens the topic's chat; a long press, its sheet.
+ */
+@Composable
+private fun DrawerTopicChips(
+    rows: List<Pair<ChatTopic, SessionItem?>>,
+    isActive: (ChatTopic, SessionItem?) -> Boolean,
+    toneOf: (ChatTopic, SessionItem?) -> RowTone,
+    onClick: (ChatTopic) -> Unit,
+    onLongClick: (ChatTopic) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        rows.forEach { (topic, row) ->
+            DrawerTopicChip(
+                name = topic.name,
+                tone = toneOf(topic, row),
+                selected = isActive(topic, row),
+                onClick = { onClick(topic) },
+                onLongClick = { onLongClick(topic) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DrawerTopicChip(
+    name: String,
+    tone: RowTone,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val shape = CircleShape
+    val content = if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurfaceVariant
+    val toneColor = when (tone) {
+        RowTone.Waiting -> HxStatus.waiting
+        RowTone.Running, RowTone.Reply -> HxStatus.running
+        RowTone.Failed -> HxStatus.error
+        RowTone.Idle -> HxTone.textMuted
+    }
+    // Said in words for a screen reader, as the row's status line says it.
+    val state = when (tone) {
+        RowTone.Waiting -> stringResource(R.string.status_waiting)
+        RowTone.Running -> stringResource(R.string.status_in_progress)
+        RowTone.Failed -> stringResource(R.string.status_failed)
+        RowTone.Reply -> stringResource(R.string.status_new_reply)
+        RowTone.Idle -> null
+    }
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .semantics {
+                this.selected = selected
+                state?.let { stateDescription = it }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 32.dp)
+                .clip(shape)
+                .then(
+                    if (selected) {
+                        Modifier.background(MaterialTheme.colorScheme.onSurface, shape)
+                    } else {
+                        Modifier
+                            .background(HxTone.cardStrong, shape)
+                            .border(1.dp, HxTone.hairline, shape)
+                    },
+                )
+                .indication(interaction, LocalIndication.current)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            when (tone) {
+                RowTone.Idle -> Icon(
+                    HxIcons.Hash,
+                    contentDescription = null,
+                    tint = if (selected) content else toneColor,
+                    modifier = Modifier.size(13.dp),
+                )
+                RowTone.Running -> if (rememberReduceMotion()) {
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(toneColor))
+                } else {
+                    CircularProgressIndicator(modifier = Modifier.size(11.dp), color = toneColor, strokeWidth = 1.5.dp)
+                }
+                else -> Box(Modifier.size(7.dp).clip(CircleShape).background(toneColor))
+            }
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp),
+            )
+        }
     }
 }
 
