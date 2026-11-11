@@ -143,6 +143,8 @@
     <string name="command">فرمان</string>
     <string name="command_approval">درخواست اجرای فرمان</string>
     <string name="command_approval_2">تأیید فرمان‌ها</string>
+    <string name="approval_from_chat">از چت: %1$s</string>
+    <string name="approval_from_other_chat">از یک چت دیگر</string>
     <string name="comments">%1$s نظر</string>
     <string name="comments_2">نظرها</string>
     <string name="compress_history">فشرده‌سازی تاریخچه</string>

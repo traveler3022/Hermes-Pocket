@@ -29,9 +29,10 @@ internal class ChatRequestsDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatUiState>,
 ) {
-    fun respondToApproval(choice: String) {
-        val pending = state.value.pendingApproval ?: return
-        state.update { it.copy(pendingApproval = null) }
+    /** Answers the approval [requestId] (the one the sheet showed when the user tapped). */
+    fun respondToApproval(requestId: String, choice: String) {
+        val pending = state.value.pendingApprovals.firstOrNull { it.requestId == requestId } ?: return
+        state.update { it.copy(pendingApprovals = ApprovalQueue.remove(it.pendingApprovals, requestId)) }
         approvalNotificationManager.cancelApproval(pending.requestId)
         scope.launch {
             try {
@@ -53,7 +54,7 @@ internal class ChatRequestsDelegate(
                 // A refusal from the server (it carries a code) means the request is gone.
                 val undelivered = (e as? GatewayException)?.code == null
                 state.update { it.copy(
-                    pendingApproval = if (undelivered && it.pendingApproval == null) pending else it.pendingApproval,
+                    pendingApprovals = if (undelivered) ApprovalQueue.add(it.pendingApprovals, pending) else it.pendingApprovals,
                     errorEvent = ErrorEvent.Error(e.message ?: "Unknown error"),
                 ) }
             }
@@ -120,7 +121,7 @@ internal class ChatRequestsDelegate(
         // The approval sheet and the notification show the request. It is not added
         // to the chat: as plain text it stayed there for good, raw command and all.
         state.update { it.copy(
-            pendingApproval = PendingApprovalUi(
+            pendingApprovals = ApprovalQueue.add(it.pendingApprovals, PendingApprovalUi(
                 requestId = requestId,
                 sessionId = event.sessionId,
                 command = event.command,
@@ -130,7 +131,7 @@ internal class ChatRequestsDelegate(
                 serverRequestId = event.serverRequestId,
                 sessionKey = sessionKey,
                 choices = event.choices,
-            ),
+            )),
         ) }
     }
 
@@ -228,13 +229,12 @@ internal class ChatRequestsDelegate(
 
     /** The server withdrew a request (timeout, interrupt, answered elsewhere): its card stops taking answers. */
     fun onRequestCancel(serverRequestId: String) {
-        val pending = state.value.pendingApproval
-        if (pending != null && pending.serverRequestId == serverRequestId) {
-            approvalNotificationManager.cancelApproval(pending.requestId)
-        }
+        state.value.pendingApprovals
+            .filter { serverRequestId.isNotBlank() && it.serverRequestId == serverRequestId }
+            .forEach { approvalNotificationManager.cancelApproval(it.requestId) }
         state.update { current ->
             current.copy(
-                pendingApproval = current.pendingApproval?.takeUnless { it.serverRequestId == serverRequestId },
+                pendingApprovals = ApprovalQueue.removeByServerId(current.pendingApprovals, serverRequestId),
                 messages = current.messages.updateFirst({ msg ->
                     msg is ChatMessage.InteractiveRequest && msg.requestId == serverRequestId && !msg.answered
                 }) { msg ->

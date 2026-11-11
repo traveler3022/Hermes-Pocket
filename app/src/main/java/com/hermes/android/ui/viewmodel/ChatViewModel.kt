@@ -496,7 +496,7 @@ class ChatViewModel @Inject constructor(
             // The new chat's folder comes with its session.info, not the last chat's.
             sessionCwd = null,
             activeTodos = emptyList(),
-            pendingApproval = null,
+            // Queued approvals stay: they belong to other chats, which still wait on them.
             // Starting a new chat mid-turn dropped the session id while isSending
             // stayed true; if session.new then failed nothing ever cleared it and
             // the composer stayed locked.
@@ -849,7 +849,7 @@ class ChatViewModel @Inject constructor(
 
     // ── Interactive responds (delegated) ─────────────────────────────────
 
-    fun respondToApproval(choice: String) = requestsDelegate.respondToApproval(choice)
+    fun respondToApproval(requestId: String, choice: String) = requestsDelegate.respondToApproval(requestId, choice)
     fun respondToClarify(requestId: String, picked: List<String>) = requestsDelegate.respondToClarify(requestId, picked)
     fun respondToClarifyBatch(requestId: String, answers: Map<String, List<String>>) =
         requestsDelegate.respondToClarifyBatch(requestId, answers)

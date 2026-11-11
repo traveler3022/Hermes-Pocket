@@ -143,6 +143,8 @@
     <string name="command">Befehl</string>
     <string name="command_approval">Befehlsgenehmigung</string>
     <string name="command_approval_2">Befehlsgenehmigung</string>
+    <string name="approval_from_chat">Aus dem Chat: %1$s</string>
+    <string name="approval_from_other_chat">Aus einem anderen Chat</string>
     <string name="comments">%1$s Kommentare</string>
     <string name="comments_2">Kommentare</string>
     <string name="compress_history">Verlauf komprimieren</string>

@@ -94,7 +94,13 @@ internal class ChatSessionDelegate(
                 errorEvent = null,
                 sessionLoadedAt = System.currentTimeMillis(),
                 activeTodos = emptyList(),
-                pendingApproval = null,
+                // Other chats' approvals stay queued. This chat's are dropped: the resume
+                // re-delivers those still open (open_requests below).
+                pendingApprovals = ApprovalQueue.withoutChat(
+                    it.pendingApprovals,
+                    liveSessionId,
+                    attached.storedId ?: sessionId.takeIf { sid -> sid != liveSessionId },
+                ),
                 // isSending is this chat's own turn, not the one of the chat we
                 // just left: a busy chat (opened from its "working"
                 // notification, say) shows the stop button, an idle one send.
