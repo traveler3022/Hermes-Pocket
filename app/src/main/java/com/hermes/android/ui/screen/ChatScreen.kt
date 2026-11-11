@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ConfigViewModel
+import com.hermes.android.ui.viewmodel.ApprovalCardModel
 import com.hermes.android.ui.viewmodel.ApprovalQueue
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -1183,6 +1184,25 @@ fun ChatScreen(
                     }
                 }
 
+                // Tool approval (approval.request): a card docked above the composer, not
+                // a modal, so the chat above stays readable; see ChatApprovalSheet.kt.
+                val approvalCard = remember(
+                    uiState.pendingApprovals, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
+                ) {
+                    ApprovalCardModel.of(
+                        uiState.pendingApprovals, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
+                    )
+                }
+                approvalCard?.let { card ->
+                    // Keyed by request: the next queued one gets a fresh card, not the answered one's scroll.
+                    key(card.request.requestId) {
+                        ApprovalCard(
+                            card = card,
+                            onRespond = { choice -> viewModel.respondToApproval(card.request.requestId, choice) },
+                        )
+                    }
+                }
+
                 // Input bar
                 InputBar(
                     text = uiState.inputText,
@@ -1314,24 +1334,6 @@ fun ChatScreen(
             onStop = subagents::stop,
             onDismiss = subagents::close,
         )
-    }
-
-    // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
-    // level so it overlays the whole screen; see ChatApprovalSheet.kt for
-    // why it can't be swiped away.
-    uiState.pendingApproval?.let { approval ->
-        // A request from another chat names that chat: it looked like the open one's.
-        val otherChat = ApprovalQueue.otherChatTitle(
-            approval, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
-        )
-        // Keyed by request: the next queued one gets a fresh sheet, not the answered one's state.
-        key(approval.requestId) {
-            ApprovalSheet(
-                approval = approval,
-                otherChatTitle = otherChat,
-                onRespond = { choice -> viewModel.respondToApproval(approval.requestId, choice) },
-            )
-        }
     }
 
     uiState.sideQuestion?.let { sideQuestion ->

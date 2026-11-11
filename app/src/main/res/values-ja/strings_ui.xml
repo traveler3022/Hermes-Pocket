@@ -145,6 +145,7 @@
     <string name="command_approval_2">コマンドの承認</string>
     <string name="approval_from_chat">チャット「%1$s」から</string>
     <string name="approval_from_other_chat">別のチャットから</string>
+    <string name="approval_position">%2$d件中%1$d件目</string>
     <string name="comments">%1$s件のコメント</string>
     <string name="comments_2">コメント</string>
     <string name="compress_history">履歴を圧縮</string>

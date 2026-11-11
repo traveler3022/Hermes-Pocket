@@ -145,6 +145,7 @@
     <string name="command_approval_2">命令审批</string>
     <string name="approval_from_chat">来自对话：%1$s</string>
     <string name="approval_from_other_chat">来自另一个对话</string>
+    <string name="approval_position">第 %1$d 个，共 %2$d 个</string>
     <string name="comments">%1$s 条评论</string>
     <string name="comments_2">评论</string>
     <string name="compress_history">压缩历史记录</string>
