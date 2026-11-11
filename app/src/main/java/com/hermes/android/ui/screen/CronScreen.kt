@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
 import androidx.compose.foundation.text.KeyboardOptions
@@ -220,7 +221,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
     }
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(HxSpace.inner)) {
@@ -293,7 +294,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
                     Text(
                         text = stringResource(R.string.next, it),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = HxTone.textTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),

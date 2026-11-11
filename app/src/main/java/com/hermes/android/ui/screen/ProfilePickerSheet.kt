@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.R
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.ProfilesViewModel
 
 /**
@@ -206,7 +207,7 @@ internal fun ProfileAvatar(title: String, size: Int = 36, image: ByteArray? = nu
         Modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            .background(HxTone.accentSoft),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {

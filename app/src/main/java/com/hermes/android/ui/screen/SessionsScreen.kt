@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
@@ -496,7 +497,7 @@ private fun SessionRow(
 
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(HxRadius.md))
@@ -549,7 +550,7 @@ private fun SessionRow(
                 Text(
                     text = "${session.messageCount} ${stringResource(R.string.messages)} · ${dateFormat.format(Date(session.updatedAt))}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = HxTone.textTertiary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }
@@ -559,7 +560,7 @@ private fun SessionRow(
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.options),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = HxTone.textTertiary,
                         modifier = Modifier.size(20.dp),
                     )
                 }

@@ -57,6 +57,7 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.VaultViewModel
 
 /**
@@ -206,7 +207,7 @@ private fun VaultItemRow(item: VaultItem, managerName: String?, onDelete: (Vault
     val local = item.backend == "local"
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -257,7 +258,7 @@ private fun ManagerRow(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(

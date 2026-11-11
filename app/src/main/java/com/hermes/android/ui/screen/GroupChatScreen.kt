@@ -69,7 +69,9 @@ import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.ImageGallery
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
 import com.hermes.android.ui.viewmodel.GroupChatViewModel
 import com.hermes.android.ui.viewmodel.GroupMentions
@@ -243,7 +245,7 @@ fun GroupChatScreen(
                     onValueChange = viewModel::updateInput,
                     placeholder = { Text(stringResource(R.string.message_the_group)) },
                     maxLines = 6,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(HxRadius.lg),
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(
@@ -325,7 +327,7 @@ private fun UserRow(text: String) {
             Modifier
                 .widthIn(max = hxUserBubbleMaxWidth())
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                .background(HxTone.accentSoft)
                 .padding(12.dp),
         ) {
             Text(text, style = MaterialTheme.typography.bodyMedium)
@@ -483,7 +485,7 @@ private fun ApprovalCard(
     onAnswer: (allow: Boolean) -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(HxRadius.md),
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()

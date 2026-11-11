@@ -10,6 +10,7 @@ import android.media.AudioManager
 import androidx.compose.animation.Crossfade
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.mutableFloatStateOf
+import com.hermes.android.ui.design.HxRadius
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.width
 import android.app.Activity
@@ -186,7 +187,7 @@ internal fun AppleMusicAudio(player: Player, name: String, onBack: () -> Unit, o
                     modifier = Modifier
                         .fillMaxWidth(0.62f)
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(HxRadius.md))
                         .background(Color.White.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center,
                 ) {

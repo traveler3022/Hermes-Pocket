@@ -81,6 +81,8 @@ import com.hermes.android.domain.storage.FileArea
 import com.hermes.android.domain.storage.FoundFile
 import com.hermes.android.domain.storage.FoundFolder
 import com.hermes.android.domain.storage.FoundKind
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.MusicNote
 import com.hermes.android.ui.viewer.FileViewerActivity
@@ -188,7 +190,7 @@ private fun StorageTabsRow(tabs: List<StorageTab>, selected: StorageTab, onTab: 
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .clickable { onTab(tab) }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center,
@@ -205,7 +207,7 @@ private fun StorageTabsRow(tabs: List<StorageTab>, selected: StorageTab, onTab: 
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        HorizontalDivider(thickness = 0.5.dp, color = HxTone.hairline)
     }
 }
 
@@ -281,7 +283,7 @@ private fun RowDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 98.dp),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        color = HxTone.hairline,
     )
 }
 
@@ -347,7 +349,7 @@ private fun MediaCell(file: FoundFile, checked: Boolean, thumbs: VideoThumbs, on
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(HxRadius.xs))
                 .padding(horizontal = 4.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -437,7 +439,7 @@ private fun FileRow(file: FoundFile, checked: Boolean, divider: Boolean, onPick:
                 }
             } else {
                 Box(
-                    Modifier.size(40.dp).background(documentColor(file.name), RoundedCornerShape(6.dp)),
+                    Modifier.size(40.dp).background(documentColor(file.name), RoundedCornerShape(HxRadius.xs)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

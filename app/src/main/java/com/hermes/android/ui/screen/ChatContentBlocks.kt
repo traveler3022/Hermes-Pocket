@@ -415,7 +415,7 @@ internal fun HtmlBlockCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(320.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .clip(RoundedCornerShape(HxRadius.xs)),
                 )
             }
         }

@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.android.R
 import com.hermes.android.runtime.TerminalLaunchSpec
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
 import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -248,7 +249,7 @@ private fun KeyStripRow(terminal: TerminalView?, modifiers: StickyModifiers) {
 private fun StripButton(label: String, armed: Boolean = false, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
         color = if (armed) colors.primary else colors.surfaceContainerHighest,
         contentColor = if (armed) colors.onPrimary else colors.onSurface,
         modifier = Modifier.clickable(onClick = onClick),

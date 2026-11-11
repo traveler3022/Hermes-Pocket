@@ -102,6 +102,8 @@ import com.hermes.android.ui.component.CacheChartState
 import com.hermes.android.ui.component.EaseOutQuint
 import com.hermes.android.ui.component.roundPercents
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.automirrored.filled.ArrowForwardIos
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -403,7 +405,7 @@ private fun DeletePickedButton(onClick: () -> Unit) {
         modifier = Modifier
             .padding(end = 14.dp)
             .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(HxRadius.xs))
             .background(MaterialTheme.colorScheme.primary)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp),
@@ -441,7 +443,7 @@ private fun SpaceEntryRow(onClick: () -> Unit) {
                 modifier = Modifier.size(16.dp),
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        HorizontalDivider(thickness = 0.5.dp, color = HxTone.hairline)
     }
 }
 
@@ -608,7 +610,7 @@ private fun SectionRowItem(
             HorizontalDivider(
                 modifier = Modifier.padding(start = if (pad) 100.dp else 60.dp),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                color = HxTone.hairline,
             )
         }
     }
@@ -661,9 +663,9 @@ private fun LoadingSectionRow() {
     ) {
         Box(Modifier.size(21.dp).background(color, CircleShape))
         Spacer(Modifier.width(18.dp))
-        Box(Modifier.width(120.dp).height(10.dp).background(color, RoundedCornerShape(4.dp)))
+        Box(Modifier.width(120.dp).height(10.dp).background(color, RoundedCornerShape(HxRadius.xs)))
         Spacer(Modifier.weight(1f))
-        Box(Modifier.width(48.dp).height(10.dp).background(color, RoundedCornerShape(4.dp)))
+        Box(Modifier.width(48.dp).height(10.dp).background(color, RoundedCornerShape(HxRadius.xs)))
     }
 }
 
@@ -683,7 +685,7 @@ private fun ClearCacheButton(allSelected: Boolean, size: Long, onClick: () -> Un
             .height(48.dp)
             .scale(scale)
             .alpha(alpha)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(HxRadius.lg))
             .background(MaterialTheme.colorScheme.primary)
             .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), enabled = !disabled, onClick = onClick),
         contentAlignment = Alignment.Center,

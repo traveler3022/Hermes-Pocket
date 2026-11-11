@@ -50,6 +50,7 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.History
 import com.hermes.android.ui.viewmodel.ForeignSessionsViewModel
 import java.text.SimpleDateFormat
@@ -173,7 +174,7 @@ private fun ForeignList(state: ForeignSessionsViewModel.UiState, viewModel: Fore
 private fun ForeignRow(session: ForeignSession, dateFormat: SimpleDateFormat, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(HxRadius.md)).clickable(onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(horizontal = HxSpace.inner, vertical = HxSpace.md)) {
@@ -201,14 +202,14 @@ private fun ForeignRow(session: ForeignSession, dateFormat: SimpleDateFormat, on
             Text(
                 text = meta,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = HxTone.textTertiary,
                 modifier = Modifier.padding(top = 3.dp),
             )
             session.cwd?.let { cwd ->
                 Text(
                     text = cwd,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = HxTone.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -268,7 +269,7 @@ private fun ForeignPreviewSheet(
                                 color = if (user) {
                                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                                 } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                    HxTone.card
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {

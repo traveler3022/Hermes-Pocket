@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.viewmodel.ConfigViewModel
 
 /**
@@ -83,7 +84,7 @@ internal fun AdvancedSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
                         .padding(10.dp),
                     verticalAlignment = Alignment.Top,
@@ -184,7 +185,7 @@ internal fun EnvFileCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(HxRadius.sm))
                     .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
                     .padding(10.dp),
                 verticalAlignment = Alignment.Top,

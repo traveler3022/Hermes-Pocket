@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -119,7 +120,7 @@ internal fun ApprovalSheet(
             // space left and scrolls, so the answer buttons stay on screen.
             Surface(
                 shape = RoundedCornerShape(HxRadius.sm),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                color = HxTone.cardStrong,
                 modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
             ) {
                 androidx.compose.runtime.CompositionLocalProvider(

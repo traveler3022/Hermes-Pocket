@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
@@ -322,7 +323,7 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.options),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = HxTone.textTertiary,
                         modifier = Modifier.size(18.dp),
                     )
                 }

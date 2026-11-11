@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.Dns
@@ -560,7 +561,7 @@ private fun SavedServersCard(
                 val current = connected && server.url.trim().trimEnd('/') == currentUrl.trim().trimEnd('/')
                 Surface(
                     onClick = { if (!current && !busy) onConnect(server) },
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(HxRadius.sm),
                     color = if (current) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -685,7 +686,7 @@ private fun TailscaleCard(
 private fun DeviceRow(device: TailnetDeviceUi, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(HxRadius.sm),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -959,7 +960,7 @@ private fun GuideCode(code: String) {
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(HxRadius.sm))
                 .padding(10.dp),
         )
     }

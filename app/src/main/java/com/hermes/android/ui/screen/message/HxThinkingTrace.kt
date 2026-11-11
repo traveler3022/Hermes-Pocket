@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringArrayResource
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxStatus
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -535,7 +536,7 @@ private fun HxSheetGrabber() {
             .padding(top = 10.dp, bottom = 8.dp)
             .width(56.dp)
             .height(5.dp)
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(HxRadius.full))
             .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f)),
     )
 }
@@ -793,7 +794,7 @@ private fun HxTimelineGlyph(
                     .padding(top = GlyphIconSize + ConnectorTopGap)
                     .width(ConnectorWidth)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(HxRadius.full))
                     .background(muted.copy(alpha = ConnectorAlpha)),
             )
         }

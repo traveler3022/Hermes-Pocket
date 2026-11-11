@@ -61,6 +61,7 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.viewmodel.LearningViewModel
@@ -217,7 +218,7 @@ private fun ActivityBars(activity: List<Pair<YearMonth, Int>>, monthFormat: Date
     val max = activity.maxOf { it.second }.coerceAtLeast(1)
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(HxSpace.inner), verticalArrangement = Arrangement.spacedBy(HxSpace.sm)) {
@@ -265,7 +266,7 @@ private fun ActivityBars(activity: List<Pair<YearMonth, Int>>, monthFormat: Date
 private fun NodeRow(node: LearningNode, date: String?, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(horizontal = HxSpace.inner, vertical = HxSpace.md)) {
@@ -379,7 +380,7 @@ private fun LearningNodeSheet(
                 else -> {
                     Surface(
                         shape = RoundedCornerShape(HxRadius.sm),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        color = HxTone.card,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
