@@ -685,7 +685,7 @@ private fun ClearCacheButton(allSelected: Boolean, size: Long, onClick: () -> Un
             .height(48.dp)
             .scale(scale)
             .alpha(alpha)
-            .clip(RoundedCornerShape(HxRadius.lg))
+            .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.primary)
             .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), enabled = !disabled, onClick = onClick),
         contentAlignment = Alignment.Center,

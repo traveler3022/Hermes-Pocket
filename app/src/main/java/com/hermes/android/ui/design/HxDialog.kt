@@ -13,7 +13,7 @@ import androidx.compose.ui.window.DialogProperties
 /**
  * The app's one dialog look. Same slots as Material's AlertDialog, so a call
  * site only changes its name; the frame is fixed here instead of in each of
- * them: the sheet radius, one flat container, a titleMedium title (Material's
+ * them: Material's soft 28 dp corners, one flat container, a titleMedium title (Material's
  * headlineSmall shouted over a two-line question) and bodyMedium text in the
  * secondary colour. A caller's own text style or colour still wins.
  */
@@ -38,7 +38,7 @@ fun HxAlertDialog(
         icon = icon,
         title = title?.let { slot -> { ProvideTextStyle(titleStyle) { slot() } } },
         text = text?.let { slot -> { ProvideTextStyle(textStyle) { slot() } } },
-        shape = RoundedCornerShape(HxRadius.lg),
+        shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         iconContentColor = MaterialTheme.colorScheme.primary,
         titleContentColor = MaterialTheme.colorScheme.onSurface,

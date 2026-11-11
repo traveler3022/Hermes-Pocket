@@ -662,7 +662,7 @@ val HxSoftShadowColor: Color
 /** A soft drop shadow reusable across floating controls (no hard outline). */
 fun Modifier.hxSoftShadow(
     radius: Dp = 10.dp,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(HxRadius.lg),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
 ): Modifier = composed {
     val scrim = HxSoftShadowColor
     this.shadow(radius, shape, ambientColor = scrim, spotColor = scrim)

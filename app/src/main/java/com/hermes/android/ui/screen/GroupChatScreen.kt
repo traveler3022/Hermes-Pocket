@@ -245,7 +245,7 @@ fun GroupChatScreen(
                     onValueChange = viewModel::updateInput,
                     placeholder = { Text(stringResource(R.string.message_the_group)) },
                     maxLines = 6,
-                    shape = RoundedCornerShape(HxRadius.lg),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(
