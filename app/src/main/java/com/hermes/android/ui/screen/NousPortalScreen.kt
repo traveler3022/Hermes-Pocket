@@ -14,7 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -195,7 +195,7 @@ private fun PortalUsageCard(usage: PortalUsage, showPortalButton: Boolean, onOpe
 @Composable
 private fun RenameAccountDialog(account: ConnectorAccount, onRename: (String) -> Unit, onDismiss: () -> Unit) {
     var alias by remember(account.connectionId) { mutableStateOf(account.alias.orEmpty()) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.portal_account_rename)) },
         text = {
@@ -227,7 +227,7 @@ private fun RenameAccountDialog(account: ConnectorAccount, onRename: (String) ->
 
 @Composable
 private fun ConnectorToolsDialog(connector: Connector, tools: List<ConnectorTool>?, error: String?, onDismiss: () -> Unit) {
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.portal_tools_of, connector.name)) },
         text = {

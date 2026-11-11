@@ -27,7 +27,7 @@ import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -204,7 +204,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
     // Deleting asked nothing: one tap beside Edit and the job was gone for good.
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_job)) },
             text = { Text(stringResource(R.string.will_stop_running_and_be_removed, job.name)) },
@@ -560,7 +560,7 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
     val isEdit = existingJob != null
     val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isEdit) stringResource(R.string.edit_cron_job) else stringResource(R.string.create_cron_job)) },
         text = {

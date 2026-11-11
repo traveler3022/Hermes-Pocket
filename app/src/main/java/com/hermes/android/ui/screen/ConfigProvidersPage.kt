@@ -17,7 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -467,7 +467,7 @@ private fun AccountDialog(
     var confirmingSignOut by remember { mutableStateOf(false) }
     var useTerminal by remember { mutableStateOf(false) }
     val inBrowser = !account.loggedIn && account.flow == "device_code" && !useTerminal
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -546,7 +546,7 @@ private fun DeviceSignInDialog(
 ) {
     val code = signIn.code
     val error = signIn.error
-    AlertDialog(
+    HxAlertDialog(
         // Only Cancel ends a sign-in that's still waiting on the browser.
         onDismissRequest = { if (error != null) onCancel() },
         title = { Text(stringResource(R.string.sign_in_with, name)) },
@@ -626,7 +626,7 @@ private fun ConnectedProviderDialog(
     onDismiss: () -> Unit,
 ) {
     var confirming by remember { mutableStateOf(false) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (confirming) stringResource(R.string.disconnect, row.name) else row.name) },
         text = {
@@ -684,7 +684,7 @@ private fun ProviderKeyDialog(
 ) {
     var key by remember { mutableStateOf("") }
     val uriHandler = LocalUriHandler.current
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = {
             Text(

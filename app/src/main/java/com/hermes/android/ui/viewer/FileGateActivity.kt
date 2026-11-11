@@ -11,7 +11,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,7 +103,7 @@ class FileGateActivity : ComponentActivity() {
                     fontScalePct = themeModeState.fontScalePct,
                 ) {
                     if (risk == LinuxFileGate.Risk.DISGUISED) {
-                        AlertDialog(
+                        HxAlertDialog(
                             onDismissRequest = ::finish,
                             title = { Text(stringResource(R.string.blocked_a_disguised_program)) },
                             text = {
@@ -114,7 +114,7 @@ class FileGateActivity : ComponentActivity() {
                             confirmButton = { TextButton(onClick = ::finish) { Text(stringResource(R.string.ok)) } },
                         )
                     } else {
-                        AlertDialog(
+                        HxAlertDialog(
                             onDismissRequest = ::finish,
                             title = { Text(stringResource(R.string.this_file_is_a_program)) },
                             text = {

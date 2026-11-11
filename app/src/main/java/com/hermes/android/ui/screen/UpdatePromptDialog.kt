@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,7 +50,7 @@ fun UpdatePromptDialog(viewModel: AboutViewModel = hiltViewModel()) {
 
     if (!state.showPrompt) return
     val release = (state.result as? UpdateCheck.Available)?.release ?: return
-    AlertDialog(
+    HxAlertDialog(
         // A tap outside must not throw away a download under way.
         onDismissRequest = {
             if (state.appDownload !is AppDownload.Downloading) viewModel.dismissPrompt()

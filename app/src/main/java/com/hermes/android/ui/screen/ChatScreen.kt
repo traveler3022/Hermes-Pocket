@@ -48,7 +48,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import com.hermes.android.ui.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -568,7 +568,7 @@ fun ChatScreen(
                 // ── Long-press menu: rename / pin / delete ─────────────────
                 drawerMenuTarget?.let { target ->
                     val pinned = target.id in uiState.drawerPinnedIds
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { drawerMenuTarget = null },
                         title = {
                             Text(target.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -614,7 +614,7 @@ fun ChatScreen(
                     val projectsState by projectsViewModel.uiState.collectAsStateWithLifecycle()
                     // The "no project" bucket has no folder to move into.
                     val targets = projectsState.projects.filter { it.path.isNotBlank() }
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { moveToProjectTarget = null },
                         title = { Text(stringResource(R.string.move_to_project)) },
                         text = {
@@ -643,7 +643,7 @@ fun ChatScreen(
 
                 // ── Rename dialog ──────────────────────────────────────────
                 uiState.drawerRenameTarget?.let { rename ->
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { viewModel.drawerHideRename() },
                         title = { Text(stringResource(R.string.rename_chat)) },
                         text = {
@@ -671,7 +671,7 @@ fun ChatScreen(
                 // ── Delete confirm dialog ──────────────────────────────────
                 if (uiState.drawerDeleteTarget != null) {
                     val targetSession = uiState.sessions.find { it.id == uiState.drawerDeleteTarget }
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { viewModel.drawerHideDelete() },
                         title = { Text(stringResource(R.string.delete_chat)) },
                         text = {
@@ -1268,7 +1268,7 @@ fun ChatScreen(
     }
 
     deleteFromMessageId?.let { messageId ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deleteFromMessageId = null },
             title = { Text(stringResource(R.string.delete_message)) },
             text = {

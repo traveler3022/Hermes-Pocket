@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Folder
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -202,7 +202,7 @@ fun ProjectsScreen(
     if (showCreate) {
         var name by rememberSaveable { mutableStateOf("") }
         var folder by rememberSaveable { mutableStateOf("") }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { showCreate = false },
             title = { Text(stringResource(R.string.new_project)) },
             text = {
@@ -234,7 +234,7 @@ fun ProjectsScreen(
 
     renaming?.let { project ->
         var name by remember(project.id) { mutableStateOf(project.label) }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { renaming = null },
             title = { Text(stringResource(R.string.rename_project)) },
             text = {
@@ -263,7 +263,7 @@ fun ProjectsScreen(
 
     if (showAddFolder && uiState.selectedStored != null) {
         var folder by rememberSaveable { mutableStateOf("") }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { showAddFolder = false },
             title = { Text(stringResource(R.string.add_folder)) },
             text = { FolderField(folder) { folder = it } },

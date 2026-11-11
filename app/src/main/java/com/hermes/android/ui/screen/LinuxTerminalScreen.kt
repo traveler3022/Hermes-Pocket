@@ -254,7 +254,7 @@ private fun StripButton(label: String, armed: Boolean = false, onClick: () -> Un
         contentColor = if (armed) colors.onPrimary else colors.onSurface,
         modifier = Modifier.clickable(onClick = onClick),
     ) {
-        Text(label, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        Text(label, fontSize = MaterialTheme.typography.bodySmall.fontSize, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
     }
 }
 

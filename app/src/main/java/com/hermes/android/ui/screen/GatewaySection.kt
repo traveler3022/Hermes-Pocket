@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -161,7 +161,7 @@ fun GatewaySection(
     }
 
     if (confirmStop) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmStop = false },
             title = { Text(stringResource(R.string.gateway_stop_confirm_title)) },
             text = { Text(stringResource(R.string.gateway_stop_confirm_body)) },

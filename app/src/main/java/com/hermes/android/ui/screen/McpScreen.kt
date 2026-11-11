@@ -21,7 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -308,7 +308,7 @@ fun McpScreen(
     }
 
     removing?.let { name ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.remove_server)) },
             text = {
@@ -389,7 +389,7 @@ private fun ServerDialog(
     onDismiss: () -> Unit,
 ) {
     val status = server.statusWith(probe)
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(server.name) },
         text = {
@@ -471,7 +471,7 @@ private fun AddServerDialog(
     var args by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
     val valid = name.isNotBlank() && if (byUrl) url.isNotBlank() else command.isNotBlank()
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.add_mcp_server)) },
         text = {
@@ -546,7 +546,7 @@ private fun CatalogKeysDialog(
     onDismiss: () -> Unit,
 ) {
     val values = remember(entry.name) { mutableStateMapOf<String, String>() }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(entry.name) },
         text = {
@@ -586,7 +586,7 @@ private fun ApiKeyDialog(
 ) {
     var value by remember { mutableStateOf("") }
     var envVar by remember { mutableStateOf("") }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.api_key_for_2, name)) },
         text = {

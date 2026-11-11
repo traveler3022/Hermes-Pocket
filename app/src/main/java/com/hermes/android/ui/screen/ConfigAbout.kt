@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -426,7 +426,7 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
     }
 
     if (confirming) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirming = false },
             title = { Text(stringResource(R.string.update_the_hermes_core_2)) },
             text = {

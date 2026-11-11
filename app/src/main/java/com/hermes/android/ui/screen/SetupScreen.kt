@@ -31,7 +31,7 @@ import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.OpenInNew
 import com.hermes.android.ui.icons.filled.RocketLaunch
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -112,7 +112,7 @@ fun SetupScreen(
     }
 
     state.confirmMessage?.let { message ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = viewModel::dismissConfirm,
             title = { Text(stringResource(R.string.expensive_model)) },
             text = { Text(message) },
