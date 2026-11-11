@@ -25,7 +25,6 @@ import com.hermes.android.ui.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -350,7 +349,7 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                     skill.locked?.let { locked ->
                         DropdownMenuItem(
                             text = { Text(stringResource(if (locked) R.string.skill_unlock else R.string.skill_lock)) },
-                            leadingIcon = { Icon(if (locked) Icons.Default.LockOpen else Icons.Default.Lock, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                             onClick = { viewModel.setLocked(skill.name, !locked); menuExpanded = false },
                         )
                     }
