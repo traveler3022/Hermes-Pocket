@@ -22,6 +22,8 @@ internal class ChatSessionDelegate(
     private val gatewayClient: GatewayClient,
     private val sessionRepository: ChatSessions,
     private val scope: CoroutineScope,
+    /** A new chat got its live id; called before the screen switches to it. */
+    private val onChatCreated: (liveId: String) -> Unit = {},
     private val loadReasoningLevel: () -> Unit,
 ) {
     /** Turn ends the open chat has seen, bumped by [onTurnEnded]; lets [recover] tell a snapshot is older than one. */
@@ -53,6 +55,7 @@ internal class ChatSessionDelegate(
         try {
             val created = sessionRepository.createChat()
             if (created != null) {
+                onChatCreated(created.liveId)
                 state.update { it.copy(activeSessionId = created.liveId, activeSessionKey = created.storedId, isSending = false) }
                 Timber.i("[Chat] Session created: ${created.liveId}")
             }
