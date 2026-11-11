@@ -142,6 +142,7 @@
     <string name="color_theme">配色主题</string>
     <string name="command">命令</string>
     <string name="command_approval">命令审批</string>
+    <string name="approval_from_other_chat">来自另一个聊天</string>
     <string name="command_approval_2">命令审批</string>
     <string name="comments">%1$s 条评论</string>
     <string name="comments_2">评论</string>

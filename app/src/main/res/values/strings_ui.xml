@@ -143,6 +143,7 @@
     <string name="color_theme">Color Theme</string>
     <string name="command">Command</string>
     <string name="command_approval">Command approval</string>
+    <string name="approval_from_other_chat">From another chat</string>
     <string name="command_approval_2">Command Approval</string>
     <string name="comments">%1$s comments</string>
     <string name="comments_2">Comments</string>

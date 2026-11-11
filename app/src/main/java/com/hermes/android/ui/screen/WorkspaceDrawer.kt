@@ -323,15 +323,36 @@ private fun DrawerSessionRow(
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // A chat that is doing something says what, in words, under its
+            // name; an idle chat stays one line, so the list stays quiet.
+            val statusWord = when (pulse) {
+                SessionPulse.Running -> stringResource(R.string.status_in_progress)
+                SessionPulse.Waiting -> stringResource(R.string.status_waiting)
+                SessionPulse.Failed -> stringResource(R.string.status_failed)
+                SessionPulse.None -> null
+            }
+            if (statusWord != null) {
+                Text(
+                    text = statusWord,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (pulse) {
+                        SessionPulse.Running -> HxStatus.running
+                        SessionPulse.Waiting -> HxStatus.waiting
+                        else -> HxStatus.error
+                    },
+                    maxLines = 1,
+                )
+            }
+        }
         if (unread > 0) {
             Box(
                 Modifier

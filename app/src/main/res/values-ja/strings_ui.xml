@@ -142,6 +142,7 @@
     <string name="color_theme">カラーテーマ</string>
     <string name="command">コマンド</string>
     <string name="command_approval">コマンドの承認</string>
+    <string name="approval_from_other_chat">別のチャットから</string>
     <string name="command_approval_2">コマンドの承認</string>
     <string name="comments">%1$s件のコメント</string>
     <string name="comments_2">コメント</string>

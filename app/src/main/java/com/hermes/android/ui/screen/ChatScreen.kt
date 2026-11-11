@@ -1191,8 +1191,19 @@ fun ChatScreen(
                     }
                 }
 
-                // Input bar
-                InputBar(
+                // A command waiting for approval takes the composer's place
+                // (ChatApprovalPanel.kt); the composer and its draft come back
+                // once it is answered. A request from a chat running in the
+                // background lands here too (ChatViewModel lets approvals through
+                // from any session), so the panel says when it isn't this chat's.
+                val approval = uiState.pendingApproval
+                if (approval != null) {
+                    ApprovalPanel(
+                        approval = approval,
+                        onRespond = viewModel::respondToApproval,
+                        fromOtherChat = approval.sessionId != null && approval.sessionId != uiState.activeSessionId,
+                    )
+                } else InputBar(
                     text = uiState.inputText,
                     isSending = uiState.isSending,
                     isAttaching = uiState.isAttaching,
@@ -1317,16 +1328,6 @@ fun ChatScreen(
             onSteer = subagents::steer,
             onStop = subagents::stop,
             onDismiss = subagents::close,
-        )
-    }
-
-    // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
-    // level so it overlays the whole screen; see ChatApprovalSheet.kt for
-    // why it can't be swiped away.
-    uiState.pendingApproval?.let { approval ->
-        ApprovalSheet(
-            approval = approval,
-            onRespond = viewModel::respondToApproval,
         )
     }
 

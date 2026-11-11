@@ -142,6 +142,7 @@
     <string name="color_theme">رنگ تم</string>
     <string name="command">فرمان</string>
     <string name="command_approval">درخواست اجرای فرمان</string>
+    <string name="approval_from_other_chat">از یک گفتگوی دیگر</string>
     <string name="command_approval_2">تأیید فرمان‌ها</string>
     <string name="comments">%1$s نظر</string>
     <string name="comments_2">نظرها</string>

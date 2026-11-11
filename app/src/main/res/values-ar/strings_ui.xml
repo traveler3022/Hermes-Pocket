@@ -142,6 +142,7 @@
     <string name="color_theme">مظهر الألوان</string>
     <string name="command">أمر</string>
     <string name="command_approval">الموافقة على الأمر</string>
+    <string name="approval_from_other_chat">من دردشة أخرى</string>
     <string name="command_approval_2">الموافقة على الأمر</string>
     <string name="comments">التعليقات: %1$s</string>
     <string name="comments_2">التعليقات</string>
