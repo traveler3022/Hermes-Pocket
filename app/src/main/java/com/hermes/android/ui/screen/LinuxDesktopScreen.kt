@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import com.hermes.android.ui.icons.filled.SmartToy
 import com.hermes.android.ui.icons.filled.Wifi
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -237,7 +237,7 @@ fun LinuxDesktopScreen(
                 },
             )
         }
-        DesktopDialog.Resolution -> AlertDialog(
+        DesktopDialog.Resolution -> HxAlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text(stringResource(R.string.screen_size)) },
             text = {
@@ -261,7 +261,7 @@ fun LinuxDesktopScreen(
             },
             confirmButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.close)) } },
         )
-        DesktopDialog.ClearData -> AlertDialog(
+        DesktopDialog.ClearData -> HxAlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text(stringResource(R.string.clear_browser_data_2)) },
             text = {
@@ -353,7 +353,7 @@ private fun TextSettingDialog(
     isValid: (String) -> Boolean = { true },
 ) {
     var value by remember { mutableStateOf(initial) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

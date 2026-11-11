@@ -40,7 +40,7 @@ import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -130,7 +130,7 @@ internal fun AddProviderDialog(
         }
     }
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -286,7 +286,7 @@ internal fun SetKeyDialog(
 ) {
     var key by remember { mutableStateOf("") }
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.api_key_for, providerSlug)) },
         text = {
@@ -376,7 +376,7 @@ internal fun CredentialRow(
     }
 
     if (showConfirm) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { showConfirm = false },
             title = { Text(stringResource(R.string.remove_key)) },
             text = { Text(stringResource(R.string.this_key_will_be_removed_from_the)) },

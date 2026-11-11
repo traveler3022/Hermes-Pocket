@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -200,7 +200,7 @@ fun StorageSpaceScreen(
     }
 
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.space_delete_title, formatFileSize(state.pickedBytes))) },
             text = {
@@ -233,7 +233,7 @@ private fun Scanning() {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.space_scanning), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+        Text(stringResource(R.string.space_scanning), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = MaterialTheme.typography.bodyMedium.fontSize)
     }
 }
 
@@ -268,7 +268,7 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 21.dp, vertical = 16.dp)) {
         Text(
             stringResource(R.string.space_total).format(formatFileSize(overview.total)),
-            fontSize = 20.sp,
+            fontSize = MaterialTheme.typography.titleLarge.fontSize,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -291,8 +291,8 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                 Box(Modifier.size(10.dp).background(verdictColor(verdict), CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(verdictTitle(verdict), fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
-                Text(formatFileSize(overview.size(verdict)), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(verdictTitle(verdict), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                Text(formatFileSize(overview.size(verdict)), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -306,12 +306,12 @@ private fun VerdictHeader(verdict: SpaceVerdict, size: Long) {
     ) {
         Text(
             verdictTitle(verdict),
-            fontSize = 14.sp,
+            fontSize = MaterialTheme.typography.bodyMedium.fontSize,
             fontWeight = FontWeight.Bold,
             color = verdictColor(verdict),
             modifier = Modifier.weight(1f),
         )
-        Text(formatFileSize(size), fontSize = 14.sp, color = verdictColor(verdict))
+        Text(formatFileSize(size), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = verdictColor(verdict))
     }
 }
 
@@ -325,12 +325,12 @@ private fun PlaceRow(place: SpacePlace, size: Long, onClick: () -> Unit) {
             Box(Modifier.size(12.dp).background(verdictColor(place.verdict), CircleShape))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(placeTitle(place), fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground)
-                Text(placeDescription(place), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(placeTitle(place), fontSize = MaterialTheme.typography.titleMedium.fontSize, color = MaterialTheme.colorScheme.onBackground)
+                Text(placeDescription(place), fontSize = MaterialTheme.typography.bodySmall.fontSize, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
                 formatFileSize(size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp),
             )
@@ -355,7 +355,7 @@ private fun ItemsList(
         item(key = "about") {
             Text(
                 placeDescription(place),
-                fontSize = 13.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 21.dp, vertical = 12.dp),
             )
@@ -412,11 +412,11 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Text(item.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
+                Text(item.name, fontSize = MaterialTheme.typography.titleMedium.fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
                 val line = listOfNotNull(hint, note).joinToString(" · ").ifEmpty { item.guestPath }
                 Text(
                     line,
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = if (!item.deletable) NeededColor else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -424,7 +424,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
             }
             Text(
                 formatFileSize(item.size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp, end = 21.dp),
             )

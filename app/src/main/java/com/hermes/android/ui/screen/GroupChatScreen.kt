@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -264,7 +264,7 @@ fun GroupChatScreen(
 
     if (renaming) {
         var name by remember { mutableStateOf(state.room?.name.orEmpty()) }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { renaming = false },
             title = { Text(stringResource(R.string.rename_group)) },
             text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
@@ -281,7 +281,7 @@ fun GroupChatScreen(
         )
     }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_this_group)) },
             text = {

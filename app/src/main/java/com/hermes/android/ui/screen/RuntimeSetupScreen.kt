@@ -27,7 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import com.hermes.android.runtime.remote.SavedServer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -510,7 +510,7 @@ private fun SavedServersCard(
     var renameTarget by remember { mutableStateOf<SavedServer?>(null) }
     renameTarget?.let { target ->
         var name by remember(target.url) { mutableStateOf(target.name) }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { renameTarget = null },
             title = { Text(stringResource(R.string.rename_saved_server)) },
             text = {
@@ -533,7 +533,7 @@ private fun SavedServersCard(
         )
     }
     forgetTarget?.let { target ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { forgetTarget = null },
             title = { Text(stringResource(R.string.remove_saved_server)) },
             text = { Text(stringResource(R.string.remove_saved_server_body, target.name)) },

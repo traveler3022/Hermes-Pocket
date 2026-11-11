@@ -10,7 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -45,7 +45,7 @@ import androidx.compose.ui.res.stringResource
 internal fun TelegramSetupDialog(state: TelegramSetupUiState, viewModel: TelegramSetupViewModel) {
     val step = state.step
     if (step == TelegramStep.Closed) return
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = { viewModel.close() },
         title = {
             Text(

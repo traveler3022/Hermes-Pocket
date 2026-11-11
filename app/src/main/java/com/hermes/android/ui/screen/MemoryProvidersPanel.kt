@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -213,7 +213,7 @@ private fun ProviderEditor(
     val missingRequired = visible.any { field ->
         field.required && state.values[field.key].isNullOrBlank() && !(field.kind == FieldKind.SECRET && field.isSet)
     }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(name) },
         text = {
@@ -353,7 +353,7 @@ private fun ConfigFieldInput(field: ConfigField, value: String, enabled: Boolean
 
 @Composable
 private fun ResetDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.erase_built_in_memory_2)) },
         text = {

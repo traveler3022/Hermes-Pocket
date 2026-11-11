@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -335,7 +335,7 @@ fun KanbanScreen(
     }
 
     if (bulkAssigning) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { bulkAssigning = false },
             title = { Text(stringResource(R.string.assign_tasks_to, state.selected.size)) },
             text = {
@@ -620,7 +620,7 @@ private fun BoardPicker(
     }
     if (creating) {
         var name by remember { mutableStateOf("") }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { creating = false },
             title = { Text(stringResource(R.string.new_board)) },
             text = {
@@ -925,7 +925,7 @@ private fun TaskSheet(
         }
     }
     deletingFile?.let { file ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deletingFile = null },
             title = { Text(stringResource(R.string.remove_2, file.filename)) },
             confirmButton = {
@@ -953,7 +953,7 @@ private fun TaskSheet(
     if (pickingParent) {
         val linked = detail.parents.map { it.id }.toSet() + detail.children.map { it.id } + task.id
         val choices = boardTasks.filter { it.id !in linked && it.status != "archived" }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { pickingParent = false },
             title = { Text(stringResource(R.string.wait_for_which_task)) },
             text = {
@@ -983,7 +983,7 @@ private fun TaskSheet(
         )
     }
     if (confirmReclaim) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmReclaim = false },
             title = { Text(stringResource(R.string.stop_the_worker)) },
             text = {
@@ -1001,7 +1001,7 @@ private fun TaskSheet(
         )
     }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_this_task)) },
             confirmButton = {
@@ -1079,7 +1079,7 @@ private fun RunSettingsDialog(
     var pickedProvider by remember { mutableStateOf(provider) }
     var pickedModel by remember { mutableStateOf(model.orEmpty()) }
     var pickedEffort by remember { mutableStateOf(effort) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.model_and_thinking)) },
         text = {

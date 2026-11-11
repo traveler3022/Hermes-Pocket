@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -90,7 +90,7 @@ fun SkillsScreen(
     }
 
     uiState.pendingUninstallSkill?.let { name ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.cancelUninstallSkill() },
             title = { Text(stringResource(R.string.skill_uninstall_title, name)) },
             text = { Text(stringResource(R.string.skill_uninstall_body)) },
@@ -106,7 +106,7 @@ fun SkillsScreen(
     }
 
     uiState.pendingScan?.let { (name, scan) ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.cancelScannedInstall() },
             title = { Text(stringResource(R.string.skill_scan_title, name)) },
             text = {
@@ -135,7 +135,7 @@ fun SkillsScreen(
     }
 
     if (uiState.inspectedSkillName != null) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.dismissInspect() },
             title = { Text(uiState.inspectedSkillName ?: "") },
             // A dialog's text doesn't scroll by itself: a long SKILL.md was cut off.
@@ -152,7 +152,7 @@ fun SkillsScreen(
     }
 
     uiState.pendingDeleteSkill?.let { name ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.cancelDeleteSkill() },
             title = { Text(stringResource(R.string.delete_skill)) },
             text = {
@@ -179,7 +179,7 @@ fun SkillsScreen(
             mutableStateOf(uiState.editingSkillContent)
         }
         val isNew = uiState.editingSkillOriginalName == null
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.dismissSkillEditor() },
             title = { Text(if (isNew) stringResource(R.string.new_skill) else stringResource(R.string.edit_skill)) },
             text = {

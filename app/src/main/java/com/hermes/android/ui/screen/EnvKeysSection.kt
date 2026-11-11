@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,7 +84,7 @@ internal fun EnvKeysSection(
         )
     }
     removing?.let { key ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.env_key_remove_title, key)) },
             text = { Text(stringResource(R.string.env_key_remove_body)) },
@@ -247,7 +247,7 @@ private fun EnvKeyRow(
 private fun EnvKeyDialog(key: EnvKey?, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
     var name by remember { mutableStateOf(key?.key.orEmpty()) }
     var value by remember { mutableStateOf("") }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (key == null) stringResource(R.string.env_key_add) else key.key) },
         text = {

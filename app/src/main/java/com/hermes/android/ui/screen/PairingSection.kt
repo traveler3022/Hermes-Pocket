@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -111,7 +111,7 @@ fun PairingSection(state: PairingUiState, viewModel: PairingViewModel) {
     }
 
     revoking?.let { user ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { revoking = null },
             title = { Text(stringResource(R.string.pairing_revoke_confirm, user.userName.ifBlank { user.userId })) },
             confirmButton = {
@@ -124,7 +124,7 @@ fun PairingSection(state: PairingUiState, viewModel: PairingViewModel) {
         )
     }
     if (confirmClear) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text(stringResource(R.string.pairing_clear_confirm)) },
             confirmButton = {

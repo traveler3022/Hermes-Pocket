@@ -75,6 +75,12 @@ class ChatViewModel @Inject constructor(
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    // Before init {}, which loads the draft: properties initialise in order.
+    private val drafts = ChatDrafts(
+        read = { prefs.getString(KEY_DRAFTS, null) },
+        write = { prefs.edit().putString(KEY_DRAFTS, it).apply() },
+    )
+
     /** Kanban is here: switched on in Settings › General, on a runtime that has it. */
     val kanbanAvailable: Boolean get() = kanban?.available == true
 
@@ -438,6 +444,9 @@ class ChatViewModel @Inject constructor(
         newChatOnConnect = false
         // An edit belongs to the chat it started in.
         if (_uiState.value.editingMessageId != null) cancelEditing()
+        // Reopening the chat on screen (a reconnect, back from the background) keeps the composer as is.
+        val current = _uiState.value
+        if (sessionId != current.activeSessionId && sessionId != current.activeSessionKey) switchDraft(sessionId)
         autoPickJob?.cancel()
         // Only the latest pick may land; an older one finishing late would
         // replace the chat the user just chose.
@@ -489,6 +498,7 @@ class ChatViewModel @Inject constructor(
     /** The screen of a new chat, before its session exists. */
     private fun clearForNewChat() {
         streamingDelegate.reset()
+        switchDraft(null)
         _uiState.update { it.copy(
             messages = emptyList(),
             activeSessionId = null,
@@ -786,20 +796,44 @@ class ChatViewModel @Inject constructor(
 
     // ── Draft persistence ────────────────────────────────────────────────
 
+    /** The open chat's draft key: its stored id, else its live id; null for a chat not created yet. */
+    private fun draftKey(): String? = _uiState.value.let { state ->
+        state.activeSessionKey ?: state.activeSessionId?.let { storedIdByLiveId[it] ?: it }
+    }
+
     fun saveDraft() {
-        val text = _uiState.value.inputText
-        prefs.edit().putString(KEY_DRAFT, text).apply()
+        drafts.put(draftKey(), _uiState.value.inputText)
     }
 
     fun loadDraft() {
-        val draft = prefs.getString(KEY_DRAFT, "") ?: ""
+        // The single draft of older versions becomes the new chat's draft.
+        prefs.getString(KEY_DRAFT, null)?.let { legacy ->
+            if (drafts.get(null).isEmpty()) drafts.put(null, legacy)
+            prefs.edit().remove(KEY_DRAFT).apply()
+        }
+        val draft = drafts.get(draftKey())
         if (draft.isNotEmpty()) {
             _uiState.update { it.copy(inputText = draft) }
         }
     }
 
     private fun clearDraft() {
-        prefs.edit().remove(KEY_DRAFT).apply()
+        drafts.put(draftKey(), "")
+    }
+
+    /**
+     * Leaving the open chat for [target] (a session id, or null for a new chat):
+     * what was typed stays with the chat it was typed in, and [target]'s own
+     * draft comes back into the composer.
+     */
+    private fun switchDraft(target: String?) {
+        drafts.put(draftKey(), _uiState.value.inputText)
+        val key = target?.let { storedIdByLiveId[it] ?: it }
+        // A chat first saved under its live id (new, before its stored id was known).
+        val text = drafts.get(key).ifEmpty {
+            storedIdByLiveId.entries.firstOrNull { it.value == key }?.let { drafts.get(it.key) }.orEmpty()
+        }
+        _uiState.update { it.copy(inputText = text) }
     }
 
     // ── Search ───────────────────────────────────────────────────────────
@@ -1303,6 +1337,7 @@ class ChatViewModel @Inject constructor(
     companion object {
         private const val PREFS_NAME = "hermes_chat_prefs"
         private const val KEY_DRAFT = "draft_message"
+        private const val KEY_DRAFTS = "drafts_by_chat"
         private const val KEY_BOOT_ESTIMATE_MS = "boot_estimate_ms"
         /** Below this, the gateway was already up and we only re-dialled. */
         private const val MIN_BOOT_SAMPLE_MS = 1_500L

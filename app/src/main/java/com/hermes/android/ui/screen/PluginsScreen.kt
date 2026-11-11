@@ -45,7 +45,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -112,7 +112,7 @@ fun PluginsScreen(
         )
     }
     removing?.let { plugin ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { removing = null },
             title = { Text(stringResource(R.string.plugin_remove_title, plugin.name)) },
             text = { Text(stringResource(R.string.plugin_remove_body)) },
@@ -132,7 +132,7 @@ fun PluginsScreen(
         )
     }
     uiState.pendingConsent?.let { (plugin, lines) ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.dismissConsent() },
             title = { Text(stringResource(R.string.plugin_consent_title, plugin.name)) },
             text = {
@@ -288,7 +288,7 @@ private fun PluginMenu(
 private fun AddPluginDialog(onAdd: (String, Boolean) -> Unit, onDismiss: () -> Unit) {
     var identifier by remember { mutableStateOf("") }
     var force by remember { mutableStateOf(false) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.plugin_add_url)) },
         text = {
@@ -328,7 +328,7 @@ private fun CatalogDialog(
         if (q.isEmpty()) state.catalog
         else state.catalog.filter { q in it.title.lowercase() || q in it.name.lowercase() || q in it.description.lowercase() }
     }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.plugin_catalog)) },
         text = {
@@ -397,7 +397,7 @@ private fun PluginSettingsDialog(
             }
         }
     }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.plugin_settings_title, plugin.name)) },
         text = {

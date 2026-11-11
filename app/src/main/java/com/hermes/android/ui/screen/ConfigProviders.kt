@@ -41,7 +41,7 @@ import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -604,7 +604,7 @@ internal fun ProviderCard(
 
     // ── Delete confirmation ──
     if (showDeleteConfirm) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text(stringResource(R.string.delete_provider)) },
             text = {
