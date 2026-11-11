@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.icons.automirrored.filled.ArrowForwardIos
 import com.hermes.android.ui.icons.filled.Description
 import androidx.compose.material.icons.filled.Face
@@ -395,7 +396,7 @@ internal fun ReasoningCard(
                         modifier = Modifier
                             .weight(1f)
                             .height(40.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(HxRadius.sm))
                             .clickable { viewModel.setReasoning(level) },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -403,7 +404,7 @@ internal fun ReasoningCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(7.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(RoundedCornerShape(HxRadius.xs))
                                 .background(
                                     if (i <= currentIdx) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.outlineVariant,

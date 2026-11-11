@@ -68,6 +68,8 @@ import com.hermes.android.ui.component.FileKind
 import com.hermes.android.ui.component.fileKindOf
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.MusicNote
 import com.hermes.android.ui.icons.outlined.PermMedia
@@ -233,7 +235,7 @@ private fun MediaList(files: List<SavedFile>) {
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 72.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                color = HxTone.hairline,
             )
         }
     }
@@ -257,7 +259,7 @@ private fun FileBadge(file: SavedFile) {
     Box(
         modifier = Modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(HxRadius.sm))
             .background(MaterialTheme.colorScheme.tertiaryContainer),
         contentAlignment = Alignment.Center,
     ) {

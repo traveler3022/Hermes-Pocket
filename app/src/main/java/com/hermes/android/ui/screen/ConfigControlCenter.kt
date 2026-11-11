@@ -48,6 +48,8 @@ import com.hermes.android.R
 import com.hermes.android.i18n.AppLanguage
 import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HxIconColors
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
 import com.hermes.android.ui.design.StatTile
@@ -437,7 +439,7 @@ internal fun CcRow(
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    tint = HxTone.textMuted,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -451,8 +453,8 @@ private fun UpdateBanner(onUpdate: () -> Unit) {
     var dismissed by remember { mutableStateOf(false) }
     if (dismissed) return
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(HxRadius.md),
+        color = HxTone.card,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
@@ -482,7 +484,7 @@ internal fun LanguageSection(appLanguageState: AppLanguageState?) {
         if (appLanguageState != null) SettingsCardGroup {
             Column(Modifier.selectableGroup()) {
                 AppLanguage.entries.forEachIndexed { i, lang ->
-                    if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    if (i > 0) HorizontalDivider(thickness = 0.5.dp, color = HxTone.hairline)
                     val selected = appLanguageState.language == lang
                     Row(
                         modifier = Modifier

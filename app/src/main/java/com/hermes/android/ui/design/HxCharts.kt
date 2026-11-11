@@ -62,7 +62,7 @@ fun HxSplitBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(HxRadius.full))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             visible.forEach { part ->

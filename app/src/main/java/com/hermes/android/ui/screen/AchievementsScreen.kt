@@ -279,7 +279,7 @@ private fun AchievementCard(item: Achievement, expanded: Boolean, onClick: () ->
                 if (!secret && threshold != null && (item.nextTier != null || !unlocked)) {
                     LinearProgressIndicator(
                         progress = { item.percent / 100f },
-                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(HxRadius.full)),
                     )
                     Text(
                         text = item.nextTier?.let {

@@ -32,6 +32,7 @@ import com.hermes.android.domain.messaging.MessagingPairing.Request
 import com.hermes.android.domain.messaging.MessagingPairing.User
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.PairingUiState
 import com.hermes.android.ui.viewmodel.PairingViewModel
 
@@ -43,7 +44,7 @@ fun PairingSection(state: PairingUiState, viewModel: PairingViewModel) {
 
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(

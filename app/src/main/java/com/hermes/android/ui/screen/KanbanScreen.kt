@@ -74,7 +74,9 @@ import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -647,8 +649,8 @@ private fun boardLabel(board: KanbanRepository.Board): String =
 @Composable
 private fun TaskCard(task: KanbanRepository.Task, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(HxRadius.md),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else HxTone.cardStrong,
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
@@ -1041,8 +1043,8 @@ private fun HealthSheet(
             item { SheetHeader(stringResource(R.string.board_health), onBack = null) }
             items(diagnostics, key = { it.taskId }) { row ->
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(HxRadius.md),
+                    color = HxTone.cardStrong,
                     modifier = Modifier.fillMaxWidth().clickable { onOpen(row.taskId) },
                 ) {
                     Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
@@ -1146,8 +1148,8 @@ private fun RunSettingsDialog(
 @Composable
 private fun AttachmentRow(file: KanbanRepository.Attachment, onOpen: () -> Unit, onDelete: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(HxRadius.sm),
+        color = HxTone.cardStrong,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
     ) {
         Row(Modifier.padding(HxSpace.sm), verticalAlignment = Alignment.CenterVertically) {
@@ -1353,7 +1355,7 @@ private fun LogView(log: KanbanRepository.Log) {
         SheetHint(stringResource(R.string.no_worker_has_started_on_this_task_yet))
         return
     }
-    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+    Surface(shape = RoundedCornerShape(HxRadius.sm), color = HxTone.cardStrong) {
         Column(Modifier.fillMaxWidth().padding(HxSpace.sm)) {
             if (log.truncated) {
                 Text(

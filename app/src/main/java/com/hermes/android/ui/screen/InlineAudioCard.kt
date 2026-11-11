@@ -119,7 +119,7 @@ internal fun InlineAudioCard(
                 Box(
                     modifier = Modifier
                         .size(ARTWORK_SIZE)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .background(Color.White.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {

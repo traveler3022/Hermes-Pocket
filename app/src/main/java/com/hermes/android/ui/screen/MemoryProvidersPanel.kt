@@ -44,6 +44,7 @@ import com.hermes.android.domain.memory.MemoryProviders.Provider
 import com.hermes.android.domain.memory.MemoryProviders.ProviderState
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel
 import com.hermes.android.ui.viewmodel.MemoryProvidersViewModel.Busy
@@ -166,7 +167,7 @@ internal fun MemoryProvidersPanel(
 private fun ProviderRow(provider: Provider, active: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(HxSpace.inner)) {

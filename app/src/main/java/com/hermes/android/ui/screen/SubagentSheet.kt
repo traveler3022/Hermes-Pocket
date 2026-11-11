@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.R
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.SubagentViewModel
 
 /**
@@ -98,7 +99,7 @@ internal fun SubagentSheet(
 
             Surface(
                 shape = RoundedCornerShape(HxRadius.sm),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                color = HxTone.cardStrong,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp, max = 380.dp),
             ) {
                 val vertical = rememberScrollState()

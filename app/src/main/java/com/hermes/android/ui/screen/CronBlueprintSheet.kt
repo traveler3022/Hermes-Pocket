@@ -39,6 +39,7 @@ import com.hermes.android.domain.cron.CronBlueprints.Field
 import com.hermes.android.domain.cron.CronBlueprints.FieldType
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.i18n.BlueprintTexts
 import com.hermes.android.ui.viewmodel.CronUiState
 import java.util.Locale
@@ -112,7 +113,7 @@ internal fun BlueprintSheet(
 private fun BlueprintRow(blueprint: Blueprint, persian: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(HxSpace.inner)) {

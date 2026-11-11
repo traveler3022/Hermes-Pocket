@@ -68,6 +68,7 @@ import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
@@ -431,7 +432,7 @@ private fun RunSheet(run: OpsViewModel.Run, onDismiss: () -> Unit) {
             }
             Surface(
                 shape = RoundedCornerShape(HxRadius.sm),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                color = HxTone.cardStrong,
                 modifier = Modifier.fillMaxWidth().padding(top = HxSpace.md).heightIn(min = 120.dp, max = 460.dp),
             ) {
                 val vertical = rememberScrollState()

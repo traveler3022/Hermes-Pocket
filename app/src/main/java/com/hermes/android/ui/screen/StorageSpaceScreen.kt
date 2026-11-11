@@ -55,6 +55,8 @@ import com.hermes.android.domain.storage.SpaceOverview
 import com.hermes.android.domain.storage.SpacePlace
 import com.hermes.android.domain.storage.SpaceVerdict
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Security
@@ -276,7 +278,7 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
         }
         Spacer(Modifier.height(12.dp))
         val total = overview.total.coerceAtLeast(1).toFloat()
-        Canvas(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp))) {
+        Canvas(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(HxRadius.full))) {
             var x = 0f
             SpaceVerdict.entries.forEach { verdict ->
                 val w = size.width * overview.size(verdict) / total
@@ -336,7 +338,7 @@ private fun PlaceRow(place: SpacePlace, size: Long, onClick: () -> Unit) {
         HorizontalDivider(
             modifier = Modifier.padding(start = 47.dp),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            color = HxTone.hairline,
         )
     }
 }
@@ -398,7 +400,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
                 }
             }
             Box(
-                Modifier.size(38.dp).background(verdictColor(item.place.verdict).copy(alpha = 0.85f), RoundedCornerShape(8.dp)),
+                Modifier.size(38.dp).background(verdictColor(item.place.verdict).copy(alpha = 0.85f), RoundedCornerShape(HxRadius.sm)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -430,7 +432,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
         HorizontalDivider(
             modifier = Modifier.padding(start = 98.dp),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            color = HxTone.hairline,
         )
     }
 }
