@@ -1565,4 +1565,18 @@
     <string name="topic_drag">Drag %1$s</string>
     <string name="topic_reorder_done">Done</string>
     <string name="chat_active_ago">Active %1$s ago</string>
+    <string name="drawer_settings_title">Drawer</string>
+    <string name="drawer_settings_subtitle">What the chat drawer shows</string>
+    <string name="drawer_sections">Sections</string>
+    <string name="drawer_topics_detail">The row of topic chips. Off, topic chats sit with the others.</string>
+    <string name="drawer_pinned_detail">Pinned chats in a section of their own. Off, they stay at the top of the list.</string>
+    <string name="drawer_projects_title">Projects</string>
+    <string name="drawer_projects_detail">Chips that narrow the list to one project.</string>
+    <string name="drawer_filters_title">Status filters</string>
+    <string name="drawer_filters_detail">All, Running and Needs you, above the chats.</string>
+    <string name="drawer_filters_each">Filters</string>
+    <string name="drawer_pages_title">Page buttons</string>
+    <string name="drawer_pages_show">Show page buttons</string>
+    <string name="drawer_pages_detail">The tiles above your chats, such as Scheduled and Files. Off, the drawer starts with your chats.</string>
+    <string name="drawer_pages_each">Pages</string>
 </resources>

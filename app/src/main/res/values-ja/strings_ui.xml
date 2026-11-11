@@ -1511,4 +1511,18 @@
     <string name="topic_drag">%1$s をドラッグ</string>
     <string name="topic_reorder_done">完了</string>
     <string name="chat_active_ago">%1$s 前にアクティブ</string>
+    <string name="drawer_settings_title">サイドバー</string>
+    <string name="drawer_settings_subtitle">チャットのサイドバーに表示するもの</string>
+    <string name="drawer_sections">セクション</string>
+    <string name="drawer_topics_detail">トピックのチップの列。オフにすると、トピックのチャットは他と一緒に並びます。</string>
+    <string name="drawer_pinned_detail">ピン留めしたチャットを専用のセクションに。オフにすると、リストの先頭に残ります。</string>
+    <string name="drawer_projects_title">プロジェクト</string>
+    <string name="drawer_projects_detail">リストを1つのプロジェクトに絞るチップ。</string>
+    <string name="drawer_filters_title">状態フィルター</string>
+    <string name="drawer_filters_detail">チャットの上の「すべて」「実行中」「あなた待ち」。</string>
+    <string name="drawer_filters_each">フィルター</string>
+    <string name="drawer_pages_title">ページボタン</string>
+    <string name="drawer_pages_show">ページボタンを表示</string>
+    <string name="drawer_pages_detail">スケジュールやファイルなど、チャットの上のタイル。オフにすると、サイドバーはチャットから始まります。</string>
+    <string name="drawer_pages_each">ページ</string>
 </resources>

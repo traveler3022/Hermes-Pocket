@@ -1513,4 +1513,18 @@
     <string name="topic_drag">Перетащить %1$s</string>
     <string name="topic_reorder_done">Готово</string>
     <string name="chat_active_ago">Активен %1$s назад</string>
+    <string name="drawer_settings_title">Боковая панель</string>
+    <string name="drawer_settings_subtitle">Что показывает панель чатов</string>
+    <string name="drawer_sections">Разделы</string>
+    <string name="drawer_topics_detail">Строка чипов тем. Выключено: чаты тем стоят вместе с остальными.</string>
+    <string name="drawer_pinned_detail">Закреплённые чаты в своём разделе. Выключено: они остаются вверху списка.</string>
+    <string name="drawer_projects_title">Проекты</string>
+    <string name="drawer_projects_detail">Чипы, сужающие список до одного проекта.</string>
+    <string name="drawer_filters_title">Фильтры состояния</string>
+    <string name="drawer_filters_detail">«Все», «Выполняется» и «Ждёт вас» над чатами.</string>
+    <string name="drawer_filters_each">Фильтры</string>
+    <string name="drawer_pages_title">Кнопки страниц</string>
+    <string name="drawer_pages_show">Показывать кнопки страниц</string>
+    <string name="drawer_pages_detail">Плитки над чатами, например «Запланированные» и «Файлы». Выключено: панель начинается с чатов.</string>
+    <string name="drawer_pages_each">Страницы</string>
 </resources>

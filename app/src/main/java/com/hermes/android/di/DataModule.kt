@@ -23,6 +23,7 @@ import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
 import com.hermes.android.data.TopicsRepository
+import com.hermes.android.data.DrawerLayoutStore
 import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
@@ -77,6 +78,7 @@ import com.hermes.android.domain.notify.ApprovalAlerts
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.topics.ChatTopics
+import com.hermes.android.domain.drawer.DrawerLayout
 import com.hermes.android.domain.session.AgentTasks
 import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.domain.session.SessionCheckpoints
@@ -138,6 +140,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindChatTopics(impl: TopicsRepository): ChatTopics
+
+    @Binds
+    abstract fun bindDrawerLayout(impl: DrawerLayoutStore): DrawerLayout
 
     @Binds
     abstract fun bindProviderSetup(impl: ProviderSetupRepository): ProviderSetup

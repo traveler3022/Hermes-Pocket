@@ -1512,4 +1512,18 @@
     <string name="topic_drag">%1$s ziehen</string>
     <string name="topic_reorder_done">Fertig</string>
     <string name="chat_active_ago">Aktiv vor %1$s</string>
+    <string name="drawer_settings_title">Seitenleiste</string>
+    <string name="drawer_settings_subtitle">Was die Chat-Seitenleiste zeigt</string>
+    <string name="drawer_sections">Bereiche</string>
+    <string name="drawer_topics_detail">Die Zeile der Themen-Chips. Aus: Themen-Chats stehen bei den anderen.</string>
+    <string name="drawer_pinned_detail">Angeheftete Chats in einem eigenen Bereich. Aus: Sie bleiben oben in der Liste.</string>
+    <string name="drawer_projects_title">Projekte</string>
+    <string name="drawer_projects_detail">Chips, die die Liste auf ein Projekt eingrenzen.</string>
+    <string name="drawer_filters_title">Statusfilter</string>
+    <string name="drawer_filters_detail">Alle, Läuft und Wartet auf dich, über den Chats.</string>
+    <string name="drawer_filters_each">Filter</string>
+    <string name="drawer_pages_title">Seiten-Buttons</string>
+    <string name="drawer_pages_show">Seiten-Buttons zeigen</string>
+    <string name="drawer_pages_detail">Die Kacheln über deinen Chats, etwa Geplant und Dateien. Aus: Die Leiste beginnt mit deinen Chats.</string>
+    <string name="drawer_pages_each">Seiten</string>
 </resources>

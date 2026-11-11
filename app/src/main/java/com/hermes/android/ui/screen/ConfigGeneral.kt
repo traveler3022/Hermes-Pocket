@@ -56,6 +56,7 @@ internal fun GeneralTab(
     themeModeState: ThemeModeState? = null,
     appLanguageState: AppLanguageState? = null,
     onOpenLanguage: () -> Unit = {},
+    onOpenDrawer: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -73,6 +74,15 @@ internal fun GeneralTab(
                     onClick = onOpenLanguage,
                 )
             }
+        }
+        // What the chat drawer shows: tiles, topics, pinned, projects, filters.
+        SettingsCardGroup {
+            SettingsNavRow(
+                title = stringResource(R.string.drawer_settings_title),
+                subtitle = stringResource(R.string.drawer_settings_subtitle),
+                icon = com.hermes.android.ui.design.HxIcons.LayoutGrid,
+                onClick = onOpenDrawer,
+            )
         }
 
         if (themeModeState != null) {

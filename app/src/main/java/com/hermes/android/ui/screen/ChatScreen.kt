@@ -186,6 +186,7 @@ fun ChatScreen(
     projectsViewModel: com.hermes.android.ui.viewmodel.ProjectsViewModel = hiltViewModel(),
     subagents: com.hermes.android.ui.viewmodel.SubagentViewModel = hiltViewModel(),
     topicsViewModel: com.hermes.android.ui.viewmodel.TopicsViewModel = hiltViewModel(),
+    drawerLayoutViewModel: com.hermes.android.ui.viewmodel.DrawerLayoutViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subagentSheet by subagents.sheet.collectAsStateWithLifecycle()
@@ -215,6 +216,7 @@ fun ChatScreen(
     var topicFreshTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
     var reorderingTopics by remember { mutableStateOf(false) }
     val topics by topicsViewModel.topics.collectAsStateWithLifecycle()
+    val drawerLayout by drawerLayoutViewModel.prefs.collectAsStateWithLifecycle()
     val drawerProjects by projectsViewModel.uiState.collectAsStateWithLifecycle()
     val topicFailedText = stringResource(R.string.topic_failed)
     // The topic whose chat is open, by the chat's stored id or its lineage's first id.
@@ -608,6 +610,7 @@ fun ChatScreen(
                     onTopicLongClick = { topicMenuTarget = it },
                     projects = drawerProjects.projects,
                     reorderingTopics = reorderingTopics,
+                    layout = drawerLayout,
                     onReordered = { ids ->
                         reorderingTopics = false
                         if (ids != topics.map { it.id }) topicsViewModel.reorder(ids)

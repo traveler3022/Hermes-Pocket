@@ -1514,4 +1514,18 @@
     <string name="topic_drag">拖动 %1$s</string>
     <string name="topic_reorder_done">完成</string>
     <string name="chat_active_ago">%1$s前活跃</string>
+    <string name="drawer_settings_title">侧边栏</string>
+    <string name="drawer_settings_subtitle">聊天侧边栏显示的内容</string>
+    <string name="drawer_sections">分区</string>
+    <string name="drawer_topics_detail">话题标签行。关闭后，话题的对话与其他对话放在一起。</string>
+    <string name="drawer_pinned_detail">置顶的对话单独成区。关闭后，它们留在列表顶部。</string>
+    <string name="drawer_projects_title">项目</string>
+    <string name="drawer_projects_detail">把列表限定到一个项目的标签。</string>
+    <string name="drawer_filters_title">状态筛选</string>
+    <string name="drawer_filters_detail">对话上方的“全部”“正在运行”“等你处理”。</string>
+    <string name="drawer_filters_each">筛选</string>
+    <string name="drawer_pages_title">页面按钮</string>
+    <string name="drawer_pages_show">显示页面按钮</string>
+    <string name="drawer_pages_detail">对话上方的方块，例如定时任务和文件。关闭后，侧边栏从对话开始。</string>
+    <string name="drawer_pages_each">页面</string>
 </resources>

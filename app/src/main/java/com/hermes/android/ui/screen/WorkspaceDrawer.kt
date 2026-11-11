@@ -91,6 +91,7 @@ import com.hermes.android.ui.icons.outlined.PermMedia
 import com.hermes.android.ui.viewmodel.SessionItem
 import com.hermes.android.domain.projects.Projects
 import com.hermes.android.domain.topics.ChatTopic
+import com.hermes.android.domain.drawer.DrawerPrefs
 import kotlinx.coroutines.delay
 
 /** A Workspace destination: one of the drawer's tiles. */
@@ -99,6 +100,8 @@ internal data class WorkspaceDestination(
     val icon: ImageVector,
     val badge: Int? = null,
     val onClick: () -> Unit,
+    /** A stable name for Settings › Drawer to hide the tile by. */
+    val id: String = label,
 )
 
 /** Per-session attention state, as the host reads it from approvals and background turns. */
@@ -206,11 +209,20 @@ internal fun WorkspaceDrawerSheet(
     /** The Topics section shows drag handles; [onReordered] gets the order once the user is done. */
     reorderingTopics: Boolean = false,
     onReordered: (List<String>) -> Unit = {},
+    /** What the user chose to show, in Settings › Appearance › Drawer. */
+    layout: DrawerPrefs = DrawerPrefs(),
 ) {
     // Content only: the host's ModalDrawerSheet owns width, shape and colours,
     // and the rename / delete dialogs that hang off it.
     var showAll by rememberSaveable { mutableStateOf(false) }
-    var filter by rememberSaveable { mutableStateOf(DrawerFilter.All) }
+    var picked by rememberSaveable { mutableStateOf(DrawerFilter.All) }
+    // A filter whose chip is turned off in Settings no longer narrows the list.
+    val filter = when {
+        !layout.filters -> DrawerFilter.All
+        picked == DrawerFilter.Running && !layout.runningFilter -> DrawerFilter.All
+        picked == DrawerFilter.NeedsYou && !layout.needsYouFilter -> DrawerFilter.All
+        else -> picked
+    }
     var pinnedCollapsed by rememberSaveable { mutableStateOf(false) }
     var projectId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -221,7 +233,7 @@ internal fun WorkspaceDrawerSheet(
         .filter { (_, count) -> count > 0 }
         .sortedWith(compareBy<Pair<Projects.ProjectSummary, Int>> { it.first.isNoProject }.thenByDescending { it.second })
     // Only worth a row when a chat sits in a real project.
-    val showProjects = projectChips.any { !it.first.isNoProject }
+    val showProjects = layout.projects && projectChips.any { !it.first.isNoProject }
     val project = projectChips.firstOrNull { it.first.id == projectId }?.first?.takeIf { showProjects }
     val projectOf: (SessionItem) -> String? = { s ->
         projects.firstOrNull { !it.isNoProject && it.holds(s) }?.label
@@ -229,10 +241,10 @@ internal fun WorkspaceDrawerSheet(
     val scoped = if (project == null) sessions else sessions.filter { project.holds(it) }
 
     // ── Topics, then Pinned, then the rest; each chat once ───────────────
-    val topicRows = topics.map { topic ->
+    val topicRows = (if (layout.topics) topics else emptyList()).map { topic ->
         topic to (sessions.firstOrNull { it.id == topic.sessionId } ?: sessions.firstOrNull { it.lineageRootId == topic.sessionId })
     }.filter { (_, row) -> project == null || (row != null && project.holds(row)) }
-    val topicChatIds = topics.mapTo(HashSet()) { it.sessionId } + topicRows.mapNotNull { it.second?.id }
+    val topicChatIds = topicRows.mapTo(HashSet()) { it.first.sessionId } + topicRows.mapNotNull { it.second?.id }
     val topicChat: (ChatTopic, SessionItem?) -> SessionItem = { topic, row ->
         row ?: SessionItem(topic.sessionId, topic.name, null, 0L)
     }
@@ -241,8 +253,9 @@ internal fun WorkspaceDrawerSheet(
     // Every section follows the status filter; the topic rows as the section shows them,
     // so moving one goes past its neighbour here.
     val filteredTopics = topicRows.filter { (topic, row) -> passes(topicChat(topic, row)) }
-    val pinned = scoped.filter { it.id in pinnedIds && it.id !in topicChatIds && passes(it) }
-    val rest = scoped.filter { it.id !in pinnedIds && it.id !in topicChatIds && passes(it) }
+    val pinnedApart = if (layout.pinned) pinnedIds else emptySet()
+    val pinned = scoped.filter { it.id in pinnedApart && it.id !in topicChatIds && passes(it) }
+    val rest = scoped.filter { it.id !in pinnedApart && it.id !in topicChatIds && passes(it) }
     // Folded, Pinned still lists the open chat and those with something going on.
     val shownPinned = if (!pinnedCollapsed) pinned else pinned.filter { it.id == activeSessionId || busy(it) }
     val shown = if (filter != DrawerFilter.All || showAll) rest else rest.take(visibleSessions)
@@ -303,7 +316,8 @@ internal fun WorkspaceDrawerSheet(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                 ) {
                     // The destinations scroll with the chats, as the list's header.
-                    if (destinations.isNotEmpty()) item(key = "nav") { DrawerNavGrid(destinations) }
+                    val pages = if (layout.pages) destinations.filter { it.id !in layout.hiddenPages } else emptyList()
+                    if (pages.isNotEmpty()) item(key = "nav") { DrawerNavGrid(pages) }
 
                     // ── Pinned ───────────────────────────────────────────
                     if (pinned.isNotEmpty()) {
@@ -368,13 +382,15 @@ internal fun WorkspaceDrawerSheet(
                     }
                     // Kept while a filter is on, so an emptied list (another profile)
                     // can still be set back to All.
-                    if (sessions.isNotEmpty() || filter != DrawerFilter.All) {
+                    if (layout.filters && (sessions.isNotEmpty() || filter != DrawerFilter.All)) {
                         item(key = "filters") {
                             DrawerFilters(
                                 selected = filter,
                                 running = scoped.count { pulseOf(it) == SessionPulse.Running },
                                 needsYou = scoped.count { DrawerFilter.NeedsYou.keeps(pulseOf(it), unreadOf(it)) },
-                                onSelect = { filter = it },
+                                onSelect = { picked = it },
+                                showRunning = layout.runningFilter,
+                                showNeedsYou = layout.needsYouFilter,
                             )
                         }
                     }
@@ -397,7 +413,7 @@ internal fun WorkspaceDrawerSheet(
                     ) { session ->
                         DrawerSessionRow(
                             title = session.title,
-                            mark = RowMark.None,
+                            mark = if (session.id in pinnedIds) RowMark.Pin else RowMark.None,
                             pulse = pulseOf(session),
                             unread = unreadOf(session),
                             age = shortAge(session.updatedAt, now),
@@ -525,6 +541,8 @@ private fun DrawerFilters(
     running: Int,
     needsYou: Int,
     onSelect: (DrawerFilter) -> Unit,
+    showRunning: Boolean = true,
+    showNeedsYou: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -533,7 +551,13 @@ private fun DrawerFilters(
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        DrawerFilter.entries.forEach { entry ->
+        DrawerFilter.entries.filter {
+            when (it) {
+                DrawerFilter.All -> true
+                DrawerFilter.Running -> showRunning
+                DrawerFilter.NeedsYou -> showNeedsYou
+            }
+        }.forEach { entry ->
             val (label, count, countColor) = when (entry) {
                 DrawerFilter.All -> Triple(stringResource(R.string.all), null, HxTone.textTertiary)
                 DrawerFilter.Running -> Triple(stringResource(R.string.running), running, HxStatus.running)
@@ -1171,11 +1195,18 @@ internal fun rememberWorkspaceDestinations(
     ) {
         // The board is the work desk now, so it leads when it is switched on.
         listOfNotNull(
-            onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it) },
-            WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled),
-            WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups),
-            WorkspaceDestination(media, Icons.Outlined.PermMedia, null, onMedia),
-            WorkspaceDestination(files, Icons.Outlined.Folder, null, onFiles),
+            onKanban?.let { WorkspaceDestination(kanban, Icons.Default.Inventory2, null, it, id = PAGE_KANBAN) },
+            WorkspaceDestination(scheduled, HxIcons.Clock, null, onScheduled, id = PAGE_SCHEDULED),
+            WorkspaceDestination(groups, Icons.Default.Forum, null, onGroups, id = PAGE_GROUPS),
+            WorkspaceDestination(media, Icons.Outlined.PermMedia, null, onMedia, id = PAGE_MEDIA),
+            WorkspaceDestination(files, Icons.Outlined.Folder, null, onFiles, id = PAGE_FILES),
         )
     }
 }
+
+/** The tiles' ids, as Settings › Drawer stores which are hidden. */
+internal const val PAGE_KANBAN = "kanban"
+internal const val PAGE_SCHEDULED = "scheduled"
+internal const val PAGE_GROUPS = "groups"
+internal const val PAGE_MEDIA = "media"
+internal const val PAGE_FILES = "files"

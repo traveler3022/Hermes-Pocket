@@ -1514,4 +1514,18 @@
     <string name="topic_drag">اسحب %1$s</string>
     <string name="topic_reorder_done">تم</string>
     <string name="chat_active_ago">نشط منذ %1$s</string>
+    <string name="drawer_settings_title">الدرج</string>
+    <string name="drawer_settings_subtitle">ما يعرضه درج المحادثات</string>
+    <string name="drawer_sections">الأقسام</string>
+    <string name="drawer_topics_detail">صف شرائح المواضيع. عند إيقافه تظهر محادثات المواضيع مع البقية.</string>
+    <string name="drawer_pinned_detail">المحادثات المثبتة في قسم خاص. عند إيقافه تبقى في أعلى القائمة.</string>
+    <string name="drawer_projects_title">المشاريع</string>
+    <string name="drawer_projects_detail">شرائح تحصر القائمة في مشروع واحد.</string>
+    <string name="drawer_filters_title">مرشحات الحالة</string>
+    <string name="drawer_filters_detail">الكل وقيد التشغيل وبانتظارك، فوق المحادثات.</string>
+    <string name="drawer_filters_each">المرشحات</string>
+    <string name="drawer_pages_title">أزرار الصفحات</string>
+    <string name="drawer_pages_show">إظهار أزرار الصفحات</string>
+    <string name="drawer_pages_detail">المربعات فوق محادثاتك مثل المجدولة والملفات. عند إيقافها يبدأ الدرج بمحادثاتك.</string>
+    <string name="drawer_pages_each">الصفحات</string>
 </resources>

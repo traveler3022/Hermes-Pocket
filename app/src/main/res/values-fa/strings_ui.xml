@@ -1545,4 +1545,18 @@
     <string name="topic_drag">کشیدن %1$s</string>
     <string name="topic_reorder_done">تمام</string>
     <string name="chat_active_ago">فعال %1$s پیش</string>
+    <string name="drawer_settings_title">کشوی کناری</string>
+    <string name="drawer_settings_subtitle">چیزهایی که کشوی چت‌ها نشان می‌دهد</string>
+    <string name="drawer_sections">بخش‌ها</string>
+    <string name="drawer_topics_detail">ردیف چیپ‌های تاپیک. خاموش باشد، چت تاپیک‌ها کنار بقیه می‌آید.</string>
+    <string name="drawer_pinned_detail">چت‌های سنجاق‌شده در بخش جدا. خاموش باشد، بالای لیست می‌مانند.</string>
+    <string name="drawer_projects_title">پروژه‌ها</string>
+    <string name="drawer_projects_detail">چیپ‌هایی که لیست را به یک پروژه محدود می‌کنند.</string>
+    <string name="drawer_filters_title">فیلترهای وضعیت</string>
+    <string name="drawer_filters_detail">«همه»، «در حال اجرا» و «منتظر من»، بالای چت‌ها.</string>
+    <string name="drawer_filters_each">فیلترها</string>
+    <string name="drawer_pages_title">دکمه‌های صفحه‌ها</string>
+    <string name="drawer_pages_show">نمایش دکمه‌های صفحه‌ها</string>
+    <string name="drawer_pages_detail">کاشی‌های بالای چت‌ها، مثل زمان‌بندی و فایل‌ها. خاموش باشد، کشو از چت‌ها شروع می‌شود.</string>
+    <string name="drawer_pages_each">صفحه‌ها</string>
 </resources>
