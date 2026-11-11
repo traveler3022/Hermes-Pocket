@@ -1514,4 +1514,9 @@
     <string name="tool_verb_using">Using</string>
     <string name="tool_verb_used">Used</string>
     <string name="tool_verb_use_failed">Couldn\'t use</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">new file</string>
+    <string name="diff_deleted_file">deleted</string>
+    <string name="diff_moved_to">moved to %1$s</string>
+    <string name="diff_show_rest">Show the rest (%1$d lines)</string>
 </resources>

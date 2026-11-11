@@ -1462,4 +1462,9 @@
     <string name="tool_verb_using">Использует</string>
     <string name="tool_verb_used">Использовал</string>
     <string name="tool_verb_use_failed">Не удалось использовать</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">новый файл</string>
+    <string name="diff_deleted_file">удалён</string>
+    <string name="diff_moved_to">перемещён в %1$s</string>
+    <string name="diff_show_rest">Показать остальное (строк: %1$d)</string>
 </resources>

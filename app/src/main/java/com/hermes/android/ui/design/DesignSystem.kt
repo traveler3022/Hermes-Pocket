@@ -133,6 +133,19 @@ object HxIconColors {
     val gray = Color(0xFF6B7280)
 }
 
+/**
+ * A file diff's two sides: added lines in the settings tiles' green, removed
+ * lines in the theme's error colour. Lines are tinted with these at low alpha
+ * and the changed words inside them a little stronger.
+ */
+object HxDiff {
+    val added: Color
+        @Composable get() = HxIconColors.green
+
+    val removed: Color
+        @Composable get() = MaterialTheme.colorScheme.error
+}
+
 // ── Status colours ──────────────────────────────────────────────────────
 
 /** Warning amber: anything that is blocked on the user. */

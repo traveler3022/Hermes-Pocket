@@ -1494,4 +1494,9 @@
     <string name="tool_verb_using">در حال استفاده از</string>
     <string name="tool_verb_used">استفاده از</string>
     <string name="tool_verb_use_failed">خطا در استفاده از</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">فایل تازه</string>
+    <string name="diff_deleted_file">حذف شد</string>
+    <string name="diff_moved_to">منتقل شد به %1$s</string>
+    <string name="diff_show_rest">نمایش بقیه (%1$d خط)</string>
 </resources>

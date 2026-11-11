@@ -44,6 +44,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import android.widget.Toast
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hermes.android.domain.diff.FileEditDiff
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxStatus
@@ -110,6 +111,8 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                 }
             }
             message.argsText?.takeIf { it.isNotBlank() }?.let { args ->
+                // A file edit's arguments read as the diff they make; anything else as they are.
+                val edits = remember(message.toolName, args) { FileEditDiff.fromToolArgs(message.toolName, args) }
                 // Auto-expand while the tool is running so the user can watch
                 // what it's doing; once finished, they can open it on demand.
                 var argsExpanded by remember { mutableStateOf(message.isRunning) }
@@ -120,7 +123,7 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(R.string.arguments),
+                        text = stringResource(if (edits != null) R.string.changes else R.string.arguments),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
@@ -133,12 +136,16 @@ internal fun ToolCallCard(message: ChatMessage.ToolCall) {
                     )
                 }
                 AnimatedVisibility(visible = argsExpanded) {
-                    Text(
-                        text = args,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (edits != null) {
+                        FileEditsView(edits)
+                    } else {
+                        Text(
+                            text = args,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             message.resultText?.takeIf { it.isNotBlank() }?.let { result ->

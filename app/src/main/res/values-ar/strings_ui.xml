@@ -1463,4 +1463,9 @@
     <string name="tool_verb_using">يستخدم</string>
     <string name="tool_verb_used">استخدم</string>
     <string name="tool_verb_use_failed">تعذّر استخدام</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">ملف جديد</string>
+    <string name="diff_deleted_file">حُذف</string>
+    <string name="diff_moved_to">نُقل إلى %1$s</string>
+    <string name="diff_show_rest">عرض الباقي (%1$d سطر)</string>
 </resources>

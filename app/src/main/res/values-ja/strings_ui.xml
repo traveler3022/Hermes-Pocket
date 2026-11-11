@@ -1460,4 +1460,9 @@
     <string name="tool_verb_using">使用中</string>
     <string name="tool_verb_used">使用</string>
     <string name="tool_verb_use_failed">使用失敗</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">新規ファイル</string>
+    <string name="diff_deleted_file">削除</string>
+    <string name="diff_moved_to">%1$s へ移動</string>
+    <string name="diff_show_rest">残りを表示 (%1$d 行)</string>
 </resources>

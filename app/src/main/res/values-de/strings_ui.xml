@@ -1461,4 +1461,9 @@
     <string name="tool_verb_using">Verwendet</string>
     <string name="tool_verb_used">Benutzt</string>
     <string name="tool_verb_use_failed">Verwenden fehlgeschlagen</string>
+    <!-- File edit diff in a tool card -->
+    <string name="diff_new_file">neue Datei</string>
+    <string name="diff_deleted_file">gelöscht</string>
+    <string name="diff_moved_to">verschoben nach %1$s</string>
+    <string name="diff_show_rest">Rest anzeigen (%1$d Zeilen)</string>
 </resources>
