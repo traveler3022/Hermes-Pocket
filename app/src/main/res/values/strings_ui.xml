@@ -1545,4 +1545,19 @@
     <string name="age_weeks">%1$dw</string>
     <string name="age_months">%1$dmo</string>
     <string name="age_years">%1$dy</string>
+    <string name="topics_section">Topics</string>
+    <string name="topic_make">Make it a topic</string>
+    <string name="topic_label">Topic</string>
+    <string name="topic_start_fresh">Start fresh</string>
+    <string name="topic_start_fresh_title">Start “%1$s” fresh?</string>
+    <string name="topic_start_fresh_detail">The chat it has now goes to the archive as “%1$s · date and time”, and a new, empty chat takes its place in the topic.</string>
+    <string name="topic_rename">Rename topic</string>
+    <string name="topic_rename_detail">The topic\'s chat gets the same name.</string>
+    <string name="topic_move_up">Move up</string>
+    <string name="topic_move_down">Move down</string>
+    <string name="topic_remove">Remove from topics</string>
+    <string name="topic_failed">Couldn\'t change the topic</string>
+    <string name="section_collapsed">Collapsed</string>
+    <string name="section_expanded">Expanded</string>
+    <string name="all_projects">All projects</string>
 </resources>

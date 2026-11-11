@@ -1491,4 +1491,19 @@
     <string name="age_weeks">%1$d週</string>
     <string name="age_months">%1$dか月</string>
     <string name="age_years">%1$d年</string>
+    <string name="topics_section">トピック</string>
+    <string name="topic_make">トピックにする</string>
+    <string name="topic_label">トピック</string>
+    <string name="topic_start_fresh">新しく始める</string>
+    <string name="topic_start_fresh_title">「%1$s」を新しく始めますか？</string>
+    <string name="topic_start_fresh_detail">今のチャットは「%1$s · 日時」としてアーカイブに移り、空の新しいチャットがトピックに入ります。</string>
+    <string name="topic_rename">トピック名を変更</string>
+    <string name="topic_rename_detail">トピックのチャットも同じ名前になります。</string>
+    <string name="topic_move_up">上へ移動</string>
+    <string name="topic_move_down">下へ移動</string>
+    <string name="topic_remove">トピックから外す</string>
+    <string name="topic_failed">トピックを変更できませんでした</string>
+    <string name="section_collapsed">折りたたみ</string>
+    <string name="section_expanded">展開</string>
+    <string name="all_projects">すべてのプロジェクト</string>
 </resources>

@@ -172,6 +172,58 @@ class SessionRepository @Inject constructor(
     }
 
     /**
+     * `session.create` with [title], then `session.title` on the new runtime, which saves the
+     * row at once (a chat is otherwise stored on its first prompt). A refused title closes the
+     * runtime and deletes its row, so no untitled stray is left in the list.
+     */
+    override suspend fun createTitledChat(title: String, cwd: String?): AttachedSession? {
+        val params = buildJsonObject {
+            put("title", title)
+            cwd?.let { put("cwd", it) }
+            put("source", SessionSource.CHAT)
+        }.toElementMap()
+        // Not the reconnect target yet: it may be discarded below, and opening it adopts it.
+        val created = gatewayClient.request(GatewayMethods.SESSION_CREATE, params, trackSession = false) as? JsonObject
+            ?: return null
+        val liveId = created["session_id"].sessionIdOrNull() ?: return null
+        val attached = AttachedSession(liveId = liveId, raw = created)
+        try {
+            gatewayClient.request(
+                GatewayMethods.SESSION_TITLE,
+                buildJsonObject {
+                    put("session_id", liveId)
+                    put("title", title)
+                }.toElementMap(),
+                trackSession = false,
+            )
+        } catch (e: Exception) {
+            discardNewChat(attached)
+            throw e
+        }
+        return attached
+    }
+
+    /** Closes the runtime first: the server refuses to delete a row a live session holds (4023). */
+    override suspend fun discardNewChat(created: AttachedSession) {
+        runCatching {
+            gatewayClient.request(
+                GatewayMethods.SESSION_CLOSE,
+                buildJsonObject { put("session_id", created.liveId) }.toElementMap(),
+                timeoutMs = 5_000,
+            )
+        }
+        created.storedId?.let { stored ->
+            runCatching {
+                gatewayClient.request(
+                    GatewayMethods.SESSION_DELETE,
+                    buildJsonObject { put("session_id", stored) }.toElementMap(),
+                    trackSession = false,
+                )
+            }.onFailure { Timber.w(it, "[Sessions] discarding new chat $stored failed") }
+        }
+    }
+
+    /**
      * Lend [block] a throwaway session, closed after: some writes need a session, and a fresh
      * install has none (a sessionless model set answers 4001).
      */

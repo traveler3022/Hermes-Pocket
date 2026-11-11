@@ -1494,4 +1494,19 @@
     <string name="age_weeks">%1$d周</string>
     <string name="age_months">%1$d个月</string>
     <string name="age_years">%1$d年</string>
+    <string name="topics_section">话题</string>
+    <string name="topic_make">设为话题</string>
+    <string name="topic_label">话题</string>
+    <string name="topic_start_fresh">重新开始</string>
+    <string name="topic_start_fresh_title">重新开始“%1$s”？</string>
+    <string name="topic_start_fresh_detail">当前对话将以“%1$s · 日期和时间”归档，一个新的空对话会在话题中取代它。</string>
+    <string name="topic_rename">重命名话题</string>
+    <string name="topic_rename_detail">话题的对话也会使用同一名称。</string>
+    <string name="topic_move_up">上移</string>
+    <string name="topic_move_down">下移</string>
+    <string name="topic_remove">从话题中移除</string>
+    <string name="topic_failed">无法更改话题</string>
+    <string name="section_collapsed">已折叠</string>
+    <string name="section_expanded">已展开</string>
+    <string name="all_projects">全部项目</string>
 </resources>

@@ -328,6 +328,17 @@ object HxIcons {
         )
     }
 
+    /** lucide `hash`: a topic. */
+    val Hash: ImageVector by lazy {
+        lucideIcon(
+            name = "Hash",
+            "M4 9h16",
+            "M4 15h16",
+            "M10 3L8 21",
+            "M16 3L14 21",
+        )
+    }
+
     /** lucide `message-square`: a chat with nothing going on. */
     val MessageSquare: ImageVector by lazy {
         lucideIcon(

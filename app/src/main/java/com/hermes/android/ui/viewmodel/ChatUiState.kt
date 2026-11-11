@@ -169,6 +169,8 @@ data class SessionItem(
     val updatedAt: Long,
     /** Number of messages in this session (if known). */
     val messageCount: Int? = null,
+    /** The first id of this chat's compression lineage (`_lineage_root_id`), when the server names one. */
+    val lineageRootId: String? = null,
 )
 
 /** Rename dialog state for the session drawer. */

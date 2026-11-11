@@ -185,6 +185,7 @@ fun ChatScreen(
     profilesViewModel: com.hermes.android.ui.viewmodel.ProfilesViewModel = hiltViewModel(),
     projectsViewModel: com.hermes.android.ui.viewmodel.ProjectsViewModel = hiltViewModel(),
     subagents: com.hermes.android.ui.viewmodel.SubagentViewModel = hiltViewModel(),
+    topicsViewModel: com.hermes.android.ui.viewmodel.TopicsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subagentSheet by subagents.sheet.collectAsStateWithLifecycle()
@@ -208,6 +209,26 @@ fun ChatScreen(
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var moveToProjectTarget by remember { mutableStateOf<SessionItem?>(null) }
+    // Topics: the long-press menu, and its rename and start-fresh dialogs.
+    var topicMenuTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    var topicRenameTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    var topicFreshTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    val topics by topicsViewModel.topics.collectAsStateWithLifecycle()
+    val drawerProjects by projectsViewModel.uiState.collectAsStateWithLifecycle()
+    val topicFailedText = stringResource(R.string.topic_failed)
+    LaunchedEffect(topicsViewModel) {
+        topicsViewModel.events.collect { event ->
+            when (event) {
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.Open -> viewModel.resumeSession(event.sessionId)
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.ListChanged -> viewModel.loadSessionList()
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.Failed -> Toast.makeText(
+                    context,
+                    listOfNotNull(topicFailedText, event.message).joinToString(": "),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
     val movedToText = stringResource(R.string.moved_to_project)
     val subagentTexts = mapOf(
         com.hermes.android.ui.viewmodel.SubagentViewModel.QUEUED to stringResource(R.string.subagent_queued),
@@ -390,6 +411,9 @@ fun ChatScreen(
             // However it opened (hamburger or swipe), or always there on a wide screen: a current chat list.
             viewModel.onSessionDrawerOpened()
             profilesViewModel.load()
+            // The drawer's project chips and Topics section: another device may have changed either.
+            projectsViewModel.load()
+            topicsViewModel.refresh()
         } else {
             viewModel.closeSessionDrawer()
         }
@@ -563,7 +587,121 @@ fun ChatScreen(
                         profilesViewModel.load()
                         showProfiles = true
                     },
+                    topics = topics,
+                    onTopicClick = { topic ->
+                        // The row the list has for the topic's chat, by its id or its lineage's first id.
+                        val row = uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                            ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId }
+                        closeDrawerThen { viewModel.resumeSession(row?.id ?: topic.sessionId) }
+                    },
+                    onTopicLongClick = { topicMenuTarget = it },
+                    projects = drawerProjects.projects,
                 )
+
+                // ── Topic menu: start fresh / rename / move / remove ───────
+                topicMenuTarget?.let { topic ->
+                    val at = topics.indexOfFirst { it.id == topic.id }
+                    val above = topics.getOrNull(at - 1)?.takeIf { at >= 0 }
+                    val below = topics.getOrNull(at + 1)?.takeIf { at >= 0 }
+                    HxAlertDialog(
+                        onDismissRequest = { topicMenuTarget = null },
+                        title = { Text(topic.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        text = {
+                            Column {
+                                TextButton(onClick = {
+                                    topicMenuTarget = null
+                                    topicFreshTarget = topic
+                                }) { Text(stringResource(R.string.topic_start_fresh)) }
+                                TextButton(onClick = {
+                                    topicMenuTarget = null
+                                    topicRenameTarget = topic
+                                }) { Text(stringResource(R.string.topic_rename)) }
+                                above?.let { other ->
+                                    TextButton(onClick = {
+                                        topicMenuTarget = null
+                                        topicsViewModel.move(topic, other)
+                                    }) { Text(stringResource(R.string.topic_move_up)) }
+                                }
+                                below?.let { other ->
+                                    TextButton(onClick = {
+                                        topicMenuTarget = null
+                                        topicsViewModel.move(topic, other)
+                                    }) { Text(stringResource(R.string.topic_move_down)) }
+                                }
+                                TextButton(onClick = {
+                                    topicMenuTarget = null
+                                    confirmTick()
+                                    topicsViewModel.remove(topic)
+                                }) { Text(stringResource(R.string.topic_remove)) }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { topicMenuTarget = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
+
+                // ── Rename a topic: its chat takes the same name ───────────
+                topicRenameTarget?.let { topic ->
+                    var name by remember(topic.id) { mutableStateOf(topic.name) }
+                    val chatTitle = (uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                        ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId })?.title
+                    HxAlertDialog(
+                        onDismissRequest = { topicRenameTarget = null },
+                        title = { Text(stringResource(R.string.topic_rename)) },
+                        text = {
+                            Column {
+                                Text(
+                                    stringResource(R.string.topic_rename_detail),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedTextField(
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    singleLine = true,
+                                    placeholder = { Text(topic.name) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                )
+                            }
+                        },
+                        // A topic always has a name, so Save waits for one.
+                        confirmButton = {
+                            Button(
+                                enabled = name.isNotBlank(),
+                                onClick = {
+                                    topicRenameTarget = null
+                                    topicsViewModel.rename(topic, name, chatTitle)
+                                },
+                            ) { Text(stringResource(R.string.save)) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { topicRenameTarget = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
+
+                // ── Start a topic fresh: its chat goes to the archive ──────
+                topicFreshTarget?.let { topic ->
+                    val chatTitle = (uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                        ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId })?.title
+                    HxAlertDialog(
+                        onDismissRequest = { topicFreshTarget = null },
+                        title = { Text(stringResource(R.string.topic_start_fresh_title, topic.name)) },
+                        text = { Text(stringResource(R.string.topic_start_fresh_detail, topic.name)) },
+                        confirmButton = {
+                            Button(onClick = {
+                                topicFreshTarget = null
+                                confirmTick()
+                                closeDrawerThen { topicsViewModel.startFresh(topic, chatTitle) }
+                            }) { Text(stringResource(R.string.topic_start_fresh)) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { topicFreshTarget = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
 
                 // ── Long-press menu: rename / pin / delete ─────────────────
                 drawerMenuTarget?.let { target ->
@@ -589,6 +727,14 @@ fun ChatScreen(
                                     projectsViewModel.load()
                                     moveToProjectTarget = target
                                 }) { Text(stringResource(R.string.move_to_project)) }
+                                // A chat a topic already holds is in the Topics section, not here.
+                                if (topics.none { it.sessionId == target.id || it.sessionId == target.lineageRootId }) {
+                                    TextButton(onClick = {
+                                        drawerMenuTarget = null
+                                        confirmTick()
+                                        topicsViewModel.make(target)
+                                    }) { Text(stringResource(R.string.topic_make)) }
+                                }
                                 TextButton(onClick = {
                                     drawerMenuTarget = null
                                     confirmTick()

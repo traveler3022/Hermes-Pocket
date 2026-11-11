@@ -36,6 +36,8 @@ import com.hermes.android.ui.screen.InputBar
 import com.hermes.android.ui.screen.MessageBubble
 import com.hermes.android.ui.screen.WorkspaceDrawerSheet
 import com.hermes.android.ui.screen.SessionPulse
+import com.hermes.android.domain.projects.Projects
+import com.hermes.android.domain.topics.ChatTopic
 import com.hermes.android.ui.screen.HxTraceItem
 import com.hermes.android.ui.screen.rememberWorkspaceDestinations
 import com.hermes.android.ui.theme.ColorTheme
@@ -268,6 +270,14 @@ private fun Drawer(fa: Boolean) {
             },
             unreadOf = { session -> if (session.id == "s3") 2 else 0 },
             pinnedIds = setOf("s0"),
+            // The trip chat is a topic; the build and translation chats sit in a project.
+            topics = listOf(ChatTopic("t1", if (fa) "سفر شیراز" else "Shiraz trip", "s3")),
+            projects = listOf(
+                Projects.ProjectSummary(
+                    id = "p1", label = "hermes-app", path = "/home/u/hermes-app",
+                    sessionCount = 2, lastActive = 0.0, sessionIds = setOf("s2", "s4"),
+                ),
+            ),
         )
     }
 }

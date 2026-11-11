@@ -57,6 +57,10 @@ class ProjectsRepository @Inject constructor(
                 sessionCount = p.str("sessionCount").toIntOrNull() ?: 0,
                 lastActive = p.str("lastActive").toDoubleOrNull() ?: 0.0,
                 isStored = p.str("isAuto") != "true" && p.str("isNoProject") != "true",
+                sessionIds = (p["sessionIds"] as? JsonArray)
+                    ?.mapNotNullTo(LinkedHashSet()) { (it as? JsonPrimitive)?.contentOrNull?.takeIf { id -> id.isNotBlank() } }
+                    .orEmpty(),
+                isNoProject = p.str("isNoProject") == "true",
             )
         }.sortedByDescending { it.lastActive }
     }

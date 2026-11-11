@@ -338,6 +338,7 @@ internal class ChatSessionDelegate(
                         ?.let { (it as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toLong() }
                         ?.let { normalizeEpochMillis(it) } ?: System.currentTimeMillis(),
                     messageCount = session["message_count"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() },
+                    lineageRootId = (session["_lineage_root_id"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
                 )
             }
         } catch (e: Exception) {

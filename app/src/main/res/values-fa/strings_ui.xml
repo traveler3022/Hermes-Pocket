@@ -1525,4 +1525,19 @@
     <string name="age_weeks">%1$d هفته</string>
     <string name="age_months">%1$d ماه</string>
     <string name="age_years">%1$d سال</string>
+    <string name="topics_section">تاپیک‌ها</string>
+    <string name="topic_make">تبدیل به تاپیک</string>
+    <string name="topic_label">تاپیک</string>
+    <string name="topic_start_fresh">شروع از نو</string>
+    <string name="topic_start_fresh_title">«%1$s» از نو شروع شود؟</string>
+    <string name="topic_start_fresh_detail">چت فعلی‌اش با نام «%1$s · تاریخ و ساعت» به بایگانی می‌رود و یک چت تازه و خالی جایش را در تاپیک می‌گیرد.</string>
+    <string name="topic_rename">تغییر نام تاپیک</string>
+    <string name="topic_rename_detail">چت تاپیک هم همین نام را می‌گیرد.</string>
+    <string name="topic_move_up">بالاتر</string>
+    <string name="topic_move_down">پایین‌تر</string>
+    <string name="topic_remove">برداشتن از تاپیک‌ها</string>
+    <string name="topic_failed">تغییر تاپیک انجام نشد</string>
+    <string name="section_collapsed">بسته</string>
+    <string name="section_expanded">باز</string>
+    <string name="all_projects">همه‌ی پروژه‌ها</string>
 </resources>

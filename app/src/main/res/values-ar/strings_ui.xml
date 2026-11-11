@@ -1494,4 +1494,19 @@
     <string name="age_weeks">%1$d أ</string>
     <string name="age_months">%1$d ش</string>
     <string name="age_years">%1$d سنة</string>
+    <string name="topics_section">المواضيع</string>
+    <string name="topic_make">تحويل إلى موضوع</string>
+    <string name="topic_label">موضوع</string>
+    <string name="topic_start_fresh">البدء من جديد</string>
+    <string name="topic_start_fresh_title">هل تبدأ «%1$s» من جديد؟</string>
+    <string name="topic_start_fresh_detail">تنتقل محادثته الحالية إلى الأرشيف باسم «%1$s · التاريخ والوقت»، وتحلّ محلها في الموضوع محادثة جديدة فارغة.</string>
+    <string name="topic_rename">إعادة تسمية الموضوع</string>
+    <string name="topic_rename_detail">تأخذ محادثة الموضوع الاسم نفسه.</string>
+    <string name="topic_move_up">نقل لأعلى</string>
+    <string name="topic_move_down">نقل لأسفل</string>
+    <string name="topic_remove">إزالة من المواضيع</string>
+    <string name="topic_failed">تعذّر تغيير الموضوع</string>
+    <string name="section_collapsed">مطوي</string>
+    <string name="section_expanded">موسّع</string>
+    <string name="all_projects">كل المشاريع</string>
 </resources>

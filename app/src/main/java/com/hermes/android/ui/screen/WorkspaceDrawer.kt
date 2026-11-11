@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,11 +56,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.platform.LocalLayoutDirection
 import com.hermes.android.R
 import com.hermes.android.ui.design.HxHeaderCircleButton
 import com.hermes.android.ui.design.HxIcons
@@ -72,6 +79,8 @@ import com.hermes.android.ui.icons.filled.PushPin
 import com.hermes.android.ui.icons.outlined.Folder
 import com.hermes.android.ui.icons.outlined.PermMedia
 import com.hermes.android.ui.viewmodel.SessionItem
+import com.hermes.android.domain.projects.Projects
+import com.hermes.android.domain.topics.ChatTopic
 import kotlinx.coroutines.delay
 
 /** A Workspace destination: one of the drawer's tiles. */
@@ -173,14 +182,55 @@ internal fun WorkspaceDrawerSheet(
     pinnedIds: Set<String> = emptySet(),
     onSessionLongClick: (SessionItem) -> Unit = {},
     visibleSessions: Int = 6,
+    /** The profile's topics, in their order; their chats leave the other sections. */
+    topics: List<ChatTopic> = emptyList(),
+    onTopicClick: (ChatTopic) -> Unit = {},
+    onTopicLongClick: (ChatTopic) -> Unit = {},
+    /** The gateway's projects, as chips that narrow the list to one. */
+    projects: List<Projects.ProjectSummary> = emptyList(),
 ) {
     // Content only: the host's ModalDrawerSheet owns width, shape and colours,
     // and the rename / delete dialogs that hang off it.
     var showAll by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(DrawerFilter.All) }
+    var topicsCollapsed by rememberSaveable { mutableStateOf(false) }
+    var pinnedCollapsed by rememberSaveable { mutableStateOf(false) }
+    var projectId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // ── Projects: chips for those that hold a chat the list has ──────────
+    fun Projects.ProjectSummary.holds(s: SessionItem) = s.id in sessionIds || s.lineageRootId?.let { it in sessionIds } == true
+    val projectChips = projects
+        .map { it to sessions.count { s -> it.holds(s) } }
+        .filter { (_, count) -> count > 0 }
+        .sortedWith(compareBy<Pair<Projects.ProjectSummary, Int>> { it.first.isNoProject }.thenByDescending { it.second })
+    // Only worth a row when a chat sits in a real project.
+    val showProjects = projectChips.any { !it.first.isNoProject }
+    val project = projectChips.firstOrNull { it.first.id == projectId }?.first?.takeIf { showProjects }
+    val projectOf: (SessionItem) -> String? = { s ->
+        projects.firstOrNull { !it.isNoProject && it.holds(s) }?.label
+    }
+    val scoped = if (project == null) sessions else sessions.filter { project.holds(it) }
+
+    // ── Topics, then Pinned, then the rest; each chat once ───────────────
+    val topicRows = topics.map { topic ->
+        topic to (sessions.firstOrNull { it.id == topic.sessionId } ?: sessions.firstOrNull { it.lineageRootId == topic.sessionId })
+    }.filter { (_, row) -> project == null || (row != null && project.holds(row)) }
+    val topicChatIds = topics.mapTo(HashSet()) { it.sessionId } + topicRows.mapNotNull { it.second?.id }
+    val pinned = scoped.filter { it.id in pinnedIds && it.id !in topicChatIds }
+    val rest = scoped.filter { it.id !in pinnedIds && it.id !in topicChatIds }
+    fun busy(s: SessionItem) = rowTone(pulseOf(s), unreadOf(s)) != RowTone.Idle
+    val topicChat: (ChatTopic, SessionItem?) -> SessionItem = { topic, row ->
+        row ?: SessionItem(topic.sessionId, topic.name, null, 0L)
+    }
+    // Folded, a section still lists the open chat and those with something going on.
+    val shownTopics = if (!topicsCollapsed) topicRows else topicRows.filter { (topic, row) ->
+        val chat = topicChat(topic, row)
+        chat.id == activeSessionId || topic.sessionId == activeSessionId || busy(chat)
+    }
+    val shownPinned = if (!pinnedCollapsed) pinned else pinned.filter { it.id == activeSessionId || busy(it) }
     val shown = when (filter) {
-        DrawerFilter.All -> if (showAll) sessions else sessions.take(visibleSessions)
-        else -> sessions.filter { filter.keeps(pulseOf(it), unreadOf(it)) }
+        DrawerFilter.All -> if (showAll) rest else rest.take(visibleSessions)
+        else -> scoped.filter { filter.keeps(pulseOf(it), unreadOf(it)) }
     }
     // Ages move on while the drawer sits open.
     val now by produceState(System.currentTimeMillis()) {
@@ -237,11 +287,18 @@ internal fun WorkspaceDrawerSheet(
             // ── Filters ──────────────────────────────────────────────────
             // Kept while a filter is on, so an emptied list (another profile)
             // can still be set back to All.
+            if (showProjects) {
+                DrawerProjectChips(
+                    projects = projectChips,
+                    selected = project?.id,
+                    onSelect = { projectId = it },
+                )
+            }
             if (sessions.isNotEmpty() || filter != DrawerFilter.All) {
                 DrawerFilters(
                     selected = filter,
-                    running = sessions.count { pulseOf(it) == SessionPulse.Running },
-                    needsYou = sessions.count { DrawerFilter.NeedsYou.keeps(pulseOf(it), unreadOf(it)) },
+                    running = scoped.count { pulseOf(it) == SessionPulse.Running },
+                    needsYou = scoped.count { DrawerFilter.NeedsYou.keeps(pulseOf(it), unreadOf(it)) },
                     onSelect = { filter = it },
                 )
             }
@@ -252,13 +309,61 @@ internal fun WorkspaceDrawerSheet(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                 ) {
+                    if (filter == DrawerFilter.All && topicRows.isNotEmpty()) {
+                        item(key = "label-topics") {
+                            SectionToggle(
+                                title = stringResource(R.string.topics_section),
+                                count = topicRows.size,
+                                collapsed = topicsCollapsed,
+                                onToggle = { topicsCollapsed = !topicsCollapsed },
+                            )
+                        }
+                        items(items = shownTopics, key = { "topic-${it.first.id}" }) { (topic, row) ->
+                            val chat = topicChat(topic, row)
+                            DrawerSessionRow(
+                                title = topic.name,
+                                mark = RowMark.Topic,
+                                pulse = pulseOf(chat),
+                                unread = unreadOf(chat),
+                                age = row?.let { shortAge(it.updatedAt, now) }.orEmpty(),
+                                isActive = chat.id == activeSessionId || topic.sessionId == activeSessionId,
+                                projectLabel = if (project == null) row?.let(projectOf) else null,
+                                onClick = { onTopicClick(topic) },
+                                onLongClick = { onTopicLongClick(topic) },
+                            )
+                        }
+                    }
+                    if (filter == DrawerFilter.All && pinned.isNotEmpty()) {
+                        item(key = "label-pinned") {
+                            SectionToggle(
+                                title = stringResource(R.string.pinned),
+                                count = pinned.size,
+                                collapsed = pinnedCollapsed,
+                                onToggle = { pinnedCollapsed = !pinnedCollapsed },
+                            )
+                        }
+                        items(items = shownPinned, key = { "pinned-${it.id}" }) { session ->
+                            DrawerSessionRow(
+                                title = session.title,
+                                mark = RowMark.Pin,
+                                pulse = pulseOf(session),
+                                unread = unreadOf(session),
+                                age = shortAge(session.updatedAt, now),
+                                isActive = session.id == activeSessionId,
+                                // Pinned chats sit apart from their project's others, so their row names it.
+                                projectLabel = if (project == null) projectOf(session) else null,
+                                onClick = { onSessionClick(session) },
+                                onLongClick = { onSessionLongClick(session) },
+                            )
+                        }
+                    }
                     items(
                         items = shown,
                         key = { it.id },
                     ) { session ->
                         DrawerSessionRow(
                             title = session.title,
-                            isPinned = session.id in pinnedIds,
+                            mark = if (session.id in pinnedIds) RowMark.Pin else RowMark.None,
                             pulse = pulseOf(session),
                             unread = unreadOf(session),
                             age = shortAge(session.updatedAt, now),
@@ -280,7 +385,7 @@ internal fun WorkspaceDrawerSheet(
                             )
                         }
                     }
-                    if (filter == DrawerFilter.All && !showAll && sessions.size > visibleSessions) {
+                    if (filter == DrawerFilter.All && !showAll && rest.size > visibleSessions) {
                         item(key = "show-all") {
                             Text(
                                 text = stringResource(R.string.show_all),
@@ -489,13 +594,15 @@ private fun DrawerFilterChip(
 @Composable
 private fun DrawerSessionRow(
     title: String,
-    isPinned: Boolean,
+    mark: RowMark,
     pulse: SessionPulse,
     unread: Int,
     age: String,
     isActive: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    /** The chat's project, named after the title where the row sits apart from the project's others. */
+    projectLabel: String? = null,
 ) {
     val tone = rowTone(pulse, unread)
     val toneColor = when (tone) {
@@ -511,7 +618,12 @@ private fun DrawerSessionRow(
         stringResource(R.string.status_failed).takeIf { pulse == SessionPulse.Failed },
         stringResource(R.string.status_new_reply).takeIf { unread > 0 },
     ).joinToString(" · ").ifEmpty { null }
-    val pinnedLabel = stringResource(R.string.pinned)
+    val markLabel = when (mark) {
+        RowMark.Pin -> stringResource(R.string.pinned)
+        RowMark.Topic -> stringResource(R.string.topic_label)
+        RowMark.None -> null
+    }
+    val markIcon = if (mark == RowMark.Topic) HxIcons.Hash else Icons.Default.PushPin
     val shape = RoundedCornerShape(HxRadius.md)
     Row(
         modifier = Modifier
@@ -528,12 +640,13 @@ private fun DrawerSessionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val pinOnly = isPinned && tone == RowTone.Idle
-        if (pinOnly) {
+        // A marked chat with nothing going on shows its mark in the disc's place.
+        val markOnly = mark != RowMark.None && tone == RowTone.Idle
+        if (markOnly) {
             Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Default.PushPin,
-                    contentDescription = pinnedLabel,
+                    markIcon,
+                    contentDescription = markLabel,
                     modifier = Modifier.size(14.dp),
                     tint = HxTone.textMuted,
                 )
@@ -556,10 +669,21 @@ private fun DrawerSessionRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (isPinned && !pinOnly) {
+                // Measured before the weighted title, and held narrow, so a long project name is cut first.
+                projectLabel?.let { label ->
+                    Text(
+                        text = "· $label",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = HxTone.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 112.dp),
+                    )
+                }
+                if (mark != RowMark.None && !markOnly) {
                     Icon(
-                        Icons.Default.PushPin,
-                        contentDescription = pinnedLabel,
+                        markIcon,
+                        contentDescription = markLabel,
                         modifier = Modifier.size(12.dp),
                         tint = HxTone.textMuted,
                     )
@@ -583,6 +707,84 @@ private fun DrawerSessionRow(
                 maxLines = 1,
                 // Level with the title when a status line follows it.
                 modifier = if (statusLine != null) Modifier.align(Alignment.Top).padding(top = 3.dp) else Modifier,
+            )
+        }
+    }
+}
+
+/** What marks a row besides its state: a pinned chat, or a topic's chat. */
+internal enum class RowMark { None, Pin, Topic }
+
+/**
+ * A section's "TITLE · n" label as a toggle: the arrow points down while the section is
+ * open and toward the reading direction while it is folded.
+ */
+@Composable
+private fun SectionToggle(title: String, count: Int, collapsed: Boolean, onToggle: () -> Unit) {
+    val state = stringResource(if (collapsed) R.string.section_collapsed else R.string.section_expanded)
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .heightIn(min = 40.dp)
+            .clip(RoundedCornerShape(HxRadius.sm))
+            .clickable(role = Role.Button, onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                heading()
+                stateDescription = state
+            }
+            .padding(start = 10.dp, end = 10.dp, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = "${title.uppercase()} · $count",
+            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.08.em),
+            fontWeight = FontWeight.SemiBold,
+            color = HxTone.textTertiary,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = HxTone.textTertiary,
+            modifier = Modifier
+                .size(16.dp)
+                .rotate(if (!collapsed) 0f else if (rtl) 90f else -90f),
+        )
+    }
+}
+
+/** "All projects" and each project that holds a listed chat, with how many it holds. */
+@Composable
+private fun DrawerProjectChips(
+    projects: List<Pair<Projects.ProjectSummary, Int>>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        DrawerFilterChip(
+            text = stringResource(R.string.all_projects),
+            count = null,
+            countColor = HxTone.textTertiary,
+            selected = selected == null,
+            onClick = { onSelect(null) },
+        )
+        projects.forEach { (project, count) ->
+            DrawerFilterChip(
+                text = project.label,
+                count = count,
+                countColor = HxTone.textTertiary,
+                selected = project.id == selected,
+                onClick = { onSelect(project.id) },
             )
         }
     }
