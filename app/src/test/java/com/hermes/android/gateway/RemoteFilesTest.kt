@@ -48,6 +48,16 @@ class RemoteFilesTest {
     }
 
     @Test
+    fun `audio and video are asked for as a player source, other files are not`() = runBlocking {
+        files.fetch("https://box.ts.net/api/files/download?path=%2Froot%2Fshow.MP3")
+        files.fetch("https://box.ts.net/api/files/download?path=%2Froot%2Fclip.mp4")
+        files.fetch(url)
+        assertEquals("audio", server.requests[0].header("Sec-Fetch-Dest"))
+        assertEquals("video", server.requests[1].header("Sec-Fetch-Dest"))
+        assertEquals(null, server.requests[2].header("Sec-Fetch-Dest"))
+    }
+
+    @Test
     fun `a cut transfer goes on from where it stopped`() = runBlocking {
         server.cutAfter = 70_000
         val file = files.fetch(url)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
@@ -50,6 +51,7 @@ class RemoteFiles @Inject constructor(
     shared: OkHttpClient,
 ) : ServerFiles {
     val client: OkHttpClient = shared.newBuilder()
+        .apply { interceptors().add(0, Interceptor { chain -> chain.proceed(asMediaSource(chain.request())) }) }
         .protocols(listOf(Protocol.HTTP_1_1))
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -222,6 +224,27 @@ class RemoteFiles @Inject constructor(
         private const val MAX_RETRIES = 4
         private const val MAX_CACHE_BYTES = 512L * 1024 * 1024
         private const val DOWNLOAD_PATH = "/api/files/download"
+
+        /** Hermes' own list of what its download serves as a player source (files.py). */
+        private val AUDIO = setOf("flac", "m4a", "mp3", "ogg", "opus", "wav")
+        private val VIDEO = setOf("avi", "mkv", "mov", "mp4", "webm")
+
+        /**
+         * An audio or video file on the server is asked for as a player asks for it
+         * (`Sec-Fetch-Dest`), as Hermes' desktop does. Hermes then serves it from disk one Range at
+         * a time with no size cap; otherwise its download refuses a file over 100 MB with 413.
+         * Saving it and playing it both go this way. An older server ignores the header.
+         */
+        internal fun asMediaSource(request: Request): Request {
+            val path = serverFileUrl(request.url.toString())?.queryParameter("path") ?: return request
+            val ext = path.substringAfterLast('/').substringAfterLast('.', "").lowercase()
+            val dest = when (ext) {
+                in AUDIO -> "audio"
+                in VIDEO -> "video"
+                else -> return request
+            }
+            return request.newBuilder().header("Sec-Fetch-Dest", dest).build()
+        }
 
         /** [url] when it is the server's download endpoint with a file path, else null. */
         fun serverFileUrl(url: String): HttpUrl? =
