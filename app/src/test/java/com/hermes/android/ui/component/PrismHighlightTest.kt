@@ -1,6 +1,6 @@
 package com.hermes.android.ui.component
 
-import com.hermes.android.ui.component.syntax.Prism
+import com.hermes.android.data.syntax.PrismTokenizer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -8,9 +8,11 @@ import org.junit.Test
 
 /** [CodeHighlighter.spans] over Prism, the diff rules and the fallback. */
 class PrismHighlightTest {
+    private val prism = shared
+
 
     private fun tokens(code: String, lang: String): List<Pair<String, CodeToken>> =
-        CodeHighlighter.spans(code, lang).map { code.substring(it.start, it.end) to it.token }
+        CodeHighlighter.spans(code, lang, prism).map { code.substring(it.start, it.end) to it.token }
 
     private fun assertOrderedInside(code: String, spans: List<CodeSpan>) {
         var last = 0
@@ -22,7 +24,7 @@ class PrismHighlightTest {
 
     @Test
     fun `the hard-coded grammar ids match the table`() {
-        assertEquals(Prism.languages, CodeHighlighter.PRISM_IDS)
+        assertEquals(prism.languages, CodeHighlighter.PRISM_IDS)
     }
 
     @Test
@@ -45,7 +47,7 @@ class PrismHighlightTest {
     @Test
     fun `typescript template interpolation is inside the string colour or its own`() {
         val code = "const s = `a \${b} c`;"
-        val spans = CodeHighlighter.spans(code, "ts")
+        val spans = CodeHighlighter.spans(code, "ts", prism)
         assertOrderedInside(code, spans)
         assertTrue(tokens(code, "ts").first() == ("const" to CodeToken.Keyword))
         assertTrue(spans.any { it.token == CodeToken.Str })
@@ -96,34 +98,38 @@ class PrismHighlightTest {
         assertFalse(CodeHighlighter.usesPrism(""))
         assertFalse(CodeHighlighter.usesPrism("diff"))
         val code = "def x = 'a' // c"
-        assertEquals(CodeHighlighter.ruleSpans(code, "groovy"), CodeHighlighter.spans(code, "groovy"))
-        assertEquals(CodeHighlighter.ruleSpans(code, ""), CodeHighlighter.spans(code, ""))
+        assertEquals(CodeHighlighter.ruleSpans(code, "groovy"), CodeHighlighter.spans(code, "groovy", prism))
+        assertEquals(CodeHighlighter.ruleSpans(code, ""), CodeHighlighter.spans(code, "", prism))
     }
 
     @Test
     fun `aliases reach their grammar`() {
         listOf("kt", "py", "sh", "yml", "ts", "rs", "golang", "c++", "html", "dockerfile", "console", "md").forEach {
             assertTrue(it, CodeHighlighter.usesPrism(it))
-            assertTrue(it, CodeHighlighter.prismId(it) != null)
+            assertTrue(it, CodeHighlighter.prismId(it, prism) != null)
         }
     }
 
     @Test
     fun `a long unterminated string near the cap does not throw`() {
         val code = "val s = \"" + "a".repeat(CodeHighlighter.MAX_LENGTH - 20)
-        val spans = CodeHighlighter.spans(code, "kotlin")
+        val spans = CodeHighlighter.spans(code, "kotlin", prism)
         assertOrderedInside(code, spans)
     }
 
     @Test
     fun `spans stay ordered for every grammar on mixed input`() {
         val code = "/* x */ # y\n<a b='c'> \"s\" `t \${u}` 0x1F fun def\n-- z\n@@ +a"
-        CodeHighlighter.PRISM_IDS.forEach { id -> assertOrderedInside(code, CodeHighlighter.spans(code, id)) }
+        CodeHighlighter.PRISM_IDS.forEach { id -> assertOrderedInside(code, CodeHighlighter.spans(code, id, prism)) }
     }
 
     @Test
     fun `huge code is left plain for prism too`() {
-        assertTrue(CodeHighlighter.spans("val x = 1\n".repeat(4000), "kotlin").isEmpty())
-        assertTrue(CodeHighlighter.spans("+a\n".repeat(20_000), "diff").isEmpty())
+        assertTrue(CodeHighlighter.spans("val x = 1\n".repeat(4000), "kotlin", prism).isEmpty())
+        assertTrue(CodeHighlighter.spans("+a\n".repeat(20_000), "diff", prism).isEmpty())
+    }
+
+    private companion object {
+        val shared = PrismTokenizer()
     }
 }

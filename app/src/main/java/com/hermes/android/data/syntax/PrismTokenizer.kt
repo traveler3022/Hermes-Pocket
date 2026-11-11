@@ -1,5 +1,7 @@
-package com.hermes.android.ui.component.syntax
+package com.hermes.android.data.syntax
 
+import com.hermes.android.domain.syntax.CodeTokenizer
+import com.hermes.android.domain.syntax.CodeTokenizer.Node
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.ExecutionException
@@ -7,6 +9,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Adapted from slopus/happy (MIT License, Copyright (c) 2026 Happy Coder Contributors).
@@ -16,15 +20,11 @@ import java.util.regex.Pattern
  * from prismjs 1.30.0 with the patterns rewritten for java.util.regex. Offsets are
  * UTF-16, as in JavaScript.
  *
- * An object only as a cache: the parsed table, the compiled patterns and the one
- * worker thread are the same for every caller and hold no app state.
+ * One per app (Hilt @Singleton): the parsed table, the compiled patterns and the
+ * one worker thread are shared by every caller.
  */
-object Prism {
-    /** What `Prism.tokenize` returns: plain text, or a named token over its content. Ranges are into the tokenized text. */
-    sealed interface Node {
-        data class Text(val location: Int, val length: Int) : Node
-        data class Token(val name: String, val content: List<Node>) : Node
-    }
+@Singleton
+class PrismTokenizer @Inject constructor() : CodeTokenizer {
 
     private class PatternSpec(val source: Int, val ignoreCase: Boolean, val lookbehind: Boolean, val greedy: Boolean, val inside: Int)
 
@@ -87,14 +87,14 @@ object Prism {
     }
 
     private val table: Table by lazy {
-        val stream = requireNotNull(Prism::class.java.classLoader?.getResourceAsStream("prism/prism-grammars.txt")) { "prism/prism-grammars.txt missing" }
+        val stream = requireNotNull(PrismTokenizer::class.java.classLoader?.getResourceAsStream("prism/prism-grammars.txt")) { "prism/prism-grammars.txt missing" }
         Table(stream.bufferedReader().use { it.readText() })
     }
 
     /** Language ids with a grammar. */
     val languages: Set<String> get() = table.languages.keys
 
-    fun hasGrammar(language: String?): Boolean = language != null && language in table.languages
+    override fun hasGrammar(language: String?): Boolean = language != null && language in table.languages
 
     /** Compiles every pattern; for tests. */
     internal fun compileAll(): Int {
@@ -114,24 +114,23 @@ object Prism {
      * characters, so 64 MB should be enough (happy gives 256 MB for 128k characters).
      * A [StackOverflowError] still only fails this one call: callers fall back.
      */
-    private const val STACK_BYTES = 64L * 1024 * 1024
     @Volatile private var thread: Thread? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { task ->
         Thread(null, task, "prism", STACK_BYTES).apply { isDaemon = true }.also { thread = it }
     }
 
     /** Runs coroutines on Prism's thread, so [tokenize] inside it runs inline. */
-    val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
+    override val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
 
     // By identity: coroutines' debug mode renames the threads it runs on.
     private fun onWorker() = Thread.currentThread() === thread
 
     /** The text's tokens in [language]'s grammar; null without one. Runs on Prism's own thread. */
-    fun tokenize(text: String, language: String): List<Node>? {
+    override fun tokenize(text: String, language: String): List<Node>? {
         val index = table.languages[language] ?: return null
-        if (onWorker()) return Tokenizer(text, 0).tokenize(index)
+        if (onWorker()) return Tokenizer(table, text, 0).tokenize(index)
         return try {
-            executor.submit<List<Node>> { Tokenizer(text, 0).tokenize(index) }.get()
+            executor.submit<List<Node>> { Tokenizer(table, text, 0).tokenize(index) }.get()
         } catch (e: ExecutionException) {
             throw e.cause ?: e
         }
@@ -141,7 +140,7 @@ object Prism {
      * Prism's LinkedList, matchGrammar and matchPattern over one text. Nodes
      * live in arrays; index 0 is the head and 1 the tail.
      */
-    private class Tokenizer(private val text: String, private val base: Int) {
+    private class Tokenizer(private val table: Table, private val text: String, private val base: Int) {
         private sealed interface Value {
             val length: Int
 
@@ -307,7 +306,7 @@ object Prism {
 
                         val matchStart = strStart + from
                         val content = if (pattern.inside >= 0) {
-                            Tokenizer(text.substring(matchStart, matchStart + matchLength), base + matchStart).tokenize(pattern.inside)
+                            Tokenizer(table, text.substring(matchStart, matchStart + matchLength), base + matchStart).tokenize(pattern.inside)
                         } else {
                             listOf(Node.Text(base + matchStart, matchLength))
                         }
@@ -327,5 +326,10 @@ object Prism {
                 }
             }
         }
+    }
+
+    private companion object {
+        /** See the worker thread above: Prism's patterns recurse deeply in java.util.regex. */
+        const val STACK_BYTES = 64L * 1024 * 1024
     }
 }

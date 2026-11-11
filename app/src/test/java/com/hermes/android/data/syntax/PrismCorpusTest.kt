@@ -1,5 +1,6 @@
-package com.hermes.android.ui.component.syntax
+package com.hermes.android.data.syntax
 
+import com.hermes.android.domain.syntax.CodeTokenizer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -15,10 +16,12 @@ import org.junit.Test
  * The port of Prism's tokenizer against Prism 1.30.0 itself: test resource
  * prism/prism-reference.json holds, for one sample file per grammar, the runs
  * happy-app's highlightLines got from PrismJS (kind and length, per line).
- * [runs] is that function over our [Prism], so a mismatch is an engine or
+ * [runs] is that function over our [PrismTokenizer], so a mismatch is an engine or
  * grammar-table bug, not a palette choice.
  */
 class PrismCorpusTest {
+    private val prism = shared
+
 
     private data class Run(val kind: String, val length: Int)
 
@@ -40,7 +43,7 @@ class PrismCorpusTest {
 
     /** highlightLines: one run list per `\n`-separated line. */
     private fun runs(text: String, language: String): List<List<Run>> {
-        val tokens = Prism.tokenize(text, language) ?: error("no grammar $language")
+        val tokens = prism.tokenize(text, language) ?: error("no grammar $language")
         val out = ArrayList<List<Run>>()
         var current = ArrayList<Run>()
         fun push(kind: String, length: Int) {
@@ -63,10 +66,10 @@ class PrismCorpusTest {
                 start = newline + 1
             }
         }
-        fun walk(nodes: List<Prism.Node>, inherited: String) {
+        fun walk(nodes: List<CodeTokenizer.Node>, inherited: String) {
             for (node in nodes) when (node) {
-                is Prism.Node.Text -> emit(node.location, node.length, inherited)
-                is Prism.Node.Token -> {
+                is CodeTokenizer.Node.Text -> emit(node.location, node.length, inherited)
+                is CodeTokenizer.Node.Token -> {
                     val kind = classify(node.name)
                     walk(node.content, if (kind == "plain") inherited else kind)
                 }
@@ -79,8 +82,8 @@ class PrismCorpusTest {
 
     @Test
     fun everyPatternCompiles() {
-        assertTrue(Prism.compileAll() > 1000)
-        assertEquals(45, Prism.languages.size)
+        assertTrue(prism.compileAll() > 1000)
+        assertEquals(45, prism.languages.size)
     }
 
     @Test
@@ -107,5 +110,10 @@ class PrismCorpusTest {
             }
         }
         assertEquals(failures.joinToString("\n"), 0, failures.size)
+    }
+
+    private companion object {
+        /** Parsed once for the class, as the app's @Singleton is. */
+        val shared = PrismTokenizer()
     }
 }

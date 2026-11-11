@@ -91,6 +91,8 @@ import com.hermes.android.service.ApprovalNotificationManager
 import com.hermes.android.service.MediaStreams
 import dagger.Binds
 import dagger.Module
+import com.hermes.android.data.syntax.PrismTokenizer
+import com.hermes.android.domain.syntax.CodeTokenizer
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -243,4 +245,7 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindAppVisibility(impl: AppForegroundState): AppVisibility
+
+    @Binds
+    abstract fun bindCodeTokenizer(impl: PrismTokenizer): CodeTokenizer
 }

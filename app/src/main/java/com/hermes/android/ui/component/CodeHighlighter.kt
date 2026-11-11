@@ -12,7 +12,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
-import com.hermes.android.ui.component.syntax.Prism
+import androidx.compose.ui.platform.LocalContext
+import com.hermes.android.domain.syntax.CodeTokenizer
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
@@ -26,23 +31,26 @@ data class CodeSpan(val start: Int, val end: Int, val token: CodeToken)
 
 /**
  * The syntax colourer for code cards. Languages Prism has a grammar for (see
- * [prismId]) are tokenized by [Prism]; `diff`/`patch` colour their `+`/`-` lines;
- * everything else, or a Prism failure, falls back to [ruleSpans].
+ * [prismId]) are tokenized by the app's [CodeTokenizer] (Prism); `diff`/`patch` colour
+ * their `+`/`-` lines; everything else, no tokenizer, or a Prism failure, falls back to [ruleSpans].
  */
 object CodeHighlighter {
 
     /** Longer code is shown plain: colouring it is not worth the work while it streams. */
     const val MAX_LENGTH = 30_000
 
-    /** The coloured stretches of [code], in order and never overlapping. Blocks on Prism's thread. */
-    fun spans(code: String, language: String): List<CodeSpan> {
+    /**
+     * The coloured stretches of [code], in order and never overlapping. With a [tokenizer]
+     * it blocks on the tokenizer's thread; without one only the rules colour.
+     */
+    fun spans(code: String, language: String, tokenizer: CodeTokenizer? = null): List<CodeSpan> {
         if (code.isEmpty() || code.length > MAX_LENGTH) return emptyList()
         if (isDiff(language)) return diffSpans(code)
-        return prismSpans(code, language) ?: ruleSpans(code, language)
+        return tokenizer?.let { prismSpans(code, language, it) } ?: ruleSpans(code, language)
     }
 
     /**
-     * True when [language] is coloured by [Prism]. Reads [PRISM_IDS], not Prism's table,
+     * True when [language] is coloured by Prism. Reads [PRISM_IDS], not Prism's table,
      * so asking on the main thread never parses the grammars there.
      */
     fun usesPrism(language: String): Boolean = !isDiff(language) && prismName(language) in PRISM_IDS
@@ -91,18 +99,18 @@ object CodeHighlighter {
     )
 
     /** The Prism grammar id for a fence's language name, or null when Prism has none. */
-    internal fun prismId(language: String): String? {
+    internal fun prismId(language: String, tokenizer: CodeTokenizer): String? {
         val id = prismName(language)
         if (id !in PRISM_IDS) return null
-        return id.takeIf { runCatching { Prism.hasGrammar(it) }.getOrDefault(false) }
+        return id.takeIf { runCatching { tokenizer.hasGrammar(it) }.getOrDefault(false) }
     }
 
     /** Prism's colouring of [code], or null when Prism has no grammar or fails on it. */
-    internal fun prismSpans(code: String, language: String): List<CodeSpan>? {
-        val id = prismId(language) ?: return null
+    internal fun prismSpans(code: String, language: String, tokenizer: CodeTokenizer): List<CodeSpan>? {
+        val id = prismId(language, tokenizer) ?: return null
         // Throwable: a StackOverflowError on a pathological block must only fall back.
         val nodes = try {
-            Prism.tokenize(code, id)
+            tokenizer.tokenize(code, id)
         } catch (t: Throwable) {
             null
         } ?: return null
@@ -116,11 +124,11 @@ object CodeHighlighter {
                 out += CodeSpan(start, end, token)
             }
         }
-        fun walk(list: List<Prism.Node>, inherited: CodeToken?) {
+        fun walk(list: List<CodeTokenizer.Node>, inherited: CodeToken?) {
             for (node in list) when (node) {
-                is Prism.Node.Text -> add(node.location, node.location + node.length, inherited)
+                is CodeTokenizer.Node.Text -> add(node.location, node.location + node.length, inherited)
                 // A token with no colour of its own (an interpolation) keeps its parent's.
-                is Prism.Node.Token -> walk(node.content, prismToken(node.name) ?: inherited)
+                is CodeTokenizer.Node.Token -> walk(node.content, prismToken(node.name) ?: inherited)
             }
         }
         walk(nodes, null)
@@ -507,6 +515,13 @@ private fun styled(code: String, spans: List<CodeSpan>, palette: CodePalette): A
         }
     }
 
+/** How a composable reaches the app's one [CodeTokenizer] (Hilt @Singleton). */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface CodeTokenizerEntryPoint {
+    fun codeTokenizer(): CodeTokenizer
+}
+
 /** A Prism result and the exact input it was made for. */
 private class PrismResult(val code: String, val language: String, val palette: CodePalette, val text: AnnotatedString)
 
@@ -520,16 +535,23 @@ private class PrismResult(val code: String, val language: String, val palette: C
 @Composable
 fun rememberHighlightedCode(code: String, language: String, background: Color): AnnotatedString {
     val palette = CodePalette.forBackground(background)
-    val usesPrism = remember(language) { CodeHighlighter.usesPrism(language) }
+    val context = LocalContext.current
+    // Null outside a Hilt app (screenshot tests, previews): the rules then colour alone.
+    val tokenizer = remember(context) {
+        runCatching {
+            EntryPointAccessors.fromApplication(context.applicationContext, CodeTokenizerEntryPoint::class.java).codeTokenizer()
+        }.getOrNull()
+    }
+    val usesPrism = remember(language, tokenizer) { tokenizer != null && CodeHighlighter.usesPrism(language) }
     var prism by remember { mutableStateOf<PrismResult?>(null) }
-    if (usesPrism) {
+    if (usesPrism && tokenizer != null) {
         LaunchedEffect(code, language, palette) {
             if (code.isEmpty() || code.length > CodeHighlighter.MAX_LENGTH) return@LaunchedEffect
             // Throwable: even starting Prism's big-stack thread can fail on a starved device;
             // the card then keeps the rule colouring. Cancellation still propagates.
             val text = try {
-                withContext(Prism.dispatcher) {
-                    styled(code, CodeHighlighter.spans(code, language), palette)
+                withContext(tokenizer.dispatcher) {
+                    styled(code, CodeHighlighter.spans(code, language, tokenizer), palette)
                 }
             } catch (e: CancellationException) {
                 throw e
