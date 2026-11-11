@@ -204,6 +204,8 @@ data class ChatUiState(
     val activeSessionKey: String? = null,
     /** Waiting for a live session; sent the moment one exists. */
     val queuedPrompt: QueuedPrompt? = null,
+    /** The open chat's "Send when done" messages, oldest first (ChatQueueDelegate). */
+    val queuedSends: List<QueuedSend> = emptyList(),
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     /** When the current connect attempt began (0 = not connecting); drives the wait UI. */
     val connectingSince: Long = 0L,

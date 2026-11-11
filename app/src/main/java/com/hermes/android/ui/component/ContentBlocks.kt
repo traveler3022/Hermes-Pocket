@@ -35,7 +35,7 @@ sealed class ContentBlock {
 }
 
 /** The viewer a file opens in (see FileViewerActivity). */
-enum class FileKind { IMAGE, VIDEO, AUDIO, HTML, MARKDOWN, OTHER }
+enum class FileKind { IMAGE, VIDEO, AUDIO, HTML, MARKDOWN, TEXT, PDF, OTHER }
 
 private val fenceRegex = Regex("```([A-Za-z0-9+_.-]*)[ \\t]*\\n([\\s\\S]*?)(?:```|$)")
 private val mdImageRegex = Regex("""!\[([^\]]*)]\(([^)\s]+)\)""")
@@ -96,6 +96,26 @@ private val videoExts = setOf("mp4", "webm", "mov", "m4v", "mkv", "avi", "3gp")
 private val audioExts = setOf("mp3", "m2a", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "amr", "mid", "midi")
 private val htmlExts = setOf("html", "htm", "xhtml")
 private val markdownExts = setOf("md", "markdown")
+private val pdfExts = setOf("pdf")
+
+// Code, config and plain text: the text viewer shows them, highlighted where it knows the language.
+private val textExts = setOf(
+    "txt", "text", "log", "out", "err", "csv", "tsv", "rst", "adoc", "org", "srt", "vtt",
+    "json", "jsonl", "ndjson", "json5", "jsonc", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
+    "properties", "env", "editorconfig", "gitignore", "gitattributes", "dockerignore",
+    "kt", "kts", "java", "gradle", "groovy", "scala", "py", "pyi", "js", "mjs", "cjs", "ts", "tsx", "jsx",
+    "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "cs", "go", "rs", "rb", "php", "swift", "m", "mm", "dart",
+    "lua", "pl", "pm", "r", "jl", "ex", "exs", "erl", "hs", "clj", "elm", "zig", "nim", "vue", "svelte",
+    "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "sql", "css", "scss", "sass", "less",
+    "diff", "patch", "tex", "bib", "proto", "graphql", "gql", "tf", "hcl", "nix", "cmake", "mk",
+)
+
+// Types that say "text" without naming a viewer of their own; text/html and markdown are matched first.
+private val textMimes = setOf(
+    "application/json", "application/xml", "application/javascript", "application/x-javascript",
+    "application/x-sh", "application/x-yaml", "application/yaml", "application/toml", "application/sql",
+    "application/x-python", "application/x-httpd-php",
+)
 
 /**
  * The one place that decides which viewer a file gets: by its MIME type when that says
@@ -110,17 +130,26 @@ fun fileKindOf(name: String, mime: String? = null): FileKind {
         type.startsWith("audio/") || type == "application/ogg" -> return FileKind.AUDIO
         type == "text/html" || type == "application/xhtml+xml" -> return FileKind.HTML
         type == "text/markdown" || type == "text/x-markdown" -> return FileKind.MARKDOWN
+        type == "application/pdf" -> return FileKind.PDF
     }
     val ext = name.substringBefore('?').substringBefore('#').substringAfterLast('/')
         .substringAfterLast('.', "").lowercase()
-    return when (ext) {
+    val byExtension = when (ext) {
         in imageExts -> FileKind.IMAGE
         in videoExts -> FileKind.VIDEO
         in audioExts -> FileKind.AUDIO
         in htmlExts -> FileKind.HTML
         in markdownExts -> FileKind.MARKDOWN
+        in pdfExts -> FileKind.PDF
+        in textExts -> FileKind.TEXT
         else -> FileKind.OTHER
     }
+    // A generic text type (text/plain for a README.md) loses to the extension: only a file the
+    // extension says nothing about is shown as text because of it.
+    if (byExtension == FileKind.OTHER && (type.startsWith("text/") || type in textMimes || type.endsWith("+json") || type.endsWith("+xml"))) {
+        return FileKind.TEXT
+    }
+    return byExtension
 }
 
 private fun classifyUrl(url: String, alt: String = ""): ContentBlock {

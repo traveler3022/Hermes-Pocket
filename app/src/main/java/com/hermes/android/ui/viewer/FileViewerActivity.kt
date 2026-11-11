@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.ViewGroup
@@ -111,7 +112,8 @@ import javax.inject.Inject
  * The in-app viewer for a file: from a chat card, or from the Files app for a file of the
  * built-in Linux. [fileKindOf] picks the viewer; each one is a stock component —
  * Media3 ExoPlayer with its Compose Material 3 player for audio and video, the chat's own [HermesMarkdown] for
- * Markdown, WebView for HTML, Coil for images. Anything else goes to another app.
+ * Markdown, WebView for HTML, Coil for images, a line-numbered text view for code and text,
+ * PdfRenderer for PDF. Anything else goes to another app.
  */
 @AndroidEntryPoint
 class FileViewerActivity : ComponentActivity() {
@@ -168,6 +170,8 @@ class FileViewerActivity : ComponentActivity() {
                         FileViewerScreen(
                             uri = uri, name = name, kind = kind,
                             readBytes = ::readBytes,
+                            readHead = ::readHead,
+                            openPdf = ::openPdf,
                             newPlayer = mediaStreams::playerBuilder,
                             openExternally = {
                                 if (remoteFiles.isServerFile(uri.toString())) {
@@ -213,6 +217,40 @@ class FileViewerActivity : ComponentActivity() {
                 if (file.length() > MAX_TEXT_BYTES) throw IOException("File too large to show")
                 file.readBytes()
             }
+        }
+    }
+
+    /**
+     * At most [limit] bytes from the start of the file, and whether there was more: the text
+     * viewer shows the head of a big log without reading all of it.
+     */
+    private suspend fun readHead(uri: Uri, limit: Int): Pair<ByteArray, Boolean> = withContext(Dispatchers.IO) {
+        when (uri.scheme) {
+            "file" -> {
+                val file = File(URI(uri.toString())).canonicalFile
+                if (!linuxFiles.contains(file)) throw IOException("File is outside the built-in Linux")
+                file.inputStream().use { it.readHead(limit) }
+            }
+            "content" -> contentResolver.openInputStream(uri)?.use { it.readHead(limit) }
+                ?: throw IOException("Could not open the file")
+            // A server file comes to the app's cache first (RemoteFiles), then its head is read.
+            else -> gatewayClient.fetchFile(uri.toString()).inputStream().use { it.readHead(limit) }
+        }
+    }
+
+    /**
+     * A seekable descriptor of the PDF for PdfRenderer: the rootfs file itself, the provider's
+     * file, or the server file once it is in the app's cache.
+     */
+    private suspend fun openPdf(uri: Uri): ParcelFileDescriptor = withContext(Dispatchers.IO) {
+        when (uri.scheme) {
+            "file" -> {
+                val file = File(URI(uri.toString())).canonicalFile
+                if (!linuxFiles.contains(file)) throw IOException("File is outside the built-in Linux")
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            }
+            "content" -> contentResolver.openFileDescriptor(uri, "r") ?: throw IOException("Could not open the file")
+            else -> ParcelFileDescriptor.open(gatewayClient.fetchFile(uri.toString()), ParcelFileDescriptor.MODE_READ_ONLY)
         }
     }
 
@@ -277,6 +315,8 @@ private fun FileViewerScreen(
     name: String,
     kind: FileKind,
     readBytes: suspend (Uri) -> ByteArray,
+    readHead: suspend (Uri, Int) -> Pair<ByteArray, Boolean>,
+    openPdf: suspend (Uri) -> ParcelFileDescriptor,
     newPlayer: (Context) -> ExoPlayer.Builder,
     openExternally: () -> Unit,
     onBack: () -> Unit,
@@ -313,6 +353,8 @@ private fun FileViewerScreen(
                 FileKind.MARKDOWN -> MarkdownViewer(uri, readBytes, openExternally)
                 FileKind.HTML -> HtmlViewer(uri, readBytes, openExternally)
                 FileKind.IMAGE -> ImageViewer(uri)
+                FileKind.TEXT -> TextFileViewer(uri, name, readHead, openExternally)
+                FileKind.PDF -> PdfViewer(uri, openPdf, openExternally)
                 FileKind.OTHER -> Unit
             }
         }
@@ -486,11 +528,12 @@ private fun VideoPlayer(player: Player, fullscreen: Boolean, onFullscreen: (Bool
 
 private const val ControlsHideDelayMs = 3_000L
 
-/** Markdown through the chat's own renderer. */
+/** Markdown through the chat's own renderer, or its source in the text viewer. */
 @Composable
 private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray, openExternally: () -> Unit) {
     var text by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var raw by remember { mutableStateOf(false) }
     LaunchedEffect(uri) {
         runCatching { readBytes(uri).toString(Charsets.UTF_8) }
             .onSuccess { text = it }
@@ -499,12 +542,23 @@ private fun MarkdownViewer(uri: Uri, readBytes: suspend (Uri) -> ByteArray, open
     when {
         error != null -> ViewerError(error!!, openExternally)
         text == null -> Loading()
-        else -> SelectionContainer {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                HermesMarkdown(
-                    markdown = text!!,
-                    style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                )
+        else -> Column(modifier = Modifier.fillMaxSize()) {
+            TextButton(onClick = { raw = !raw }, modifier = Modifier.align(Alignment.End).padding(end = 8.dp)) {
+                Text(stringResource(if (raw) R.string.viewer_show_rendered else R.string.viewer_show_source))
+            }
+            if (raw) {
+                val source = text.orEmpty()
+                val preview = remember(source) { decodeTextPreview(source.toByteArray(Charsets.UTF_8), moreFollows = false) }
+                if (preview != null) TextLines(preview, language = "")
+            } else {
+                SelectionContainer {
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        HermesMarkdown(
+                            markdown = text!!,
+                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        )
+                    }
+                }
             }
         }
     }
@@ -576,12 +630,12 @@ private fun ImageViewer(uri: Uri) {
 }
 
 @Composable
-private fun Loading() {
+internal fun Loading() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
 
 @Composable
-private fun ViewerError(message: String, openExternally: () -> Unit) {
+internal fun ViewerError(message: String, openExternally: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,

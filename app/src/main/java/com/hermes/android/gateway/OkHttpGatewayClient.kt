@@ -1102,6 +1102,7 @@ class OkHttpGatewayClient @Inject constructor(
                 (p["response_previewed"] as? JsonPrimitive)?.booleanOrNull ?: false,
                 finalAssistantRowId = (p["persisted_turn"] as? JsonObject)
                     ?.get("final_assistant_row_id").asText()?.toLongOrNull(),
+                status = p["status"].asText(),
             )
             "thinking.delta" -> GatewayEvent.ThinkingDelta(sid, p["text"].asText() ?: "")
             "reasoning.delta" -> GatewayEvent.ReasoningDelta(sid, p["text"].asText() ?: "")
