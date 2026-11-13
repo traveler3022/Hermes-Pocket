@@ -25,6 +25,7 @@ import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -312,6 +313,14 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
         onClick = { viewModel.inspectSkill(skill.name) },
         trailing = {
           androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            if (skill.locked == true) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = stringResource(R.string.skill_locked),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
             skill.enabled?.let { on ->
                 androidx.compose.material3.Switch(
                     checked = on,
@@ -338,6 +347,13 @@ private fun SkillRow(skill: SkillItem, viewModel: SkillsViewModel) {
                         leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
                         onClick = { viewModel.scanThenInstall(skill.name); menuExpanded = false },
                     )
+                    skill.locked?.let { locked ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (locked) R.string.skill_unlock else R.string.skill_lock)) },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                            onClick = { viewModel.setLocked(skill.name, !locked); menuExpanded = false },
+                        )
+                    }
                     if (skill.provenance == "hub") {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.skill_uninstall), color = MaterialTheme.colorScheme.error) },

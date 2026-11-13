@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -66,6 +67,7 @@ class SkillsViewModel @Inject constructor(
                             category = it.category ?: rpcCategory[it.name].orEmpty(),
                             enabled = it.enabled,
                             provenance = it.provenance,
+                            locked = it.locked,
                         )
                     }.sortedWith(compareBy({ it.category }, { it.name }))
                 }
@@ -138,6 +140,23 @@ class SkillsViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 Timber.e(e, "[Skills] Toggle failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to change $name: ${e.message}")
+            }
+        }
+    }
+
+    /** Locks a skill against the agent's own edits, or lifts the lock. */
+    fun setLocked(name: String, locked: Boolean) {
+        viewModelScope.launch {
+            try {
+                admin.setLocked(name, locked)
+                _uiState.value = _uiState.value.copy(
+                    skills = _uiState.value.skills.map { if (it.name == name) it.copy(locked = locked) else it },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Skills] Lock failed")
                 _uiState.value = _uiState.value.copy(errorMessage = "Failed to change $name: ${e.message}")
             }
         }
@@ -530,6 +549,8 @@ data class SkillItem(
     val enabled: Boolean? = null,
     /** hub, bundled, external or agent. */
     val provenance: String? = null,
+    /** Locked against the agent's edits; null when the server doesn't report it: no menu entry then. */
+    val locked: Boolean? = null,
 )
 
 private const val BACKGROUND_ACTION_SETTLE_MS = 4_000L

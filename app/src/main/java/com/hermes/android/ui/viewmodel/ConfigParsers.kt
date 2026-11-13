@@ -7,7 +7,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlin.math.roundToInt
 
 fun parseModelOptions(result: JsonElement): List<ModelOption> {
     return try {
@@ -24,6 +26,10 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
             val slug = providerObj["slug"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
             val providerName = providerObj["name"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
             val models = providerObj["models"] as? kotlinx.serialization.json.JsonArray ?: return@flatMap emptyList()
+            val usage = parseUsageGauges(providerObj["usage"] as? JsonObject)
+            val limit = providerObj["limit"] as? JsonObject
+            val limitedUntil = limit?.takeIf { (it["scope"] as? JsonPrimitive)?.contentOrNull == "account" }
+                ?.let { (it["resets_at"] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }
             models.mapNotNull { modelEl ->
                 val modelId = (modelEl as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
                 ModelOption(
@@ -32,6 +38,8 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
                     name = modelId,
                     requiresApiKey = providerObj["authenticated"]?.let { (it as? JsonPrimitive)?.contentOrNull } == "false",
                     providerName = providerName,
+                    usage = usage,
+                    limitedUntil = limitedUntil,
                 )
             }
         // The pickers key their lists by provider/model, and a repeated key crashes a
@@ -40,6 +48,32 @@ fun parseModelOptions(result: JsonElement): List<ModelOption> {
     } catch (e: Exception) {
         Timber.w(e, "[Config] Failed to parse model options")
         emptyList()
+    }
+}
+
+/**
+ * A provider row's `usage` (inventory.py `_apply_usage`): `windows` for a single login, or
+ * `accounts` (one per pooled login, each with its own windows) where the legacy `windows` stay
+ * empty. Pooled windows are named after their account so two logins don't read as one.
+ */
+internal fun parseUsageGauges(usage: JsonObject?): List<UsageGauge> {
+    if (usage == null) return emptyList()
+    fun gauges(windows: JsonElement?, prefix: String?): List<UsageGauge> =
+        (windows as? JsonArray).orEmpty().mapNotNull { el ->
+            val w = el as? JsonObject ?: return@mapNotNull null
+            val label = (w["label"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val used = (w["used_percent"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
+            UsageGauge(
+                label = prefix?.let { "$it · $label" } ?: label,
+                usedPercent = used.coerceIn(0.0, 100.0).roundToInt(),
+                resetsAt = (w["resets_at"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+            )
+        }
+    val accounts = (usage["accounts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+    if (accounts.isEmpty()) return gauges(usage["windows"], null)
+    return accounts.flatMapIndexed { i, a ->
+        val label = (a["label"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: "#${i + 1}"
+        gauges(a["windows"], label)
     }
 }
 

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.android.domain.cron.CronBlueprints
 import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.domain.cron.CronJobs.CatchUp
+import com.hermes.android.domain.cron.CronJobs.ModelPin
 import com.hermes.android.domain.cron.CronWake
 import com.hermes.android.gateway.GatewayClient
 import com.hermes.android.gateway.GatewayException
@@ -101,6 +103,8 @@ class CronViewModel @Inject constructor(
                     nextRunAt = j["next_run_at"]?.let { (it as? JsonPrimitive)?.contentOrNull },
                     lastStatus = j["last_status"]?.let { (it as? JsonPrimitive)?.contentOrNull },
                     state = j["state"]?.let { (it as? JsonPrimitive)?.contentOrNull } ?: "scheduled",
+                    model = (j["model"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+                    provider = (j["provider"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
                 )
             }
         } catch (e: Exception) {
@@ -129,10 +133,17 @@ class CronViewModel @Inject constructor(
      * the dashboard's own page does: the job keeps its id, run history, skills, delivery
      * target and model pin.
      */
-    fun updateJob(jobId: String, name: String, schedule: String, prompt: String) {
+    fun updateJob(
+        jobId: String,
+        name: String,
+        schedule: String,
+        prompt: String,
+        model: ModelPin? = null,
+        catchUp: CatchUp? = null,
+    ) {
         viewModelScope.launch {
             try {
-                cronJobs.update(jobId, name, schedule, prompt)
+                cronJobs.update(jobId, name, schedule, prompt, model, catchUp)
                 Timber.i("[Cron] Job updated: $jobId")
                 _uiState.value = _uiState.value.copy(editingJob = null)
                 loadJobs()
@@ -172,6 +183,21 @@ class CronViewModel @Inject constructor(
         }
     }
 
+    /** Stops the job's run in progress (a manual run or a scheduled one); its schedule stays. */
+    fun stopRun(jobId: String) {
+        viewModelScope.launch {
+            try {
+                val stopped = cronJobs.cancelRun(jobId)
+                _uiState.value = _uiState.value.copy(notice = if (stopped) "Stopped." else "Nothing was running.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "[Cron] Stop failed")
+                _uiState.value = _uiState.value.copy(errorMessage = "Failed to stop job: ${e.message}")
+            }
+        }
+    }
+
     /** Returns the new job id. A rejected job comes back as {"error": …} inside a success reply. */
     private suspend fun addJob(name: String, schedule: String, prompt: String): String? {
         val result = manage(buildJsonObject {
@@ -199,11 +225,21 @@ class CronViewModel @Inject constructor(
      * when that fails the editor stays closed rather than truncate the job.
      */
     fun startEditJob(job: CronJob) {
-        if (!job.promptPreview.endsWith("...")) {
-            _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = job.promptPreview))
-            return
-        }
         viewModelScope.launch {
+            // The job's own missed-run rule is only in its full record; without the dashboard
+            // (or on an older Hermes) the editor just leaves that choice out.
+            val catchUp = try {
+                cronJobs.catchUp(job.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "[Cron] No missed-run rule for ${job.id}")
+                null
+            }
+            if (!job.promptPreview.endsWith("...")) {
+                _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = job.promptPreview, catchUp = catchUp))
+                return@launch
+            }
             try {
                 val out = gatewayClient.execPython(
                     """
@@ -221,7 +257,7 @@ class CronViewModel @Inject constructor(
                 val prompt = ((kotlinx.serialization.json.Json.parseToJsonElement(out) as? JsonObject)
                     ?.get("prompt") as? JsonPrimitive)?.contentOrNull
                     ?: throw IllegalStateException("no prompt in the cron store")
-                _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = prompt))
+                _uiState.value = _uiState.value.copy(editingJob = job.copy(fullPrompt = prompt, catchUp = catchUp))
             } catch (e: Exception) {
                 Timber.e(e, "[Cron] Could not read the full prompt of ${job.id}")
                 _uiState.value = _uiState.value.copy(
@@ -388,4 +424,9 @@ data class CronJob(
     val state: String,
     /** The whole prompt, set only on the job handed to the editor. */
     val fullPrompt: String? = null,
+    /** The job's model pin; null follows the main agent's model. */
+    val model: String? = null,
+    val provider: String? = null,
+    /** The job's missed-run rule, set only on the job handed to the editor; null when unknown. */
+    val catchUp: CatchUp? = null,
 )

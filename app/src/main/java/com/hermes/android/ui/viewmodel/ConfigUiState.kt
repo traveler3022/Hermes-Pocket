@@ -67,7 +67,14 @@ data class ModelOption(
     val requiresApiKey: Boolean,
     // Provider display name from model.options (row `name`); blank → show [provider].
     val providerName: String = "",
+    /** The provider's subscription windows (Codex/Claude 5-hour and weekly), from the server's cache. */
+    val usage: List<UsageGauge> = emptyList(),
+    /** ISO time the whole login is rate-limited until, when it is. */
+    val limitedUntil: String? = null,
 )
+
+/** One usage window of a provider login: [label] as Hermes words it, how much is spent, when it resets (ISO). */
+data class UsageGauge(val label: String, val usedPercent: Int, val resetsAt: String?)
 
 data class ToolOption(
     val name: String,

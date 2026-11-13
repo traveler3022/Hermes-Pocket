@@ -1526,4 +1526,16 @@
     <string name="drawer_pages_show">Seiten-Buttons zeigen</string>
     <string name="drawer_pages_detail">Die Kacheln über deinen Chats, etwa Geplant und Dateien. Aus: Die Leiste beginnt mit deinen Chats.</string>
     <string name="drawer_pages_each">Seiten</string>
+    <string name="skill_lock">Gegen Agent-Änderungen sperren</string>
+    <string name="skill_unlock">Für den Agenten entsperren</string>
+    <string name="skill_locked">Gesperrt</string>
+    <string name="cron_stop_run">Lauf stoppen</string>
+    <string name="cron_model">Modell</string>
+    <string name="cron_model_main">Hauptmodell (wie der Agent)</string>
+    <string name="cron_missed_runs">Verpasste Läufe (Server war aus)</string>
+    <string name="cron_catch_up_default">Hermes-Standard</string>
+    <string name="cron_catch_up_once">Einmal nachholen</string>
+    <string name="cron_catch_up_skip">Überspringen</string>
+    <string name="usage_resets_at">zurückgesetzt %1$s</string>
+    <string name="usage_limited_until">Limit erreicht bis %1$s</string>
 </resources>

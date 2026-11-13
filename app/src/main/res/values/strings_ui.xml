@@ -1579,4 +1579,16 @@
     <string name="drawer_pages_show">Show page buttons</string>
     <string name="drawer_pages_detail">The tiles above your chats, such as Scheduled and Files. Off, the drawer starts with your chats.</string>
     <string name="drawer_pages_each">Pages</string>
+    <string name="skill_lock">Lock against agent edits</string>
+    <string name="skill_unlock">Unlock for the agent</string>
+    <string name="skill_locked">Locked</string>
+    <string name="cron_stop_run">Stop the run</string>
+    <string name="cron_model">Model</string>
+    <string name="cron_model_main">Main model (follows the agent)</string>
+    <string name="cron_missed_runs">Missed runs (server was off)</string>
+    <string name="cron_catch_up_default">Hermes default</string>
+    <string name="cron_catch_up_once">Run once</string>
+    <string name="cron_catch_up_skip">Skip</string>
+    <string name="usage_resets_at">resets %1$s</string>
+    <string name="usage_limited_until">Limit reached until %1$s</string>
 </resources>

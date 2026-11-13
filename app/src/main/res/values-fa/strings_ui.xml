@@ -1559,4 +1559,16 @@
     <string name="drawer_pages_show">نمایش دکمه‌های صفحه‌ها</string>
     <string name="drawer_pages_detail">کاشی‌های بالای چت‌ها، مثل زمان‌بندی و فایل‌ها. خاموش باشد، کشو از چت‌ها شروع می‌شود.</string>
     <string name="drawer_pages_each">صفحه‌ها</string>
+    <string name="skill_lock">قفل در برابر ویرایش عامل</string>
+    <string name="skill_unlock">باز کردن قفل برای عامل</string>
+    <string name="skill_locked">قفل‌شده</string>
+    <string name="cron_stop_run">توقف اجرا</string>
+    <string name="cron_model">مدل</string>
+    <string name="cron_model_main">مدل اصلی (همان مدل عامل)</string>
+    <string name="cron_missed_runs">اجراهای جامانده (وقتی سرور خاموش بود)</string>
+    <string name="cron_catch_up_default">پیش‌فرض هرمس</string>
+    <string name="cron_catch_up_once">یک بار اجرا شود</string>
+    <string name="cron_catch_up_skip">رد شود</string>
+    <string name="usage_resets_at">تمدید %1$s</string>
+    <string name="usage_limited_until">سقف پر شده تا %1$s</string>
 </resources>
