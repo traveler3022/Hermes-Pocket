@@ -125,6 +125,8 @@ sealed class GatewayEvent {
          * when that row holds exactly [text]; null when Hermes cannot vouch for it.
          */
         val finalAssistantRowId: Long? = null,
+        /** How the turn ended: `complete`, `interrupted` or `error`; null from an older server. */
+        val status: String? = null,
     ) : GatewayEvent()
 
     /** Thinking text chunk (reasoning models). */

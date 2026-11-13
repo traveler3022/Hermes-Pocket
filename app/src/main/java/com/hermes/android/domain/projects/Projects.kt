@@ -44,6 +44,10 @@ interface Projects {
         val lastActive: Double,
         /** A project the user made (`p_…`), as opposed to one grouped automatically from session folders. */
         val isStored: Boolean = false,
+        /** The stored ids of the chats the project holds in the gateway's window (`sessionIds`). */
+        val sessionIds: Set<String> = emptySet(),
+        /** The bucket for chats outside every project ("Home"). */
+        val isNoProject: Boolean = false,
     )
 
     /** A project the user made, with its folders; [primaryPath] is where its new chats start. */

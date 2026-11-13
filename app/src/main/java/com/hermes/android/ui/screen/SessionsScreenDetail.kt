@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
@@ -163,7 +164,7 @@ internal fun HistoryMessageBubble(msg: HistoryMessage) {
             color = if (isUser) {
                 MaterialTheme.colorScheme.surfaceVariant
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                HxTone.card
             },
             modifier = Modifier.fillMaxWidth(0.9f),
         ) {
@@ -171,7 +172,7 @@ internal fun HistoryMessageBubble(msg: HistoryMessage) {
                 Text(
                     text = if (isUser) stringResource(R.string.you) else "Hermes",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = HxTone.textTertiary,
                 )
                 Text(
                     text = msg.content,

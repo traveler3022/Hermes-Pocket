@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +68,7 @@ import com.hermes.android.ui.design.GroupDivider
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
@@ -291,7 +292,7 @@ fun OpsScreen(
     state.debugShare?.let { share -> DebugShareDialog(share, onDismiss = viewModel::dismissDebugShare) }
 
     confirmRestore?.let { uri ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmRestore = null },
             title = { Text(stringResource(R.string.ops_restore)) },
             text = { Text(stringResource(R.string.ops_restore_confirm)) },
@@ -306,7 +307,7 @@ fun OpsScreen(
     }
 
     if (confirmShare) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmShare = false },
             title = { Text(stringResource(R.string.ops_debug_share)) },
             text = { Text(stringResource(R.string.ops_debug_share_confirm)) },
@@ -321,7 +322,7 @@ fun OpsScreen(
     }
 
     if (confirmPrune) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmPrune = false },
             title = { Text(stringResource(R.string.ops_checkpoints_prune)) },
             text = { Text(stringResource(R.string.ops_checkpoints_prune_confirm)) },
@@ -336,7 +337,7 @@ fun OpsScreen(
     }
 
     removingHook?.let { hook ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { removingHook = null },
             title = { Text(stringResource(R.string.ops_hook_remove)) },
             text = { Text(hook.event + "\n" + hook.command) },
@@ -431,7 +432,7 @@ private fun RunSheet(run: OpsViewModel.Run, onDismiss: () -> Unit) {
             }
             Surface(
                 shape = RoundedCornerShape(HxRadius.sm),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                color = HxTone.cardStrong,
                 modifier = Modifier.fillMaxWidth().padding(top = HxSpace.md).heightIn(min = 120.dp, max = 460.dp),
             ) {
                 val vertical = rememberScrollState()
@@ -461,7 +462,7 @@ private fun RunSheet(run: OpsViewModel.Run, onDismiss: () -> Unit) {
 @Composable
 private fun DebugShareDialog(share: DebugShare, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.ops_debug_share_done)) },
         text = {
@@ -511,7 +512,7 @@ private fun AddHookDialog(
     var matcher by rememberSaveable { mutableStateOf("") }
     var approve by rememberSaveable { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.ops_hook_add)) },
         text = {

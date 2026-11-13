@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.GatewayAction
 import com.hermes.android.ui.viewmodel.GatewayEvent
@@ -203,7 +204,7 @@ private fun PlatformCard(
 
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(

@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +47,7 @@ import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.SettingRow
 import com.hermes.android.ui.design.SettingsGroup
@@ -204,7 +205,7 @@ internal fun AvailableRelease(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(HxRadius.sm))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                    .background(HxTone.accentSoft)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 Text(
@@ -425,7 +426,7 @@ private fun HermesAgentSection(state: AboutUiState, onUpdate: () -> Unit) {
     }
 
     if (confirming) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirming = false },
             title = { Text(stringResource(R.string.update_the_hermes_core_2)) },
             text = {

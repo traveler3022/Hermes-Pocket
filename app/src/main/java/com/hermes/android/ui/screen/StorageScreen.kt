@@ -46,7 +46,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -102,6 +102,8 @@ import com.hermes.android.ui.component.CacheChartState
 import com.hermes.android.ui.component.EaseOutQuint
 import com.hermes.android.ui.component.roundPercents
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.automirrored.filled.ArrowForwardIos
 import com.hermes.android.ui.icons.filled.DeleteSweep
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -353,7 +355,7 @@ fun StorageScreen(
 
     if (confirmClear) {
         val buttonText = if (JunkKind.entries.all { it in state.selected }) stringResource(R.string.clear_cache) else stringResource(R.string.clear_selected)
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text(stringResource(R.string.clear_cache_2) + " (" + formatFileSize(state.selectedBytes) + ")") },
             text = { Text(storageInfo()) },
@@ -372,7 +374,7 @@ fun StorageScreen(
 
     if (confirmDelete) {
         val count = state.picked.size
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_files)) },
             text = {
@@ -403,13 +405,13 @@ private fun DeletePickedButton(onClick: () -> Unit) {
         modifier = Modifier
             .padding(end = 14.dp)
             .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(HxRadius.xs))
             .background(MaterialTheme.colorScheme.primary)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(stringResource(R.string.delete), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+        Text(stringResource(R.string.delete), fontSize = MaterialTheme.typography.bodyMedium.fontSize, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
     }
 }
 
@@ -424,13 +426,13 @@ private fun SpaceEntryRow(onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.space_where_it_goes),
-                    fontSize = 16.sp,
+                    fontSize = MaterialTheme.typography.titleMedium.fontSize,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
                     stringResource(R.string.space_where_it_goes_hint),
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -441,7 +443,7 @@ private fun SpaceEntryRow(onClick: () -> Unit) {
                 modifier = Modifier.size(16.dp),
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        HorizontalDivider(thickness = 0.5.dp, color = HxTone.hairline)
     }
 }
 
@@ -474,7 +476,7 @@ private fun ChartHeader(calculating: Boolean, hasCache: Boolean, percent: Float?
     ) {
         Text(
             text = if (cleared) stringResource(R.string.storage_cleared) else stringResource(R.string.storage_usage),
-            fontSize = 20.sp,
+            fontSize = MaterialTheme.typography.titleLarge.fontSize,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.height(26.dp),
@@ -482,7 +484,7 @@ private fun ChartHeader(calculating: Boolean, hasCache: Boolean, percent: Float?
         Spacer(Modifier.height(4.dp))
         Text(
             text = subtitle,
-            fontSize = 13.sp,
+            fontSize = MaterialTheme.typography.bodySmall.fontSize,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 24.dp),
@@ -580,7 +582,7 @@ private fun SectionRowItem(
                     append("  ")
                     withStyle(SpanStyle(fontSize = (16 * 0.834).sp, fontWeight = FontWeight.Bold)) { append(percentText) }
                 },
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 maxLines = 1,
                 color = MaterialTheme.colorScheme.onBackground,
             )
@@ -599,7 +601,7 @@ private fun SectionRowItem(
             Spacer(Modifier.weight(1f))
             Text(
                 text = formatFileSize(size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 maxLines = 1,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -608,7 +610,7 @@ private fun SectionRowItem(
             HorizontalDivider(
                 modifier = Modifier.padding(start = if (pad) 100.dp else 60.dp),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                color = HxTone.hairline,
             )
         }
     }
@@ -661,9 +663,9 @@ private fun LoadingSectionRow() {
     ) {
         Box(Modifier.size(21.dp).background(color, CircleShape))
         Spacer(Modifier.width(18.dp))
-        Box(Modifier.width(120.dp).height(10.dp).background(color, RoundedCornerShape(4.dp)))
+        Box(Modifier.width(120.dp).height(10.dp).background(color, RoundedCornerShape(HxRadius.xs)))
         Spacer(Modifier.weight(1f))
-        Box(Modifier.width(48.dp).height(10.dp).background(color, RoundedCornerShape(4.dp)))
+        Box(Modifier.width(48.dp).height(10.dp).background(color, RoundedCornerShape(HxRadius.xs)))
     }
 }
 
@@ -691,14 +693,14 @@ private fun ClearCacheButton(allSelected: Boolean, size: Long, onClick: () -> Un
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = if (allSelected) stringResource(R.string.clear_cache) else stringResource(R.string.clear_selected),
-                fontSize = 14.sp,
+                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
                 fontWeight = FontWeight.Bold,
                 color = onAccent,
             )
             if (!disabled) {
                 Text(
                     text = formatFileSize(size),
-                    fontSize = 14.sp,
+                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
                     fontWeight = FontWeight.Bold,
                     color = onAccent.copy(alpha = .7f),
                 )
@@ -712,7 +714,7 @@ private fun ClearCacheButton(allSelected: Boolean, size: Long, onClick: () -> Un
 private fun InfoText(text: String) {
     Text(
         text = text,
-        fontSize = 14.sp,
+        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 21.dp, end = 21.dp, top = 10.dp, bottom = 17.dp),
     )
@@ -756,7 +758,7 @@ private fun ClearingSheet(progress: Float, deleting: Boolean) {
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = "${kotlin.math.ceil(progress.coerceIn(0f, 1f) * 100).toInt()}%",
-                        fontSize = 24.sp,
+                        fontSize = MaterialTheme.typography.headlineSmall.fontSize,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.height(32.dp),
@@ -770,14 +772,14 @@ private fun ClearingSheet(progress: Float, deleting: Boolean) {
                     Spacer(Modifier.height(30.dp))
                     Text(
                         text = if (deleting) stringResource(R.string.deleting_files) else stringResource(R.string.clearing_cache),
-                        fontSize = 16.sp,
+                        fontSize = MaterialTheme.typography.titleMedium.fontSize,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(R.string.please_keep_this_window_open_while),
-                        fontSize = 14.sp,
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.width(240.dp),

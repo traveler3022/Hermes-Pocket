@@ -310,6 +310,135 @@ object HxIcons {
         )
     }
 
+    /** lucide `shield-alert`: a chat that waits on the user's approval. */
+    val ShieldAlert: ImageVector by lazy {
+        lucideIcon(
+            name = "ShieldAlert",
+            "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z",
+            "M12 8v4",
+            "M12 16h.01",
+        )
+    }
+
+    /** lucide `message-circle`: a chat with a reply the user has not read. */
+    val MessageCircle: ImageVector by lazy {
+        lucideIcon(
+            name = "MessageCircle",
+            "M7.9 20A9 9 0 1 0 4 16.1L2 22Z",
+        )
+    }
+
+    /** lucide `arrow-down` */
+    val ArrowDown: ImageVector by lazy {
+        lucideIcon(
+            name = "ArrowDown",
+            "M12 5v14",
+            "m19 12-7 7-7-7",
+        )
+    }
+
+    /** lucide `rotate-ccw`: start fresh. */
+    val RotateCcw: ImageVector by lazy {
+        lucideIcon(
+            name = "RotateCcw",
+            "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+            "M3 3v5h5",
+        )
+    }
+
+    /** lucide `pencil` */
+    val Pencil: ImageVector by lazy {
+        lucideIcon(
+            name = "Pencil",
+            "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497Z",
+            "m15 5 4 4",
+        )
+    }
+
+    /** lucide `grip-vertical`: a drag handle. */
+    val GripVertical: ImageVector by lazy {
+        lucideIcon(
+            name = "GripVertical",
+            "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+            "M8 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+            "M8 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+            "M14 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+            "M14 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+            "M14 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z",
+        )
+    }
+
+    /** lucide `pin` */
+    val Pin: ImageVector by lazy {
+        lucideIcon(
+            name = "Pin",
+            "M12 17v5",
+            "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z",
+        )
+    }
+
+    /** lucide `pin-off` */
+    val PinOff: ImageVector by lazy {
+        lucideIcon(
+            name = "PinOff",
+            "M12 17v5",
+            "M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89",
+            "m2 2 20 20",
+            "M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11",
+        )
+    }
+
+    /** lucide `archive` */
+    val Archive: ImageVector by lazy {
+        lucideIcon(
+            name = "Archive",
+            "M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
+            "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8",
+            "M10 12h4",
+        )
+    }
+
+    /** lucide `trash-2` */
+    val Trash2: ImageVector by lazy {
+        lucideIcon(
+            name = "Trash2",
+            "M3 6h18",
+            "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6",
+            "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
+            "M10 11v6",
+            "M14 11v6",
+        )
+    }
+
+    /** lucide `folder-input`: move to a project. */
+    val FolderInput: ImageVector by lazy {
+        lucideIcon(
+            name = "FolderInput",
+            "M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1",
+            "M2 13h10",
+            "m9 16 3-3-3-3",
+        )
+    }
+
+    /** lucide `hash`: a topic. */
+    val Hash: ImageVector by lazy {
+        lucideIcon(
+            name = "Hash",
+            "M4 9h16",
+            "M4 15h16",
+            "M10 3L8 21",
+            "M16 3L14 21",
+        )
+    }
+
+    /** lucide `message-square`: a chat with nothing going on. */
+    val MessageSquare: ImageVector by lazy {
+        lucideIcon(
+            name = "MessageSquare",
+            "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z",
+        )
+    }
+
     /** lucide `user` */
     val User: ImageVector by lazy {
         lucideIcon(

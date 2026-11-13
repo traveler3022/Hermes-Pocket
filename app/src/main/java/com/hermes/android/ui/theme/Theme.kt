@@ -37,10 +37,11 @@ enum class AppFont(val key: String, val displayEn: String, val displayFa: String
 }
 
 enum class ColorTheme(val key: String, val displayEn: String, val displayFa: String) {
-    // Two families, each with a day and a night palette; the app's light/dark
+    // Three families, each with a day and a night palette; the app's light/dark
     // setting (or the phone's, on System) picks which one shows.
     CARBON("carbon", "Carbon", "کربن"),
-    LAJVARD("lajvard", "Lajvard", "لاجورد");
+    LAJVARD("lajvard", "Lajvard", "لاجورد"),
+    GRAPHITE("graphite", "Graphite", "گرافیت");
 
     companion object {
         /**
@@ -50,6 +51,7 @@ enum class ColorTheme(val key: String, val displayEn: String, val displayFa: Str
          */
         fun fromKey(key: String): ColorTheme = when (key) {
             "lajvard", "hermes", "blue_eye", "claude", "aether" -> LAJVARD
+            "graphite" -> GRAPHITE
             else -> CARBON
         }
     }
@@ -198,6 +200,40 @@ private val CarbonLightColors = lightColorScheme(
     surfaceDim = carbon_light_surfaceContainerHighest,
 )
 
+private val GraphiteLightColors = lightColorScheme(
+    primary = graphite_light_primary,
+    onPrimary = graphite_light_onPrimary,
+    primaryContainer = graphite_light_primaryContainer,
+    onPrimaryContainer = graphite_light_onPrimaryContainer,
+    secondary = graphite_light_secondary,
+    onSecondary = graphite_light_onSecondary,
+    secondaryContainer = graphite_light_secondaryContainer,
+    onSecondaryContainer = graphite_light_onSecondaryContainer,
+    tertiary = graphite_light_tertiary,
+    onTertiary = graphite_light_onTertiary,
+    tertiaryContainer = graphite_light_tertiaryContainer,
+    onTertiaryContainer = graphite_light_onTertiaryContainer,
+    error = graphite_light_error,
+    onError = graphite_light_onError,
+    errorContainer = graphite_light_errorContainer,
+    onErrorContainer = graphite_light_onErrorContainer,
+    background = graphite_light_background,
+    onBackground = graphite_light_onBackground,
+    surface = graphite_light_surface,
+    onSurface = graphite_light_onSurface,
+    surfaceVariant = graphite_light_surfaceVariant,
+    onSurfaceVariant = graphite_light_onSurfaceVariant,
+    outline = graphite_light_outline,
+    outlineVariant = graphite_light_outlineVariant,
+    surfaceContainerLowest = graphite_light_surfaceContainerLowest,
+    surfaceContainerLow = graphite_light_surfaceContainerLow,
+    surfaceContainer = graphite_light_surfaceContainer,
+    surfaceContainerHigh = graphite_light_surfaceContainerHigh,
+    surfaceContainerHighest = graphite_light_surfaceContainerHighest,
+    surfaceBright = graphite_light_surfaceContainerLowest,
+    surfaceDim = graphite_light_surfaceContainerHighest,
+)
+
 private val CarbonDarkColors = darkColorScheme(
     primary = carbon_dark_primary,
     onPrimary = carbon_dark_onPrimary,
@@ -230,6 +266,40 @@ private val CarbonDarkColors = darkColorScheme(
     surfaceContainerHighest = carbon_dark_surfaceContainerHighest,
     surfaceBright = carbon_dark_surfaceContainerHighest,
     surfaceDim = carbon_dark_surfaceContainerLowest,
+)
+
+private val GraphiteDarkColors = darkColorScheme(
+    primary = graphite_dark_primary,
+    onPrimary = graphite_dark_onPrimary,
+    primaryContainer = graphite_dark_primaryContainer,
+    onPrimaryContainer = graphite_dark_onPrimaryContainer,
+    secondary = graphite_dark_secondary,
+    onSecondary = graphite_dark_onSecondary,
+    secondaryContainer = graphite_dark_secondaryContainer,
+    onSecondaryContainer = graphite_dark_onSecondaryContainer,
+    tertiary = graphite_dark_tertiary,
+    onTertiary = graphite_dark_onTertiary,
+    tertiaryContainer = graphite_dark_tertiaryContainer,
+    onTertiaryContainer = graphite_dark_onTertiaryContainer,
+    error = graphite_dark_error,
+    onError = graphite_dark_onError,
+    errorContainer = graphite_dark_errorContainer,
+    onErrorContainer = graphite_dark_onErrorContainer,
+    background = graphite_dark_background,
+    onBackground = graphite_dark_onBackground,
+    surface = graphite_dark_surface,
+    onSurface = graphite_dark_onSurface,
+    surfaceVariant = graphite_dark_surfaceVariant,
+    onSurfaceVariant = graphite_dark_onSurfaceVariant,
+    outline = graphite_dark_outline,
+    outlineVariant = graphite_dark_outlineVariant,
+    surfaceContainerLowest = graphite_dark_surfaceContainerLowest,
+    surfaceContainerLow = graphite_dark_surfaceContainerLow,
+    surfaceContainer = graphite_dark_surfaceContainer,
+    surfaceContainerHigh = graphite_dark_surfaceContainerHigh,
+    surfaceContainerHighest = graphite_dark_surfaceContainerHighest,
+    surfaceBright = graphite_dark_surfaceContainerHighest,
+    surfaceDim = graphite_dark_surfaceContainerLowest,
 )
 
 private val LajvardLightColors = lightColorScheme(
@@ -325,6 +395,7 @@ fun Hermes2Theme(
         else -> when (colorTheme) {
             ColorTheme.CARBON -> if (useDark) CarbonDarkColors else CarbonLightColors
             ColorTheme.LAJVARD -> if (useDark) LajvardDarkColors else LajvardLightColors
+            ColorTheme.GRAPHITE -> if (useDark) GraphiteDarkColors else GraphiteLightColors
         }
     }
 

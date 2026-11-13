@@ -62,6 +62,8 @@ sealed class ChatMessage {
          *  which part came before the tool and which after. Unset for history. */
         val reasoningOwnerId: String? = null,
         val reasoningMark: Int = 0,
+        /** The server's short argument preview (`context`: the path, the command, the query). */
+        val preview: String? = null,
     ) : ChatMessage()
 
     /** Status/error line. */
@@ -167,6 +169,8 @@ data class SessionItem(
     val updatedAt: Long,
     /** Number of messages in this session (if known). */
     val messageCount: Int? = null,
+    /** The first id of this chat's compression lineage (`_lineage_root_id`), when the server names one. */
+    val lineageRootId: String? = null,
 )
 
 /** Rename dialog state for the session drawer. */
@@ -202,6 +206,8 @@ data class ChatUiState(
     val activeSessionKey: String? = null,
     /** Waiting for a live session; sent the moment one exists. */
     val queuedPrompt: QueuedPrompt? = null,
+    /** The open chat's "Send when done" messages, oldest first (ChatQueueDelegate). */
+    val queuedSends: List<QueuedSend> = emptyList(),
     val connectionState: ChatConnectionState = ChatConnectionState.Disconnected,
     /** When the current connect attempt began (0 = not connecting); drives the wait UI. */
     val connectingSince: Long = 0L,
@@ -233,8 +239,9 @@ data class ChatUiState(
     // Turn state of every live session, so the drawer can show which other
     // chats are working and which replied while the user was away.
     val sessionActivity: Map<String, SessionActivity> = emptyMap(),
-    // Tool-approval request awaiting the user's decision (modal sheet).
-    val pendingApproval: PendingApprovalUi? = null,
+    // Tool-approval requests awaiting the user's decision, oldest first, from any chat
+    // (see ApprovalQueue). The sheet shows [pendingApproval].
+    val pendingApprovals: List<PendingApprovalUi> = emptyList(),
     // Reasoning effort (agent.reasoning_effort) — quick-switchable from the
     // chat input bar, mirrors the same setting in Settings > General.
     val reasoningLevel: String = "medium",
@@ -251,7 +258,11 @@ data class ChatUiState(
     val thinkingStatus: String = "",
     /** The `/btw` side question open in its sheet; null when the sheet is closed. */
     val sideQuestion: SideQuestionUi? = null,
-)
+) {
+    /** The approval the sheet shows: the open chat's oldest, else the oldest of any chat. */
+    val pendingApproval: PendingApprovalUi?
+        get() = ApprovalQueue.pick(pendingApprovals, activeSessionId, activeSessionKey)
+}
 
 /**
  * A `/btw` side question (prompt.btw): answered from a snapshot of the chat, the answer

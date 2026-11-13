@@ -35,6 +35,9 @@ import com.hermes.android.ui.i18n.LocalAppLanguage
 import com.hermes.android.ui.screen.InputBar
 import com.hermes.android.ui.screen.MessageBubble
 import com.hermes.android.ui.screen.WorkspaceDrawerSheet
+import com.hermes.android.ui.screen.SessionPulse
+import com.hermes.android.domain.projects.Projects
+import com.hermes.android.domain.topics.ChatTopic
 import com.hermes.android.ui.screen.HxTraceItem
 import com.hermes.android.ui.screen.rememberWorkspaceDestinations
 import com.hermes.android.ui.theme.ColorTheme
@@ -104,6 +107,15 @@ class ReadmeScreenshotsTest {
     fun drawerPersian() = shot("drawer-fa", AppLanguage.FARSI) { Drawer(fa = true) }
 
     @Test
+    fun drawerGraphiteNight() = shot("drawer-graphite-night-fa", AppLanguage.FARSI, ColorTheme.GRAPHITE) { Drawer(fa = true) }
+
+    @Test
+    fun drawerGraphiteDay() = shot("drawer-graphite-day-fa", AppLanguage.FARSI, ColorTheme.GRAPHITE, dark = false) { Drawer(fa = true) }
+
+    @Test
+    fun drawerGraphiteEnglish() = shot("drawer-graphite-night-en", colorTheme = ColorTheme.GRAPHITE) { Drawer(fa = false) }
+
+    @Test
     fun controlCenterEnglish() = shot("control-center-en") { ControlCenter() }
 
     @Test
@@ -118,6 +130,8 @@ class ReadmeScreenshotsTest {
     private fun shot(
         name: String,
         language: AppLanguage = AppLanguage.ENGLISH,
+        colorTheme: ColorTheme = ColorTheme.CARBON,
+        dark: Boolean = true,
         content: @Composable () -> Unit,
     ) {
         // Shimmers and pulses never settle; drive the clock by hand instead of waiting for idle.
@@ -127,7 +141,7 @@ class ReadmeScreenshotsTest {
                 LocalAppLanguage provides language,
                 LocalLayoutDirection provides if (language == AppLanguage.FARSI) LayoutDirection.Rtl else LayoutDirection.Ltr,
             ) {
-                Hermes2Theme(themeMode = ThemeMode.DARK, colorTheme = ColorTheme.CARBON) {
+                Hermes2Theme(themeMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT, colorTheme = colorTheme) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -221,7 +235,10 @@ private fun Drawer(fa: Boolean) {
     } else {
         listOf("Clean up phone storage", "Morning news digest", "Fix the build script", "Trip plan for Shiraz", "Translate chapter 3")
     }
-    val sessions = titles.mapIndexed { i, title -> SessionItem("s$i", title, null, 1000L - i) }
+    // Ages a list really shows: minutes, hours, days.
+    val now = System.currentTimeMillis()
+    val agesMin = listOf(3L, 40L, 5 * 60L, 2 * 24 * 60L, 9 * 24 * 60L)
+    val sessions = titles.mapIndexed { i, title -> SessionItem("s$i", title, null, now - agesMin[i] * 60_000) }
     ModalDrawerSheet(
         modifier = Modifier.fillMaxHeight().width(322.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -242,6 +259,25 @@ private fun Drawer(fa: Boolean) {
             onNewChat = {},
             onSessionClick = {},
             onSettings = {},
+            // One chat in each state the rows can show.
+            pulseOf = { session ->
+                when (session.id) {
+                    "s1" -> SessionPulse.Running
+                    "s2" -> SessionPulse.Waiting
+                    "s4" -> SessionPulse.Failed
+                    else -> SessionPulse.None
+                }
+            },
+            unreadOf = { session -> if (session.id == "s3") 2 else 0 },
+            pinnedIds = setOf("s0"),
+            // The trip chat is a topic; the build and translation chats sit in a project.
+            topics = listOf(ChatTopic("t1", if (fa) "سفر شیراز" else "Shiraz trip", "s3")),
+            projects = listOf(
+                Projects.ProjectSummary(
+                    id = "p1", label = "hermes-app", path = "/home/u/hermes-app",
+                    sessionCount = 2, lastActive = 0.0, sessionIds = setOf("s2", "s4"),
+                ),
+            ),
         )
     }
 }

@@ -34,6 +34,15 @@ interface ChatSessions {
     /** A new chat, working in [cwd] when given; null when the server named no session. */
     suspend fun createChat(cwd: String? = null): AttachedSession?
 
+    /**
+     * A new chat titled [title], working in [cwd] when given, its row saved at once so it is
+     * listed before its first message. A title another chat has fails, leaving nothing behind.
+     */
+    suspend fun createTitledChat(title: String, cwd: String? = null): AttachedSession? = null
+
+    /** Lets go of a chat [createTitledChat] just made and deletes its row: an undo, not a user delete. */
+    suspend fun discardNewChat(created: AttachedSession) {}
+
     /** Lends [block] a throwaway session, closed after. */
     suspend fun <T> withScratchSession(block: suspend (liveId: String) -> T): T
 

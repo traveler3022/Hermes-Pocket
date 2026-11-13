@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -57,6 +57,7 @@ import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.VaultViewModel
 
 /**
@@ -141,7 +142,7 @@ fun VaultScreen(
         )
     }
     deleting?.let { item ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text(stringResource(R.string.vault_delete_title, item.label)) },
             text = { Text(stringResource(R.string.vault_delete_body)) },
@@ -206,7 +207,7 @@ private fun VaultItemRow(item: VaultItem, managerName: String?, onDelete: (Vault
     val local = item.backend == "local"
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -257,7 +258,7 @@ private fun ManagerRow(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -303,7 +304,7 @@ private fun UnlockManagerDialog(
     var password by remember { mutableStateOf("") }
     // A refused password is not left in the field.
     LaunchedEffect(error) { if (error != null) password = "" }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.vault_unlock_title, source.displayName)) },
         text = {
@@ -343,7 +344,7 @@ private fun AddVaultItemDialog(
     val originInvalid = stringResource(R.string.vault_origin_invalid)
     val missingFields = stringResource(R.string.vault_fields_required)
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.vault_add)) },
         text = {

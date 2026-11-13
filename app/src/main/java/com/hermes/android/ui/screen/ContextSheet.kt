@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
 import com.hermes.android.domain.session.ContextBreakdown
 import com.hermes.android.domain.session.ContextCategory
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.icons.filled.Compress
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -169,7 +170,7 @@ private fun ContextUsageHeader(breakdown: ContextBreakdown) {
         }
         LinearProgressIndicator(
             progress = { (breakdown.percent.coerceIn(0, 100)) / 100f },
-            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(HxRadius.full)),
             color = if (breakdown.percent >= 80) MaterialTheme.colorScheme.error
             else MaterialTheme.colorScheme.primary,
         )
@@ -196,7 +197,7 @@ private fun ContextCategoryRow(category: ContextCategory, total: Int) {
             modifier = Modifier
                 .height(10.dp)
                 .width(10.dp)
-                .clip(RoundedCornerShape(3.dp))
+                .clip(RoundedCornerShape(HxRadius.xs))
                 .background(categoryColor(category.id)),
         )
         Text(

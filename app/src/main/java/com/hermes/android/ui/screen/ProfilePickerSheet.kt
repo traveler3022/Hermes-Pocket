@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.R
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.viewmodel.ProfilesViewModel
 
 /**
@@ -206,7 +207,7 @@ internal fun ProfileAvatar(title: String, size: Int = 36, image: ByteArray? = nu
         Modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            .background(HxTone.accentSoft),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
@@ -468,7 +469,7 @@ private fun ProfileEditor(
     }
 
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_2, profile.title)) },
             text = {

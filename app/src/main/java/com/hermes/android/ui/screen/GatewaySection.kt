@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.hermes.android.R
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.GatewayCardState
 
@@ -53,7 +54,7 @@ fun GatewaySection(
 
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -160,7 +161,7 @@ fun GatewaySection(
     }
 
     if (confirmStop) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmStop = false },
             title = { Text(stringResource(R.string.gateway_stop_confirm_title)) },
             text = { Text(stringResource(R.string.gateway_stop_confirm_body)) },
@@ -182,7 +183,7 @@ fun GatewaySection(
 fun GatewayUnavailableNote() {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(

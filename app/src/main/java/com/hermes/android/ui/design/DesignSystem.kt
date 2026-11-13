@@ -107,12 +107,47 @@ val SettingsPagePadding = androidx.compose.foundation.layout.PaddingValues(
 )
 
 object HxRadius {
+    /** Inline code, small swatches and thumbnails, tiny marks. */
+    val xs = 6.dp
     /** Chips, small controls. */
     val sm = 10.dp
     /** Cards, grouped lists. */
     val md = 16.dp
     /** Sheets, hero surfaces. */
     val lg = 22.dp
+    /** Pills and thin bars: fully round ends at any height. */
+    val full = 999.dp
+}
+
+/**
+ * The see-through tones the app draws with, one per role, so two screens never
+ * pick two slightly different greys for the same thing. Each is taken from the
+ * active theme, so it follows Carbon and Lajvard, day and night.
+ */
+object HxTone {
+    /** Fill of a card or grouped list on the page (the settings card grey). */
+    val card: Color
+        @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+
+    /** A stronger fill: a card inside a sheet, a code or command block, a task card. */
+    val cardStrong: Color
+        @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+
+    /** The one hairline between rows and around quiet cards. */
+    val hairline: Color
+        @Composable get() = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+
+    /** Third text level, under onSurface and onSurfaceVariant: metadata, quiet icons. */
+    val textTertiary: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+
+    /** The quietest text and icons: hints, chevrons, placeholders. */
+    val textMuted: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+
+    /** The accent as a soft fill: a selected item's tint, an accent icon's circle. */
+    val accentSoft: Color
+        @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
 }
 
 /**
@@ -131,6 +166,19 @@ object HxIconColors {
     val purple = Color(0xFF8B5CF6)
     val indigo = Color(0xFF5B63E6)
     val gray = Color(0xFF6B7280)
+}
+
+/**
+ * A file diff's two sides: added lines in the settings tiles' green, removed
+ * lines in the theme's error colour. Lines are tinted with these at low alpha
+ * and the changed words inside them a little stronger.
+ */
+object HxDiff {
+    val added: Color
+        @Composable get() = HxIconColors.green
+
+    val removed: Color
+        @Composable get() = MaterialTheme.colorScheme.error
 }
 
 // ── Status colours ──────────────────────────────────────────────────────
@@ -295,7 +343,7 @@ fun SettingsGroup(
  * so a page never mixes two greys.
  */
 @Composable
-fun settingsCardColor(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+fun settingsCardColor(): Color = HxTone.card
 
 /**
  * The shape of one row of a grouped list drawn item by item (a LazyColumn): only
@@ -318,7 +366,7 @@ fun GroupDivider(startIndent: Dp = 56.dp) {
     HorizontalDivider(
         modifier = Modifier.padding(start = startIndent),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        color = HxTone.hairline,
     )
 }
 
@@ -385,7 +433,7 @@ fun SettingRow(
             onClick != null -> Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = HxTone.textMuted,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -431,7 +479,7 @@ fun StatusChip(
 fun RowScope.StatTile(value: String, label: String) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.weight(1f),
     ) {
         Column(
@@ -471,7 +519,7 @@ fun DomainTile(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         onClick = onClick,
         modifier = modifier,
     ) {
@@ -535,7 +583,7 @@ fun HermesEmptyState(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                .background(HxTone.accentSoft),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -701,8 +749,8 @@ fun HxGradientActionPill(
 ) {
     Row(
         modifier = modifier
-            .hxSoftShadow(radius = 18.dp, shape = RoundedCornerShape(999.dp))
-            .clip(RoundedCornerShape(999.dp))
+            .hxSoftShadow(radius = 18.dp, shape = RoundedCornerShape(HxRadius.full))
+            .clip(RoundedCornerShape(HxRadius.full))
             .background(
                 Brush.horizontalGradient(
                     listOf(

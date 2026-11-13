@@ -52,6 +52,7 @@ import com.hermes.android.ui.design.HxBarPart
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.HxSplitBar
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.SectionHeader
 import com.hermes.android.ui.design.StatTile
 import com.hermes.android.ui.design.hxCompactCount
@@ -392,13 +393,13 @@ private fun CountedRow(row: Counted, top: Long) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(2.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(HxRadius.full)),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth((row.count.toFloat() / top).coerceIn(0.02f, 1f))
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(HxRadius.full)),
             )
         }
     }
@@ -408,7 +409,7 @@ private fun CountedRow(row: Counted, top: Long) {
 private fun Card(content: @Composable () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(

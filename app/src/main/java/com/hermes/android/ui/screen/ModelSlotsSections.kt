@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -122,7 +122,7 @@ internal fun AuxModelsSection(snackbarHostState: SnackbarHostState) {
     }
 
     state.confirm?.let { confirm ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = viewModel::dismissConfirm,
             title = { Text(confirm.model.modelId) },
             text = { Text(confirm.message) },
@@ -132,7 +132,7 @@ internal fun AuxModelsSection(snackbarHostState: SnackbarHostState) {
     }
 
     if (confirmReset) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmReset = false },
             title = { Text(stringResource(R.string.aux_reset_all)) },
             text = { Text(stringResource(R.string.aux_reset_confirm)) },

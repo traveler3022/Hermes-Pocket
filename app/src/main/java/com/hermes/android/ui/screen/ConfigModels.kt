@@ -39,7 +39,7 @@ import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.SmartToy
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -97,7 +97,7 @@ internal fun ModelSwitchConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    androidx.compose.material3.AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.switch_model)) },
         text = { Text(confirm.message) },

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -40,7 +41,7 @@ import com.hermes.android.ui.icons.filled.Psychology
 import com.hermes.android.ui.icons.filled.Security
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -264,7 +265,7 @@ internal fun ModelDropdown(
         Dialog(onDismissRequest = { expanded = false }) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(HxRadius.lg),
                 tonalElevation = 6.dp,
             ) {
                 Column(
@@ -603,7 +604,7 @@ internal fun ProviderCard(
 
     // ── Delete confirmation ──
     if (showDeleteConfirm) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text(stringResource(R.string.delete_provider)) },
             text = {

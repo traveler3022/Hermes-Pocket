@@ -224,6 +224,7 @@ fun ConfigScreen(
                     themeModeState = themeModeState,
                     appLanguageState = appLanguageState,
                     onOpenLanguage = { section = SettingsSection.LANGUAGE },
+                    onOpenDrawer = { section = SettingsSection.DRAWER },
                 )
                 SettingsSection.MEMORY -> MemorySection(uiState, viewModel, onOpenLearning = onNavigateToLearning)
                 SettingsSection.MODELS -> ModelsTab(uiState, viewModel, onOpen = { section = it })
@@ -266,6 +267,7 @@ fun ConfigScreen(
                 SettingsSection.CONFIG_EDITOR -> ConfigEditorSection(snackbarHostState)
                 SettingsSection.ABOUT -> AboutSection()
                 SettingsSection.LANGUAGE -> LanguageSection(appLanguageState)
+                SettingsSection.DRAWER -> DrawerSettingsSection()
                 SettingsSection.PHONE_ASSISTANT -> PhoneAssistantSection()
                 SettingsSection.KANBAN -> KanbanSection()
             }
@@ -303,6 +305,7 @@ internal enum class SettingsSection(
     TOOLSETS("Toolsets", "گروه\u200Cهای ابزار"),
     ABOUT("Updates", "به\u200Cروزرسانی"),
     LANGUAGE("Language", "زبان", APPEARANCE),
+    DRAWER("Drawer", "کشوی کناری", APPEARANCE),
     PHONE_ASSISTANT("Phone assistant", "دستیار گوشی"),
     KANBAN("Kanban board", "تابلوی کانبان"),
 }

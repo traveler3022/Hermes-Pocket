@@ -81,6 +81,8 @@ import com.hermes.android.domain.storage.FileArea
 import com.hermes.android.domain.storage.FoundFile
 import com.hermes.android.domain.storage.FoundFolder
 import com.hermes.android.domain.storage.FoundKind
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.MusicNote
 import com.hermes.android.ui.viewer.FileViewerActivity
@@ -188,12 +190,12 @@ private fun StorageTabsRow(tabs: List<StorageTab>, selected: StorageTab, onTab: 
                 Box(
                     modifier = Modifier
                         .height(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(HxRadius.sm))
                         .clickable { onTab(tab) }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(tabTitle(tab), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color)
+                    Text(tabTitle(tab), fontSize = MaterialTheme.typography.bodyMedium.fontSize, fontWeight = FontWeight.Bold, color = color)
                     Box(
                         Modifier
                             .align(Alignment.BottomCenter)
@@ -205,7 +207,7 @@ private fun StorageTabsRow(tabs: List<StorageTab>, selected: StorageTab, onTab: 
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        HorizontalDivider(thickness = 0.5.dp, color = HxTone.hairline)
     }
 }
 
@@ -214,7 +216,7 @@ private fun FilesLoading() {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(
             stringResource(R.string.looking_for_files),
-            fontSize = 14.sp,
+            fontSize = MaterialTheme.typography.bodyMedium.fontSize,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -256,10 +258,10 @@ private fun FolderRow(folder: FoundFolder, checked: Boolean, divider: Boolean, o
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(folderTitle(folder), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
+                Text(folderTitle(folder), fontSize = MaterialTheme.typography.titleMedium.fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
                 Text(
                     folder.guestPath + " · " + stringResource(R.string.files_2, folder.count),
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -267,7 +269,7 @@ private fun FolderRow(folder: FoundFolder, checked: Boolean, divider: Boolean, o
             }
             Text(
                 formatFileSize(folder.size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp, end = 21.dp),
             )
@@ -281,7 +283,7 @@ private fun RowDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 98.dp),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        color = HxTone.hairline,
     )
 }
 
@@ -347,7 +349,7 @@ private fun MediaCell(file: FoundFile, checked: Boolean, thumbs: VideoThumbs, on
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(HxRadius.xs))
                 .padding(horizontal = 4.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -365,7 +367,7 @@ private fun MediaCell(file: FoundFile, checked: Boolean, thumbs: VideoThumbs, on
                 }
                 Spacer(Modifier.width(3.dp))
             }
-            Text(formatFileSize(file.size), fontSize = 11.sp, color = Color.White)
+            Text(formatFileSize(file.size), fontSize = MaterialTheme.typography.labelSmall.fontSize, color = Color.White)
         }
         PickBox(
             checked = checked,
@@ -437,12 +439,12 @@ private fun FileRow(file: FoundFile, checked: Boolean, divider: Boolean, onPick:
                 }
             } else {
                 Box(
-                    Modifier.size(40.dp).background(documentColor(file.name), RoundedCornerShape(6.dp)),
+                    Modifier.size(40.dp).background(documentColor(file.name), RoundedCornerShape(HxRadius.xs)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         file.name.substringAfterLast('.', "").take(4).lowercase(),
-                        fontSize = 11.sp,
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 1,
@@ -451,10 +453,10 @@ private fun FileRow(file: FoundFile, checked: Boolean, divider: Boolean, onPick:
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(file.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
+                Text(file.name, fontSize = MaterialTheme.typography.titleMedium.fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
                 Text(
                     file.guestDir + " · " + date,
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -462,7 +464,7 @@ private fun FileRow(file: FoundFile, checked: Boolean, divider: Boolean, onPick:
             }
             Text(
                 formatFileSize(file.size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp, end = 21.dp),
             )

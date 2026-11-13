@@ -23,10 +23,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.Schedule
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -66,6 +67,10 @@ import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.viewmodel.CronJob
+import com.hermes.android.domain.cron.CronJobs
+import com.hermes.android.ui.icons.filled.Stop
+import com.hermes.android.ui.viewmodel.ModelPickerViewModel
+import androidx.compose.material3.OutlinedButton
 import com.hermes.android.ui.viewmodel.CronViewModel
 import java.time.LocalDate
 import java.time.LocalTime
@@ -203,7 +208,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
     // Deleting asked nothing: one tap beside Edit and the job was gone for good.
     var confirmDelete by remember { mutableStateOf(false) }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_job)) },
             text = { Text(stringResource(R.string.will_stop_running_and_be_removed, job.name)) },
@@ -220,7 +225,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
     }
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(HxSpace.inner)) {
@@ -293,7 +298,7 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
                     Text(
                         text = stringResource(R.string.next, it),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = HxTone.textTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -301,15 +306,22 @@ private fun CronJobRow(job: CronJob, viewModel: CronViewModel, runningJobIds: Se
                 }
                 Spacer(Modifier.weight(1f))
                 val running = job.id in runningJobIds
+                if (running) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
                 IconButton(
-                    onClick = { viewModel.runJobNow(job.id) },
-                    enabled = !running,
+                    onClick = { if (running) viewModel.stopRun(job.id) else viewModel.runJobNow(job.id) },
                     modifier = Modifier.size(32.dp),
                 ) {
                     if (running) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
+                        Icon(
+                            Icons.Default.Stop,
+                            contentDescription = stringResource(R.string.cron_stop_run),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(17.dp),
                         )
                     } else {
                         Icon(
@@ -558,8 +570,17 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
         LocalTime.of(pick.hour, pick.minute).isBefore(LocalTime.now().withSecond(0).withNano(0))
     val isEdit = existingJob != null
     val onDismiss = if (isEdit) viewModel::hideEditDialog else viewModel::hideCreateDialog
+    // Edit only: cron.manage's add takes no model or missed-run rule. Null = leave as it is.
+    var modelPin by remember(existingJob) { mutableStateOf<CronJobs.ModelPin?>(null) }
+    var catchUp by remember(existingJob) { mutableStateOf(existingJob?.catchUp) }
+    var pickingModel by remember { mutableStateOf(false) }
+    val shownModel = when (val pin = modelPin) {
+        null -> existingJob?.model?.let { m -> existingJob?.provider?.let { "$it / $m" } ?: m }
+        CronJobs.ModelPin.Main -> null
+        is CronJobs.ModelPin.Fixed -> "${pin.provider} / ${pin.model}"
+    }
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isEdit) stringResource(R.string.edit_cron_job) else stringResource(R.string.create_cron_job)) },
         text = {
@@ -795,6 +816,43 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                     label = { Text(stringResource(R.string.prompt)) },
                     maxLines = 3,
                 )
+                if (isEdit) {
+                    Text(
+                        text = stringResource(R.string.cron_model),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(onClick = { pickingModel = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = shownModel ?: stringResource(R.string.cron_model_main),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (isEdit && catchUp != null) {
+                    Text(
+                        text = stringResource(R.string.cron_missed_runs),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(
+                            CronJobs.CatchUp.DEFAULT to R.string.cron_catch_up_default,
+                            CronJobs.CatchUp.RUN_ONCE to R.string.cron_catch_up_once,
+                            CronJobs.CatchUp.SKIP to R.string.cron_catch_up_skip,
+                        ).forEach { (rule, label) ->
+                            FilterChip(
+                                selected = catchUp == rule,
+                                onClick = { catchUp = rule },
+                                label = { Text(stringResource(label)) },
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -802,7 +860,14 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
                 onClick = {
                     if (name.isNotBlank() && schedule.isNotBlank() && !passedToday) {
                         if (isEdit) {
-                            val jobId = existingJob?.id; if (jobId != null) viewModel.updateJob(jobId, name, schedule, prompt)
+                            val jobId = existingJob?.id
+                            if (jobId != null) {
+                                viewModel.updateJob(
+                                    jobId, name, schedule, prompt,
+                                    model = modelPin,
+                                    catchUp = catchUp?.takeIf { it != existingJob?.catchUp },
+                                )
+                            }
                         } else {
                             viewModel.createJob(name, schedule, prompt)
                         }
@@ -814,4 +879,33 @@ private fun CreateJobDialog(viewModel: CronViewModel, existingJob: CronJob? = nu
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_2)) }
         },
     )
+
+    if (pickingModel) {
+        val picker: ModelPickerViewModel = hiltViewModel()
+        val pickerState by picker.uiState.collectAsStateWithLifecycle()
+        val pinned = modelPin
+        val followsMain = pinned == CronJobs.ModelPin.Main || (pinned == null && existingJob?.model == null)
+        ModelPickerSheet(
+            models = pickerState.models,
+            favorites = pickerState.favorites,
+            activeModel = (pinned as? CronJobs.ModelPin.Fixed)?.model ?: existingJob?.model.takeIf { pinned == null },
+            activeProvider = (pinned as? CronJobs.ModelPin.Fixed)?.provider ?: existingJob?.provider.takeIf { pinned == null },
+            reasoningLevel = "",
+            isLoading = pickerState.isLoading,
+            onSelectModel = { option ->
+                modelPin = CronJobs.ModelPin.Fixed(option.provider, option.modelId)
+                pickingModel = false
+            },
+            onToggleFavorite = picker::toggleFavorite,
+            onReasoningLevelChange = {},
+            onDismiss = { pickingModel = false },
+            showEffort = false,
+            title = stringResource(R.string.cron_model),
+            autoOption = {
+                modelPin = if (existingJob?.model == null) null else CronJobs.ModelPin.Main
+                pickingModel = false
+            },
+            autoSelected = followsMain,
+        )
+    }
 }

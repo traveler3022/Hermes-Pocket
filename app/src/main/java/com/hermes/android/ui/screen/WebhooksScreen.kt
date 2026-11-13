@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,6 +57,7 @@ import com.hermes.android.domain.messaging.Webhooks.Route
 import com.hermes.android.ui.design.HermesScaffold
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.StatusChip
 import com.hermes.android.ui.icons.filled.ContentCopy
 import com.hermes.android.ui.icons.filled.DeleteOutline
@@ -201,7 +202,7 @@ fun WebhooksScreen(
         CreatedDialog(created, onCopy = copy, onDismiss = viewModel::dismissCreated)
     }
     deleting?.let { route ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text(stringResource(R.string.webhooks_delete_title, route.name)) },
             text = { Text(stringResource(R.string.webhooks_delete_body)) },
@@ -220,7 +221,7 @@ fun WebhooksScreen(
 private fun NoteCard(text: String) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -236,7 +237,7 @@ private fun NoteCard(text: String) {
 private fun PlatformOffCard(busy: Boolean, onEnable: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -273,7 +274,7 @@ private fun RouteCard(
 ) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -369,7 +370,7 @@ private fun CreateWebhookDialog(
     val realTarget = deliver.trim().let { it.isNotEmpty() && it != "log" }
     val canCreate = nameOk && !state.busy && (!deliverOnly || realTarget)
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.webhooks_add)) },
         text = {
@@ -457,7 +458,7 @@ private fun CreateWebhookDialog(
 /** Shows the new route's URL and its secret, which the server never returns again. */
 @Composable
 private fun CreatedDialog(created: Created, onCopy: (String) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    HxAlertDialog(
         // Only the button closes it, so the secret isn't lost to a stray tap outside.
         onDismissRequest = {},
         title = { Text(stringResource(R.string.webhooks_created_title)) },

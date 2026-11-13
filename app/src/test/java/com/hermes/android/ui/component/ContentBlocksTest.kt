@@ -121,7 +121,7 @@ class ContentBlocksTest {
         assertEquals(
             listOf(
                 ContentBlock.Text("Here it is:"),
-                ContentBlock.FileRef(url = "/root/report.pdf", name = "the report"),
+                ContentBlock.FileRef(url = "/root/report.pdf", name = "the report", kind = FileKind.PDF),
                 ContentBlock.Text("."),
             ),
             blocks,
@@ -153,7 +153,7 @@ class ContentBlocksTest {
         assertEquals(
             listOf(
                 ContentBlock.Text("Run it with python3"),
-                ContentBlock.FileRef(url = "/root/app/main.py", name = "main.py"),
+                ContentBlock.FileRef(url = "/root/app/main.py", name = "main.py", kind = FileKind.TEXT),
                 ContentBlock.Text("now"),
             ),
             blocks,
@@ -237,6 +237,30 @@ class ContentBlocksTest {
     }
 
     @Test
+    fun `code, text and PDF files get the text and PDF viewers`() {
+        mapOf(
+            "main.kt" to FileKind.TEXT, "/root/app/main.py" to FileKind.TEXT, "server.LOG" to FileKind.TEXT,
+            "notes.txt" to FileKind.TEXT, "data.json" to FileKind.TEXT, "config.yaml" to FileKind.TEXT,
+            "table.csv" to FileKind.TEXT, ".gitignore" to FileKind.TEXT, "fix.patch" to FileKind.TEXT,
+            "report.pdf" to FileKind.PDF, "file:///data/x/Scan%201.PDF?dl=1" to FileKind.PDF,
+            "pic.svg" to FileKind.IMAGE, "README.md" to FileKind.MARKDOWN, "page.html" to FileKind.HTML,
+            "app.apk" to FileKind.OTHER, "doc.docx" to FileKind.OTHER, "Caddyfile" to FileKind.OTHER,
+        ).forEach { (name, kind) -> assertEquals(name, kind, fileKindOf(name)) }
+    }
+
+    @Test
+    fun `a text type shows as text only when the extension says nothing`() {
+        assertEquals(FileKind.PDF, fileKindOf("blob", "application/pdf"))
+        assertEquals(FileKind.TEXT, fileKindOf("blob", "text/plain"))
+        assertEquals(FileKind.TEXT, fileKindOf("response", "application/json; charset=utf-8"))
+        assertEquals(FileKind.TEXT, fileKindOf("feed", "application/atom+xml"))
+        // text/plain for a README.md keeps the Markdown viewer, for a page the HTML one.
+        assertEquals(FileKind.MARKDOWN, fileKindOf("README.md", "text/plain"))
+        assertEquals(FileKind.HTML, fileKindOf("page.html", "text/plain"))
+        assertEquals(FileKind.OTHER, fileKindOf("archive.zip", "application/zip"))
+    }
+
+    @Test
     fun `markdown and audio MEDIA files are typed`() {
         val blocks = parseContentBlocks("MEDIA:/root/notes.md\nMEDIA:/root/v.opus")
         assertEquals(FileKind.MARKDOWN, blocks.filterIsInstance<ContentBlock.FileRef>().single().kind)
@@ -280,7 +304,7 @@ class ContentBlocksTest {
     @Test
     fun `a preview of a file that is not a page is the file card`() {
         assertEquals(
-            listOf(ContentBlock.FileRef(url = "/root/report.pdf", name = "report.pdf", kind = FileKind.OTHER)),
+            listOf(ContentBlock.FileRef(url = "/root/report.pdf", name = "report.pdf", kind = FileKind.PDF)),
             parseContentBlocks("::preview{file=\"/root/report.pdf\"}"),
         )
     }

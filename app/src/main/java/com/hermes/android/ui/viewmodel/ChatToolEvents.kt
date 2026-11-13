@@ -27,6 +27,7 @@ internal fun ChatUiState.withToolStarted(event: GatewayEvent.ToolStart, replyId:
         durationS = null,
         reasoningOwnerId = ownerId,
         reasoningMark = mark,
+        preview = event.context?.takeIf { it.isNotBlank() } ?: existing?.preview,
     )
     return copy(
         messages = if (exists) {

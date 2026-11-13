@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +55,8 @@ import com.hermes.android.domain.storage.SpaceOverview
 import com.hermes.android.domain.storage.SpacePlace
 import com.hermes.android.domain.storage.SpaceVerdict
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Description
 import com.hermes.android.ui.icons.filled.Folder
 import com.hermes.android.ui.icons.filled.Security
@@ -198,7 +200,7 @@ fun StorageSpaceScreen(
     }
 
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.space_delete_title, formatFileSize(state.pickedBytes))) },
             text = {
@@ -231,7 +233,7 @@ private fun Scanning() {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.space_scanning), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+        Text(stringResource(R.string.space_scanning), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = MaterialTheme.typography.bodyMedium.fontSize)
     }
 }
 
@@ -266,7 +268,7 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 21.dp, vertical = 16.dp)) {
         Text(
             stringResource(R.string.space_total).format(formatFileSize(overview.total)),
-            fontSize = 20.sp,
+            fontSize = MaterialTheme.typography.titleLarge.fontSize,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -276,7 +278,7 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
         }
         Spacer(Modifier.height(12.dp))
         val total = overview.total.coerceAtLeast(1).toFloat()
-        Canvas(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp))) {
+        Canvas(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(HxRadius.full))) {
             var x = 0f
             SpaceVerdict.entries.forEach { verdict ->
                 val w = size.width * overview.size(verdict) / total
@@ -289,8 +291,8 @@ private fun Summary(overview: SpaceOverview, scanning: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                 Box(Modifier.size(10.dp).background(verdictColor(verdict), CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(verdictTitle(verdict), fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
-                Text(formatFileSize(overview.size(verdict)), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(verdictTitle(verdict), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                Text(formatFileSize(overview.size(verdict)), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -304,12 +306,12 @@ private fun VerdictHeader(verdict: SpaceVerdict, size: Long) {
     ) {
         Text(
             verdictTitle(verdict),
-            fontSize = 14.sp,
+            fontSize = MaterialTheme.typography.bodyMedium.fontSize,
             fontWeight = FontWeight.Bold,
             color = verdictColor(verdict),
             modifier = Modifier.weight(1f),
         )
-        Text(formatFileSize(size), fontSize = 14.sp, color = verdictColor(verdict))
+        Text(formatFileSize(size), fontSize = MaterialTheme.typography.bodyMedium.fontSize, color = verdictColor(verdict))
     }
 }
 
@@ -323,12 +325,12 @@ private fun PlaceRow(place: SpacePlace, size: Long, onClick: () -> Unit) {
             Box(Modifier.size(12.dp).background(verdictColor(place.verdict), CircleShape))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(placeTitle(place), fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground)
-                Text(placeDescription(place), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(placeTitle(place), fontSize = MaterialTheme.typography.titleMedium.fontSize, color = MaterialTheme.colorScheme.onBackground)
+                Text(placeDescription(place), fontSize = MaterialTheme.typography.bodySmall.fontSize, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
                 formatFileSize(size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp),
             )
@@ -336,7 +338,7 @@ private fun PlaceRow(place: SpacePlace, size: Long, onClick: () -> Unit) {
         HorizontalDivider(
             modifier = Modifier.padding(start = 47.dp),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            color = HxTone.hairline,
         )
     }
 }
@@ -353,7 +355,7 @@ private fun ItemsList(
         item(key = "about") {
             Text(
                 placeDescription(place),
-                fontSize = 13.sp,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 21.dp, vertical = 12.dp),
             )
@@ -398,7 +400,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
                 }
             }
             Box(
-                Modifier.size(38.dp).background(verdictColor(item.place.verdict).copy(alpha = 0.85f), RoundedCornerShape(8.dp)),
+                Modifier.size(38.dp).background(verdictColor(item.place.verdict).copy(alpha = 0.85f), RoundedCornerShape(HxRadius.sm)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -410,11 +412,11 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Text(item.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
+                Text(item.name, fontSize = MaterialTheme.typography.titleMedium.fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
                 val line = listOfNotNull(hint, note).joinToString(" · ").ifEmpty { item.guestPath }
                 Text(
                     line,
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = if (!item.deletable) NeededColor else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -422,7 +424,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
             }
             Text(
                 formatFileSize(item.size),
-                fontSize = 16.sp,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 8.dp, end = 21.dp),
             )
@@ -430,7 +432,7 @@ private fun ItemRow(item: SpaceItem, checked: Boolean, otherPlace: Boolean, onOp
         HorizontalDivider(
             modifier = Modifier.padding(start = 98.dp),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            color = HxTone.hairline,
         )
     }
 }

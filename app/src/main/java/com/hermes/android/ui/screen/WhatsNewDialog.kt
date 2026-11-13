@@ -3,7 +3,7 @@ package com.hermes.android.ui.screen
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,7 +23,7 @@ import com.hermes.android.ui.viewmodel.WhatsNewViewModel
 fun WhatsNewDialog(viewModel: WhatsNewViewModel = hiltViewModel()) {
     val release by viewModel.release.collectAsStateWithLifecycle()
     val shown = release ?: return
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = viewModel::dismiss,
         title = { Text(stringResource(R.string.whats_new_in_version, shown.versionName)) },
         text = {

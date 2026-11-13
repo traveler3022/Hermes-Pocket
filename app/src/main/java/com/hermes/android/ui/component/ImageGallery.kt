@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +34,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.hermes.android.R
 import com.hermes.android.ui.icons.filled.Download
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
@@ -56,9 +56,9 @@ fun ImageGallery(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = with(LocalDensity.current) { maxHeight.toPx() }
-        val closeAt = height * CloseFraction
-        val flingPx = with(LocalDensity.current) { CloseFlingDp.dp.toPx() }
-        val progress = (abs(dragY) / (height / 2)).coerceIn(0f, 1f)
+        val flingPx = with(LocalDensity.current) { ImageViewing.CLOSE_FLING_DP.dp.toPx() }
+        val wobblePx = with(LocalDensity.current) { ImageViewing.CLOSE_WOBBLE_DP.dp.toPx() }
+        val progress = ImageViewing.fade(dragY, height)
 
         HorizontalPager(
             state = pager,
@@ -71,7 +71,7 @@ fun ImageGallery(
                     orientation = Orientation.Vertical,
                     state = rememberDraggableState { delta -> dragY += delta },
                     onDragStopped = { velocity ->
-                        if (abs(dragY) > closeAt || abs(velocity) > flingPx) {
+                        if (ImageViewing.closes(dragY, velocity, height, flingPx, wobblePx)) {
                             val direction = if (dragY != 0f) sign(dragY) else sign(velocity)
                             animate(dragY, direction * height, animationSpec = tween(150)) { v, _ -> dragY = v }
                             onDismiss()
@@ -81,10 +81,14 @@ fun ImageGallery(
                     },
                 ),
         ) { page ->
+            val zoom = remember { ZoomState() }
+            // Turned away from, a page is whole again when it comes back.
+            LaunchedEffect(pager.settledPage == page) { if (pager.settledPage != page) zoom.reset() }
             ZoomableImage(
                 model = images[page],
                 modifier = Modifier.offset { IntOffset(0, dragY.roundToInt()) },
                 onTap = onDismiss,
+                state = zoom,
             )
         }
 
@@ -122,9 +126,3 @@ fun ImageGallery(
 }
 
 private const val BackdropAlpha = 0.92f
-
-/** A drag past this share of the screen height closes the viewer. */
-private const val CloseFraction = 0.18f
-
-/** Or a flick this fast (dp/s), however short. */
-private const val CloseFlingDp = 1200

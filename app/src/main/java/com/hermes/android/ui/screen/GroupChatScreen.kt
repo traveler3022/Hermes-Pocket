@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,7 +69,9 @@ import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.component.ImageGallery
 import com.hermes.android.ui.component.parseContentBlocks
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.design.hxUserBubbleMaxWidth
 import com.hermes.android.ui.viewmodel.GroupChatViewModel
 import com.hermes.android.ui.viewmodel.GroupMentions
@@ -262,7 +264,7 @@ fun GroupChatScreen(
 
     if (renaming) {
         var name by remember { mutableStateOf(state.room?.name.orEmpty()) }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { renaming = false },
             title = { Text(stringResource(R.string.rename_group)) },
             text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
@@ -279,7 +281,7 @@ fun GroupChatScreen(
         )
     }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_this_group)) },
             text = {
@@ -325,7 +327,7 @@ private fun UserRow(text: String) {
             Modifier
                 .widthIn(max = hxUserBubbleMaxWidth())
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                .background(HxTone.accentSoft)
                 .padding(12.dp),
         ) {
             Text(text, style = MaterialTheme.typography.bodyMedium)
@@ -483,7 +485,7 @@ private fun ApprovalCard(
     onAnswer: (allow: Boolean) -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(HxRadius.md),
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()

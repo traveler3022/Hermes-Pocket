@@ -25,12 +25,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.res.stringResource
 import com.hermes.android.R
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.Forum
 import androidx.compose.material.icons.filled.MoreVert
 import com.hermes.android.ui.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import com.hermes.android.ui.icons.filled.SwapVert
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -122,7 +123,7 @@ fun SessionsScreen(
     }
 
     if (uiState.showDeleteConfirm != null) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
             title = { Text(stringResource(R.string.delete_session)) },
             text = { Text(stringResource(R.string.are_you_sure_you_want_to_delete_this)) },
@@ -141,7 +142,7 @@ fun SessionsScreen(
 
     uiState.showRenameDialog?.let { renameState ->
         var newTitle by remember(renameState) { mutableStateOf(renameState.currentTitle) }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.hideRenameDialog() },
             title = { Text(stringResource(R.string.rename_session)) },
             text = {
@@ -184,7 +185,7 @@ fun SessionsScreen(
 
     uiState.pendingBulkDelete?.let { pending ->
         val count = pending.ids.size
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { viewModel.cancelBulkDelete() },
             title = { Text(stringResource(R.string.delete_chats, count)) },
             text = {
@@ -213,7 +214,7 @@ fun SessionsScreen(
     if (askOlderThan) {
         var days by remember { mutableStateOf("30") }
         val valid = days.toIntOrNull()?.takeIf { it > 0 }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { askOlderThan = false },
             title = { Text(stringResource(R.string.delete_old_chats)) },
             text = {
@@ -496,7 +497,7 @@ private fun SessionRow(
 
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(HxRadius.md))
@@ -549,7 +550,7 @@ private fun SessionRow(
                 Text(
                     text = "${session.messageCount} ${stringResource(R.string.messages)} · ${dateFormat.format(Date(session.updatedAt))}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = HxTone.textTertiary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }
@@ -559,7 +560,7 @@ private fun SessionRow(
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = stringResource(R.string.options),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = HxTone.textTertiary,
                         modifier = Modifier.size(20.dp),
                     )
                 }

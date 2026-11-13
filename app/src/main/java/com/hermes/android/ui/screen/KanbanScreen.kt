@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -74,7 +74,9 @@ import com.hermes.android.domain.kanban.KanbanRepository
 import com.hermes.android.ui.component.HermesMarkdown
 import com.hermes.android.ui.design.HermesEmptyState
 import com.hermes.android.ui.design.HermesScaffold
+import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.icons.filled.AttachFile
 import com.hermes.android.ui.icons.filled.AutoAwesome
 import com.hermes.android.ui.icons.filled.ExpandMore
@@ -333,7 +335,7 @@ fun KanbanScreen(
     }
 
     if (bulkAssigning) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { bulkAssigning = false },
             title = { Text(stringResource(R.string.assign_tasks_to, state.selected.size)) },
             text = {
@@ -618,7 +620,7 @@ private fun BoardPicker(
     }
     if (creating) {
         var name by remember { mutableStateOf("") }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { creating = false },
             title = { Text(stringResource(R.string.new_board)) },
             text = {
@@ -647,8 +649,8 @@ private fun boardLabel(board: KanbanRepository.Board): String =
 @Composable
 private fun TaskCard(task: KanbanRepository.Task, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(HxRadius.md),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else HxTone.cardStrong,
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
@@ -923,7 +925,7 @@ private fun TaskSheet(
         }
     }
     deletingFile?.let { file ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deletingFile = null },
             title = { Text(stringResource(R.string.remove_2, file.filename)) },
             confirmButton = {
@@ -951,7 +953,7 @@ private fun TaskSheet(
     if (pickingParent) {
         val linked = detail.parents.map { it.id }.toSet() + detail.children.map { it.id } + task.id
         val choices = boardTasks.filter { it.id !in linked && it.status != "archived" }
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { pickingParent = false },
             title = { Text(stringResource(R.string.wait_for_which_task)) },
             text = {
@@ -981,7 +983,7 @@ private fun TaskSheet(
         )
     }
     if (confirmReclaim) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmReclaim = false },
             title = { Text(stringResource(R.string.stop_the_worker)) },
             text = {
@@ -999,7 +1001,7 @@ private fun TaskSheet(
         )
     }
     if (confirmDelete) {
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.delete_this_task)) },
             confirmButton = {
@@ -1041,8 +1043,8 @@ private fun HealthSheet(
             item { SheetHeader(stringResource(R.string.board_health), onBack = null) }
             items(diagnostics, key = { it.taskId }) { row ->
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(HxRadius.md),
+                    color = HxTone.cardStrong,
                     modifier = Modifier.fillMaxWidth().clickable { onOpen(row.taskId) },
                 ) {
                     Column(Modifier.padding(HxSpace.md), verticalArrangement = Arrangement.spacedBy(HxSpace.xs)) {
@@ -1077,7 +1079,7 @@ private fun RunSettingsDialog(
     var pickedProvider by remember { mutableStateOf(provider) }
     var pickedModel by remember { mutableStateOf(model.orEmpty()) }
     var pickedEffort by remember { mutableStateOf(effort) }
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.model_and_thinking)) },
         text = {
@@ -1146,8 +1148,8 @@ private fun RunSettingsDialog(
 @Composable
 private fun AttachmentRow(file: KanbanRepository.Attachment, onOpen: () -> Unit, onDelete: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(HxRadius.sm),
+        color = HxTone.cardStrong,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
     ) {
         Row(Modifier.padding(HxSpace.sm), verticalAlignment = Alignment.CenterVertically) {
@@ -1353,7 +1355,7 @@ private fun LogView(log: KanbanRepository.Log) {
         SheetHint(stringResource(R.string.no_worker_has_started_on_this_task_yet))
         return
     }
-    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+    Surface(shape = RoundedCornerShape(HxRadius.sm), color = HxTone.cardStrong) {
         Column(Modifier.fillMaxWidth().padding(HxSpace.sm)) {
             if (log.truncated) {
                 Text(

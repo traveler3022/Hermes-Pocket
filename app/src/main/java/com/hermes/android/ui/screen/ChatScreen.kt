@@ -48,7 +48,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import com.hermes.android.ui.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +86,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermes.android.ui.viewmodel.ConfigViewModel
+import com.hermes.android.ui.viewmodel.ApprovalCardModel
+import com.hermes.android.ui.viewmodel.ApprovalQueue
 import com.hermes.android.ui.viewmodel.ChatConnectionState
 import com.hermes.android.ui.viewmodel.ChatMessage
 import com.hermes.android.ui.viewmodel.ChatViewModel
@@ -182,6 +185,8 @@ fun ChatScreen(
     profilesViewModel: com.hermes.android.ui.viewmodel.ProfilesViewModel = hiltViewModel(),
     projectsViewModel: com.hermes.android.ui.viewmodel.ProjectsViewModel = hiltViewModel(),
     subagents: com.hermes.android.ui.viewmodel.SubagentViewModel = hiltViewModel(),
+    topicsViewModel: com.hermes.android.ui.viewmodel.TopicsViewModel = hiltViewModel(),
+    drawerLayoutViewModel: com.hermes.android.ui.viewmodel.DrawerLayoutViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subagentSheet by subagents.sheet.collectAsStateWithLifecycle()
@@ -205,6 +210,38 @@ fun ChatScreen(
     var showContext by remember { mutableStateOf(false) }
     var drawerMenuTarget by remember { mutableStateOf<SessionItem?>(null) }
     var moveToProjectTarget by remember { mutableStateOf<SessionItem?>(null) }
+    // Topics: the long-press menu, and its rename and start-fresh dialogs.
+    var topicMenuTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    var topicRenameTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    var topicFreshTarget by remember { mutableStateOf<com.hermes.android.domain.topics.ChatTopic?>(null) }
+    var reorderingTopics by remember { mutableStateOf(false) }
+    val topics by topicsViewModel.topics.collectAsStateWithLifecycle()
+    val drawerLayout by drawerLayoutViewModel.prefs.collectAsStateWithLifecycle()
+    val drawerProjects by projectsViewModel.uiState.collectAsStateWithLifecycle()
+    val topicFailedText = stringResource(R.string.topic_failed)
+    // The topic whose chat is open, by the chat's stored id or its lineage's first id.
+    val openTopic = run {
+        val key = uiState.activeSessionKey ?: uiState.activeSessionId
+        val lineage = uiState.sessions.firstOrNull { it.id == key }?.lineageRootId
+        topics.firstOrNull { key != null && (it.sessionId == key || it.sessionId == lineage) }
+    }
+    val openTopicChatTitle = openTopic?.let { topic ->
+        (uiState.sessions.firstOrNull { it.id == topic.sessionId }
+            ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId })?.title
+    }
+    LaunchedEffect(topicsViewModel) {
+        topicsViewModel.events.collect { event ->
+            when (event) {
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.Open -> viewModel.resumeSession(event.sessionId)
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.ListChanged -> viewModel.loadSessionList()
+                is com.hermes.android.ui.viewmodel.TopicsViewModel.Event.Failed -> Toast.makeText(
+                    context,
+                    listOfNotNull(topicFailedText, event.message).joinToString(": "),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
     val movedToText = stringResource(R.string.moved_to_project)
     val subagentTexts = mapOf(
         com.hermes.android.ui.viewmodel.SubagentViewModel.QUEUED to stringResource(R.string.subagent_queued),
@@ -262,11 +299,7 @@ fun ChatScreen(
     val showScrollToBottom by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            if (layoutInfo.totalItemsCount == 0) false
-            else {
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                lastVisibleItem == null || lastVisibleItem.index < layoutInfo.totalItemsCount - 1
-            }
+            chatAwayFromBottom(layoutInfo.totalItemsCount, layoutInfo.visibleItemsInfo.lastOrNull()?.index)
         }
     }
 
@@ -391,6 +424,9 @@ fun ChatScreen(
             // However it opened (hamburger or swipe), or always there on a wide screen: a current chat list.
             viewModel.onSessionDrawerOpened()
             profilesViewModel.load()
+            // The drawer's project chips and Topics section: another device may have changed either.
+            projectsViewModel.load()
+            topicsViewModel.refresh()
         } else {
             viewModel.closeSessionDrawer()
         }
@@ -426,7 +462,6 @@ fun ChatScreen(
     // The index must come from visibleMessages — the list the LazyColumn
     // renders. uiState.messages still holds the tool-call cards it hides, so
     // its index pointed further down and pushed the message above the screen.
-    val lastUserMessageId = visibleMessages.lastOrNull { it is ChatMessage.User }?.id
 
     // Diagnostic: a turn running with no reply drawn. Says in the connection journal
     // whether the reply is missing from the state or only from what the list draws.
@@ -441,12 +476,8 @@ fun ChatScreen(
                 "windowed=${windowedMessages.size} visible=${visibleMessages.size}",
         )
     }
-    LaunchedEffect(lastUserMessageId) {
-        val lastUserIndex = visibleMessages.indexOfLast { it is ChatMessage.User }
-        if (lastUserIndex >= 0) {
-            listState.scrollToItem(lastUserIndex)
-        }
-    }
+    // The rules live in ChatScroll.kt (chatPinKey / chatPinIndex), tested in ChatScrollTest.
+    PinNewestTurn(listState, visibleMessages)
 
     // Jump to last message whenever a session is loaded/resumed
     LaunchedEffect(uiState.sessionLoadedAt) {
@@ -472,12 +503,11 @@ fun ChatScreen(
         }
     }
 
-    // Feature #23: Save draft when input changes (debounced via LaunchedEffect)
+    // Feature #23: Save draft when input changes (debounced via LaunchedEffect).
+    // Empty text is saved too: it removes the draft, which otherwise came back after a restart.
     LaunchedEffect(uiState.inputText) {
-        if (uiState.inputText.isNotEmpty()) {
-            kotlinx.coroutines.delay(500L)
-            viewModel.saveDraft()
-        }
+        kotlinx.coroutines.delay(500L)
+        viewModel.saveDraft()
     }
 
     // Pre-fill input from share intent
@@ -522,8 +552,8 @@ fun ChatScreen(
                 // Read here as values, not inside the row lambdas: rows reading uiState
                 // re-ran on every streaming flush, drawer closed or not.
                 val sessionActivity = uiState.sessionActivity
-                val waitingIds = remember(uiState.pendingApproval) {
-                    uiState.pendingApproval?.let { setOfNotNull(it.sessionId, it.sessionKey) }.orEmpty()
+                val waitingIds = remember(uiState.pendingApprovals) {
+                    ApprovalQueue.waitingIds(uiState.pendingApprovals)
                 }
                 WorkspaceDrawerSheet(
                     sessions = drawerSessions,
@@ -570,50 +600,160 @@ fun ChatScreen(
                         profilesViewModel.load()
                         showProfiles = true
                     },
+                    topics = topics,
+                    onTopicClick = { topic ->
+                        // The row the list has for the topic's chat, by its id or its lineage's first id.
+                        val row = uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                            ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId }
+                        closeDrawerThen { viewModel.resumeSession(row?.id ?: topic.sessionId) }
+                    },
+                    onTopicLongClick = { topicMenuTarget = it },
+                    projects = drawerProjects.projects,
+                    reorderingTopics = reorderingTopics,
+                    layout = drawerLayout,
+                    onReordered = { ids ->
+                        reorderingTopics = false
+                        if (ids != topics.map { it.id }) topicsViewModel.reorder(ids)
+                    },
                 )
 
-                // ── Long-press menu: rename / pin / delete ─────────────────
-                drawerMenuTarget?.let { target ->
-                    val pinned = target.id in uiState.drawerPinnedIds
-                    AlertDialog(
-                        onDismissRequest = { drawerMenuTarget = null },
-                        title = {
-                            Text(target.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
+                // ── A topic's verbs, from its row's long press ─────────────
+                topicMenuTarget?.let { topic ->
+                    val at = topics.indexOfFirst { it.id == topic.id }
+                    val above = topics.getOrNull(at - 1)?.takeIf { at >= 0 }
+                    val below = topics.getOrNull(at + 1)?.takeIf { at >= 0 }
+                    val act: (() -> Unit) -> () -> Unit = { block -> { topicMenuTarget = null; block() } }
+                    ActionSheet(onDismiss = { topicMenuTarget = null }) {
+                        ActionSheetHeader(topic.name, stringResource(R.string.topic_label))
+                        ActionSheetRow(stringResource(R.string.topic_start_fresh), HxIcons.RotateCcw, act {
+                            topicFreshTarget = topic
+                        })
+                        ActionSheetRow(stringResource(R.string.topic_rename), HxIcons.Pencil, act {
+                            topicRenameTarget = topic
+                        })
+                        above?.let { other ->
+                            ActionSheetRow(stringResource(R.string.topic_move_up), HxIcons.ArrowUp, act {
+                                topicsViewModel.move(topic, other)
+                            })
+                        }
+                        below?.let { other ->
+                            ActionSheetRow(stringResource(R.string.topic_move_down), HxIcons.ArrowDown, act {
+                                topicsViewModel.move(topic, other)
+                            })
+                        }
+                        if (above != null || below != null) {
+                            ActionSheetRow(stringResource(R.string.topic_reorder), HxIcons.GripVertical, act {
+                                reorderingTopics = true
+                            })
+                        }
+                        ActionSheetRow(stringResource(R.string.topic_remove), HxIcons.X, act {
+                            confirmTick()
+                            topicsViewModel.remove(topic)
+                        })
+                    }
+                }
+
+                // ── Rename a topic: its chat takes the same name ───────────
+                topicRenameTarget?.let { topic ->
+                    var name by remember(topic.id) { mutableStateOf(topic.name) }
+                    val chatTitle = (uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                        ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId })?.title
+                    HxAlertDialog(
+                        onDismissRequest = { topicRenameTarget = null },
+                        title = { Text(stringResource(R.string.topic_rename)) },
                         text = {
                             Column {
-                                TextButton(onClick = {
-                                    drawerMenuTarget = null
-                                    viewModel.drawerShowRename(target.id, target.title)
-                                }) { Text(stringResource(R.string.rename)) }
-                                TextButton(onClick = {
-                                    drawerMenuTarget = null
-                                    confirmTick()
-                                    viewModel.drawerTogglePin(target.id)
-                                }) { Text(if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin)) }
-                                TextButton(onClick = {
-                                    drawerMenuTarget = null
-                                    projectsViewModel.load()
-                                    moveToProjectTarget = target
-                                }) { Text(stringResource(R.string.move_to_project)) }
-                                TextButton(onClick = {
-                                    drawerMenuTarget = null
-                                    confirmTick()
-                                    viewModel.drawerArchive(target.id)
-                                }) { Text(stringResource(R.string.archive)) }
-                                TextButton(onClick = {
-                                    drawerMenuTarget = null
-                                    viewModel.drawerShowDelete(target.id)
-                                }) {
-                                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-                                }
+                                Text(
+                                    stringResource(R.string.topic_rename_detail),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedTextField(
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    singleLine = true,
+                                    placeholder = { Text(topic.name) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                )
                             }
                         },
-                        confirmButton = {},
+                        // A topic always has a name, so Save waits for one.
+                        confirmButton = {
+                            Button(
+                                enabled = name.isNotBlank(),
+                                onClick = {
+                                    topicRenameTarget = null
+                                    topicsViewModel.rename(topic, name, chatTitle)
+                                },
+                            ) { Text(stringResource(R.string.save)) }
+                        },
                         dismissButton = {
-                            TextButton(onClick = { drawerMenuTarget = null }) { Text(stringResource(R.string.cancel)) }
+                            TextButton(onClick = { topicRenameTarget = null }) { Text(stringResource(R.string.cancel)) }
                         },
                     )
+                }
+
+                // ── Start a topic fresh: its chat goes to the archive ──────
+                topicFreshTarget?.let { topic ->
+                    val chatTitle = (uiState.sessions.firstOrNull { it.id == topic.sessionId }
+                        ?: uiState.sessions.firstOrNull { it.lineageRootId == topic.sessionId })?.title
+                    HxAlertDialog(
+                        onDismissRequest = { topicFreshTarget = null },
+                        title = { Text(stringResource(R.string.topic_start_fresh_title, topic.name)) },
+                        text = { Text(stringResource(R.string.topic_start_fresh_detail, topic.name)) },
+                        confirmButton = {
+                            Button(onClick = {
+                                topicFreshTarget = null
+                                confirmTick()
+                                closeDrawerThen { topicsViewModel.startFresh(topic, chatTitle) }
+                            }) { Text(stringResource(R.string.topic_start_fresh)) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { topicFreshTarget = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
+
+                // ── Long-press: the chat's actions, as a sheet ──────────────
+                drawerMenuTarget?.let { target ->
+                    val pinned = target.id in uiState.drawerPinnedIds
+                    // "Active 5m ago"; a chat active this minute needs no line.
+                    val age = ageOf(target.updatedAt, System.currentTimeMillis())
+                        ?.takeIf { it.second != AgeUnit.Now }
+                        ?.let { stringResource(R.string.chat_active_ago, shortAgeText(it)) }
+                    val act: (() -> Unit) -> () -> Unit = { block -> { drawerMenuTarget = null; block() } }
+                    ActionSheet(onDismiss = { drawerMenuTarget = null }) {
+                        ActionSheetHeader(target.title, age)
+                        ActionSheetRow(stringResource(R.string.rename), HxIcons.Pencil, act {
+                            viewModel.drawerShowRename(target.id, target.title)
+                        })
+                        // A chat a topic already holds is in the Topics section, not here.
+                        if (topics.none { it.sessionId == target.id || it.sessionId == target.lineageRootId }) {
+                            ActionSheetRow(stringResource(R.string.topic_make), HxIcons.Hash, act {
+                                confirmTick()
+                                topicsViewModel.make(target)
+                            })
+                        }
+                        ActionSheetRow(
+                            if (pinned) stringResource(R.string.unpin) else stringResource(R.string.pin),
+                            if (pinned) HxIcons.PinOff else HxIcons.Pin,
+                            act {
+                                confirmTick()
+                                viewModel.drawerTogglePin(target.id)
+                            },
+                        )
+                        ActionSheetRow(stringResource(R.string.move_to_project), HxIcons.FolderInput, act {
+                            projectsViewModel.load()
+                            moveToProjectTarget = target
+                        })
+                        ActionSheetRow(stringResource(R.string.archive), HxIcons.Archive, act {
+                            confirmTick()
+                            viewModel.drawerArchive(target.id)
+                        })
+                        ActionSheetRow(stringResource(R.string.delete), HxIcons.Trash2, act {
+                            viewModel.drawerShowDelete(target.id)
+                        }, destructive = true)
+                    }
                 }
 
                 // ── Move to project: the desktop's session menu item ───────
@@ -621,7 +761,7 @@ fun ChatScreen(
                     val projectsState by projectsViewModel.uiState.collectAsStateWithLifecycle()
                     // The "no project" bucket has no folder to move into.
                     val targets = projectsState.projects.filter { it.path.isNotBlank() }
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { moveToProjectTarget = null },
                         title = { Text(stringResource(R.string.move_to_project)) },
                         text = {
@@ -650,7 +790,7 @@ fun ChatScreen(
 
                 // ── Rename dialog ──────────────────────────────────────────
                 uiState.drawerRenameTarget?.let { rename ->
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { viewModel.drawerHideRename() },
                         title = { Text(stringResource(R.string.rename_chat)) },
                         text = {
@@ -678,7 +818,7 @@ fun ChatScreen(
                 // ── Delete confirm dialog ──────────────────────────────────
                 if (uiState.drawerDeleteTarget != null) {
                     val targetSession = uiState.sessions.find { it.id == uiState.drawerDeleteTarget }
-                    AlertDialog(
+                    HxAlertDialog(
                         onDismissRequest = { viewModel.drawerHideDelete() },
                         title = { Text(stringResource(R.string.delete_chat)) },
                         text = {
@@ -792,6 +932,17 @@ fun ChatScreen(
                                 expanded = showOverflow,
                                 onDismissRequest = { showOverflow = false },
                             ) {
+                                // A topic's chat starts fresh in place: the topic stays, its chat is filed away.
+                                openTopic?.let { topic ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.topic_start_fresh)) },
+                                        leadingIcon = { Icon(HxIcons.RotateCcw, contentDescription = null) },
+                                        onClick = {
+                                            showOverflow = false
+                                            topicFreshTarget = topic
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.search_messages)) },
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -1191,6 +1342,25 @@ fun ChatScreen(
                     }
                 }
 
+                // Tool approval (approval.request): a card docked above the composer, not
+                // a modal, so the chat above stays readable; see ChatApprovalSheet.kt.
+                val approvalCard = remember(
+                    uiState.pendingApprovals, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
+                ) {
+                    ApprovalCardModel.of(
+                        uiState.pendingApprovals, uiState.activeSessionId, uiState.activeSessionKey, uiState.sessions,
+                    )
+                }
+                approvalCard?.let { card ->
+                    // Keyed by request: the next queued one gets a fresh card, not the answered one's scroll.
+                    key(card.request.requestId) {
+                        ApprovalCard(
+                            card = card,
+                            onRespond = { choice -> viewModel.respondToApproval(card.request.requestId, choice) },
+                        )
+                    }
+                }
+
                 // Input bar
                 InputBar(
                     text = uiState.inputText,
@@ -1204,10 +1374,23 @@ fun ChatScreen(
                     onSend = {
                         keyboardController?.hide()
                         focusManager.clearFocus()
-                        viewModel.sendMessage()
+                        // A topic keeps its place: /new (or its alias /reset) files its chat away
+                        // and a new one takes over, instead of opening an unrelated chat.
+                        val command = uiState.inputText.trim().substringBefore(' ').lowercase()
+                        val topic = openTopic
+                        if (topic != null && (command == "/new" || command == "/reset") && uiState.pendingAttachments.isEmpty()) {
+                            viewModel.updateInputText("")
+                            topicsViewModel.startFresh(topic, openTopicChatTitle)
+                        } else {
+                            viewModel.sendMessage()
+                        }
                     },
                     onStop = viewModel::stopGeneration,
                     onSteer = viewModel::steerAgent,
+                    onQueue = viewModel::queueMessage,
+                    queuedSends = uiState.queuedSends,
+                    onEditQueued = viewModel::editQueued,
+                    onCancelQueued = viewModel::cancelQueued,
                     onAttachFiles = viewModel::attachFromUris,
                     onPasteImages = viewModel::attachPastedImages,
                     newCameraPhotoUri = viewModel::newCameraPhotoUri,
@@ -1252,7 +1435,7 @@ fun ChatScreen(
     }
 
     deleteFromMessageId?.let { messageId ->
-        AlertDialog(
+        HxAlertDialog(
             onDismissRequest = { deleteFromMessageId = null },
             title = { Text(stringResource(R.string.delete_message)) },
             text = {
@@ -1317,16 +1500,6 @@ fun ChatScreen(
             onSteer = subagents::steer,
             onStop = subagents::stop,
             onDismiss = subagents::close,
-        )
-    }
-
-    // Tool-approval modal sheet (approval.request). Rendered at ChatScreen
-    // level so it overlays the whole screen; see ChatApprovalSheet.kt for
-    // why it can't be swiped away.
-    uiState.pendingApproval?.let { approval ->
-        ApprovalSheet(
-            approval = approval,
-            onRespond = viewModel::respondToApproval,
         )
     }
 

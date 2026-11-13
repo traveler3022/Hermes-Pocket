@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.hermes.android.ui.design.HxAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -39,6 +39,7 @@ import com.hermes.android.domain.cron.CronBlueprints.Field
 import com.hermes.android.domain.cron.CronBlueprints.FieldType
 import com.hermes.android.ui.design.HxRadius
 import com.hermes.android.ui.design.HxSpace
+import com.hermes.android.ui.design.HxTone
 import com.hermes.android.ui.i18n.BlueprintTexts
 import com.hermes.android.ui.viewmodel.CronUiState
 import java.util.Locale
@@ -112,7 +113,7 @@ internal fun BlueprintSheet(
 private fun BlueprintRow(blueprint: Blueprint, persian: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(HxRadius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = HxTone.card,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(HxSpace.inner)) {
@@ -156,7 +157,7 @@ internal fun BlueprintForm(
     }
     val missing = blueprint.fields.any { !it.optional && values[it.name].isNullOrBlank() }
 
-    AlertDialog(
+    HxAlertDialog(
         onDismissRequest = { if (!creating) onDismiss() },
         title = { Text(BlueprintTexts.text(blueprint.title, persian)) },
         text = {

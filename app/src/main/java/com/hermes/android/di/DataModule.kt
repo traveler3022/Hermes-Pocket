@@ -22,6 +22,8 @@ import com.hermes.android.data.PrefsTableColumnWidths
 import com.hermes.android.data.PrefsTaskRegistry
 import com.hermes.android.data.ProfilesRepository
 import com.hermes.android.data.ProjectsRepository
+import com.hermes.android.data.TopicsRepository
+import com.hermes.android.data.DrawerLayoutStore
 import com.hermes.android.data.ProviderSetupRepository
 import com.hermes.android.data.PairingRepository
 import com.hermes.android.data.TelegramSetupRepository
@@ -75,6 +77,8 @@ import com.hermes.android.domain.notify.AppVisibility
 import com.hermes.android.domain.notify.ApprovalAlerts
 import com.hermes.android.domain.profiles.HermesProfiles
 import com.hermes.android.domain.projects.Projects
+import com.hermes.android.domain.topics.ChatTopics
+import com.hermes.android.domain.drawer.DrawerLayout
 import com.hermes.android.domain.session.AgentTasks
 import com.hermes.android.domain.session.ChatSessions
 import com.hermes.android.domain.session.SessionCheckpoints
@@ -91,6 +95,8 @@ import com.hermes.android.service.ApprovalNotificationManager
 import com.hermes.android.service.MediaStreams
 import dagger.Binds
 import dagger.Module
+import com.hermes.android.data.syntax.PrismTokenizer
+import com.hermes.android.domain.syntax.CodeTokenizer
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -131,6 +137,12 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindProjects(impl: ProjectsRepository): Projects
+
+    @Binds
+    abstract fun bindChatTopics(impl: TopicsRepository): ChatTopics
+
+    @Binds
+    abstract fun bindDrawerLayout(impl: DrawerLayoutStore): DrawerLayout
 
     @Binds
     abstract fun bindProviderSetup(impl: ProviderSetupRepository): ProviderSetup
@@ -243,4 +255,7 @@ abstract class DataModule {
 
     @Binds
     abstract fun bindAppVisibility(impl: AppForegroundState): AppVisibility
+
+    @Binds
+    abstract fun bindCodeTokenizer(impl: PrismTokenizer): CodeTokenizer
 }
